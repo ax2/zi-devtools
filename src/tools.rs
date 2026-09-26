@@ -32,6 +32,12 @@ pub enum ToolKind {
     Lines,
     UrlInspect,
     Cidr,
+    JsonPath,
+    JsonDiff,
+    DataQuality,
+    Cron,
+    Random,
+    Unicode,
 }
 
 impl ToolKind {
@@ -57,6 +63,12 @@ impl ToolKind {
             Self::Lines => "lines",
             Self::UrlInspect => "url-inspect",
             Self::Cidr => "cidr",
+            Self::JsonPath => "json-path",
+            Self::JsonDiff => "json-diff",
+            Self::DataQuality => "data-schema",
+            Self::Cron => "cron",
+            Self::Random => "random",
+            Self::Unicode => "unicode",
         }
     }
     pub fn description(self) -> &'static str {
@@ -81,6 +93,12 @@ impl ToolKind {
             Self::Lines => "稳定去重、排序、去空行与空白处理",
             Self::UrlInspect => "解析协议、主机、路径和重复查询参数",
             Self::Cidr => "IPv4 掩码、网络地址与可用范围",
+            Self::JsonPath => "提取 JSONPath 子集匹配结果；支持字段、索引与通配符",
+            Self::JsonDiff => "比较两个 JSON；对象键顺序无关，可选择数组策略",
+            Self::DataQuality => "检查 JSON / CSV / TSV 的空值、重复行与类型分布",
+            Self::Cron => "五字段 Cron；预览未来 5 年内最多 10 次运行时间",
+            Self::Random => "操作系统安全随机字符串，或可复现的测试数据",
+            Self::Unicode => "检查码点、UTF-8、常见不可见字符与 Unicode 规范化",
         }
     }
     pub fn sample(self) -> &'static str {
@@ -91,6 +109,15 @@ impl ToolKind {
             Self::Number => "255",
             Self::Color => "#538DE8",
             Self::Cidr => "192.168.10.42/24",
+            Self::JsonPath => r#"{"items":[{"name":"Rust"},{"name":"Python"}]}"#,
+            Self::JsonDiff => r#"{"name":"Zi","tools":["JSON","CSV"],"version":14}"#,
+            Self::DataQuality => {
+                r#"[{"id":1,"name":"Zi"},{"id":2,"name":" "},{"id":1,"name":"Zi"},{"id":"3"}]"#
+            }
+            Self::Cron => "*/15 9-18 * * 1-5",
+            Self::Random => r#"{"length":24,"count":5,"seed":42}"#,
+            Self::Unicode => "Hello\u{200b} Ａ e\u{301}",
+
             Self::Qr | Self::UrlInspect => "https://example.com/search?q=hello&tag=rust&tag=tools",
             Self::Jwt => "eyJhbGciOiJub25lIn0.eyJzdWIiOiJkZW1vIn0.",
             Self::Regex => "build-2026 release-14 test-42",
@@ -122,9 +149,15 @@ impl ToolKind {
             Self::Lines => &["去重", "升序", "降序", "去空行", "去首尾空白"],
             Self::UrlInspect => &["解析 URL"],
             Self::Cidr => &["计算子网"],
+            Self::JsonPath => &["提取匹配结果"],
+            Self::JsonDiff => &["按数组索引对比", "忽略数组顺序"],
+            Self::DataQuality => &["检查 JSON", "检查 CSV", "检查 TSV"],
+            Self::Cron => &["预览运行时间"],
+            Self::Random => &["安全随机字符串", "种子测试数据（非安全）"],
+            Self::Unicode => &["检查字符", "转换 NFC", "转换 NFKC"],
         }
     }
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 26] = [
         Self::Json,
         Self::Base64,
         Self::Url,
@@ -145,6 +178,12 @@ impl ToolKind {
         Self::Lines,
         Self::UrlInspect,
         Self::Cidr,
+        Self::JsonPath,
+        Self::JsonDiff,
+        Self::DataQuality,
+        Self::Cron,
+        Self::Random,
+        Self::Unicode,
     ];
 
     pub fn label(self) -> &'static str {
@@ -169,9 +208,54 @@ impl ToolKind {
             Self::Lines => "文本行整理",
             Self::UrlInspect => "URL 拆解",
             Self::Cidr => "IPv4 子网",
+            Self::JsonPath => "JSON 路径查询",
+            Self::JsonDiff => "JSON 结构对比",
+            Self::DataQuality => "数据质量检查",
+            Self::Cron => "Cron 预览",
+            Self::Random => "随机数据生成",
+            Self::Unicode => "Unicode 检查",
         }
     }
 
+    pub fn secondary_sample(self) -> &'static str {
+        match self {
+            Self::Regex => r"([a-z]+)-(\d+)",
+            Self::JsonPath => "$.items[*].name",
+            Self::JsonDiff => r#"{"name":"Zi","tools":["CSV","JSON"],"version":15}"#,
+            Self::Cron => "2026-09-26T09:00:00+08:00",
+            _ => "",
+        }
+    }
+    pub fn option_label(self) -> Option<&'static str> {
+        match self {
+            Self::Regex => Some("正则表达式"),
+            Self::JsonPath => Some("JSON 路径 · $、.字段、[索引]、[\"字段\"]、[*]"),
+            Self::JsonDiff => Some("右侧 JSON · 数组无序模式保留重复次数；数组差异作为整体报告"),
+            Self::Cron => Some("参考时间（RFC3339，含时区偏移）· 留空使用当前 UTC"),
+            _ => None,
+        }
+    }
+    pub fn help(self) -> &'static str {
+        match self {
+            Self::JsonPath => "不支持递归、过滤器或切片。未匹配返回 []，所有匹配以 JSON 数组输出。",
+            Self::JsonDiff => {
+                "差异路径采用 JSON Pointer。无序模式忽略各层数组顺序、保留重复次数，数组差异整体报告。"
+            }
+            Self::DataQuality => {
+                "JSON 需为对象数组；CSV/TSV 首行为列名。缺失与 null 合计，空白字符串单列；CSV 不推断类型。"
+            }
+            Self::Cron => {
+                "分 时 日 月 周；支持数字、*、列表、范围与步长。日和周均不以 * 开头时按 OR；否则按 AND。固定偏移，不模拟夏令时。"
+            }
+            Self::Random => {
+                "输入 JSON 参数 length（1–256）、count（1–100）、alphabet（可选）、seed（仅测试模式）。安全模式使用系统随机源；不保证各类字符必选。"
+            }
+            Self::Unicode => {
+                "按码点而非字形检查，最多 10000 码点。NFC 合并等价字符；NFKC 会折叠兼容字符，可能改变语义。"
+            }
+            _ => "",
+        }
+    }
     pub fn is_encoding(self) -> bool {
         matches!(
             self,
@@ -183,6 +267,9 @@ impl ToolKind {
                 | Self::HtmlEscape
                 | Self::TextEscape
                 | Self::Yaml
+                | Self::JsonPath
+                | Self::JsonDiff
+                | Self::Unicode
                 | Self::Hex
         )
     }
@@ -268,6 +355,12 @@ pub fn run_tool(
         ToolKind::Lines => extra::process_lines(input, kind.actions()[action]),
         ToolKind::UrlInspect => extra::inspect_url(input),
         ToolKind::Cidr => extra::inspect_cidr(input),
+        ToolKind::JsonPath => crate::tools_advanced::json_path(input, pattern),
+        ToolKind::JsonDiff => crate::tools_advanced::json_diff(input, pattern, action == 1),
+        ToolKind::DataQuality => crate::tools_advanced::quality(input, action),
+        ToolKind::Cron => crate::tools_advanced::cron(input, pattern),
+        ToolKind::Random => crate::tools_advanced::random(input, action == 1),
+        ToolKind::Unicode => crate::tools_advanced::unicode(input, action),
     }
 }
 
@@ -693,7 +786,7 @@ mod tests {
                 continue;
             }
             assert!(
-                super::run_tool(kind, 0, kind.sample(), "[a-z]+", 10).is_ok(),
+                super::run_tool(kind, 0, kind.sample(), kind.secondary_sample(), 10).is_ok(),
                 "{kind:?}"
             );
         }

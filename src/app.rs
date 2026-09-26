@@ -293,6 +293,34 @@ impl DevToolsApp {
                 self.page = Page::Files;
                 self.file_state.preview(fixture);
             }
+            9..=20 => {
+                let kind = [
+                    ToolKind::JsonPath,
+                    ToolKind::JsonDiff,
+                    ToolKind::DataQuality,
+                    ToolKind::Cron,
+                    ToolKind::Random,
+                    ToolKind::Unicode,
+                ][(scene - 9) / 2];
+                self.navigate(
+                    if kind.is_encoding() {
+                        Page::EncodingTools
+                    } else {
+                        Page::SmallTools
+                    },
+                    Some(kind),
+                );
+                self.tool_state.input = kind.sample().into();
+                self.tool_state.pattern = kind.secondary_sample().into();
+                self.tool_state.output = run_tool(
+                    kind,
+                    0,
+                    &self.tool_state.input,
+                    &self.tool_state.pattern,
+                    10,
+                )
+                .unwrap();
+            }
             _ => {
                 self.page = Page::Home;
                 self.open_launcher();
@@ -693,7 +721,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 14  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 15  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -756,7 +784,13 @@ impl DevToolsApp {
     fn home_page(&mut self, ui: &mut egui::Ui) {
         let p = self.colors;
         ui.heading(RichText::new("今天想处理什么？").size(30.0));
-        ui.label(RichText::new("20 个轻量工具 · 5 个开发工作台 · 本地服务管理").color(p.muted));
+        ui.label(
+            RichText::new(format!(
+                "{} 个轻量工具 · 5 个开发工作台 · 本地服务管理",
+                ToolKind::ALL.len()
+            ))
+            .color(p.muted),
+        );
         ui.add_space(20.0);
         let response = ui.add_sized(
             [ui.available_width(), 40.0],
@@ -1351,8 +1385,9 @@ impl DevToolsApp {
                         .clicked()
                     {
                         self.tool_state.input = self.tool_state.selected.sample().into();
-                        if self.tool_state.selected == ToolKind::Regex {
-                            self.tool_state.pattern = r"([a-z]+)-(\d+)".into();
+                        if self.tool_state.pattern.is_empty() {
+                            self.tool_state.pattern =
+                                self.tool_state.selected.secondary_sample().into();
                         }
                     }
                     if ui
@@ -1454,8 +1489,10 @@ impl DevToolsApp {
                         }
                     }
                     _ => {
-                        if self.tool_state.selected == ToolKind::Regex {
-                            ui.label("正则表达式");
+                        if let Some(label) = self.tool_state.selected.option_label()
+                            && self.tool_state.selected != ToolKind::JsonDiff
+                        {
+                            ui.label(label);
                             ui.add_sized(
                                 [ui.available_width(), 32.0],
                                 egui::TextEdit::singleline(&mut self.tool_state.pattern)
@@ -1482,8 +1519,17 @@ impl DevToolsApp {
                                     }
                                 });
                         }
+                        let help = self.tool_state.selected.help();
+                        if !help.is_empty() {
+                            ui.label(RichText::new(help).small().color(p.muted));
+                            ui.add_space(8.0);
+                        }
                         ui.horizontal(|ui| {
-                            ui.strong("输入");
+                            ui.strong(if self.tool_state.selected == ToolKind::JsonDiff {
+                                "左侧 JSON"
+                            } else {
+                                "输入"
+                            });
                             ui.label(
                                 RichText::new(format!(
                                     "{} 字符 · {} 字节",
@@ -1495,12 +1541,28 @@ impl DevToolsApp {
                             );
                         });
                         ui.add_sized(
-                            [ui.available_width(), 160.0],
+                            [
+                                ui.available_width(),
+                                if self.tool_state.selected == ToolKind::JsonDiff {
+                                    88.0
+                                } else {
+                                    160.0
+                                },
+                            ],
                             egui::TextEdit::multiline(&mut self.tool_state.input)
                                 .font(egui::TextStyle::Monospace)
                                 .hint_text("在这里粘贴需要处理的内容…"),
                         );
                         ui.add_space(8.0);
+                        if self.tool_state.selected == ToolKind::JsonDiff {
+                            ui.strong("右侧 JSON");
+                            ui.add_sized(
+                                [ui.available_width(), 88.0],
+                                egui::TextEdit::multiline(&mut self.tool_state.pattern)
+                                    .font(egui::TextStyle::Monospace),
+                            );
+                            ui.add_space(8.0);
+                        }
                         self.tool_actions(ui);
                     }
                 }

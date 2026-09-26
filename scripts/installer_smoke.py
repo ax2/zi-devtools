@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 
 root = Path(__file__).resolve().parents[1]
-setup = next((root / 'release').glob('*.msi'))
+version = tomllib.loads((root / 'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
+setup = root / 'release' / f'ZiDevTools-{version}-windows-x64.msi'
+assert setup.is_file(), f'Current version installer missing: {setup.name}'
 folder = Path(tempfile.mkdtemp(prefix='zi-installer-'))
 target = folder / 'app'
 msiexec = str(Path(os.environ['SystemRoot']) / 'System32/msiexec.exe')

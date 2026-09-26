@@ -1,5 +1,5 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "updated": "2026-09-26",
   "tools": [
     {
@@ -213,26 +213,26 @@
     {
       "id": "json-path",
       "name": "JSON 路径查询",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "JSONPath 子集、定位错误与导出匹配结果"
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "JSONPath 子集：字段、数组索引、通配符与 JSON 结果导出；不含过滤器、递归和切片"
     },
     {
       "id": "json-diff",
       "name": "结构化 JSON 对比",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "字段增删改、数组策略、忽略路径"
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "结构化 JSON 差异与 JSON Pointer 路径；数组按索引或无序多重集比较；不含忽略路径"
     },
     {
       "id": "data-schema",
       "name": "数据质量检查",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "缺失值、重复行、列类型与统计报告"
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "JSON 对象数组、CSV/TSV 的空值、重复行、类型分布与混合类型报告"
     },
     {
       "id": "data-transform",
@@ -269,18 +269,18 @@
     {
       "id": "cron",
       "name": "Cron 表达式",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "表达式解释、指定时区的后续运行时间"
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "数字五字段 Cron、列表/范围/步长；固定 UTC 偏移下未来 5 年内最多 10 次运行预览"
     },
     {
       "id": "random",
       "name": "随机数据生成",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "密码、随机字符串与种子测试数据；使用安全随机源"
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "操作系统安全随机字符串；独立种子模式生成可复现测试字符串（非安全）"
     },
     {
       "id": "sql-format",
@@ -373,10 +373,10 @@
     {
       "id": "unicode",
       "name": "Unicode 字符检查",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P2",
-      "scope": "码点、不可见字符、正规化对比"
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化"
     },
     {
       "id": "escape-suite",

@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 9] = [
+const NAMES: [&str; 21] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -17,6 +17,18 @@ const NAMES: [&str; 9] = [
     "files-dark",
     "files-light-compact",
     "launcher-light",
+    "json-path-light",
+    "json-path-dark",
+    "json-diff-light",
+    "json-diff-dark",
+    "quality-light",
+    "quality-dark",
+    "cron-light",
+    "cron-dark",
+    "random-light",
+    "random-dark",
+    "unicode-light",
+    "unicode-dark",
 ];
 
 struct Capture {
@@ -52,8 +64,7 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if self.started.elapsed() > Duration::from_secs(100) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            return;
+            panic!("UI capture timed out before verification completed");
         }
         let screenshots = ctx.input(|i| {
             i.events
@@ -106,7 +117,8 @@ impl eframe::App for Capture {
                     "ArrowDown + Enter opens Files"
                 );
                 println!("PASS keyboard: Ctrl K, ArrowDown, Enter navigation");
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                // The product intentionally hides on Close; this disposable fixture must exit.
+                std::process::exit(0);
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(60));

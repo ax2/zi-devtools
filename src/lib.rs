@@ -6,6 +6,7 @@ pub mod network_tools;
 pub mod preferences;
 pub mod service;
 pub mod tools;
+pub mod tools_advanced;
 pub mod tools_extra;
 pub mod tray;
 pub mod workbench;
