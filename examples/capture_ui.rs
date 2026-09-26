@@ -158,6 +158,9 @@ impl eframe::App for Capture {
                 "Captured {}: {}x{}",
                 NAMES[self.scene], image.size[0], image.size[1]
             );
+            if std::env::args().nth(3).as_deref() == Some("single") {
+                std::process::exit(0);
+            }
             self.scene += 1;
             self.frames = 0;
             self.pending = false;

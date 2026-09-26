@@ -3019,13 +3019,20 @@ fn restore_main_window(window_handle: Option<isize>, ctx: &egui::Context) {
     #[cfg(windows)]
     if let Some(handle) = window_handle {
         use windows_sys::Win32::UI::WindowsAndMessaging::{
-            IsWindow, SW_RESTORE, SetForegroundWindow, ShowWindow,
+            IsIconic, IsWindow, SW_RESTORE, SW_SHOW, SetForegroundWindow, ShowWindow,
         };
         let window = handle as windows_sys::Win32::Foundation::HWND;
         // The handle comes from this app's eframe CreationContext and is checked before use.
         unsafe {
             if IsWindow(window) != 0 {
-                ShowWindow(window, SW_RESTORE);
+                ShowWindow(
+                    window,
+                    if IsIconic(window) != 0 {
+                        SW_RESTORE
+                    } else {
+                        SW_SHOW
+                    },
+                );
                 SetForegroundWindow(window);
                 ctx.request_repaint();
                 return;
@@ -3508,7 +3515,8 @@ mod service_filter_tests {
 mod native_window_tests {
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, IsWindowVisible,
+        CreateWindowExW, DestroyWindow, IsIconic, IsWindowVisible, IsZoomed, SW_MAXIMIZE,
+        SW_MINIMIZE, ShowWindow, WS_OVERLAPPEDWINDOW,
     };
 
     #[test]
@@ -3521,7 +3529,7 @@ mod native_window_tests {
                 0,
                 class.as_ptr(),
                 title.as_ptr(),
-                0,
+                WS_OVERLAPPEDWINDOW,
                 0,
                 0,
                 100,
@@ -3538,6 +3546,28 @@ mod native_window_tests {
         assert_ne!(unsafe { IsWindowVisible(window) }, 0);
         hide_main_window(Some(window as isize));
         assert_eq!(unsafe { IsWindowVisible(window) }, 0);
+        unsafe {
+            ShowWindow(window, SW_MAXIMIZE);
+        }
+        assert_ne!(unsafe { IsZoomed(window) }, 0);
+        hide_main_window(Some(window as isize));
+        restore_main_window(Some(window as isize), &egui::Context::default());
+        assert_ne!(
+            unsafe { IsZoomed(window) },
+            0,
+            "Opening a tool must preserve maximization"
+        );
+        unsafe {
+            ShowWindow(window, SW_MINIMIZE);
+        }
+        assert_ne!(unsafe { IsIconic(window) }, 0);
+        restore_main_window(Some(window as isize), &egui::Context::default());
+        assert_eq!(unsafe { IsIconic(window) }, 0);
+        assert_ne!(
+            unsafe { IsZoomed(window) },
+            0,
+            "Restoring minimized maximized window keeps its placement"
+        );
         unsafe { DestroyWindow(window) };
     }
 }
