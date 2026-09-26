@@ -237,10 +237,10 @@
     {
       "id": "data-transform",
       "name": "数据列变换",
-      "status": "in-progress",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "已实现整列重命名、文本清理、空值处理、预览应用与单步撤销；待补列选择及显式类型转换"
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "选择保留列、重命名、文本清理、空值处理、显式文本/整数/数字/布尔转换；整列预览、失败行提示、原始输入保留及单步撤销"
     },
     {
       "id": "csv-merge",

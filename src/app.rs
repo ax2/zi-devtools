@@ -157,7 +157,9 @@ fn tool_category(id: &str) -> &'static str {
         return tool.category();
     }
     match id {
-        "data" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => "数据与格式",
+        "data" | "data-transform" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => {
+            "数据与格式"
+        }
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
         "files" | "services" | "global-launcher" | "file-intake" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
@@ -195,6 +197,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: String::new(),
+        },
+        ToolEntry {
+            id: "data-transform".into(),
+            title: "数据列变换".into(),
+            description: "选列、类型转换与清理 · 预览及撤销".into(),
+            page: Page::Data,
+            kind: None,
+            category: String::new(),
+            keywords: "column transform schema integer boolean 类型 空值 重命名".into(),
         },
         ToolEntry {
             id: "files".into(),
@@ -486,6 +497,10 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            70..=73 => {
+                self.page = Page::Data;
+                self.data_state.preview_schema(scene >= 72);
             }
             68 | 69 => {
                 self.page = Page::Data;
@@ -1259,7 +1274,12 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
-        if let Some(tool) = crate::framework::Tool::from_id(&e.id) {
+        if e.id == "data-transform" {
+            self.page = Page::Data;
+            self.data_state.show_transform();
+            self.launcher_open = false;
+            self.visit(&e.id);
+        } else if let Some(tool) = crate::framework::Tool::from_id(&e.id) {
             self.frameworks.select(tool);
             self.page = Page::Frameworks;
             self.launcher_open = false;
