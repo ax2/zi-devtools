@@ -47,7 +47,12 @@ jobs:
         run: ./scripts/package.ps1
       - name: Install and uninstall smoke check
         shell: pwsh
+        env:
+          # Override inherited compatibility layers in the disposable CI process.
+          # Keep the installer OS requirement intact; do not emulate an older OS.
+          __COMPAT_LAYER: RunAsInvoker
         run: |
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version
           $installer = Get-ChildItem release/*-setup.exe | Select-Object -First 1
           $installDir = Join-Path $env:RUNNER_TEMP 'ZiDevTools-install-test'
           $installLog = Join-Path $env:RUNNER_TEMP 'zi-install.log'

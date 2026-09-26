@@ -13,6 +13,7 @@ DefaultGroupName=Zi DevTools
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0
 OutputDir=..\release
 OutputBaseFilename=ZiDevTools-{#AppVersion}-windows-x64-setup
 Compression=lzma2
