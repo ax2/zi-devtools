@@ -42,29 +42,24 @@ jobs:
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
           $global:LASTEXITCODE = 0
       - run: cargo build --release --locked
+      - name: Install pinned Inno Setup compiler
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.4.3.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_4_3/innosetup-6.4.3.exe' -OutFile $installer
+          if ((Get-FileHash $installer).Hash.ToLowerInvariant() -ne 'f3c42116542c4cc57263c5ba6c4feabfc49fe771f2f98a79d2f7628b8762723b') { throw 'Inno Setup checksum mismatch' }
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'inno-6.4.3'
+          $p = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$compilerDir") -Wait -PassThru -WindowStyle Hidden
+          if ($p.ExitCode -ne 0) { throw 'Compiler installation failed' }
+          "ISCC=$compilerDir/ISCC.exe" >> $env:GITHUB_ENV
       - name: Build Windows installer and checksums
         shell: pwsh
         run: ./scripts/package.ps1
       - name: Install and uninstall smoke check
         shell: pwsh
-        env:
-          # Override inherited compatibility layers in the disposable CI process.
-          # Keep the installer OS requirement intact; do not emulate an older OS.
-          __COMPAT_LAYER: RunAsInvoker
         run: |
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version
-          $installer = Get-ChildItem release/*-setup.exe | Select-Object -First 1
-          $installDir = Join-Path $env:RUNNER_TEMP 'ZiDevTools-install-test'
-          $installLog = Join-Path $env:RUNNER_TEMP 'zi-install.log'
-          $p = Start-Process $installer.FullName -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installDir", "/LOG=$installLog") -Wait -PassThru -WindowStyle Hidden
-          $p.Refresh()
-          if ($p.ExitCode -ne 0 -or !(Test-Path "$installDir/ZiDevTools.exe")) {
-            if (Test-Path $installLog) { Get-Content $installLog -Tail 100 }
-            throw "Installer smoke failed: exit=$($p.ExitCode), target=$installDir"
-          }
-          if ((Get-FileHash "$installDir/ZiDevTools.exe").Hash -ne (Get-FileHash target/release/ZiDevTools.exe).Hash) { throw 'Installed executable mismatch' }
-          $p = Start-Process "$installDir/unins000.exe" -ArgumentList '/VERYSILENT', '/NORESTART' -Wait -PassThru -WindowStyle Hidden
-          if ($p.ExitCode -ne 0 -or (Test-Path "$installDir/ZiDevTools.exe")) { throw 'Uninstall smoke failed' }
+          python scripts/installer_smoke.py
       - name: Publish version and assets
         shell: pwsh
         env:

@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $version = (Get-Content Cargo.toml | Select-String '^version = "([^"]+)"').Matches.Groups[1].Value
 if (!(Test-Path target/release/ZiDevTools.exe)) { throw 'Build release first' }
-$compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+$compiler = if ($env:ISCC) { $env:ISCC } else { "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
 if (!(Test-Path $compiler)) { throw 'Install Inno Setup 6 before packaging' }
 New-Item -ItemType Directory -Path release -Force | Out-Null
 & $compiler "/DAppVersion=$version" packaging/windows.iss
