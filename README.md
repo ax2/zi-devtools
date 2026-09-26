@@ -2,7 +2,11 @@
 
 [官网](https://devtools.zicode.com/) · [下载](https://github.com/ax2/zi-devtools/releases/latest) · [已实现工具与规划](docs/tools.md) · [发版流程](docs/releasing.md) · [MIT License](LICENSE)
 
-个人使用的 Windows 原生 Rust 桌面开发工具：
+MIT 开源的 Windows 原生 Rust 桌面开发工具。
+
+![Zi DevTools 工具首页](docs/images/workspace.png)
+
+主要能力：
 
 - 读取独立的 `~/.zi-devtools/services.yml`。
 - 查看本地服务状态、健康检查、端口、PID、日志与配置文件摘要。
