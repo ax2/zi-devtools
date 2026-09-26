@@ -38,11 +38,16 @@ pub(super) struct State {
     cancel: Arc<AtomicBool>,
     force_open: bool,
     message: String,
+    pub(super) job: Job,
+    invalidated: bool,
 }
 impl State {
     pub(super) fn invalidate(&mut self) {
-        self.cancel.store(true, Ordering::Relaxed);
-        self.receiver = None;
+        if self.receiver.is_some() {
+            self.cancel.store(true, Ordering::Relaxed);
+            self.job.cancelling();
+            self.invalidated = true;
+        }
         self.preview = None;
     }
 }
@@ -255,28 +260,57 @@ impl DataState {
     pub fn show_join(&mut self) {
         self.join.force_open = true;
     }
-    pub(super) fn join_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    pub(super) fn poll_join(&mut self) {
         if let Some(receiver) = &self.join.receiver {
             match receiver.try_recv() {
                 Ok(result) => {
                     self.join.receiver = None;
+                    if self.join.invalidated || self.join.cancel.load(Ordering::Relaxed) {
+                        self.join
+                            .job
+                            .finish(Phase::Cancelled, "任务已取消，原数据未修改");
+                        self.join.message = "任务已取消，原数据未修改".into();
+                        self.join.invalidated = false;
+                        return;
+                    }
                     match result {
                         Ok(preview) => {
+                            self.join
+                                .job
+                                .finish(Phase::Done, "合并预览已生成，等待应用");
                             self.join.message.clear();
                             self.join.preview = Some(preview);
                         }
-                        Err(e) => self.join.message = e,
+                        Err(e) => {
+                            self.join.job.finish(
+                                if self.join.cancel.load(Ordering::Relaxed) {
+                                    Phase::Cancelled
+                                } else {
+                                    Phase::Failed
+                                },
+                                "打开合并工具查看详情",
+                            );
+                            self.join.message = e;
+                        }
                     }
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.join.receiver = None;
+                    self.join.job.finish(Phase::Failed, "任务意外结束");
                     self.join.message = "合并任务意外结束，请重试".into();
                 }
-                Err(mpsc::TryRecvError::Empty) => {
-                    ctx.request_repaint_after(std::time::Duration::from_millis(100));
-                }
+                Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+    }
+    pub fn join_job(&self) -> &Job {
+        &self.join.job
+    }
+    pub fn cancel_join(&mut self) {
+        self.join.cancel.store(true, Ordering::Relaxed);
+        self.join.job.cancelling();
+    }
+    pub(super) fn join_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let Some(left) = &self.dataset else {
             return;
         };
@@ -323,7 +357,7 @@ impl DataState {
                         let delimiter = if self.join.tsv { b'\t' } else { b',' };
                         let mode = self.join.mode; let lk = self.join.left_key; let rk = self.join.right_key.clone();
                         let cancel = Arc::new(AtomicBool::new(false)); self.join.cancel = cancel.clone();
-                        let (tx, rx) = mpsc::channel(); self.join.receiver = Some(rx);
+                        let (tx, rx) = mpsc::channel(); self.join.receiver = Some(rx); self.join.job.begin(); self.join.invalidated = false;
                         std::thread::spawn(move || {
                             let result = Dataset::parse(&input, format, delimiter).and_then(|right| combine(&left, &right, mode, lk, &rk, &cancel));
                             let _ = tx.send(result.map_err(|e| e.to_string()));
@@ -332,7 +366,7 @@ impl DataState {
                     }
                 });
                 if busy {
-                    ui.horizontal(|ui| { ui.spinner(); ui.label("正在生成预览…"); if ui.button("取消").clicked() { self.join.cancel.store(true, Ordering::Relaxed); } });
+                    ui.horizontal(|ui| { ui.spinner(); ui.label("正在生成预览…"); if ui.button("取消").clicked() { self.join.cancel.store(true, Ordering::Relaxed); self.join.job.cancelling(); } });
                 }
                 if let Some(preview) = &self.join.preview {
                     ui.label(&preview.report);
@@ -362,6 +396,24 @@ mod tests {
         Dataset::parse(s, DataFormat::Csv, b',').unwrap()
     }
     #[test]
+    fn invalidation_waits_for_worker_and_never_applies_stale_result() {
+        let mut state = DataState::default();
+        let (tx, rx) = mpsc::channel();
+        state.join.cancel = Arc::new(AtomicBool::new(false));
+        state.join.receiver = Some(rx);
+        state.join.job.begin();
+        state.join.invalidate();
+        assert_eq!(state.join.job.phase, Phase::Cancelling);
+        tx.send(Ok(Preview {
+            data: csv("id\n1"),
+            report: "old".into(),
+        }))
+        .unwrap();
+        state.poll();
+        assert_eq!(state.join.job.phase, Phase::Cancelled);
+        assert!(state.join.preview.is_none());
+    }
+    #[test]
     fn applying_join_can_be_undone_and_left_changes_invalidate_pending_result() {
         let original = csv("id,value\n1,left");
         let right = csv("id,extra\n1,right");
@@ -387,7 +439,7 @@ mod tests {
         assert_eq!(state.dataset.as_ref().unwrap().headers.len(), 4);
         assert!(state.output.is_empty() && state.query.is_empty());
         assert_eq!(state.input, "original input");
-        assert!(token.load(Ordering::Relaxed));
+        assert!(!token.load(Ordering::Relaxed));
         state.undo_transform();
         assert_eq!(state.dataset.unwrap(), original);
     }

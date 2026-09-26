@@ -17,3 +17,5 @@ pub mod tools_advanced;
 pub mod tools_extra;
 pub mod tray;
 pub mod workbench;
+
+pub mod tasks;

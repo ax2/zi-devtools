@@ -1,5 +1,6 @@
 mod handoff;
 mod launcher;
+mod task_center;
 
 use std::{
     fs,
@@ -100,6 +101,7 @@ enum Page {
     #[default]
     Home,
     Intake,
+    Tasks,
     Services,
     SmallTools,
     EncodingTools,
@@ -160,7 +162,7 @@ fn tool_category(id: &str) -> &'static str {
         "data" | "data-transform" | "csv-merge" | "json" | "json-path" | "json-diff"
         | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
-        "files" | "services" | "global-launcher" | "file-intake" => "文件与系统",
+        "task-center" | "files" | "services" | "global-launcher" | "file-intake" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
@@ -170,6 +172,15 @@ fn tool_category(id: &str) -> &'static str {
 }
 fn catalog() -> Vec<ToolEntry> {
     let mut entries = vec![
+        ToolEntry {
+            id: "task-center".into(),
+            title: "后台任务中心".into(),
+            description: "数据解析、表格合并与文件校验状态".into(),
+            category: String::new(),
+            keywords: "task job progress cancel 后台 任务 进度 取消".into(),
+            page: Page::Tasks,
+            kind: None,
+        },
         ToolEntry {
             id: "global-launcher".into(),
             title: "全局快捷启动器".into(),
@@ -393,6 +404,7 @@ pub struct DevToolsApp {
     quick_position: Option<egui::Pos2>,
     quick_size: egui::Vec2,
     intake: crate::intake::State,
+    tasks: crate::tasks::Center,
     handoff: Option<handoff::Transfer>,
     tray: Option<TrayController>,
     page: Page,
@@ -505,6 +517,10 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            76 | 77 => {
+                self.page = Page::Tasks;
+                self.preview_tasks();
             }
             74 | 75 => {
                 self.page = Page::Data;
@@ -753,7 +769,7 @@ impl DevToolsApp {
             preview_panel_frames: 0,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             quick_active,
-            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), handoff: None,
+            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), tasks: Default::default(), handoff: None,
             manager,
             tray,
             page: Page::Home,
@@ -1121,6 +1137,7 @@ impl DevToolsApp {
                     .show(ui, |ui| {
                         nav_button(ui, &mut self.page, Page::Home, "工具首页");
                         nav_button(ui, &mut self.page, Page::Services, "本地服务");
+                        nav_button(ui, &mut self.page, Page::Tasks, "后台任务中心");
                         nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Frameworks, "Java / Django 诊断");
@@ -3120,6 +3137,7 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_tasks(ctx);
         if let Some(message) = self.frameworks.poll() {
             self.toast = Some((message, Instant::now()));
         }
@@ -3253,6 +3271,9 @@ impl eframe::App for DevToolsApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(self.colors.bg).inner_margin(24.0))
             .show(ctx, |ui| match self.page {
+                Page::Tasks => {
+                    self.tasks_page(ui);
+                }
                 Page::Intake => {
                     egui::ScrollArea::vertical().show(ui, |ui| self.intake.ui(ui));
                 }

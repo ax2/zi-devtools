@@ -1,3 +1,4 @@
+use crate::tasks::{Job, Phase};
 mod join;
 mod transform;
 
@@ -207,6 +208,7 @@ pub struct DataState {
     sort: Option<usize>,
     descending: bool,
     receiver: Option<Receiver<std::result::Result<Dataset, String>>>,
+    pub parse_job: Job,
 }
 impl DataState {
     pub fn import_text(&mut self, text: String, format: DataFormat, tsv: bool) -> Result<()> {
@@ -231,6 +233,7 @@ impl DataState {
         let delimiter = if self.tab_delimiter { b'\t' } else { b',' };
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
+        self.parse_job.begin();
         self.message.clear();
         self.join.invalidate();
         self.dataset = None;
@@ -240,20 +243,40 @@ impl DataState {
             let _ = tx.send(Dataset::parse(&input, format, delimiter).map_err(|e| e.to_string()));
         });
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        if let Some(result) = self.receiver.as_ref().and_then(|r| r.try_recv().ok()) {
-            self.receiver = None;
-            match result {
-                Ok(data) => {
-                    self.visible = (0..data.rows.len()).collect();
-                    self.dataset = Some(data);
-                    self.query.clear();
-                    self.sort = None;
-                    self.output.clear();
+    pub fn poll(&mut self) {
+        if let Some(receiver) = &self.receiver {
+            let result = match receiver.try_recv() {
+                Ok(value) => Some(value),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    Some(Err("解析任务意外结束，请重试".into()))
                 }
-                Err(e) => self.message = e,
+                Err(mpsc::TryRecvError::Empty) => None,
+            };
+            if let Some(result) = result {
+                self.receiver = None;
+                match result {
+                    Ok(data) => {
+                        self.parse_job.finish(
+                            Phase::Done,
+                            format!("{} 行 / {} 列", data.rows.len(), data.headers.len()),
+                        );
+                        self.visible = (0..data.rows.len()).collect();
+                        self.dataset = Some(data);
+                        self.query.clear();
+                        self.sort = None;
+                        self.output.clear();
+                    }
+                    Err(e) => {
+                        self.parse_job
+                            .finish(Phase::Failed, "解析失败，打开工具查看详情");
+                        self.message = e;
+                    }
+                }
             }
         }
+        self.poll_join();
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         heading(
             ui,
             "数据工作台",
@@ -522,6 +545,7 @@ pub struct FileState {
     progress: f32,
     index: usize,
     total: usize,
+    pub job: Job,
 }
 impl FileState {
     pub fn append_paths(&mut self, paths: &[PathBuf]) -> Result<()> {
@@ -574,6 +598,7 @@ impl FileState {
         let cancel = self.cancel.clone();
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
+        self.job.begin();
         std::thread::spawn(move || {
             for (i, path) in paths.into_iter().enumerate() {
                 if cancel.load(Ordering::Relaxed) {
@@ -590,12 +615,21 @@ impl FileState {
             let _ = tx.send(HashEvent::Done);
         });
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        let events = self
-            .receiver
-            .as_ref()
-            .map(|r| r.try_iter().collect::<Vec<_>>())
-            .unwrap_or_default();
+    pub fn poll(&mut self) {
+        let mut events = Vec::new();
+        let mut disconnected = false;
+        if let Some(receiver) = &self.receiver {
+            loop {
+                match receiver.try_recv() {
+                    Ok(event) => events.push(event),
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
+            }
+        }
         for event in events {
             match event {
                 HashEvent::Progress(i, done, total) => {
@@ -615,9 +649,34 @@ impl FileState {
                     } else {
                         format!("完成 {} 个文件，{} 个失败", self.results.len(), failed)
                     };
+                    self.job.finish(
+                        if self.cancel.load(Ordering::Relaxed) {
+                            Phase::Cancelled
+                        } else if failed > 0 {
+                            Phase::Failed
+                        } else {
+                            Phase::Done
+                        },
+                        self.message.clone(),
+                    );
                 }
             }
         }
+        if disconnected && self.receiver.is_some() {
+            self.receiver = None;
+            self.message = "校验任务意外结束，请重试".into();
+            self.job.finish(Phase::Failed, "校验任务意外结束");
+        }
+        if self.receiver.is_some() {
+            self.job.progress =
+                Some((self.index as f32 + self.progress) / self.total.max(1) as f32);
+        }
+    }
+    pub fn cancel_task(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        self.job.cancelling();
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         heading(
             ui,
             "文件校验",
@@ -656,7 +715,7 @@ impl FileState {
                     .add_enabled(self.receiver.is_some(), egui::Button::new("取消任务"))
                     .clicked()
                 {
-                    self.cancel.store(true, Ordering::Relaxed);
+                    self.cancel_task();
                 }
                 ui.label(
                     RichText::new("每批最多 64 个文件；文件内容不会上传")
@@ -774,6 +833,56 @@ fn primary(ui: &egui::Ui, text: &str) -> egui::Button<'static> {
 mod tests {
     use super::*;
     use std::fs;
+    #[test]
+    fn background_parse_is_received_without_rendering_tool_page() {
+        let mut state = DataState::default();
+        state
+            .import_text("id,name\n1,example".into(), DataFormat::Csv, false)
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.parse_job.phase.active() && std::time::Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(state.parse_job.phase, Phase::Done);
+        assert_eq!(state.dataset.unwrap().rows.len(), 1);
+    }
+    #[test]
+    fn disconnected_workers_are_failed_instead_of_staying_busy() {
+        let mut data = DataState::default();
+        let (tx, rx) = mpsc::channel();
+        drop(tx);
+        data.receiver = Some(rx);
+        data.parse_job.begin();
+        data.poll();
+        assert_eq!(data.parse_job.phase, Phase::Failed);
+        assert!(data.receiver.is_none());
+        let mut files = FileState::default();
+        let (tx, rx) = mpsc::channel();
+        drop(tx);
+        files.receiver = Some(rx);
+        files.job.begin();
+        files.poll();
+        assert_eq!(files.job.phase, Phase::Failed);
+        assert!(files.receiver.is_none());
+    }
+    #[test]
+    fn hash_worker_progress_and_completion_are_received_without_tool_ui() {
+        let path = std::env::temp_dir().join(format!("zi-task-{}.txt", uuid::Uuid::new_v4()));
+        fs::write(&path, b"abc").unwrap();
+        let mut files = FileState::default();
+        files.paths = path.to_string_lossy().into_owned();
+        files.start();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while files.job.phase.active() && std::time::Instant::now() < deadline {
+            files.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(files.job.phase, Phase::Done);
+        assert_eq!(files.job.progress, Some(1.0));
+        assert_eq!(files.results[0].1.as_ref().unwrap().bytes, 3);
+        fs::remove_file(path).unwrap();
+    }
     #[test]
     fn intake_preserves_busy_drafts_and_parses_tsv() {
         let mut data = DataState::default();
