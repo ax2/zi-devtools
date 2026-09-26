@@ -1,5 +1,5 @@
 {
-  "version": "0.20.1",
+  "version": "0.21.0",
   "updated": "2026-09-26",
   "tools": [
     {
@@ -168,7 +168,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出"
+      "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出；导出结果发送到其他文本工具，接收结果后本地解析预览"
     },
     {
       "id": "files",
@@ -184,7 +184,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "请求标签、站点配置、响应查看和脱敏历史"
+      "scope": "请求标签、站点配置、响应查看和脱敏历史；完整响应可预览并发送到文本工具"
     },
     {
       "id": "diff",
@@ -192,7 +192,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "逐行比较两段文本"
+      "scope": "逐行比较两段文本；接收其他工具结果到左侧或右侧输入"
     },
     {
       "id": "network",

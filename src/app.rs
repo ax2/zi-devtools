@@ -1,3 +1,4 @@
+mod handoff;
 mod launcher;
 
 use std::{
@@ -373,6 +374,7 @@ pub struct DevToolsApp {
     quick_position: Option<egui::Pos2>,
     quick_size: egui::Vec2,
     intake: crate::intake::State,
+    handoff: Option<handoff::Transfer>,
     tray: Option<TrayController>,
     page: Page,
     statuses: Vec<ServiceStatus>,
@@ -431,6 +433,7 @@ impl DevToolsApp {
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
         self.startup_warning = None;
         self.quick_open = false;
+        self.handoff = None;
         self.launcher_open = false;
         self.tool_search.clear();
         self.preferences.recent.clear();
@@ -483,6 +486,14 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            66 | 67 => {
+                self.navigate(Page::EncodingTools, Some(ToolKind::Json));
+                self.tool_state.input = "[{\"name\":\"示例\",\"count\":3}]".into();
+                self.tool_state.output =
+                    run_tool(ToolKind::Json, 0, &self.tool_state.input, "", 10).unwrap();
+                self.handoff =
+                    Some(handoff::Transfer::new("JSON".into(), &self.tool_state.output).unwrap());
             }
             64 | 65 => {
                 self.page = Page::Intake;
@@ -711,7 +722,7 @@ impl DevToolsApp {
             preview_panel_frames: 0,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             quick_active,
-            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(),
+            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), handoff: None,
             manager,
             tray,
             page: Page::Home,
@@ -1107,7 +1118,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 20  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 21  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -2171,7 +2182,8 @@ impl DevToolsApp {
     fn tool_actions(&mut self, ui: &mut egui::Ui) {
         let p = self.colors;
         let mut selected = None;
-        let shortcut = !self.launcher_open
+        let shortcut = self.handoff.is_none()
+            && !self.launcher_open
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
@@ -3164,7 +3176,9 @@ impl eframe::App for DevToolsApp {
             return;
         }
 
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K)) {
+        if self.handoff.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K))
+        {
             self.open_launcher();
         }
         egui::TopBottomPanel::bottom("status-bar")
@@ -3194,6 +3208,7 @@ impl eframe::App for DevToolsApp {
                 });
             });
         self.sidebar(ctx);
+        self.handoff_bar(ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(self.colors.bg).inner_margin(24.0))
             .show(ctx, |ui| match self.page {
@@ -3240,7 +3255,10 @@ impl eframe::App for DevToolsApp {
                     let previous = self.plugins.selected.clone();
                     egui::ScrollArea::vertical()
                         .id_salt("plugins-page")
-                        .show(ui, |ui| self.plugins.ui(ui, !self.launcher_open));
+                        .show(ui, |ui| {
+                            self.plugins
+                                .ui(ui, !self.launcher_open && self.handoff.is_none())
+                        });
                     if self.plugins.selected != previous
                         && let Some(id) = self.plugins.selected.clone()
                     {
@@ -3264,7 +3282,10 @@ impl eframe::App for DevToolsApp {
                     });
                     egui::ScrollArea::vertical()
                         .id_salt(("frameworks", self.frameworks.selected.id()))
-                        .show(ui, |ui| self.frameworks.ui(ui, !self.launcher_open));
+                        .show(ui, |ui| {
+                            self.frameworks
+                                .ui(ui, !self.launcher_open && self.handoff.is_none())
+                        });
                     if self.frameworks.selected != before {
                         self.visit(self.frameworks.selected.id());
                     }
@@ -3275,6 +3296,7 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.integrations.ui(ui));
                 }
             });
+        self.handoff_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
         if self.clear_tool_confirm {

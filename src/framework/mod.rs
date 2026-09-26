@@ -291,6 +291,12 @@ pub struct State {
     copied: Option<Instant>,
 }
 impl State {
+    pub fn result_text(&self) -> &str {
+        self.drafts
+            .get(&self.selected)
+            .map_or("", |draft| draft.output.as_str())
+    }
+
     pub fn import_text(&mut self, tool: Tool, text: String) -> Result<()> {
         ensure!(
             !self
