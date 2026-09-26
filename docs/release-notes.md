@@ -1,17 +1,17 @@
-# Zi DevTools v0.17.0
+# Zi DevTools v0.18.0
 
-本轮完善现有工具体验，增加 Java 与 Django 离线诊断入口。
+本轮完成原有 14 项 Java / Django 规划的首版，提供独立诊断工作台。
 
-- 新增 Java 异常链：异常类型、cause/suppressed 关系、帧位置和省略帧数，正确区分主链与 suppressed 分支。
-- 新增 Django / Python Traceback：异常链、文件/行号/函数、最后可见帧、截断标记及常见 Django 异常规则提示。
-- 目录每页最多 18 项；分类、搜索与视图变化后回到首页；收藏、最近、常用和 Ctrl K 保持统一入口。
-- 插件任务离开页面后继续收取完成结果并提示，保留各工具结果；模型必填检查、GET 参数简化、运行中锁定输入、结构化 HTTP 错误摘要与复制反馈。
-- 插件清单目录与管理页避免每帧复制所有请求体；搜索匹配分数只计算一次。
-- 本机入口发现增加 Java/javac/Maven/Gradle/django-admin；不执行环境命令、不导入项目。
-- 新增 14 项 Java/Django 规划与专项路线文档；现有 36 项内置能力、80 项规划，另有 3 个示例插件包 / 6 项可选工具。
+- Java：JDK/构建环境、线程转储、Maven/Gradle 依赖、GC 日志、JFR 事件、Spring 配置、Actuator 只读检查。
+- Python：解释器/Django 环境、迁移计划、SQL/N+1、URL/reverse、DRF OpenAPI、部署检查、Celery 日志。
+- 新增 Java/Python 两个目录分类；全部工具支持收藏、最近/常用、Ctrl K 与托盘直达。Ctrl Enter 执行，后台结果保留原工具。
+- 会话独立草稿、UTF-8 文件导入、可复制摘要/JSON、新文件报告保存；输入与报告不自动持久化。
+- 固定 java/python/jfr 命令、后台进程、输出/时间限制与 Windows Job 清理；核心仍为 Rust，不要求预装这些运行时。未开放任意进程插件。
+- 迁移依赖不由显示顺序伪造；Object.wait 释放的监视器不计为持有者；SQL/N+1 与死锁推测和原文明确证据分开。
+- 清单共 50 项内置已实现、66 项规划；14 项状态和具体支持范围已同步。3 个可选插件包 / 6 项工具另计。
 
-边界：两种诊断只解析支持的标准文本，不执行代码，不证明真实根因。Java 不还原省略帧；Python 不支持 HTML 调试页及 ExceptionGroup 树。模型请求仍不支持 SSE、手动取消或自主 Agent；MCP、RAG、进程插件尚在规划。
+详细格式、导出脚本、权限和限制：[Java / Django 使用说明](java-django-tools.md)。不支持所有日志方言、虚拟线程 JSON、完整 JFR 调用树或复杂 OpenAPI/reverse 语义；不执行迁移、修改环境、连接 broker 或重放任务。
 
-验证：56 项单元测试、4 项 Windows 生命周期集成测试、fmt、全目标全特性 Clippy；32 张真实应用 UI 截图和内置/插件 Ctrl K 键盘导航。安装器与发布结果见对应 Actions。
+验证：69 项单元测试、4 项 Windows 生命周期集成测试；1 项子进程夹具由边界测试单独启动。fmt、全目标全特性 Clippy、60 个真实 UI 场景和内置/插件/诊断快捷导航。临时 Java 21 与 Django 5.1.6 项目验证真实线程死锁、GC/JFR、迁移/SQL/URL/check 输出，另验证空 venv；Actuator 本地 HTTP 夹具验证 GET/Bearer/503。公开发版流水线另验证 MSI 安装/卸载。
 
 Windows x64：MSI、便携 EXE、SHA256SUMS.txt，无 ZIP。升级前请从托盘退出旧版本。MIT 开源。

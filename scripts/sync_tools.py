@@ -15,6 +15,8 @@ ids = set(re.findall(r'Self::\w+ => "([a-z0-9-]+)"', source[source.index('fn id'
 app = (root/'src/app.rs').read_text(encoding='utf-8')
 ids |= set(re.findall(r'id: "([a-z0-9-]+)"', app[app.index('fn catalog()'):app.index('pub struct DevToolsApp')]))
 ids.add('services')
+framework = (root/'src/framework/mod.rs').read_text(encoding='utf-8')
+ids |= set(re.findall(r'Self::\w+ => "([a-z0-9-]+)"', framework[framework.index('pub fn id'):framework.index('pub fn label')]))
 assert ids == {t['id'] for t in items if t['status']=='implemented'}, 'Source/catalog implemented IDs differ'
 lines = ['# 工具清单与路线图', '', f"更新：{data['updated']} · 已实现版本：v{data['version']}", '', '本文件由 `docs/tools.json` 生成。规划表示方向，不代表已经可用，也不承诺发布日期。', '', '## 已实现', '', '| 工具 | 分类 | 当前范围 |', '| --- | --- | --- |']
 for t in items:

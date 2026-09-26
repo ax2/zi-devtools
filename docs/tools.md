@@ -1,6 +1,6 @@
 # 工具清单与路线图
 
-更新：2026-09-26 · 已实现版本：v0.17.0
+更新：2026-09-26 · 已实现版本：v0.18.0
 
 本文件由 `docs/tools.json` 生成。规划表示方向，不代表已经可用，也不承诺发布日期。
 
@@ -44,6 +44,20 @@
 | 本机集成发现 | 工作台 | 只读检查 PATH 软件入口和 4 个本地 TCP 端口；不读取软件私有配置或启动服务 |
 | Java 异常链 | 小工具 | 离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧 |
 | Django / Python 堆栈 | 小工具 | 离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目 |
+| Java 线程转储分析 | 工作台 | 标准 jstack/jcmd 平台线程状态、监视器锁等待关系、循环线索与 JVM 明确死锁报告；不支持虚拟线程 JSON |
+| Maven / Gradle 依赖冲突 | 工作台 | Maven/Gradle 文本坐标、树路径与版本选择；insight 仅提取坐标，不执行 wrapper 或证明运行时冲突 |
+| JDK / 构建环境诊断 | 工作台 | 显式选择可信 java，固定命令对比 JDK 属性与 JAVA_HOME；Maven/Gradle 仅发现入口，不修改环境 |
+| Java GC 日志分析 | 工作台 | JDK 11–21 G1/Parallel/Serial 统一日志 Pause 完成行统计、堆变化和时间线；不解析所有收集器 |
+| JFR 录制报告浏览 | 工作台 | 解析 jfr print JSON，或调用所选可信 jfr 读取 ≤64 MiB 录制；采样顶层热点、事件时间线，非完整 profiler |
+| Spring 配置对比 | 工作台 | 比较两份 JSON/单文档 YAML 配置与占位符，敏感键值遮盖；不推导实际生效优先级，不直接解析 properties |
+| Spring Actuator 只读诊断 | 工作台 | 显式选择基础地址和 health/info/metrics GET；支持 503 health JSON，不跟随重定向、不读取 env/configprops |
+| Python / Django 环境诊断 | 工作台 | 显式运行可信 Python -I，检查解释器/venv/Django 分发和脚本目录，可比较两个环境；不加载项目 settings |
+| Django 迁移计划检查 | 工作台 | 解析 showmigrations 列表/带显式依赖的 plan 与 migrate plan；标记依赖循环/状态不一致和 SQL 风险，不执行迁移 |
+| Django SQL / N+1 分析 | 工作台 | 导入 requestId/sql/durationMs JSON，按请求聚合 SQL 指纹、耗时与疑似 N+1；不执行 SQL 或断言根因 |
+| Django URL / reverse 检查 | 工作台 | 导入 URL JSON 清单，检查完整命名空间、名称重复和 reverse kwargs 名称；不运行 resolver 或验证转换器值 |
+| DRF OpenAPI 契约对比 | 工作台 | 比较 OpenAPI 3.x JSON 端点、字段、共享组件与潜在兼容性变化；不展开外部/循环引用、不验证权限 |
+| Django 部署检查报告 | 工作台 | 按 Django check 编号阅读脱敏输出，分类并解释常见部署问题；不执行项目或改设置 |
+| Celery 任务故障分析 | 工作台 | 解析标准 worker Task name[id] 文本日志，关联失败、重试、耗时和最后观测状态；不连接 broker/重放任务 |
 
 ## 规划中
 
@@ -117,20 +131,6 @@ P1：优先推进数据闭环与插件/AI 基础；P2：扩展场景；P3：需�
 | P2 | Git 工作区面板 | 状态/差异/分支查看，写入前预览，不自动提交私有文件 | 规划中 |
 | P2 | SQLite 工作台 | 只读打开、schema/SQL 查询/导出；写模式显式切换与事务回滚 | 规划中 |
 | P2 | Parquet / Arrow 工作台 | schema、分页预览、过滤与 CSV/JSON 导出，控制内存上限 | 规划中 |
-| P1 | Java 线程转储分析 | 导入 jstack/jcmd 文本；线程状态、锁等待链、显式死锁报告；区分采样阻塞与已证实死锁 | 规划中 |
-| P1 | Maven / Gradle 依赖冲突 | 导入依赖树输出，定位版本选择与重复依赖路径；不自动执行项目 wrapper | 规划中 |
-| P1 | JDK / 构建环境诊断 | 对比用户选定 JDK、JAVA_HOME 与构建入口；显示版本兼容提示，不自动修改 PATH | 规划中 |
-| P2 | Java GC 日志分析 | 导入统一 GC 日志，展示停顿分布、回收频率与堆变化；明确支持的收集器与日志版本 | 规划中 |
-| P2 | JFR 录制报告浏览 | 通过独立可选解析器读取录制事件；时间线与热点摘要，限制文件大小，不替代专业 profiler | 规划中 |
-| P2 | Spring 配置对比 | 比较脱敏配置与 profile 差异；标明来源和未解析占位符，不声称推导完整运行时优先级 | 规划中 |
-| P2 | Spring Actuator 只读诊断 | 显式配置端点并请求 health/info/metrics；单独授权网络，不默认抓取 env/configprops | 规划中 |
-| P1 | Python / Django 环境诊断 | 用户选择解释器后检查版本与 Django 导入位置，对比 django-admin 来源；不导入项目 settings | 规划中 |
-| P1 | Django 迁移计划检查 | 导入 showmigrations/plan/sqlmigrate 输出，展示依赖与破坏性 SQL 提示；不自动 migrate 或 fake | 规划中 |
-| P1 | Django SQL / N+1 分析 | 导入脱敏 SQL 记录及请求分组；归一化重复查询与耗时，区分疑似 N+1 和证实请求上下文 | 规划中 |
-| P2 | Django URL / reverse 检查 | 导入显式导出的 URL 清单，检查名称重复、namespace 与参数；导出步骤不隐式运行项目 | 规划中 |
-| P2 | DRF OpenAPI 契约对比 | 比较 OpenAPI 文档的端点、字段和兼容性变化；不等同运行时权限测试 | 规划中 |
-| P2 | Django 部署检查报告 | 导入 check --deploy 的脱敏输出，按检查编号分类并提供修复说明，不自动修改 settings | 规划中 |
-| P2 | Celery 任务故障分析 | 导入脱敏任务日志、重试与 worker 事件；关联失败与耗时，不连接 broker 或重放任务 | 规划中 |
 
 ## 持续同步规则
 

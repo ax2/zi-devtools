@@ -107,6 +107,7 @@ enum Page {
     Settings,
     Plugins,
     Integrations,
+    Frameworks,
 }
 
 struct ToolEntry {
@@ -148,12 +149,17 @@ fn page_bounds(total: usize, index: usize) -> (std::ops::Range<usize>, usize) {
     (start..(start + SIZE).min(total), pages)
 }
 fn tool_category(id: &str) -> &'static str {
+    if let Some(tool) = crate::framework::Tool::from_id(id) {
+        return tool.category();
+    }
     match id {
         "data" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
         "files" | "services" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
-        "plugins" | "integrations" | "java-trace" | "django-trace" => "扩展与集成",
+        "java-trace" => "Java 与 JVM",
+        "django-trace" => "Python 与 Django",
+        "plugins" | "integrations" => "扩展与集成",
         _ => "文本与编码",
     }
 }
@@ -232,6 +238,25 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "service server process".into(),
         },
     ];
+    entries.extend(
+        crate::framework::Tool::ALL
+            .into_iter()
+            .map(|tool| ToolEntry {
+                id: tool.id().into(),
+                title: tool.label().into(),
+                description: tool.description().into(),
+                category: tool.category().into(),
+                keywords: format!(
+                    "{} {} {} {}",
+                    tool.category(),
+                    tool.id(),
+                    tool.description(),
+                    tool.help()
+                ),
+                page: Page::Frameworks,
+                kind: None,
+            }),
+    );
     entries.extend(ToolKind::ALL.into_iter().map(|kind| ToolEntry {
         id: kind.id().into(),
         title: kind.label().into(),
@@ -355,6 +380,7 @@ pub struct DevToolsApp {
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
     integrations: crate::integrations::IntegrationState,
+    frameworks: crate::framework::State,
     home_filter: String,
     home_category: String,
     home_page_index: usize,
@@ -421,6 +447,11 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
+            32..=59 => {
+                self.page = Page::Frameworks;
+                self.frameworks
+                    .preview(crate::framework::Tool::ALL[(scene - 32) / 2]);
+            }
             27..=30 => {
                 let kind = if scene <= 28 {
                     ToolKind::JavaTrace
@@ -478,6 +509,14 @@ impl DevToolsApp {
     pub fn preview_plugin_navigation(&self) -> bool {
         self.page == Page::Plugins
             && self.plugins.selected.as_deref() == Some("plugin:local-text/deduplicate")
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_framework_navigation(&self) -> (bool, bool) {
+        (
+            self.page == Page::Frameworks
+                && self.frameworks.selected == crate::framework::Tool::Sql,
+            self.frameworks.preview_completed > 0 && !self.frameworks.is_running(),
+        )
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_navigation(&self) -> (bool, bool) {
@@ -569,7 +608,7 @@ impl DevToolsApp {
             launcher_focus: false, launcher_index: 0, toast: None,
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
-            integrations: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
+            integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
             app.spawn_restore();
@@ -739,6 +778,11 @@ impl DevToolsApp {
                         self.navigate(Page::Plugins, None);
                     }
                     TrayTool::Integrations => self.navigate(Page::Integrations, None),
+                    TrayTool::Framework(tool) => {
+                        self.frameworks.select(tool);
+                        self.page = Page::Frameworks;
+                        self.visit(tool.id());
+                    }
                 },
                 BackgroundEvent::NetworkResult(request_id, result) => {
                     if self.network_state.request_id == request_id {
@@ -857,6 +901,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Services, "本地服务");
                         nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
+                        nav_button(ui, &mut self.page, Page::Frameworks, "Java / Django 诊断");
                         ui.add_space(10.0);
                         ui.label(RichText::new("轻量工具").size(11.0).strong().color(p.muted));
                         ui.add_space(4.0);
@@ -882,7 +927,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 17  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 18  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -921,10 +966,11 @@ impl DevToolsApp {
             if self.page == Page::Plugins {
                 self.plugins.selected = None;
             }
-            if let Some(e) = catalog()
-                .into_iter()
-                .find(|e| e.page == self.page && e.kind.is_none())
-            {
+            if let Some(e) = catalog().into_iter().find(|e| {
+                e.page == self.page
+                    && e.kind.is_none()
+                    && (e.page != Page::Frameworks || e.id == self.frameworks.selected.id())
+            }) {
                 self.visit(&e.id);
             }
         }
@@ -1009,7 +1055,12 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
-        if e.id.starts_with("plugin:") {
+        if let Some(tool) = crate::framework::Tool::from_id(&e.id) {
+            self.frameworks.select(tool);
+            self.page = Page::Frameworks;
+            self.launcher_open = false;
+            self.visit(&e.id);
+        } else if e.id.starts_with("plugin:") {
             self.plugins.select(&e.id);
             self.page = Page::Plugins;
             self.launcher_open = false;
@@ -2708,6 +2759,15 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(message) = self.frameworks.poll() {
+            self.toast = Some((message, Instant::now()));
+        }
+        if self.frameworks.is_running() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        if self.page != Page::Frameworks {
+            self.frameworks.clear_token();
+        }
         if let Some(message) = self.plugins.poll() {
             self.toast = Some((message, Instant::now()));
         }
@@ -2808,6 +2868,28 @@ impl eframe::App for DevToolsApp {
                         && let Some(id) = self.plugins.selected.clone()
                     {
                         self.visit(&id);
+                    }
+                }
+                Page::Frameworks => {
+                    let before = self.frameworks.selected;
+                    ui.horizontal(|ui| {
+                        let id = self.frameworks.selected.id();
+                        if ui
+                            .button(if self.preferences.favorites.iter().any(|s| s == id) {
+                                "★ 已收藏"
+                            } else {
+                                "☆ 收藏当前诊断"
+                            })
+                            .clicked()
+                        {
+                            self.toggle_favorite(id);
+                        }
+                    });
+                    egui::ScrollArea::vertical()
+                        .id_salt(("frameworks", self.frameworks.selected.id()))
+                        .show(ui, |ui| self.frameworks.ui(ui, !self.launcher_open));
+                    if self.frameworks.selected != before {
+                        self.visit(self.frameworks.selected.id());
                     }
                 }
                 Page::Integrations => {

@@ -20,6 +20,8 @@ pub const CATEGORIES: &[&str] = &[
     "AI 与模型",
     "知识与检索",
     "扩展与集成",
+    "Java 与 JVM",
+    "Python 与 Django",
 ];
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

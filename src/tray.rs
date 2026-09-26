@@ -27,6 +27,7 @@ pub enum TrayTool {
     Files,
     Plugins,
     Integrations,
+    Framework(crate::framework::Tool),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -91,6 +92,21 @@ impl TrayController {
             &MenuItem::with_id("tool.plugins", "插件与连接器", true, None),
             &MenuItem::with_id("tool.integrations", "本机集成发现", true, None),
         ])?;
+        for category in ["Java 与 JVM", "Python 与 Django"] {
+            let submenu = Submenu::new(category, true);
+            for tool in crate::framework::Tool::ALL
+                .into_iter()
+                .filter(|t| t.category() == category)
+            {
+                submenu.append(&MenuItem::with_id(
+                    format!("tool.framework.{}", tool.id()),
+                    tool.label(),
+                    true,
+                    None,
+                ))?;
+            }
+            developer_tools.append(&submenu)?;
+        }
         menu.append_items(&[&small_tools, &encoding_tools, &developer_tools])?;
 
         let services_menu = Submenu::new("本地服务", true);
@@ -219,6 +235,12 @@ impl TrayController {
 }
 
 fn action_from_menu_id(id: &str) -> Option<TrayAction> {
+    if let Some(tool) = id
+        .strip_prefix("tool.framework.")
+        .and_then(crate::framework::Tool::from_id)
+    {
+        return Some(TrayAction::OpenTool(TrayTool::Framework(tool)));
+    }
     match id {
         OPEN_ID => Some(TrayAction::ShowWindow),
         "tool.http" => Some(TrayAction::OpenTool(TrayTool::Http)),

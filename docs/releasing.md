@@ -20,6 +20,6 @@
 
 ## 验证基线
 
-Stage 17 已通过 56 项单元测试、4 项 Windows 生命周期集成测试和本地 EXE 冒烟。工作流另行验证干净 Windows runner 的完整构建及安装卸载；具体结果以 Actions 为准。
+Stage 18 已通过 69 项单元测试、4 项 Windows 生命周期集成测试和本地 EXE 冒烟。工作流另行验证干净 Windows runner 的完整构建及安装卸载；具体结果以 Actions 为准。
 
 升级前请从系统托盘选择退出 Zi DevTools。卸载仅移除程序与快捷方式，用户目录中的配置和服务状态保留。

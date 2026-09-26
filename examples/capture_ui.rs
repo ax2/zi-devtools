@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 32] = [
+const NAMES: [&str; 60] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -40,6 +40,34 @@ const NAMES: [&str; 32] = [
     "django-trace-light",
     "django-trace-dark",
     "directory-page-two-light",
+    "java-environment-dark",
+    "java-environment-light",
+    "django-environment-dark",
+    "django-environment-light",
+    "java-threads-dark",
+    "java-threads-light",
+    "dependencies-dark",
+    "dependencies-light",
+    "migrations-dark",
+    "migrations-light",
+    "sql-dark",
+    "sql-light",
+    "gc-dark",
+    "gc-light",
+    "jfr-dark",
+    "jfr-light",
+    "spring-config-dark",
+    "spring-config-light",
+    "actuator-dark",
+    "actuator-light",
+    "django-urls-dark",
+    "django-urls-light",
+    "drf-dark",
+    "drf-light",
+    "checks-dark",
+    "checks-light",
+    "celery-dark",
+    "celery-light",
 ];
 
 struct Capture {
@@ -60,12 +88,16 @@ impl eframe::App for Capture {
         let event = match self.frames {
             2 => Some((egui::Key::K, egui::Modifiers::CTRL)),
             4 => Some((egui::Key::ArrowDown, egui::Modifiers::NONE)),
-            6 | 14 => Some((egui::Key::Enter, egui::Modifiers::NONE)),
-            10 => Some((egui::Key::K, egui::Modifiers::CTRL)),
+            6 | 14 | 22 => Some((egui::Key::Enter, egui::Modifiers::NONE)),
+            10 | 18 => Some((egui::Key::K, egui::Modifiers::CTRL)),
+            26 => Some((egui::Key::Enter, egui::Modifiers::CTRL)),
             _ => None,
         };
         if self.frames == 12 {
             input.events.push(egui::Event::Text("保持顺序去重".into()));
+        }
+        if self.frames == 20 {
+            input.events.push(egui::Event::Text("django-sql".into()));
         }
         if let Some((key, modifiers)) = event {
             input.modifiers = modifiers;
@@ -79,7 +111,7 @@ impl eframe::App for Capture {
         }
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.started.elapsed() > Duration::from_secs(100) {
+        if self.started.elapsed() > Duration::from_secs(180) {
             panic!("UI capture timed out before verification completed");
         }
         let screenshots = ctx.input(|i| {
@@ -140,6 +172,22 @@ impl eframe::App for Capture {
                     "Ctrl K routes installed plugin tool"
                 );
                 println!("PASS keyboard: plugin search and navigation");
+            }
+            if self.frames == 24 {
+                assert!(
+                    self.app.preview_framework_navigation().0,
+                    "Ctrl K routes Django SQL"
+                );
+            }
+            if self.frames == 42 {
+                let (navigated, completed) = self.app.preview_framework_navigation();
+                assert!(
+                    navigated && completed,
+                    "Ctrl Enter executes diagnostic background task"
+                );
+                println!(
+                    "PASS keyboard: diagnostic search, navigation, Ctrl Enter background completion"
+                );
                 // The product intentionally hides on Close; this disposable fixture must exit.
                 std::process::exit(0);
             }
@@ -150,7 +198,7 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if self.scene == 3 || self.scene == 7 {
+            let size = if self.scene == 3 || self.scene == 7 || self.scene == 59 {
                 egui::vec2(980.0, 760.0)
             } else {
                 egui::vec2(1280.0, 900.0)
