@@ -11,9 +11,13 @@ struct Draft {
     input: String,
     output: String,
     model: String,
+    endpoint: String,
+    settings_key: String,
+    settings_message: String,
 }
 pub struct PluginState {
     pub store: Store,
+    settings: crate::plugin_settings::Settings,
     pub selected: Option<String>,
     path: String,
     preview: Option<Vec<u8>>,
@@ -29,6 +33,9 @@ pub struct PluginState {
 impl PluginState {
     pub fn new(root: PathBuf) -> Self {
         Self {
+            settings: crate::plugin_settings::Settings::load(
+                root.join("settings/connections.json"),
+            ),
             store: Store::load(root),
             selected: None,
             path: String::new(),
@@ -88,7 +95,7 @@ impl PluginState {
             self.clear_token();
         }
         if let Some(id) = self.selected.clone() {
-            if let Some((_, tool)) = self
+            if let Some((_, mut tool)) = self
                 .store
                 .tool_refs()
                 .find(|(key, _)| key == &id)
@@ -98,29 +105,128 @@ impl PluginState {
                 let get_only = matches!(&tool.adapter,Adapter::Http{method,..} if method=="GET");
                 ui.heading(&tool.name);
                 ui.label(&tool.description);
-                let draft = self.drafts.entry(id.clone()).or_insert_with(|| Draft {
-                    model: tool.model.clone(),
-                    ..Default::default()
-                });
+                let settings_key = crate::plugin_settings::Settings::key(&id, &tool);
+                let default_endpoint = match &tool.adapter {
+                    Adapter::Http { url, .. } => url.clone(),
+                    _ => String::new(),
+                };
+                let draft = self.drafts.entry(id.clone()).or_default();
+                if draft.settings_key != settings_key {
+                    let saved = self.settings.get(&settings_key);
+                    draft.model = saved.map_or_else(|| tool.model.clone(), |v| v.model.clone());
+                    draft.endpoint =
+                        saved.map_or_else(|| default_endpoint.clone(), |v| v.endpoint.clone());
+                    draft.settings_key = settings_key.clone();
+                    draft.settings_message.clear();
+                    self.token.clear();
+                    self.use_saved = false;
+                    self.credential_message.clear();
+                }
+                let mut connection_valid = true;
                 if let Adapter::Http {
                     url, method, body, ..
-                } = &tool.adapter
+                } = &mut tool.adapter
                 {
-                    ui.label(format!("请求目标：{method} {url}"));
-                    ui.label(
-                        "仅点击运行时发送输入；请求超时 30 秒。临时令牌切换工具后清除；保存需手动操作。",
-                    );
-                    if method == "POST" && plugins::uses_model(body) {
-                        ui.horizontal(|ui| {
-                            ui.label("模型名称");
-                            ui.add_enabled(
-                                !busy,
-                                egui::TextEdit::singleline(&mut draft.model)
-                                    .hint_text("填入模型列表返回的名称"),
-                            );
-                        });
-                    }
                     ui.add_enabled_ui(!busy, |ui| {
+                        egui::CollapsingHeader::new("连接设置 · 地址与模型")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                ui.label("完整接口地址（远程 HTTPS / 本机 HTTP）");
+                                if ui
+                                    .add(
+                                        egui::TextEdit::singleline(&mut draft.endpoint)
+                                            .desired_width(f32::INFINITY),
+                                    )
+                                    .changed()
+                                {
+                                    self.token.clear();
+                                    self.use_saved = false;
+                                    self.credential_message.clear();
+                                    draft.settings_message.clear();
+                                }
+                                if method == "POST" && plugins::uses_model(body) {
+                                    ui.horizontal(|ui| {
+                                        ui.label("模型名称");
+                                        if ui
+                                            .add(
+                                                egui::TextEdit::singleline(&mut draft.model)
+                                                    .hint_text("填入服务提供的模型名称"),
+                                            )
+                                            .changed()
+                                        {
+                                            draft.settings_message.clear();
+                                        }
+                                    });
+                                }
+                                let value = crate::plugin_settings::Connection {
+                                    endpoint: draft.endpoint.clone(),
+                                    model: draft.model.clone(),
+                                };
+                                let changed = self.settings.get(&settings_key) != Some(&value);
+                                ui.horizontal_wrapped(|ui| {
+                                    if ui
+                                        .add_enabled(
+                                            changed
+                                                && value.validate().is_ok()
+                                                && self.settings.error.is_none(),
+                                            egui::Button::new("保存连接设置"),
+                                        )
+                                        .clicked()
+                                    {
+                                        draft.settings_message =
+                                            match self.settings.set(&settings_key, Some(value)) {
+                                                Ok(()) => "连接设置已保存；未保存令牌".into(),
+                                                Err(_) => "保存失败，请检查配置目录写入权限".into(),
+                                            };
+                                    }
+                                    if ui
+                                        .add_enabled(
+                                            self.settings.error.is_none(),
+                                            egui::Button::new("恢复插件默认"),
+                                        )
+                                        .clicked()
+                                    {
+                                        match self.settings.set(&settings_key, None) {
+                                            Ok(()) => {
+                                                draft.endpoint = default_endpoint.clone();
+                                                draft.model = tool.model.clone();
+                                                self.token.clear();
+                                                self.use_saved = false;
+                                                self.credential_message.clear();
+                                                draft.settings_message =
+                                                    "已恢复插件默认；系统凭据保留".into();
+                                            }
+                                            Err(_) => {
+                                                draft.settings_message =
+                                                    "恢复失败，原设置保留".into()
+                                            }
+                                        }
+                                    }
+                                    if changed {
+                                        ui.weak("当前编辑可直接运行；保存后重启仍可使用");
+                                    }
+                                });
+                                if !draft.settings_message.is_empty() {
+                                    ui.label(&draft.settings_message);
+                                }
+                                if let Some(error) = &self.settings.error {
+                                    ui.colored_label(ui.visuals().error_fg_color, error);
+                                }
+                            });
+                    });
+                    *url = draft.endpoint.clone();
+                    if let Err(error) = (crate::plugin_settings::Connection {
+                        endpoint: url.clone(),
+                        model: draft.model.clone(),
+                    })
+                    .validate()
+                    {
+                        connection_valid = false;
+                        ui.colored_label(ui.visuals().error_fg_color, error.to_string());
+                    }
+                    ui.label(format!("请求目标：{method} {url}"));
+                    ui.small("仅点击运行时发送输入；超时 30 秒。修改地址会清空临时令牌并取消使用已保存凭据。");
+                    ui.add_enabled_ui(!busy && connection_valid, |ui| {
                         ui.checkbox(&mut self.use_saved, "本次使用 Windows 已保存凭据");
                         ui.horizontal_wrapped(|ui| {
                             ui.label("临时 Bearer 令牌（可选）");
@@ -182,12 +288,13 @@ impl PluginState {
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
                 if (ui
                     .add_enabled(
-                        self.running.is_none(),
+                        self.running.is_none() && connection_valid,
                         egui::Button::new("运行工具 · Ctrl Enter"),
                     )
                     .clicked()
                     || shortcut)
                     && self.running.is_none()
+                    && connection_valid
                 {
                     let (input, model, token) = (
                         draft.input.clone(),

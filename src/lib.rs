@@ -21,3 +21,5 @@ pub mod workbench;
 pub mod tasks;
 
 pub mod credentials;
+
+pub mod plugin_settings;

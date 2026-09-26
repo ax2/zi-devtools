@@ -736,7 +736,7 @@
       "status": "in-progress",
       "category": "插件平台",
       "priority": "P1",
-      "scope": "已接入 Windows 凭据管理器：显式保存/使用/删除，按工具/方法/地址隔离；待补结构化设置表单与连接档案"
+      "scope": "已接入 Windows 凭据管理器与工具级地址/模型设置表单，支持保存及恢复默认；待补可复用连接档案与更多设置字段"
     },
     {
       "id": "plugin-health",
