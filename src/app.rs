@@ -487,6 +487,10 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
+            68 | 69 => {
+                self.page = Page::Data;
+                self.data_state.preview_transform();
+            }
             66 | 67 => {
                 self.navigate(Page::EncodingTools, Some(ToolKind::Json));
                 self.tool_state.input = "[{\"name\":\"示例\",\"count\":3}]".into();

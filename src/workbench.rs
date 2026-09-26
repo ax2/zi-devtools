@@ -1,3 +1,5 @@
+mod transform;
+
 use anyhow::{Context, Result, anyhow, bail};
 use eframe::egui::{self, RichText};
 use serde_json::Value;
@@ -25,6 +27,7 @@ pub enum DataFormat {
     Json,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Dataset {
     pub headers: Vec<String>,
     pub rows: Vec<Vec<Value>>,
@@ -196,6 +199,7 @@ pub struct DataState {
     export_path: String,
     tab_delimiter: bool,
     dataset: Option<Dataset>,
+    transform: transform::State,
     query: String,
     visible: Vec<usize>,
     sort: Option<usize>,
@@ -227,6 +231,7 @@ impl DataState {
         self.receiver = Some(rx);
         self.message.clear();
         self.dataset = None;
+        self.transform = Default::default();
         self.output.clear();
         std::thread::spawn(move || {
             let _ = tx.send(Dataset::parse(&input, format, delimiter).map_err(|e| e.to_string()));
@@ -317,6 +322,7 @@ impl DataState {
                 .weak(),
             );
         });
+        self.transform_ui(ui);
         if let Some(data) = &self.dataset {
             ui.add_space(14.0);
             let mut changed = false;

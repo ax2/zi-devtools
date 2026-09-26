@@ -168,7 +168,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出；导出结果发送到其他文本工具，接收结果后本地解析预览"
+      "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出；导出结果发送到其他文本工具，接收结果后本地解析预览；整列去空白/大小写、空值处理与重命名，预览应用及单步撤销"
     },
     {
       "id": "files",
@@ -237,10 +237,10 @@
     {
       "id": "data-transform",
       "name": "数据列变换",
-      "status": "planned",
+      "status": "in-progress",
       "category": "扩展工具",
       "priority": "P1",
-      "scope": "选择/重命名列、类型转换、空值处理与操作预览"
+      "scope": "已实现整列重命名、文本清理、空值处理、预览应用与单步撤销；待补列选择及显式类型转换"
     },
     {
       "id": "csv-merge",
