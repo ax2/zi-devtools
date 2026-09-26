@@ -67,9 +67,9 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-最新公开版本：Stage 20 / v0.20.1，Windows 可运行目录 `dist\Stage-20`。
+Stage 21 / v0.21.0：Windows 可运行目录 `dist\Stage-21`；公开安装包以 [GitHub Release](https://github.com/ax2/zi-devtools/releases/latest) 为准。
 
-Stage 21 / v0.21.0 开发中：结果互传已接入文本工具、数据导出、HTTP 完整响应与诊断报告；预览后明确替换目标输入；数据工作台增加列转换、两表合并与关联、后台预览和单步撤销；任务中心支持数据解析/合并与文件校验，准备验收发版。[数据处理说明](docs/data-workbench.md)。
+Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整响应与诊断报告；预览后明确替换目标输入；数据工作台增加列转换、两表合并与关联、后台预览和单步撤销；任务中心支持数据解析/合并与文件校验，本地验收通过。[数据处理说明](docs/data-workbench.md)。
 
 - **Stage 20 快捷入口**：全局热键、独立托盘快捷面板、文件拖放与导入；原生右键菜单保留。合并重复 SQLite 规划。
 - **Java / Django 专项**：原有 14 项规划均已提供首版入口；独立诊断工作台、分类/收藏/最近/Ctrl K/托盘直达、后台任务、文件导入与报告保存。[支持格式与使用说明](docs/java-django-tools.md)。环境检查与 JFR 需要所选可信 JDK/Python；日志分析不需要安装它们。
