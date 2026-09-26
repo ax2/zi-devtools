@@ -46,7 +46,12 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Install pinned WiX toolset
-        run: dotnet tool install --global wix --version 5.0.2
+        shell: pwsh
+        run: |
+          $toolDir = Join-Path $env:RUNNER_TEMP 'zi-devtools-wix5'
+          dotnet tool install --tool-path $toolDir wix --version 5.0.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "ZIDEVTOOLS_WIX=$toolDir/wix.exe" >> $env:GITHUB_ENV
       - name: Build Windows installer and checksums
         shell: pwsh
         run: ./scripts/package.ps1

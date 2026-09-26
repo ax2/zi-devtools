@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $version = (Get-Content Cargo.toml | Select-String '^version = "([^"]+)"').Matches.Groups[1].Value
 if (!(Test-Path target/release/ZiDevTools.exe)) { throw 'Build release first' }
-$compiler = if ($env:WIX) { $env:WIX } else { 'wix' }
+$compiler = if ($env:ZIDEVTOOLS_WIX) { $env:ZIDEVTOOLS_WIX } else { 'wix' }
 New-Item -ItemType Directory -Path release -Force | Out-Null
 & $compiler build packaging/windows.wxs -arch x64 -d "AppVersion=$version" -o "release/ZiDevTools-$version-windows-x64.msi"
 if ($LASTEXITCODE -ne 0) { throw 'MSI compilation failed' }
