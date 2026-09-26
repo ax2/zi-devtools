@@ -2506,6 +2506,7 @@ impl eframe::App for DevToolsApp {
                         }
                         if ui.button("确认清空").clicked() {
                             self.tool_state.input.clear();
+                            self.tool_state.pattern.clear();
                             self.tool_state.output.clear();
                             self.tool_state.message.clear();
                             self.tool_state.qr_image = None;
