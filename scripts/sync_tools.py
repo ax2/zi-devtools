@@ -29,3 +29,16 @@ if args.check:
     if not target.exists() or target.read_text(encoding='utf-8') != output: sys.exit('Run python scripts/sync_tools.py and commit docs/tools.md')
 else: target.write_text(output, encoding='utf-8')
 print(f"Catalog OK: {len(ids)} implemented, {len(items)-len(ids)} planned/in progress")
+
+readme = root/'README.md'
+text = readme.read_text(encoding='utf-8')
+small = sum(t['status']=='implemented' and t['category']=='小工具' for t in items)
+workbenches = sum(t['status']=='implemented' and t['category']=='工作台' for t in items)
+planned = sum(t['status']!='implemented' for t in items)
+summary = f"<!-- tools-summary:start -->\n当前包含 **{small} 个小工具、{workbenches} 个开发工作台和本地服务管理**，另有 **{planned} 项规划 / 开发中能力**。完整列表见 [工具清单](docs/tools.md)。\n\n优先推进：" + '、'.join(t['name'] for t in items if t['priority']=='P1' and t['status']!='implemented') + '。规划不代表已实现。\n<!-- tools-summary:end -->'
+updated, count = re.subn(r'<!-- tools-summary:start -->.*?<!-- tools-summary:end -->', lambda _: summary, text, flags=re.S)
+assert count == 1, 'README needs one tools-summary block'
+if args.check:
+    assert text == updated, 'README tool summary is stale; regenerate it'
+else:
+    readme.write_text(updated, encoding='utf-8')
