@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
+    io::{Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -29,16 +30,50 @@ impl Preferences {
         }
     }
     pub fn load(path: &Path) -> Self {
-        fs::read(path)
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
+        let mut bytes = Vec::new();
+        let read =
+            fs::File::open(path).and_then(|file| file.take(8_388_609).read_to_end(&mut bytes));
+        let mut value: Self = if read.is_ok() && bytes.len() <= 8_388_608 {
+            serde_json::from_slice(&bytes).unwrap_or_default()
+        } else {
+            Self::default()
+        };
+        let normalize = |ids: &mut Vec<String>, limit: usize| {
+            let mut seen = std::collections::HashSet::new();
+            ids.retain(|id| !id.is_empty() && id.len() <= 512 && seen.insert(id.clone()));
+            ids.truncate(limit);
+        };
+        normalize(&mut value.favorites, 4096);
+        normalize(&mut value.recent, 20);
+        value.usage = value
+            .usage
+            .into_iter()
+            .filter(|(id, count)| !id.is_empty() && id.len() <= 512 && *count > 0)
+            .take(4096)
+            .collect();
+        value
     }
     pub fn save(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             fs::create_dir_all(parent)?;
         }
-        fs::write(path, serde_json::to_vec_pretty(self)?).context("无法保存界面偏好")
+        let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+        let result = (|| -> Result<()> {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)?;
+            file.write_all(&serde_json::to_vec_pretty(self)?)?;
+            file.sync_all()?;
+            drop(file);
+            // Same-directory rename replaces the previous file without first deleting it.
+            fs::rename(&temporary, path)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result.context("无法保存界面偏好")
     }
     pub fn toggle(&mut self, id: &str) {
         if self.favorites.iter().any(|s| s == id) {
@@ -52,6 +87,26 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saves_replace_existing_preferences_and_load_deduplicates() {
+        let dir = std::env::temp_dir().join(format!("zi-preferences-{}", uuid::Uuid::new_v4()));
+        let path = dir.join("preferences.json");
+        let mut prefs = Preferences::default();
+        prefs.toggle("plugin:disabled/tool");
+        prefs.save(&path).unwrap();
+        prefs.visit("json");
+        prefs.favorites.push("plugin:disabled/tool".into());
+        prefs.save(&path).unwrap();
+        let restored = Preferences::load(&path);
+        assert_eq!(restored.favorites, ["plugin:disabled/tool"]);
+        assert_eq!(restored.recent, ["json"]);
+        assert_eq!(restored.usage["json"], 1);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        fs::write(&path, "invalid").unwrap();
+        assert!(Preferences::load(&path).recent.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn old_preferences_migrate_and_usage_stays_bounded() {
         let mut p: Preferences =

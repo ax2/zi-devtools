@@ -24,7 +24,7 @@ use crate::{
     preferences::{self, Preferences},
     service::{ActionResult, ServiceManager, ServiceState, ServiceStatus},
     tools::{ToolKind, ToolState, generate_qr, generate_uuid, run_tool},
-    tray::{TrayAction, TrayController, TrayTool},
+    tray::{Navigation, TrayAction, TrayController, TrayEntry, TrayTool},
     workbench::{DataState, FileState},
 };
 
@@ -325,6 +325,7 @@ enum BackgroundEvent {
     ConfigPreview(String, Result<String, String>),
     RestoreFinished(String),
     NavigateTool(TrayTool),
+    TrayNavigate(TrayAction),
     NetworkResult(u64, Result<String, String>),
     HttpResult {
         tab_id: u64,
@@ -446,6 +447,25 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            60..=63 => {
+                self.visit("json");
+                self.visit("files");
+                self.visit("json");
+                self.event_tx
+                    .send(BackgroundEvent::TrayNavigate(if scene == 60 {
+                        TrayAction::Settings
+                    } else {
+                        TrayAction::Collection(["收藏", "最近", "常用"][scene - 61].into())
+                    }))
+                    .unwrap();
+                self.drain_events(ctx);
+                assert!(!self.launcher_open);
+                if scene == 60 {
+                    assert!(self.page == Page::Settings);
+                } else {
+                    assert_eq!(self.home_filter, ["收藏", "最近", "常用"][scene - 61]);
+                }
             }
             32..=59 => {
                 self.page = Page::Frameworks;
@@ -758,6 +778,32 @@ impl DevToolsApp {
                     self.notification_error = false;
                     self.last_refresh = Instant::now() - Duration::from_secs(30);
                 }
+                BackgroundEvent::TrayNavigate(action) => match action {
+                    TrayAction::Search => self.open_launcher(),
+                    TrayAction::Settings => {
+                        self.launcher_open = false;
+                        self.page = Page::Settings;
+                    }
+                    TrayAction::Collection(filter) => {
+                        self.launcher_open = false;
+                        self.page = Page::Home;
+                        self.home_filter = filter;
+                        self.home_category = "全部分类".into();
+                        self.tool_search.clear();
+                        self.home_page_index = 0;
+                    }
+                    TrayAction::OpenEntry(id) => {
+                        if let Some(entry) = self.entries("").into_iter().find(|e| e.id == id) {
+                            self.open_entry(&entry);
+                        } else {
+                            self.toast = Some((
+                                "该工具已停用或移除，请在插件中心检查".into(),
+                                Instant::now(),
+                            ));
+                        }
+                    }
+                    _ => {}
+                },
                 BackgroundEvent::NavigateTool(tool) => match tool {
                     TrayTool::Small(kind) => {
                         self.page = if kind.is_encoding() {
@@ -927,7 +973,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 18  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 19  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1001,6 +1047,15 @@ impl DevToolsApp {
     }
     fn toggle_favorite(&mut self, id: &str) {
         self.preferences.toggle(id);
+        self.toast = Some((
+            if self.preferences.favorites.iter().any(|s| s == id) {
+                "已收藏 · 可从托盘快速打开"
+            } else {
+                "已取消收藏"
+            }
+            .into(),
+            Instant::now(),
+        ));
         if let Err(e) = self.preferences.save(&self.preferences_path) {
             self.toast = Some((e.to_string(), Instant::now()));
         }
@@ -1128,6 +1183,15 @@ impl DevToolsApp {
                     _ => true,
                 }
         });
+        if self.home_filter == "收藏" {
+            entries.sort_by_key(|e| {
+                self.preferences
+                    .favorites
+                    .iter()
+                    .position(|id| id == &e.id)
+                    .unwrap_or(usize::MAX)
+            });
+        }
         if self.home_filter == "最近" {
             entries.sort_by_key(|e| {
                 self.preferences
@@ -1139,7 +1203,14 @@ impl DevToolsApp {
         }
         if self.home_filter == "常用" {
             entries.sort_by_key(|e| {
-                std::cmp::Reverse(self.preferences.usage.get(&e.id).copied().unwrap_or(0))
+                (
+                    std::cmp::Reverse(self.preferences.usage.get(&e.id).copied().unwrap_or(0)),
+                    self.preferences
+                        .recent
+                        .iter()
+                        .position(|id| id == &e.id)
+                        .unwrap_or(usize::MAX),
+                )
             });
         }
         ui.add_space(12.0);
@@ -1250,12 +1321,14 @@ impl DevToolsApp {
                     egui::TextEdit::singleline(&mut self.launcher_query)
                         .hint_text("输入名称或用途…"),
                 );
+                let mut scroll_selection = self.launcher_focus;
                 if self.launcher_focus {
                     response.request_focus();
                     self.launcher_focus = false;
                 }
                 if response.changed() {
                     self.launcher_index = 0;
+                    scroll_selection = true;
                 }
                 let query = self.launcher_query.to_lowercase();
                 let entries = self.entries(&query);
@@ -1264,9 +1337,11 @@ impl DevToolsApp {
                 } else {
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown))
                     {
+                        scroll_selection = true;
                         self.launcher_index = (self.launcher_index + 1).min(entries.len() - 1);
                     }
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
+                        scroll_selection = true;
                         self.launcher_index = self.launcher_index.saturating_sub(1);
                     }
                     self.launcher_index = self.launcher_index.min(entries.len() - 1);
@@ -1287,7 +1362,7 @@ impl DevToolsApp {
                                         }
                                     ),
                                 );
-                                if i == self.launcher_index {
+                                if scroll_selection && i == self.launcher_index {
                                     response.scroll_to_me(Some(egui::Align::Center));
                                 }
                                 if response.clicked() {
@@ -2510,9 +2585,9 @@ impl DevToolsApp {
             .inner_margin(18.0)
             .show(ui, |ui| {
                 ui.label(RichText::new("托盘行为").strong());
-                ui.label("关闭窗口时程序继续驻留托盘，托管服务保持运行。托盘右键菜单可按服务启动、重启或停止。");
+                ui.label("关闭窗口时程序继续驻留托盘，托管服务保持运行。左键恢复窗口；右键可搜索工具、打开收藏/最近/常用、按分类访问插件和内置工具，并控制服务。");
                 ui.label(
-                    RichText::new("选择托盘菜单中的“退出”才会结束本程序。")
+                    RichText::new("收藏按添加顺序、最近按打开时间、常用按次数排列；快捷菜单最多显示 8 / 8 / 6 项，可进入完整列表。原生菜单外观跟随 Windows。选择“退出”才会结束本程序。")
                         .color(self.colors.muted),
                 );
                 if ui.button("立即隐藏到托盘").clicked() {
@@ -2662,6 +2737,13 @@ fn start_tray_bridge(
                         let _ = tx.send(BackgroundEvent::NavigateTool(tool));
                         restore_main_window(window_handle, &ctx);
                     }
+                    action @ (TrayAction::Search
+                    | TrayAction::Settings
+                    | TrayAction::OpenEntry(_)
+                    | TrayAction::Collection(_)) => {
+                        let _ = tx.send(BackgroundEvent::TrayNavigate(action));
+                        restore_main_window(window_handle, &ctx);
+                    }
                     TrayAction::Exit => {
                         exit_requested.store(true, Ordering::Release);
                         restore_main_window(window_handle, &ctx);
@@ -2686,6 +2768,10 @@ fn start_tray_bridge(
                                 }
                                 TrayAction::ShowWindow
                                 | TrayAction::OpenTool(_)
+                                | TrayAction::Search
+                                | TrayAction::Settings
+                                | TrayAction::OpenEntry(_)
+                                | TrayAction::Collection(_)
                                 | TrayAction::Exit => unreachable!(),
                             };
                             let _ = tx.send(BackgroundEvent::Action(result));
@@ -2778,6 +2864,24 @@ impl eframe::App for DevToolsApp {
             self.plugins.clear_token();
         }
         self.drain_events(ctx);
+        let model = Navigation::new(
+            self.entries("")
+                .into_iter()
+                .map(|e| TrayEntry {
+                    id: e.id,
+                    title: e.title,
+                    category: e.category,
+                })
+                .collect(),
+            &self.preferences,
+        );
+        if let Some(tray) = &mut self.tray
+            && let Err(error) = tray.sync_navigation(model)
+        {
+            self.notification = format!("托盘快捷菜单更新失败：{error}");
+            self.notification_error = true;
+        }
+
         if self.tray_exit_requested.swap(false, Ordering::AcqRel) {
             self.quit_requested = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

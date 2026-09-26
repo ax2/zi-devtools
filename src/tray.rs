@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{Context, Result};
 use tray_icon::{
@@ -15,7 +15,6 @@ const EXIT_ID: &str = "app.exit";
 const START_PREFIX: &str = "service.start.";
 const STOP_PREFIX: &str = "service.stop.";
 const RESTART_PREFIX: &str = "service.restart.";
-const TOOL_PREFIX: &str = "tool.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayTool {
@@ -33,6 +32,10 @@ pub enum TrayTool {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TrayAction {
     ShowWindow,
+    Search,
+    Settings,
+    OpenEntry(String),
+    Collection(String),
     OpenTool(TrayTool),
     Start(String),
     Stop(String),
@@ -42,8 +45,122 @@ pub enum TrayAction {
     Exit,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrayEntry {
+    pub id: String,
+    pub title: String,
+    pub category: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Navigation {
+    entries: Vec<TrayEntry>,
+    favorites: Vec<TrayEntry>,
+    recent: Vec<TrayEntry>,
+    frequent: Vec<TrayEntry>,
+}
+impl Navigation {
+    pub fn new(mut entries: Vec<TrayEntry>, preferences: &crate::preferences::Preferences) -> Self {
+        entries.sort_by(|a, b| (&a.category, &a.title, &a.id).cmp(&(&b.category, &b.title, &b.id)));
+        let selected = |ids: &[String]| {
+            let mut seen = std::collections::HashSet::new();
+            ids.iter()
+                .filter(|id| seen.insert(id.as_str()))
+                .filter_map(|id| entries.iter().find(|e| &e.id == id).cloned())
+                .collect()
+        };
+        let favorites = selected(&preferences.favorites);
+        let recent = selected(&preferences.recent);
+        let mut frequent: Vec<_> = entries
+            .iter()
+            .filter(|e| preferences.usage.get(&e.id).copied().unwrap_or(0) > 0)
+            .cloned()
+            .collect();
+        frequent.sort_by_key(|e| {
+            (
+                std::cmp::Reverse(preferences.usage[&e.id]),
+                preferences
+                    .recent
+                    .iter()
+                    .position(|id| id == &e.id)
+                    .unwrap_or(usize::MAX),
+            )
+        });
+        Self {
+            favorites,
+            recent,
+            frequent,
+            entries,
+        }
+    }
+}
+
+// Escape native menu mnemonic markers and keep untrusted plugin names on one line.
+fn menu_label(text: &str) -> String {
+    let clean: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let label = if clean.chars().count() > 36 {
+        format!("{}…", clean.chars().take(35).collect::<String>())
+    } else {
+        clean
+    };
+    label.replace('&', "&&")
+}
+fn entry_item(entry: &TrayEntry) -> MenuItem {
+    MenuItem::with_id(
+        format!("entry.{}", entry.id),
+        menu_label(&entry.title),
+        true,
+        None,
+    )
+}
+fn clear_menu(menu: &Submenu) -> Result<()> {
+    while menu.remove_at(0).is_some() {}
+    Ok(())
+}
+fn fill_shortcuts(
+    menu: &Submenu,
+    name: &str,
+    entries: &[TrayEntry],
+    limit: usize,
+    empty: &str,
+) -> Result<()> {
+    clear_menu(menu)?;
+    menu.set_text(format!(
+        "{}{}  ·  {}",
+        if name == "收藏" { "★  " } else { "" },
+        name,
+        entries.len()
+    ));
+    if entries.is_empty() {
+        menu.append(&MenuItem::new(empty, false, None))?;
+    }
+    for entry in entries.iter().take(limit) {
+        menu.append(&entry_item(entry))?;
+    }
+    menu.append_items(&[
+        &PredefinedMenuItem::separator(),
+        &MenuItem::with_id(
+            format!("collection.{name}"),
+            format!("查看全部{name}…"),
+            true,
+            None,
+        ),
+    ])?;
+    Ok(())
+}
+
 pub struct TrayController {
     _icon: TrayIcon,
+    navigation: Submenu,
+    favorites: Submenu,
+    recent: Submenu,
+    frequent: Submenu,
+    snapshot: Option<Navigation>,
+    start_all: MenuItem,
+    stop_all: MenuItem,
     summary: MenuItem,
     service_menus: HashMap<String, Submenu>,
     status_items: HashMap<String, MenuItem>,
@@ -55,59 +172,30 @@ pub struct TrayController {
 impl TrayController {
     pub fn new<'a>(services: impl Iterator<Item = &'a ServiceSpec>) -> Result<Self> {
         let menu = Menu::new();
-        let open = MenuItem::with_id(
-            OPEN_ID,
-            format!("打开 Zi DevTools v{}", env!("CARGO_PKG_VERSION")),
-            true,
+        let title = MenuItem::new(
+            format!("Zi DevTools  ·  v{}", env!("CARGO_PKG_VERSION")),
+            false,
             None,
         );
+        let open = MenuItem::with_id(OPEN_ID, "打开主窗口", true, None);
+        let search = MenuItem::with_id("app.search", "搜索工具…", true, None);
         let summary = MenuItem::new("正在读取服务状态…", false, None);
-        menu.append_items(&[&open, &PredefinedMenuItem::separator()])?;
-
-        let small_tools = Submenu::new("小工具", true);
-        for kind in ToolKind::ALL.into_iter().filter(|kind| !kind.is_encoding()) {
-            small_tools.append(&MenuItem::with_id(
-                format!("{TOOL_PREFIX}small.{}", tool_slug(kind)),
-                kind.label(),
-                true,
-                None,
-            ))?;
-        }
-        let encoding_tools = Submenu::new("编码工具", true);
-        for kind in ToolKind::ALL.into_iter().filter(|kind| kind.is_encoding()) {
-            encoding_tools.append(&MenuItem::with_id(
-                format!("{TOOL_PREFIX}small.{}", tool_slug(kind)),
-                kind.label(),
-                true,
-                None,
-            ))?;
-        }
-        let developer_tools = Submenu::new("开发工具", true);
-        developer_tools.append_items(&[
-            &MenuItem::with_id("tool.http", "HTTP 请求调试", true, None),
-            &MenuItem::with_id("tool.diff", "文本差异对比", true, None),
-            &MenuItem::with_id("tool.network", "网络诊断", true, None),
-            &MenuItem::with_id("tool.data", "数据工作台", true, None),
-            &MenuItem::with_id("tool.files", "文件校验", true, None),
-            &MenuItem::with_id("tool.plugins", "插件与连接器", true, None),
-            &MenuItem::with_id("tool.integrations", "本机集成发现", true, None),
+        let favorites = Submenu::new("★  收藏", true);
+        let recent = Submenu::new("最近使用", true);
+        let frequent = Submenu::new("常用工具", true);
+        let navigation = Submenu::new("全部工具", true);
+        menu.append_items(&[
+            &title,
+            &PredefinedMenuItem::separator(),
+            &open,
+            &search,
+            &PredefinedMenuItem::separator(),
+            &favorites,
+            &recent,
+            &frequent,
+            &navigation,
+            &PredefinedMenuItem::separator(),
         ])?;
-        for category in ["Java 与 JVM", "Python 与 Django"] {
-            let submenu = Submenu::new(category, true);
-            for tool in crate::framework::Tool::ALL
-                .into_iter()
-                .filter(|t| t.category() == category)
-            {
-                submenu.append(&MenuItem::with_id(
-                    format!("tool.framework.{}", tool.id()),
-                    tool.label(),
-                    true,
-                    None,
-                ))?;
-            }
-            developer_tools.append(&submenu)?;
-        }
-        menu.append_items(&[&small_tools, &encoding_tools, &developer_tools])?;
 
         let services_menu = Submenu::new("本地服务", true);
         services_menu.append_items(&[&summary, &PredefinedMenuItem::separator()])?;
@@ -141,11 +229,16 @@ impl TrayController {
         }
 
         let separator = PredefinedMenuItem::separator();
-        let start_all = MenuItem::with_id(START_ALL_ID, "全部启动", true, None);
-        let stop_all = MenuItem::with_id(STOP_ALL_ID, "全部停止", true, None);
+        let start_all = MenuItem::with_id(START_ALL_ID, "启动可用服务", false, None);
+        let stop_all = MenuItem::with_id(STOP_ALL_ID, "停止托管服务", false, None);
         let exit = MenuItem::with_id(EXIT_ID, "退出", true, None);
         services_menu.append_items(&[&separator, &start_all, &stop_all])?;
-        menu.append_items(&[&services_menu, &PredefinedMenuItem::separator(), &exit])?;
+        menu.append_items(&[
+            &services_menu,
+            &PredefinedMenuItem::separator(),
+            &MenuItem::with_id("app.settings", "设置…", true, None),
+            &exit,
+        ])?;
 
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
@@ -156,6 +249,13 @@ impl TrayController {
             .context("创建 Windows 托盘图标失败")?;
         Ok(Self {
             _icon: icon,
+            navigation,
+            favorites,
+            recent,
+            frequent,
+            snapshot: None,
+            start_all,
+            stop_all,
             summary,
             service_menus,
             status_items,
@@ -163,6 +263,49 @@ impl TrayController {
             restart_items,
             stop_items,
         })
+    }
+
+    pub fn sync_navigation(&mut self, model: Navigation) -> Result<()> {
+        if self.snapshot.as_ref() == Some(&model) {
+            return Ok(());
+        }
+        fill_shortcuts(
+            &self.favorites,
+            "收藏",
+            &model.favorites,
+            8,
+            "在工具首页点击 ☆ 添加收藏",
+        )?;
+        fill_shortcuts(
+            &self.recent,
+            "最近",
+            &model.recent,
+            8,
+            "打开工具后显示在这里",
+        )?;
+        fill_shortcuts(
+            &self.frequent,
+            "常用",
+            &model.frequent,
+            6,
+            "按工具打开次数排序",
+        )?;
+        clear_menu(&self.navigation)?;
+        self.navigation
+            .set_text(format!("全部工具  ·  {}", model.entries.len()));
+        let mut categories: BTreeMap<&str, Vec<&TrayEntry>> = BTreeMap::new();
+        for entry in &model.entries {
+            categories.entry(&entry.category).or_default().push(entry);
+        }
+        for (category, entries) in categories {
+            let submenu = Submenu::new(menu_label(category), true);
+            for entry in entries {
+                submenu.append(&entry_item(entry))?;
+            }
+            self.navigation.append(&submenu)?;
+        }
+        self.snapshot = Some(model);
+        Ok(())
     }
 
     pub fn poll_actions() -> Vec<TrayAction> {
@@ -201,6 +344,10 @@ impl TrayController {
             "托管 {running} · 外部/占用 {external} · 共 {} 项",
             statuses.len()
         ));
+        self.start_all
+            .set_enabled(statuses.iter().any(|s| !s.state.is_available()));
+        self.stop_all
+            .set_enabled(statuses.iter().any(|s| s.managed));
         for status in statuses {
             if let Some(submenu) = self.service_menus.get(&status.id) {
                 let dot = if status.state.is_available() {
@@ -235,6 +382,15 @@ impl TrayController {
 }
 
 fn action_from_menu_id(id: &str) -> Option<TrayAction> {
+    if let Some(entry) = id.strip_prefix("entry.").filter(|s| !s.is_empty()) {
+        return Some(TrayAction::OpenEntry(entry.to_owned()));
+    }
+    if let Some(collection) = id
+        .strip_prefix("collection.")
+        .filter(|s| ["收藏", "最近", "常用"].contains(s))
+    {
+        return Some(TrayAction::Collection(collection.to_owned()));
+    }
     if let Some(tool) = id
         .strip_prefix("tool.framework.")
         .and_then(crate::framework::Tool::from_id)
@@ -242,6 +398,8 @@ fn action_from_menu_id(id: &str) -> Option<TrayAction> {
         return Some(TrayAction::OpenTool(TrayTool::Framework(tool)));
     }
     match id {
+        "app.search" => Some(TrayAction::Search),
+        "app.settings" => Some(TrayAction::Settings),
         OPEN_ID => Some(TrayAction::ShowWindow),
         "tool.http" => Some(TrayAction::OpenTool(TrayTool::Http)),
         "tool.diff" => Some(TrayAction::OpenTool(TrayTool::Diff)),
@@ -317,6 +475,80 @@ fn make_icon() -> Result<Icon> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn entry(id: &str) -> TrayEntry {
+        TrayEntry {
+            id: id.into(),
+            title: id.into(),
+            category: "测试".into(),
+        }
+    }
+
+    #[test]
+    fn shortcuts_follow_history_and_filter_disabled_plugins() {
+        let mut prefs = crate::preferences::Preferences {
+            favorites: vec!["plugin:off/x".into(), "b".into(), "a".into(), "b".into()],
+            ..Default::default()
+        };
+        prefs.visit("a");
+        prefs.visit("a");
+        prefs.visit("plugin:on/x");
+        prefs.visit("b");
+        let model = Navigation::new(vec![entry("a"), entry("b"), entry("plugin:on/x")], &prefs);
+        assert_eq!(
+            model
+                .favorites
+                .iter()
+                .map(|e| e.id.as_str())
+                .collect::<Vec<_>>(),
+            ["b", "a"]
+        );
+        assert_eq!(
+            model
+                .recent
+                .iter()
+                .map(|e| e.id.as_str())
+                .collect::<Vec<_>>(),
+            ["b", "plugin:on/x", "a"]
+        );
+        assert_eq!(
+            model
+                .frequent
+                .iter()
+                .map(|e| e.id.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "b", "plugin:on/x"]
+        );
+        assert_eq!(
+            action_from_menu_id("entry.plugin:on/x"),
+            Some(TrayAction::OpenEntry("plugin:on/x".into()))
+        );
+        assert_eq!(
+            action_from_menu_id("collection.收藏"),
+            Some(TrayAction::Collection("收藏".into()))
+        );
+        assert_eq!(action_from_menu_id("entry."), None);
+        assert_eq!(action_from_menu_id("collection.unknown"), None);
+    }
+
+    #[test]
+    fn native_labels_escape_mnemonics_and_control_characters() {
+        assert_eq!(menu_label("A&B\tC\nD"), "A&&B C D");
+        assert_eq!(menu_label(&"长".repeat(50)).chars().count(), 36);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_shortcuts_are_bounded_and_refresh_without_stale_items() {
+        let menu = Submenu::new("收藏", true);
+        let entries: Vec<_> = (0..12).map(|n| entry(&format!("tool-{n}"))).collect();
+        fill_shortcuts(&menu, "收藏", &entries, 8, "empty").unwrap();
+        assert_eq!(menu.items().len(), 10); // eight tools, separator, full collection
+        assert_eq!(menu.items()[0].id().0, "entry.tool-0");
+        fill_shortcuts(&menu, "收藏", &[], 8, "empty").unwrap();
+        assert_eq!(menu.items().len(), 3);
+        assert_eq!(menu.items()[2].id().0, "collection.收藏");
+    }
 
     #[test]
     fn maps_each_service_menu_item_to_its_own_action() {

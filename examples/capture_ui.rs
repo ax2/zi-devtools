@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 60] = [
+const NAMES: [&str; 64] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -68,6 +68,10 @@ const NAMES: [&str; 60] = [
     "checks-light",
     "celery-dark",
     "celery-light",
+    "tray-settings-dark",
+    "tray-favorites-light",
+    "tray-recent-dark",
+    "tray-frequent-light",
 ];
 
 struct Capture {
