@@ -1,3 +1,4 @@
+mod join;
 mod transform;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -200,6 +201,7 @@ pub struct DataState {
     tab_delimiter: bool,
     dataset: Option<Dataset>,
     transform: transform::State,
+    join: join::State,
     query: String,
     visible: Vec<usize>,
     sort: Option<usize>,
@@ -230,6 +232,7 @@ impl DataState {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.message.clear();
+        self.join.invalidate();
         self.dataset = None;
         self.transform = Default::default();
         self.output.clear();
@@ -323,6 +326,7 @@ impl DataState {
             );
         });
         self.transform_ui(ui);
+        self.join_ui(ui, ctx);
         if let Some(data) = &self.dataset {
             ui.add_space(14.0);
             let mut changed = false;
@@ -370,6 +374,7 @@ impl DataState {
             egui::ScrollArea::both()
                 .id_salt("data-preview")
                 .max_height(270.0)
+                .min_scrolled_height(160.0)
                 .show(ui, |ui| {
                     egui::Grid::new("data-grid")
                         .striped(true)

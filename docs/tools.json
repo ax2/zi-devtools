@@ -245,10 +245,10 @@
     {
       "id": "csv-merge",
       "name": "CSV 合并与关联",
-      "status": "planned",
-      "category": "扩展工具",
-      "priority": "P1",
-      "scope": "按列拼接、按键 Join、冲突与重复键报告"
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "CSV/TSV/JSON 两表内连接与左连接、同名列按行追加、等行数拼列；重复键/未匹配统计、列名冲突处理、后台可取消预览、结果上限与单步撤销"
     },
     {
       "id": "checksum-manifest",

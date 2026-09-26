@@ -157,9 +157,8 @@ fn tool_category(id: &str) -> &'static str {
         return tool.category();
     }
     match id {
-        "data" | "data-transform" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => {
-            "数据与格式"
-        }
+        "data" | "data-transform" | "csv-merge" | "json" | "json-path" | "json-diff"
+        | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
         "files" | "services" | "global-launcher" | "file-intake" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
@@ -206,6 +205,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "column transform schema integer boolean 类型 空值 重命名".into(),
+        },
+        ToolEntry {
+            id: "csv-merge".into(),
+            title: "CSV 合并与关联".into(),
+            description: "按键关联、追加行与拼列 · 预览及撤销".into(),
+            page: Page::Data,
+            kind: None,
+            category: String::new(),
+            keywords: "csv join merge left inner 合并 关联 拼接".into(),
         },
         ToolEntry {
             id: "files".into(),
@@ -497,6 +505,10 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            74 | 75 => {
+                self.page = Page::Data;
+                self.data_state.preview_join();
             }
             70..=73 => {
                 self.page = Page::Data;
@@ -1274,7 +1286,12 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
-        if e.id == "data-transform" {
+        if e.id == "csv-merge" {
+            self.page = Page::Data;
+            self.data_state.show_join();
+            self.launcher_open = false;
+            self.visit(&e.id);
+        } else if e.id == "data-transform" {
             self.page = Page::Data;
             self.data_state.show_transform();
             self.launcher_open = false;

@@ -273,8 +273,19 @@ impl DataState {
             self.visible = data.view(&self.query, self.sort, self.descending);
         }
     }
+    pub(super) fn replace_with_join(&mut self, data: Dataset) {
+        self.transform = State {
+            undo: self.dataset.replace(data),
+            ..Default::default()
+        };
+        self.sort = None;
+        self.query.clear();
+        self.join.invalidate();
+        self.refresh_transformed_view();
+    }
     fn apply_transform(&mut self) {
         if let Some(proposal) = self.transform.proposal.take() {
+            self.join.invalidate();
             if self
                 .dataset
                 .as_ref()
@@ -292,8 +303,9 @@ impl DataState {
             self.refresh_transformed_view();
         }
     }
-    fn undo_transform(&mut self) {
+    pub(super) fn undo_transform(&mut self) {
         if let Some(previous) = self.transform.undo.take() {
+            self.join.invalidate();
             if self
                 .dataset
                 .as_ref()
