@@ -5,4 +5,4 @@
 - 新增 CSV/JSON 工作台、批量文件校验及 5 个小工具。
 - MIT 开源，工具清单与 30 项规划纳入 CI 一致性校验。
 
-Windows 10 及以上 x64：下载 `*-setup.exe` 安装，或直接运行便携版 `*-windows-x64.exe`。本版本未进行代码签名，Windows 可能显示未知发布者提示；下载后可与 SHA256SUMS.txt 核对。卸载保留用户目录中的配置。暂不提供 ARM64、MSIX 或 Store 安装包。
+Windows 10 及以上 x64：下载 `*-windows-x64.msi` 安装，或直接运行便携版 `*-windows-x64.exe`。本版本未进行代码签名，Windows 可能显示未知发布者提示；下载后可与 SHA256SUMS.txt 核对。卸载保留用户目录中的配置。暂不提供 ARM64、MSIX 或 Store 安装包。

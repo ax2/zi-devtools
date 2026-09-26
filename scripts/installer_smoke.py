@@ -1,4 +1,4 @@
-"""Exercise the generated installer using CreateProcess, without shell shims."""
+"""Exercise the generated MSI in a disposable directory."""
 import hashlib
 import os
 from pathlib import Path
@@ -6,24 +6,28 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
-setup = next((root / 'release').glob('*-setup.exe'))
+setup = next((root / 'release').glob('*.msi'))
 folder = Path(tempfile.mkdtemp(prefix='zi-installer-'))
 target = folder / 'app'
-log = folder / 'install.log'
-env = os.environ.copy()
-env.pop('__COMPAT_LAYER', None)
+msiexec = str(Path(os.environ['SystemRoot']) / 'System32/msiexec.exe')
 
-def execute(args):
-    result = subprocess.run(args, env=env, timeout=120, creationflags=subprocess.CREATE_NO_WINDOW)
-    if result.returncode:
+def execute(operation):
+    log = folder / ('install.log' if operation == '/i' else 'uninstall.log')
+    args = [msiexec, operation, str(setup), '/qn', '/norestart', '/l*v', str(log)]
+    if operation == '/i':
+        args.append(f'INSTALLFOLDER={target}')
+    result = subprocess.run(args, timeout=180, creationflags=subprocess.CREATE_NO_WINDOW)
+    if result.returncode not in (0, 3010):
         if log.exists():
-            print(log.read_text(encoding='utf-8-sig', errors='replace'))
-        raise RuntimeError(f'Installer process exited {result.returncode}')
+            print(log.read_text(encoding='utf-16', errors='replace')[-16000:])
+        raise RuntimeError(f'MSI process exited {result.returncode}')
 
-execute([str(setup), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', f'/DIR={target}', f'/LOG={log}'])
+execute('/i')
 installed = target / 'ZiDevTools.exe'
-assert installed.is_file(), 'Installed executable missing'
-assert hashlib.sha256(installed.read_bytes()).digest() == hashlib.sha256((root / 'target/release/ZiDevTools.exe').read_bytes()).digest(), 'Installed file differs'
-execute([str(target / 'unins000.exe'), '/VERYSILENT', '/NORESTART'])
+try:
+    assert installed.is_file(), 'Installed executable missing'
+    assert hashlib.sha256(installed.read_bytes()).digest() == hashlib.sha256((root / 'target/release/ZiDevTools.exe').read_bytes()).digest(), 'Installed file differs'
+finally:
+    execute('/x')
 assert not installed.exists(), 'Executable remains after uninstall'
 print('PASS: silent installation, executable SHA-256, silent uninstallation')

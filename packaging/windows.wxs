@@ -1,0 +1,34 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Zi DevTools" Manufacturer="ZiCode" Version="$(var.AppVersion)"
+           UpgradeCode="61AF00B6-E92A-4519-A0A3-382347FA4051" Scope="perUser" InstallerVersion="500">
+    <SummaryInformation Description="Zi DevTools Windows x64 installer" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Zi DevTools is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="ZiDevTools">
+          <Component Id="Application" Guid="*">
+            <File Id="ZiDevToolsExe" Source="target/release/ZiDevTools.exe" KeyPath="yes" />
+          </Component>
+          <Component Id="License" Guid="*">
+            <File Source="LICENSE" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Zi DevTools">
+        <Component Id="StartMenu" Guid="D9DB0541-9690-470A-BB4E-1A71AC531E27">
+          <Shortcut Id="StartMenuShortcut" Name="Zi DevTools" Target="[INSTALLFOLDER]ZiDevTools.exe" WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveStartMenu" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\ZiCode\ZiDevTools" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="Complete" Title="Zi DevTools" Level="1">
+      <ComponentRef Id="Application" />
+      <ComponentRef Id="License" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+  </Package>
+</Wix>
