@@ -20,6 +20,8 @@ pub struct PluginState {
     message: String,
     drafts: HashMap<String, Draft>,
     token: String,
+    use_saved: bool,
+    credential_message: String,
     pending_remove: Option<String>,
     copied_at: Option<std::time::Instant>,
     running: Option<(String, Receiver<Result<String, String>>)>,
@@ -34,6 +36,8 @@ impl PluginState {
             message: String::new(),
             drafts: HashMap::new(),
             token: String::new(),
+            use_saved: false,
+            credential_message: String::new(),
             pending_remove: None,
             copied_at: None,
             running: None,
@@ -41,11 +45,13 @@ impl PluginState {
     }
     pub fn select(&mut self, id: &str) {
         if self.selected.as_deref() != Some(id) {
-            self.token.clear();
+            self.clear_token();
         }
         self.selected = Some(id.into());
     }
     pub fn clear_token(&mut self) {
+        self.use_saved = false;
+        self.credential_message.clear();
         self.token.clear();
     }
     pub fn is_running(&self) -> bool {
@@ -79,7 +85,7 @@ impl PluginState {
         ui.add_space(12.0);
         if self.selected.is_some() && ui.button("← 返回插件管理").clicked() {
             self.selected = None;
-            self.token.clear();
+            self.clear_token();
         }
         if let Some(id) = self.selected.clone() {
             if let Some((_, tool)) = self
@@ -102,7 +108,7 @@ impl PluginState {
                 {
                     ui.label(format!("请求目标：{method} {url}"));
                     ui.label(
-                        "仅点击运行时发送输入；请求超时 30 秒。令牌不写入配置，切换工具时清除。",
+                        "仅点击运行时发送输入；请求超时 30 秒。临时令牌切换工具后清除；保存需手动操作。",
                     );
                     if method == "POST" && plugins::uses_model(body) {
                         ui.horizontal(|ui| {
@@ -114,12 +120,29 @@ impl PluginState {
                             );
                         });
                     }
-                    ui.horizontal(|ui| {
-                        ui.label("Bearer 令牌（可选）");
-                        ui.add(egui::TextEdit::singleline(&mut self.token).password(true));
-                        if ui.small_button("清除令牌").clicked() {
-                            self.token.clear();
-                        }
+                    ui.add_enabled_ui(!busy, |ui| {
+                        ui.checkbox(&mut self.use_saved, "本次使用 Windows 已保存凭据");
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("临时 Bearer 令牌（可选）");
+                            ui.add_enabled(!self.use_saved, egui::TextEdit::singleline(&mut self.token).password(true));
+                            if ui.small_button("清空输入").clicked() { self.token.clear(); }
+                        });
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.add_enabled(!self.token.trim().is_empty() && !self.use_saved, egui::Button::new("保存 / 替换凭据")).clicked() {
+                                self.credential_message = match crate::credentials::Target::plugin(&id, method, url).and_then(|target| crate::credentials::save(&target, &self.token)) {
+                                    Ok(()) => { self.token.clear(); self.use_saved = true; "已保存到当前 Windows 用户的凭据管理器".into() },
+                                    Err(e) => e.to_string(),
+                                };
+                            }
+                            if ui.button("删除此工具凭据").clicked() {
+                                self.credential_message = match crate::credentials::Target::plugin(&id, method, url).and_then(|target| crate::credentials::delete(&target)) {
+                                    Ok(()) => { self.use_saved = false; "此工具当前地址的凭据已删除".into() },
+                                    Err(e) => e.to_string(),
+                                };
+                            }
+                        });
+                        ui.small("凭据绑定当前插件工具、方法及精确接口地址，不写入 JSON。更换地址后不会使用旧凭据；旧条目可在 Windows 凭据管理器中删除。删除前可重新输入并保存，删除不会中止已发出的请求。");
+                        if !self.credential_message.is_empty() { ui.label(&self.credential_message); }
                     });
                 } else {
                     ui.label("本地配方 · 无网络请求");
@@ -166,13 +189,30 @@ impl PluginState {
                     || shortcut)
                     && self.running.is_none()
                 {
-                    let (input, model, token) =
-                        (draft.input.clone(), draft.model.clone(), self.token.clone());
+                    let (input, model, token) = (
+                        draft.input.clone(),
+                        draft.model.clone(),
+                        if self.use_saved {
+                            String::new()
+                        } else {
+                            self.token.clone()
+                        },
+                    );
+                    let use_saved = self.use_saved;
+                    let credential_id = id.clone();
+                    self.token.clear();
                     let (tx, rx) = mpsc::channel();
                     self.running = Some((id, rx));
                     std::thread::spawn(move || {
-                        let result = plugins::execute(&tool, &input, &model, &token)
-                            .map_err(|e| e.to_string());
+                        let result = execute_with_credentials(
+                            &tool,
+                            &credential_id,
+                            &input,
+                            &model,
+                            token,
+                            use_saved,
+                        )
+                        .map_err(|e| e.to_string());
                         let _ = tx.send(result);
                     });
                 }
@@ -296,7 +336,7 @@ impl PluginState {
             .clicked()
         {
             self.store = Store::load(self.store.root.clone());
-            self.token.clear();
+            self.clear_token();
         }
         ui.strong(format!("已安装 {} 个插件", self.store.packages.len()));
         enum Action {
@@ -387,7 +427,7 @@ impl PluginState {
                     .into(),
                     Err(e) => e.to_string(),
                 };
-                self.token.clear();
+                self.clear_token();
             }
             Some(Action::Remove(id)) => {
                 match self.store.uninstall(&id) {
@@ -398,7 +438,7 @@ impl PluginState {
                     }
                     Err(e) => self.message = e.to_string(),
                 }
-                self.token.clear();
+                self.clear_token();
                 self.pending_remove = None;
             }
             Some(Action::Open(id)) => self.select(&id),
@@ -410,9 +450,129 @@ impl PluginState {
     }
 }
 
+fn execute_with_credentials(
+    tool: &plugins::PluginTool,
+    id: &str,
+    input: &str,
+    model: &str,
+    temporary: String,
+    saved: bool,
+) -> anyhow::Result<String> {
+    let secret = if saved {
+        let Adapter::Http { url, method, .. } = &tool.adapter else {
+            anyhow::bail!("本地配方不使用网络凭据");
+        };
+        let target = crate::credentials::Target::plugin(id, method, url)?;
+        Some(crate::credentials::read(&target)?.ok_or_else(|| {
+            anyhow::anyhow!("当前工具和接口地址没有已保存凭据，请先保存或取消勾选")
+        })?)
+    } else if temporary.trim().is_empty() {
+        None
+    } else {
+        Some(crate::credentials::Secret::new(temporary)?)
+    };
+    let token = secret.as_ref().map_or("", |s| s.expose());
+    let redact = |text: String| {
+        if token.is_empty() {
+            text
+        } else {
+            let escaped = serde_json::to_string(token).unwrap_or_default();
+            text.replace(token, "[REDACTED]").replace(
+                escaped
+                    .get(1..escaped.len().saturating_sub(1))
+                    .unwrap_or(token),
+                "[REDACTED]",
+            )
+        }
+    };
+    plugins::execute(tool, input, model, token)
+        .map(redact)
+        .map_err(|e| anyhow::anyhow!(redact(e.to_string())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "explicit isolated Windows vault and localhost HTTP integration"]
+    fn saved_credential_reaches_only_bound_tool_and_is_redacted_from_response() {
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+            time::Duration,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/test", listener.local_addr().unwrap());
+        let id = format!("plugin:test-{}/request", uuid::Uuid::new_v4());
+        let target = crate::credentials::Target::plugin(&id, "GET", &url).unwrap();
+        struct Cleanup(crate::credentials::Target);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = crate::credentials::delete(&self.0);
+            }
+        }
+        let cleanup = Cleanup(target);
+        crate::credentials::save(&cleanup.0, "synthetic-fixture-token").unwrap();
+        let tool = plugins::PluginTool {
+            id: "request".into(),
+            name: "Fixture".into(),
+            description: String::new(),
+            category: "AI 与模型".into(),
+            keywords: vec![],
+            sample: String::new(),
+            model: String::new(),
+            adapter: Adapter::Http {
+                url: url.clone(),
+                method: "GET".into(),
+                body: serde_json::Value::Null,
+                response_pointer: Some("/output".into()),
+            },
+        };
+        // A different tool identity must fail before sending any request.
+        assert!(
+            execute_with_credentials(&tool, &format!("{id}-other"), "", "", String::new(), true)
+                .is_err()
+        );
+        let server = std::thread::spawn(move || {
+            listener.set_nonblocking(true).unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((s, _)) => break s,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "fixture request timed out"
+                        );
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(_) => panic!("fixture accept failed"),
+                }
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") && request.len() < 8192 {
+                let n = stream.read(&mut buffer).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..n]);
+            }
+            let authorized = String::from_utf8_lossy(&request)
+                .to_ascii_lowercase()
+                .contains("authorization: bearer synthetic-fixture-token");
+            let body = r#"{"output":"synthetic-fixture-token"}"#;
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+            authorized
+        });
+        let result = execute_with_credentials(&tool, &id, "", "", String::new(), true).unwrap();
+        assert!(server.join().unwrap());
+        assert_eq!(result, "[REDACTED]");
+    }
     #[test]
     fn background_result_keeps_own_draft_and_clears_busy() {
         let root = std::env::temp_dir().join(format!("zi-plugin-ui-{}", uuid::Uuid::new_v4()));
@@ -427,8 +587,10 @@ mod tests {
         assert_eq!(state.drafts["first"].output, "done");
         assert_eq!(state.selected.as_deref(), Some("second"));
         state.token = "test-only".into();
+        state.use_saved = true;
         state.select("first");
         assert!(state.token.is_empty());
+        assert!(!state.use_saved);
         let (tx, rx) = mpsc::channel();
         state.running = Some(("first".into(), rx));
         drop(tx);

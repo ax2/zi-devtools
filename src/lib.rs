@@ -19,3 +19,5 @@ pub mod tray;
 pub mod workbench;
 
 pub mod tasks;
+
+pub mod credentials;

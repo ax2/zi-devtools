@@ -1,5 +1,5 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.0",
   "updated": "2026-09-26",
   "tools": [
     {
@@ -733,10 +733,10 @@
     {
       "id": "plugin-settings",
       "name": "插件设置与凭据",
-      "status": "planned",
+      "status": "in-progress",
       "category": "插件平台",
       "priority": "P1",
-      "scope": "结构化设置表单、系统凭据存储、按插件隔离，不在清单保存令牌"
+      "scope": "已接入 Windows 凭据管理器：显式保存/使用/删除，按工具/方法/地址隔离；待补结构化设置表单与连接档案"
     },
     {
       "id": "plugin-health",

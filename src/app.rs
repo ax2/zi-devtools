@@ -518,6 +518,26 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
+            78 | 79 => {
+                self.page = Page::Plugins;
+                if !self
+                    .plugins
+                    .store
+                    .packages
+                    .iter()
+                    .any(|p| p.manifest.id == "openai-local")
+                {
+                    self.plugins
+                        .store
+                        .install(include_bytes!("../plugins-examples/openai-compatible.json"))
+                        .unwrap();
+                }
+                self.plugins
+                    .store
+                    .set_enabled("openai-local", true)
+                    .unwrap();
+                self.plugins.select("plugin:openai-local/chat");
+            }
             76 | 77 => {
                 self.page = Page::Tasks;
                 self.preview_tasks();
@@ -1166,7 +1186,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 21  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 22  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

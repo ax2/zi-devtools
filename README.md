@@ -67,6 +67,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
+Stage 22 / v0.22.0 开发中：新增插件凭据保存、使用和删除，尚未公开发版。普通设置表单与模型连接档案继续推进。
+
 Stage 21 / v0.21.0：Windows 可运行目录 `dist\Stage-21`；公开安装包以 [GitHub Release](https://github.com/ax2/zi-devtools/releases/latest) 为准。
 
 Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整响应与诊断报告；预览后明确替换目标输入；数据工作台增加列转换、两表合并与关联、后台预览和单步撤销；任务中心支持数据解析/合并与文件校验，本地验收通过。[数据处理说明](docs/data-workbench.md)。
@@ -76,7 +78,7 @@ Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整
 - **Java / Django 诊断**：离线 Java 异常链、Django / Python Traceback 整理，输出结构化帧与规则提示；[开发价值与路线](docs/java-django-roadmap.md)。不运行用户项目，不把异常链末端当作已确认根因。
 - **体验优化**：目录每页 18 项；筛选自动回到首页；插件离页后仍收取结果并提示；运行时参数锁定、模型必填检查、结构化错误摘要与复制反馈；清单浏览避免反复复制请求体。
 - **统一目录**：十类分类、收藏、最近 20 项、按打开次数排序的常用视图；关键词搜索与 Ctrl K 同时覆盖内置和插件工具。
-- **插件机制**：JSON 清单预览、安装、启停、刷新、卸载与内容指纹。支持内置配方和非流式 HTTP JSON 适配器，输入/结果/令牌不落盘。[插件使用与开发](docs/plugins.md)。
+- **插件机制**：JSON 清单预览、安装、启停、刷新、卸载与内容指纹。支持内置配方和非流式 HTTP JSON 适配器，输入/结果不落盘；令牌可临时使用，或显式保存到 Windows 凭据管理器（Stage 22 开发中）。[插件使用与开发](docs/plugins.md)。
 - **可选连接器**：3 个示例包、6 项工具，覆盖本地文本、Ollama、OpenAI 兼容服务。需要已有服务与模型，不自动下载或启动。
 - **本机发现**：只读检查 PATH 入口和常见服务端口；本次调查发现 Ollama、AnythingLLM、Codex CLI、Docker 等，具体运行与集成边界见 [架构与路线](docs/platform-roadmap.md)。
 - **扩展规划**：覆盖模型、MCP、RAG、Agent、插件生态和本地数据能力，当前目录共 116 项（50 内置已实现、66 规划）。模型连接器不等于完整 Agent/MCP/RAG。
