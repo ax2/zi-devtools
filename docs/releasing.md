@@ -4,7 +4,7 @@
 
 ## 自动工作流
 
-参考 ZiFile 的标签触发、版本一致性、质量检查、安装包、便携 EXE、SHA-256 和 GitHub Release 流程。Zi DevTools 当前仅发布 Windows x64，安装器使用 Inno Setup 6；没有复用 ZiFile 的 MSIX 身份、签名证书或 ARM64 成熟度声明。
+参考 ZiFile 的标签触发、版本一致性、质量检查、安装包、便携 EXE、SHA-256 和 GitHub Release 流程。Zi DevTools 当前仅发布 Windows x64，安装器使用固定版本 Inno Setup 6.4.3（官方资产 SHA-256 校验）；没有复用 ZiFile 的 MSIX 身份、签名证书或 ARM64 成熟度声明。
 
 1. 修改 Cargo.toml 版本、docs/tools.json 的版本和日期、docs/release-notes.md；运行 `python scripts/sync_tools.py`。
 2. 提交源代码与生成文档，等待 CI 通过。
@@ -12,7 +12,7 @@
 4. Windows runner 执行文档同步检查、fmt、Clippy、测试、release 构建、安装器生成、静默安装/卸载检查，然后发布两个 EXE 与 SHA256SUMS.txt。
 5. 已有 Release 不允许覆写；修复需要新版本。发版后检查下载和校验和，并更新官网清单快照。
 
-本地构建：`cargo build --release --locked`。安装 Inno Setup 6 后执行 `pwsh -File scripts/package.ps1`。输出到 release/，无 ZIP。安装为当前用户，不需要管理员权限。当前未配置代码签名，不能声明 Microsoft Store 认证。
+本地构建：`cargo build --release --locked`。安装 Inno Setup 6.4.3 后执行 `pwsh -File scripts/package.ps1`。输出到 release/，无 ZIP。安装为当前用户，不需要管理员权限。最低 Windows 10，x64。当前未配置代码签名，不能声明 Microsoft Store 认证。
 
 ## 工具状态同步
 
