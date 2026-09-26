@@ -23,6 +23,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: python scripts/sync_tools.py --check
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
@@ -48,8 +50,13 @@ jobs:
         run: |
           $installer = Get-ChildItem release/*-setup.exe | Select-Object -First 1
           $installDir = Join-Path $env:RUNNER_TEMP 'ZiDevTools-install-test'
-          $p = Start-Process $installer.FullName -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installDir") -Wait -PassThru -WindowStyle Hidden
-          if ($p.ExitCode -ne 0 -or !(Test-Path "$installDir/ZiDevTools.exe")) { throw 'Installer smoke failed' }
+          $installLog = Join-Path $env:RUNNER_TEMP 'zi-install.log'
+          $p = Start-Process $installer.FullName -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installDir", "/LOG=$installLog") -Wait -PassThru -WindowStyle Hidden
+          $p.Refresh()
+          if ($p.ExitCode -ne 0 -or !(Test-Path "$installDir/ZiDevTools.exe")) {
+            if (Test-Path $installLog) { Get-Content $installLog -Tail 100 }
+            throw "Installer smoke failed: exit=$($p.ExitCode), target=$installDir"
+          }
           if ((Get-FileHash "$installDir/ZiDevTools.exe").Hash -ne (Get-FileHash target/release/ZiDevTools.exe).Hash) { throw 'Installed executable mismatch' }
           $p = Start-Process "$installDir/unins000.exe" -ArgumentList '/VERYSILENT', '/NORESTART' -Wait -PassThru -WindowStyle Hidden
           if ($p.ExitCode -ne 0 -or (Test-Path "$installDir/ZiDevTools.exe")) { throw 'Uninstall smoke failed' }
