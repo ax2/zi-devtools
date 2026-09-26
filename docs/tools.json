@@ -1,5 +1,5 @@
 {
-  "version": "0.19.0",
+  "version": "0.20.0",
   "updated": "2026-09-26",
   "tools": [
     {
@@ -312,7 +312,7 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "默认只读，表结构、限额查询、CSV 导出"
+      "scope": "默认只读，表结构、限额查询、CSV 导出；后续写模式显式切换并提供事务回滚（合并原 SQLite 工作台规划）"
     },
     {
       "id": "http-collections",
@@ -749,10 +749,10 @@
     {
       "id": "global-launcher",
       "name": "全局快捷启动器",
-      "status": "planned",
-      "category": "效率与系统",
-      "priority": "P2",
-      "scope": "可配置系统级热键、冲突检测、搜索启动；区分应用内 Ctrl K"
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "Windows 可配置系统热键、冲突提示与旧绑定保留；独立托盘快捷面板、搜索/收藏/最近、键盘导航和主题切换"
     },
     {
       "id": "command-collections",
@@ -785,14 +785,6 @@
       "category": "效率与系统",
       "priority": "P2",
       "scope": "状态/差异/分支查看，写入前预览，不自动提交私有文件"
-    },
-    {
-      "id": "sqlite-workbench",
-      "name": "SQLite 工作台",
-      "status": "planned",
-      "category": "本地数据",
-      "priority": "P2",
-      "scope": "只读打开、schema/SQL 查询/导出；写模式显式切换与事务回滚"
     },
     {
       "id": "parquet-workbench",
@@ -929,6 +921,14 @@
       "category": "工作台",
       "priority": "—",
       "scope": "解析标准 worker Task name[id] 文本日志，关联失败、重试、耗时和最后观测状态；不连接 broker/重放任务"
+    },
+    {
+      "id": "file-intake",
+      "name": "文件拖放入口",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "主窗口/快捷面板拖放或填写路径，选择 CSV/TSV/JSON、Java/Python/线程/GC/SQL/Celery 或文件校验；UTF-8 文本限 2 MiB、最多 64 文件，不自动执行或上传"
     }
   ],
   "plugin_examples": [

@@ -32,6 +32,7 @@ pub enum TrayTool {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TrayAction {
     ShowWindow,
+    QuickPanel,
     Search,
     Settings,
     OpenEntry(String),
@@ -178,6 +179,7 @@ impl TrayController {
             None,
         );
         let open = MenuItem::with_id(OPEN_ID, "打开主窗口", true, None);
+        let quick = MenuItem::with_id("app.quick", "快捷面板…", true, None);
         let search = MenuItem::with_id("app.search", "搜索工具…", true, None);
         let summary = MenuItem::new("正在读取服务状态…", false, None);
         let favorites = Submenu::new("★  收藏", true);
@@ -188,6 +190,7 @@ impl TrayController {
             &title,
             &PredefinedMenuItem::separator(),
             &open,
+            &quick,
             &search,
             &PredefinedMenuItem::separator(),
             &favorites,
@@ -320,7 +323,7 @@ impl TrayController {
                 | TrayIconEvent::DoubleClick {
                     button: MouseButton::Left,
                     ..
-                } => actions.push(TrayAction::ShowWindow),
+                } => actions.push(TrayAction::QuickPanel),
                 _ => {}
             }
         }
@@ -398,6 +401,7 @@ fn action_from_menu_id(id: &str) -> Option<TrayAction> {
         return Some(TrayAction::OpenTool(TrayTool::Framework(tool)));
     }
     match id {
+        "app.quick" => Some(TrayAction::QuickPanel),
         "app.search" => Some(TrayAction::Search),
         "app.settings" => Some(TrayAction::Settings),
         OPEN_ID => Some(TrayAction::ShowWindow),

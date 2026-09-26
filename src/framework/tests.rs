@@ -171,3 +171,20 @@ fn object_wait_releases_monitor_and_celery_failure_hides_arguments() {
     ));
     assert_eq!(v["sqlRisks"][0]["statementIndex"], 0);
 }
+
+#[test]
+fn imported_text_does_not_replace_a_running_diagnostic() {
+    let mut state = State::default();
+    state.import_text(Tool::Threads, "original".into()).unwrap();
+    let (_tx, rx) = std::sync::mpsc::channel();
+    state.running = Some((Tool::Threads, rx));
+    assert!(
+        state
+            .import_text(Tool::Threads, "replacement".into())
+            .is_err()
+    );
+    assert_eq!(state.drafts[&Tool::Threads].input, "original");
+    state.import_text(Tool::Sql, "SELECT 1".into()).unwrap();
+    assert_eq!(state.drafts[&Tool::Threads].input, "original");
+    assert_eq!(state.drafts[&Tool::Sql].input, "SELECT 1");
+}

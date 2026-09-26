@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 64] = [
+const NAMES: [&str; 66] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -72,6 +72,8 @@ const NAMES: [&str; 64] = [
     "tray-favorites-light",
     "tray-recent-dark",
     "tray-frequent-light",
+    "file-intake-dark",
+    "file-intake-light",
 ];
 
 struct Capture {
@@ -86,6 +88,12 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if self.scene == 64 && self.frames == 2 {
+            input.dropped_files.push(egui::DroppedFile {
+                path: Some(self.fixture.with_file_name("订单数据.csv")),
+                ..Default::default()
+            });
+        }
         if self.scene != NAMES.len() {
             return;
         }
@@ -115,7 +123,7 @@ impl eframe::App for Capture {
         }
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.started.elapsed() > Duration::from_secs(180) {
+        if self.started.elapsed() > Duration::from_secs(240) {
             panic!("UI capture timed out before verification completed");
         }
         let screenshots = ctx.input(|i| {
@@ -156,6 +164,7 @@ impl eframe::App for Capture {
         }
         if self.scene == NAMES.len() {
             if self.frames == 0 {
+                self.app.preview_keyboard_fixture();
                 self.app.preview_scene(ctx, 0, self.fixture.clone());
             }
             self.app.update(ctx, frame);
@@ -192,7 +201,30 @@ impl eframe::App for Capture {
                 println!(
                     "PASS keyboard: diagnostic search, navigation, Ctrl Enter background completion"
                 );
-                // The product intentionally hides on Close; this disposable fixture must exit.
+                self.app.preview_import_routes();
+                self.app.preview_hidden_panel(ctx, false);
+            }
+            if self.frames >= 90 && std::env::args().nth(3).as_deref() == Some("panel") {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames == 95 {
+                assert!(
+                    self.app.preview_hidden(),
+                    "Quick panel must keep main workbench hidden"
+                );
+                assert!(
+                    self.app.preview_panel_rendered(),
+                    "Hidden workbench wakes and renders child viewport"
+                );
+                self.app.preview_hidden_panel(ctx, true);
+            }
+            if self.frames == 145 {
+                assert!(self.app.preview_hidden());
+                assert!(self.app.preview_panel_rendered());
+                println!(
+                    "PASS hidden-workbench wake, independent quick panel dark/light, file import routes"
+                );
                 std::process::exit(0);
             }
             self.frames += 1;
@@ -224,6 +256,7 @@ fn main() -> Result<(), eframe::Error> {
     let folder = folder.canonicalize().unwrap();
     let fixture = folder.join("sample.txt");
     fs::write(&fixture, b"abc").unwrap();
+    fs::write(folder.join("订单数据.csv"), "name,count\nexample,3\n").unwrap();
     let config = folder.join("services.yml");
     fs::write(&config,format!("state_dir: '{}'\nservices:\n  demo:\n    name: Demo fixture\n    repo: '{}'\n    command: 'echo fixture'\n",folder.join("state").display(),folder.display())).unwrap();
     let options = eframe::NativeOptions {
@@ -240,7 +273,10 @@ fn main() -> Result<(), eframe::Error> {
                 app: DevToolsApp::new(cc, config, false),
                 folder,
                 fixture,
-                scene: 0,
+                scene: std::env::args()
+                    .nth(2)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0),
                 frames: 0,
                 pending: false,
                 started: Instant::now(),

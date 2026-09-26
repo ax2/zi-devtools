@@ -203,6 +203,17 @@ pub struct DataState {
     receiver: Option<Receiver<std::result::Result<Dataset, String>>>,
 }
 impl DataState {
+    pub fn import_text(&mut self, text: String, format: DataFormat, tsv: bool) -> Result<()> {
+        if self.receiver.is_some() {
+            bail!("数据工作台正在解析，请稍后重试");
+        }
+        self.input = text;
+        self.format = format;
+        self.tab_delimiter = tsv;
+        self.parse();
+        Ok(())
+    }
+
     pub fn sample(&mut self) {
         self.format = DataFormat::Csv;
         self.input="name,language,stars\nZi Tools,Rust,120\nData Studio,Python,85\nLocal Notes,Markdown,64\n".into();
@@ -502,6 +513,29 @@ pub struct FileState {
     total: usize,
 }
 impl FileState {
+    pub fn append_paths(&mut self, paths: &[PathBuf]) -> Result<()> {
+        if self.receiver.is_some() {
+            bail!("文件校验正在运行，请稍后重试");
+        }
+        let mut all: Vec<String> = self
+            .paths
+            .lines()
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_owned)
+            .collect();
+        for path in paths {
+            let name = path.to_string_lossy().to_string();
+            if !all.contains(&name) {
+                all.push(name);
+            }
+        }
+        if all.len() > 64 {
+            bail!("追加后超过 64 个文件，请先整理校验列表");
+        }
+        self.paths = all.join("\n");
+        Ok(())
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview(&mut self, path: PathBuf) {
         self.paths = path.display().to_string();
@@ -729,6 +763,42 @@ fn primary(ui: &egui::Ui, text: &str) -> egui::Button<'static> {
 mod tests {
     use super::*;
     use std::fs;
+    #[test]
+    fn intake_preserves_busy_drafts_and_parses_tsv() {
+        let mut data = DataState::default();
+        data.import_text("name\tcount\n样例\t3\n".into(), DataFormat::Csv, true)
+            .unwrap();
+        assert!(
+            data.import_text("replacement".into(), DataFormat::Json, false)
+                .is_err()
+        );
+        assert!(data.input.contains("样例"));
+        let parsed = data
+            .receiver
+            .as_ref()
+            .unwrap()
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.headers, vec!["name", "count"]);
+        assert_eq!(parsed.rows.len(), 1);
+        let mut files = FileState::default();
+        files
+            .append_paths(&[PathBuf::from("a.txt"), PathBuf::from("a.txt")])
+            .unwrap();
+        assert_eq!(files.paths, "a.txt");
+        assert!(
+            files
+                .append_paths(
+                    &(0..65)
+                        .map(|i| PathBuf::from(format!("{i}.txt")))
+                        .collect::<Vec<_>>()
+                )
+                .is_err()
+        );
+        assert_eq!(files.paths, "a.txt");
+    }
+
     #[test]
     fn csv_quotes_unicode_and_shape() {
         let d = Dataset::parse(

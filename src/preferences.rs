@@ -10,6 +10,7 @@ use std::{
 #[serde(default)]
 pub struct Preferences {
     pub light: bool,
+    pub hotkey: crate::hotkey::Setting,
     pub favorites: Vec<String>,
     pub recent: Vec<String>,
     pub usage: std::collections::BTreeMap<String, u32>,

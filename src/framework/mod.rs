@@ -291,6 +291,22 @@ pub struct State {
     copied: Option<Instant>,
 }
 impl State {
+    pub fn import_text(&mut self, tool: Tool, text: String) -> Result<()> {
+        ensure!(
+            !self
+                .running
+                .as_ref()
+                .is_some_and(|(active, _)| *active == tool),
+            "该诊断正在运行，请稍后重试"
+        );
+        self.select(tool);
+        let draft = self.drafts.entry(tool).or_default();
+        draft.input = text;
+        draft.output.clear();
+        draft.summary.clear();
+        Ok(())
+    }
+
     pub fn select(&mut self, tool: Tool) {
         if self.selected != tool {
             self.token.clear();

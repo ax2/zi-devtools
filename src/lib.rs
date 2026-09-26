@@ -4,6 +4,8 @@ pub mod dev_tools;
 pub mod diagnostics;
 pub mod fixture;
 pub mod framework;
+pub mod hotkey;
+pub mod intake;
 pub mod integrations;
 pub mod network_tools;
 pub mod plugin_ui;

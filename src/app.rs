@@ -1,3 +1,5 @@
+mod launcher;
+
 use std::{
     fs,
     path::PathBuf,
@@ -96,6 +98,7 @@ fn palette(theme: Theme) -> Palette {
 enum Page {
     #[default]
     Home,
+    Intake,
     Services,
     SmallTools,
     EncodingTools,
@@ -155,7 +158,7 @@ fn tool_category(id: &str) -> &'static str {
     match id {
         "data" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
-        "files" | "services" => "文件与系统",
+        "files" | "services" | "global-launcher" | "file-intake" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
@@ -165,6 +168,24 @@ fn tool_category(id: &str) -> &'static str {
 }
 fn catalog() -> Vec<ToolEntry> {
     let mut entries = vec![
+        ToolEntry {
+            id: "global-launcher".into(),
+            title: "全局快捷启动器".into(),
+            description: "设置系统热键 · 托盘快捷面板".into(),
+            category: "文件与系统".into(),
+            keywords: "快捷键 热键 launcher hotkey tray 托盘".into(),
+            page: Page::Settings,
+            kind: None,
+        },
+        ToolEntry {
+            id: "file-intake".into(),
+            title: "文件拖放入口".into(),
+            description: "拖放或填写路径 · 选择工具导入".into(),
+            category: "文件与系统".into(),
+            keywords: "导入 文件 CSV JSON 日志 drop import".into(),
+            page: Page::Intake,
+            kind: None,
+        },
         ToolEntry {
             id: "data".into(),
             title: "数据工作台".into(),
@@ -338,6 +359,20 @@ enum BackgroundEvent {
 
 pub struct DevToolsApp {
     manager: Arc<ServiceManager>,
+    #[cfg(feature = "ui-preview")]
+    preview_panel_frames: usize,
+    hotkey: crate::hotkey::Service,
+    hotkey_edit: crate::hotkey::Setting,
+    hotkey_status: String,
+    quick_open: bool,
+    quick_active: Arc<AtomicBool>,
+    quick_focus: bool,
+    quick_had_focus: bool,
+    quick_opened: Instant,
+    quick_tab: String,
+    quick_position: Option<egui::Pos2>,
+    quick_size: egui::Vec2,
+    intake: crate::intake::State,
     tray: Option<TrayController>,
     page: Page,
     statuses: Vec<ServiceStatus>,
@@ -395,6 +430,7 @@ impl DevToolsApp {
         let light = scene % 2 == 1 || scene == 8;
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
         self.startup_warning = None;
+        self.quick_open = false;
         self.launcher_open = false;
         self.tool_search.clear();
         self.preferences.recent.clear();
@@ -447,6 +483,12 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            64 | 65 => {
+                self.page = Page::Intake;
+                self.intake
+                    .accept(vec![fixture.with_file_name("订单数据.csv")]);
+                self.intake.target = crate::intake::Target::Csv;
             }
             60..=63 => {
                 self.visit("json");
@@ -526,6 +568,73 @@ impl DevToolsApp {
         }
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_keyboard_fixture(&mut self) {
+        if self.plugins.store.packages.is_empty() {
+            self.plugins
+                .store
+                .install(include_bytes!("../plugins-examples/local-text.json"))
+                .unwrap();
+        }
+        self.plugins.store.set_enabled("local-text", true).unwrap();
+        self.frameworks.preview(crate::framework::Tool::Sql);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_hidden_panel(&mut self, ctx: &egui::Context, light: bool) {
+        self.quick_open = false;
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.preview_panel_frames = 0;
+        self.hide_to_tray(ctx);
+        let tx = self.event_tx.clone();
+        let wake_ctx = ctx.clone();
+        let handle = self.window_handle;
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            let _ = tx.send(BackgroundEvent::TrayNavigate(TrayAction::QuickPanel));
+            wake_main_window(handle, &wake_ctx);
+        });
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_panel_rendered(&self) -> bool {
+        self.preview_panel_frames >= 8
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_hidden(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.window_handle.is_some_and(|handle| unsafe {
+                windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible(handle as _) == 0
+            })
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_import_routes(&mut self) {
+        use crate::intake::{Imported, Target};
+        if !self.intake.paths.is_empty() {
+            let imported = crate::intake::read(self.intake.paths.clone(), Target::Csv).unwrap();
+            self.apply_import(imported).unwrap();
+            assert!(self.data_state.input.contains("example,3"));
+        }
+        self.apply_import(Imported {
+            target: Target::Json,
+            paths: vec![],
+            text: "{\"ok\":true}".into(),
+        })
+        .unwrap();
+        assert_eq!(self.tool_state.selected, ToolKind::Json);
+        assert_eq!(self.tool_state.input, "{\"ok\":true}");
+        self.apply_import(Imported {
+            target: Target::Threads,
+            paths: vec![],
+            text: "thread fixture".into(),
+        })
+        .unwrap();
+        assert_eq!(self.frameworks.selected, crate::framework::Tool::Threads);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_plugin_navigation(&self) -> bool {
         self.page == Page::Plugins
             && self.plugins.selected.as_deref() == Some("plugin:local-text/deduplicate")
@@ -578,6 +687,7 @@ impl DevToolsApp {
         let tray_bridge_stop = Arc::new(AtomicBool::new(false));
         let tray_exit_requested = Arc::new(AtomicBool::new(false));
         let window_handle = main_window_handle(cc);
+        let quick_active = Arc::new(AtomicBool::new(false));
         start_tray_bridge(
             Arc::clone(&manager),
             event_tx.clone(),
@@ -585,9 +695,23 @@ impl DevToolsApp {
             window_handle,
             Arc::clone(&tray_bridge_stop),
             Arc::clone(&tray_exit_requested),
+            Arc::clone(&quick_active),
         );
+        let wake_ctx = cc.egui_ctx.clone();
+        let mut hotkey_edit = preferences.hotkey.clone();
+        if cfg!(feature = "ui-preview") {
+            hotkey_edit.enabled = false;
+        }
+        let hotkey = crate::hotkey::Service::new(hotkey_edit.clone(), move || {
+            wake_main_window(window_handle, &wake_ctx)
+        });
         let duplicate_count = other_instance_count();
         let mut app = Self {
+            #[cfg(feature = "ui-preview")]
+            preview_panel_frames: 0,
+            hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
+            quick_active,
+            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(),
             manager,
             tray,
             page: Page::Home,
@@ -779,12 +903,21 @@ impl DevToolsApp {
                     self.last_refresh = Instant::now() - Duration::from_secs(30);
                 }
                 BackgroundEvent::TrayNavigate(action) => match action {
-                    TrayAction::Search => self.open_launcher(),
+                    TrayAction::QuickPanel => self.open_quick(ctx),
+                    TrayAction::ShowWindow => {
+                        self.quick_open = false;
+                    }
+                    TrayAction::Search => {
+                        self.quick_open = false;
+                        self.open_launcher();
+                    }
                     TrayAction::Settings => {
+                        self.quick_open = false;
                         self.launcher_open = false;
                         self.page = Page::Settings;
                     }
                     TrayAction::Collection(filter) => {
+                        self.quick_open = false;
                         self.launcher_open = false;
                         self.page = Page::Home;
                         self.home_filter = filter;
@@ -793,6 +926,7 @@ impl DevToolsApp {
                         self.home_page_index = 0;
                     }
                     TrayAction::OpenEntry(id) => {
+                        self.quick_open = false;
                         if let Some(entry) = self.entries("").into_iter().find(|e| e.id == id) {
                             self.open_entry(&entry);
                         } else {
@@ -973,7 +1107,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 19  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 20  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -2584,8 +2718,16 @@ impl DevToolsApp {
             .corner_radius(12.0)
             .inner_margin(18.0)
             .show(ui, |ui| {
+                ui.label(RichText::new("全局快捷启动器").strong());
+                ui.checkbox(&mut self.hotkey_edit.enabled, "启用系统全局快捷键");
+                ui.add(egui::TextEdit::singleline(&mut self.hotkey_edit.shortcut).hint_text("Ctrl+Alt+Space"));
+                ui.small("支持 Ctrl / Alt / Shift 与 A–Z、F1–F12、Space；至少包含 Ctrl 或 Alt。");
+                if ui.button("应用快捷键").clicked() { self.hotkey.configure(self.hotkey_edit.clone()); self.hotkey_status = "正在应用…".into(); }
+                ui.label(&self.hotkey_status);
+                if ui.button("打开快捷面板").clicked() { self.open_quick(ctx); }
+                ui.separator();
                 ui.label(RichText::new("托盘行为").strong());
-                ui.label("关闭窗口时程序继续驻留托盘，托管服务保持运行。左键恢复窗口；右键可搜索工具、打开收藏/最近/常用、按分类访问插件和内置工具，并控制服务。");
+                ui.label("关闭窗口时程序继续驻留托盘，托管服务保持运行。左键打开快捷面板；右键可搜索工具、打开收藏/最近/常用、按分类访问插件和内置工具，并控制服务。");
                 ui.label(
                     RichText::new("收藏按添加顺序、最近按打开时间、常用按次数排列；快捷菜单最多显示 8 / 8 / 6 项，可进入完整列表。原生菜单外观跟随 Windows。选择“退出”才会结束本程序。")
                         .color(self.colors.muted),
@@ -2725,12 +2867,21 @@ fn start_tray_bridge(
     window_handle: Option<isize>,
     stop: Arc<AtomicBool>,
     exit_requested: Arc<AtomicBool>,
+    quick_active: Arc<AtomicBool>,
 ) {
     std::thread::spawn(move || {
         while !stop.load(Ordering::Acquire) {
+            if quick_active.load(Ordering::Acquire) {
+                wake_main_window(window_handle, &ctx);
+            }
             for action in TrayController::poll_actions() {
                 match action {
+                    TrayAction::QuickPanel => {
+                        let _ = tx.send(BackgroundEvent::TrayNavigate(TrayAction::QuickPanel));
+                        wake_main_window(window_handle, &ctx);
+                    }
                     TrayAction::ShowWindow => {
+                        let _ = tx.send(BackgroundEvent::TrayNavigate(TrayAction::ShowWindow));
                         restore_main_window(window_handle, &ctx);
                     }
                     TrayAction::OpenTool(tool) => {
@@ -2766,7 +2917,8 @@ fn start_tray_bridge(
                                 TrayAction::StartAll | TrayAction::StopAll => {
                                     execute_batch(&manager, matches!(action, TrayAction::StartAll))
                                 }
-                                TrayAction::ShowWindow
+                                TrayAction::QuickPanel
+                                | TrayAction::ShowWindow
                                 | TrayAction::OpenTool(_)
                                 | TrayAction::Search
                                 | TrayAction::Settings
@@ -2798,6 +2950,69 @@ fn main_window_handle(cc: &eframe::CreationContext<'_>) -> Option<isize> {
 #[cfg(not(windows))]
 fn main_window_handle(_cc: &eframe::CreationContext<'_>) -> Option<isize> {
     None
+}
+
+fn wake_main_window(window_handle: Option<isize>, ctx: &egui::Context) {
+    ctx.request_repaint_of(egui::ViewportId::ROOT);
+    #[cfg(windows)]
+    if let Some(handle) = window_handle {
+        // Trigger the event loop without restoring or resizing the hidden workbench.
+        unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
+                handle as _,
+                windows_sys::Win32::UI::WindowsAndMessaging::WM_PAINT,
+                0,
+                0,
+            );
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = window_handle;
+}
+fn panel_origin(pixels_per_point: f32) -> Option<(egui::Pos2, egui::Vec2)> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::{
+            Foundation::POINT,
+            Graphics::Gdi::{
+                GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
+            },
+            UI::WindowsAndMessaging::GetCursorPos,
+        };
+        let mut point = POINT { x: 0, y: 0 };
+        let mut monitor: MONITORINFO = unsafe { std::mem::zeroed() };
+        monitor.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        unsafe {
+            if GetCursorPos(&mut point) == 0
+                || GetMonitorInfoW(
+                    MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST),
+                    &mut monitor,
+                ) == 0
+            {
+                return None;
+            }
+        }
+        let scale = pixels_per_point.max(0.5);
+        let rect = monitor.rcWork;
+        let size = egui::vec2(
+            460.0_f32.min((rect.right - rect.left) as f32 / scale - 16.0),
+            620.0_f32.min((rect.bottom - rect.top) as f32 / scale - 16.0),
+        );
+        let x = (point.x as f32 / scale - size.x / 2.0).clamp(
+            rect.left as f32 / scale + 8.0,
+            (rect.right as f32 / scale - size.x - 8.0).max(rect.left as f32 / scale + 8.0),
+        );
+        let y = (point.y as f32 / scale - size.y).clamp(
+            rect.top as f32 / scale + 8.0,
+            (rect.bottom as f32 / scale - size.y - 8.0).max(rect.top as f32 / scale + 8.0),
+        );
+        Some((egui::pos2(x, y), size))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = pixels_per_point;
+        None
+    }
 }
 
 fn restore_main_window(window_handle: Option<isize>, ctx: &egui::Context) {
@@ -2864,6 +3079,41 @@ impl eframe::App for DevToolsApp {
             self.plugins.clear_token();
         }
         self.drain_events(ctx);
+        let hotkey_events: Vec<_> = self.hotkey.events.try_iter().collect();
+        for event in hotkey_events {
+            match event {
+                crate::hotkey::Event::Triggered => self.open_quick(ctx),
+                crate::hotkey::Event::Configured(setting, result) => match result {
+                    Ok(()) => {
+                        self.hotkey_status = if setting.enabled {
+                            format!("已启用 {} · 可在其他应用中唤起", setting.shortcut)
+                        } else {
+                            "全局快捷键已关闭；仍可从托盘打开".into()
+                        };
+                        self.preferences.hotkey = setting;
+                        if let Err(error) = self.preferences.save(&self.preferences_path) {
+                            self.hotkey_status = format!("快捷键已生效，但保存失败：{error}");
+                        }
+                    }
+                    Err(error) => self.hotkey_status = error,
+                },
+            }
+        }
+        if let Some(result) = self.intake.poll() {
+            match result.and_then(|value| self.apply_import(value).map_err(|e| e.to_string())) {
+                Ok(()) => self.toast = Some(("文件已导入".into(), Instant::now())),
+                Err(error) => {
+                    self.intake.message = error;
+                    self.page = Page::Intake;
+                }
+            }
+        }
+        if self.intake.busy() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        self.receive_drop(ctx);
+        self.quick_panel(ctx);
+        self.quick_active.store(self.quick_open, Ordering::Release);
         let model = Navigation::new(
             self.entries("")
                 .into_iter()
@@ -2896,6 +3146,15 @@ impl eframe::App for DevToolsApp {
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.hide_to_tray(ctx);
+        }
+
+        #[cfg(windows)]
+        if self.quick_open
+            && self.window_handle.is_some_and(|handle| unsafe {
+                windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible(handle as _) == 0
+            })
+        {
+            return;
         }
 
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K)) {
@@ -2931,6 +3190,9 @@ impl eframe::App for DevToolsApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(self.colors.bg).inner_margin(24.0))
             .show(ctx, |ui| match self.page {
+                Page::Intake => {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.intake.ui(ui));
+                }
                 Page::Home => {
                     egui::ScrollArea::vertical()
                         .id_salt("home-scroll")
@@ -2962,7 +3224,11 @@ impl eframe::App for DevToolsApp {
                 Page::Network => {
                     egui::ScrollArea::vertical().show(ui, |ui| self.network_page(ui, ctx));
                 }
-                Page::Settings => self.settings_page(ui, ctx),
+                Page::Settings => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("settings-scroll")
+                        .show(ui, |ui| self.settings_page(ui, ctx));
+                }
                 Page::Plugins => {
                     let previous = self.plugins.selected.clone();
                     egui::ScrollArea::vertical()
