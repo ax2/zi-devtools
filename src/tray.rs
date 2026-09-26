@@ -25,6 +25,8 @@ pub enum TrayTool {
     Network,
     Data,
     Files,
+    Plugins,
+    Integrations,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,6 +88,8 @@ impl TrayController {
             &MenuItem::with_id("tool.network", "网络诊断", true, None),
             &MenuItem::with_id("tool.data", "数据工作台", true, None),
             &MenuItem::with_id("tool.files", "文件校验", true, None),
+            &MenuItem::with_id("tool.plugins", "插件与连接器", true, None),
+            &MenuItem::with_id("tool.integrations", "本机集成发现", true, None),
         ])?;
         menu.append_items(&[&small_tools, &encoding_tools, &developer_tools])?;
 
@@ -222,6 +226,8 @@ fn action_from_menu_id(id: &str) -> Option<TrayAction> {
         "tool.network" => Some(TrayAction::OpenTool(TrayTool::Network)),
         "tool.data" => Some(TrayAction::OpenTool(TrayTool::Data)),
         "tool.files" => Some(TrayAction::OpenTool(TrayTool::Files)),
+        "tool.plugins" => Some(TrayAction::OpenTool(TrayTool::Plugins)),
+        "tool.integrations" => Some(TrayAction::OpenTool(TrayTool::Integrations)),
         START_ALL_ID => Some(TrayAction::StartAll),
         STOP_ALL_ID => Some(TrayAction::StopAll),
         EXIT_ID => Some(TrayAction::Exit),
@@ -334,6 +340,8 @@ mod tests {
         for (id, tool) in [
             ("tool.data", TrayTool::Data),
             ("tool.files", TrayTool::Files),
+            ("tool.plugins", TrayTool::Plugins),
+            ("tool.integrations", TrayTool::Integrations),
         ] {
             assert_eq!(action_from_menu_id(id), Some(TrayAction::OpenTool(tool)));
         }

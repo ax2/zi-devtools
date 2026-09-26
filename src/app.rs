@@ -105,72 +105,152 @@ enum Page {
     Data,
     Files,
     Settings,
+    Plugins,
+    Integrations,
 }
 
 struct ToolEntry {
-    id: &'static str,
-    title: &'static str,
-    description: &'static str,
+    id: String,
+    title: String,
+    description: String,
+    category: String,
+    keywords: String,
     page: Page,
     kind: Option<ToolKind>,
 }
 impl ToolEntry {
-    fn matches(&self, query: &str) -> bool {
-        query.is_empty()
-            || format!("{} {} {}", self.id, self.title, self.description)
-                .to_lowercase()
-                .contains(query)
+    fn score(&self, query: &str) -> Option<u32> {
+        let query = query.trim().to_lowercase();
+        if query.is_empty() {
+            return Some(0);
+        }
+        let haystack = format!(
+            "{} {} {} {} {}",
+            self.id, self.title, self.description, self.category, self.keywords
+        )
+        .to_lowercase();
+        if !query.split_whitespace().all(|word| haystack.contains(word)) {
+            return None;
+        }
+        Some(if self.id == query || self.title.to_lowercase() == query {
+            1000
+        } else if self.title.to_lowercase().starts_with(&query) {
+            500
+        } else {
+            100
+        })
+    }
+}
+fn tool_category(id: &str) -> &'static str {
+    match id {
+        "data" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => "数据与格式",
+        "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
+        "files" | "services" => "文件与系统",
+        "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
+        "plugins" | "integrations" => "扩展与集成",
+        _ => "文本与编码",
     }
 }
 fn catalog() -> Vec<ToolEntry> {
     let mut entries = vec![
         ToolEntry {
-            id: "data",
-            title: "数据工作台",
-            description: "CSV / JSON 筛选、排序与导出",
+            id: "data".into(),
+            title: "数据工作台".into(),
+            description: "CSV / JSON 筛选、排序与导出".into(),
             page: Page::Data,
             kind: None,
+            category: String::new(),
+            keywords: String::new(),
         },
         ToolEntry {
-            id: "files",
-            title: "批量文件校验",
-            description: "SHA-256 / SHA-512 摘要对比",
+            id: "files".into(),
+            title: "批量文件校验".into(),
+            description: "SHA-256 / SHA-512 摘要对比".into(),
             page: Page::Files,
             kind: None,
+            category: String::new(),
+            keywords: String::new(),
         },
         ToolEntry {
-            id: "http",
-            title: "HTTP 请求调试",
-            description: "请求标签、站点与历史",
+            id: "http".into(),
+            title: "HTTP 请求调试".into(),
+            description: "请求标签、站点与历史".into(),
             page: Page::Http,
             kind: None,
+            category: String::new(),
+            keywords: String::new(),
         },
         ToolEntry {
-            id: "diff",
-            title: "文本差异对比",
-            description: "逐行比较两段文本",
+            id: "diff".into(),
+            title: "文本差异对比".into(),
+            description: "逐行比较两段文本".into(),
             page: Page::Diff,
             kind: None,
+            category: String::new(),
+            keywords: String::new(),
         },
         ToolEntry {
-            id: "network",
-            title: "网络诊断",
-            description: "DNS 解析与单端口 TCP 连通性",
+            id: "network".into(),
+            title: "网络诊断".into(),
+            description: "DNS 解析与单端口 TCP 连通性".into(),
             page: Page::Network,
             kind: None,
+            category: String::new(),
+            keywords: String::new(),
+        },
+        ToolEntry {
+            id: "plugins".into(),
+            title: "插件中心".into(),
+            description: "安装、启停与管理工具连接器".into(),
+            page: Page::Plugins,
+            kind: None,
+            category: String::new(),
+            keywords: "plugin extension LLM MCP 扩展".into(),
+        },
+        ToolEntry {
+            id: "integrations".into(),
+            title: "本机集成发现".into(),
+            description: "发现模型与开发软件入口及本地服务端口".into(),
+            page: Page::Integrations,
+            kind: None,
+            category: String::new(),
+            keywords: "Ollama Codex Docker Python Node 软件".into(),
+        },
+        ToolEntry {
+            id: "services".into(),
+            title: "本地服务".into(),
+            description: "服务启停、健康检查与日志".into(),
+            page: Page::Services,
+            kind: None,
+            category: String::new(),
+            keywords: "service server process".into(),
         },
     ];
     entries.extend(ToolKind::ALL.into_iter().map(|kind| ToolEntry {
-        id: kind.id(),
-        title: kind.label(),
-        description: kind.description(),
+        id: kind.id().into(),
+        title: kind.label().into(),
+        description: kind.description().into(),
         page: if kind.is_encoding() {
             Page::EncodingTools
         } else {
             Page::SmallTools
         },
         kind: Some(kind),
+        category: String::new(),
+        keywords: String::new(),
     }));
+    for e in &mut entries {
+        e.category = tool_category(&e.id).into();
+        e.keywords.push_str(match e.id.as_str() {
+            "json" => " format validate minify 格式 校验 压缩",
+            "data" => " csv tsv table filter sort 表格 筛选 排序",
+            "files" => " hash checksum file 文件 摘要",
+            "diff" | "json-diff" => " compare difference 比较 差异",
+            "regex" => " regex match 正则 匹配",
+            "timestamp" => " time date 时间 日期",
+            _ => "",
+        });
+    }
     entries
 }
 
@@ -265,6 +345,10 @@ pub struct DevToolsApp {
     data_state: DataState,
     file_state: FileState,
     clear_tool_confirm: bool,
+    plugins: crate::plugin_ui::PluginState,
+    integrations: crate::integrations::IntegrationState,
+    home_filter: String,
+    home_category: String,
 }
 
 impl DevToolsApp {
@@ -276,6 +360,10 @@ impl DevToolsApp {
         self.startup_warning = None;
         self.launcher_open = false;
         self.tool_search.clear();
+        self.preferences.recent.clear();
+        self.preferences.usage.clear();
+        self.home_filter = "全部".into();
+        self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
             0 | 1 => self.page = Page::Home,
@@ -321,12 +409,49 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
+            21..=26 => {
+                let bytes = include_bytes!("../plugins-examples/local-text.json");
+                if self.plugins.store.packages.is_empty() {
+                    self.plugins.store.install(bytes).unwrap();
+                }
+                self.plugins.store.set_enabled("local-text", true).unwrap();
+                match scene {
+                    21 | 22 => {
+                        self.page = Page::Plugins;
+                        self.plugins.selected = None;
+                    }
+                    23 => {
+                        self.page = Page::Home;
+                        self.home_category = "文本与编码".into();
+                    }
+                    24 => {
+                        self.page = Page::Home;
+                        self.visit("plugin:local-text/deduplicate");
+                        self.visit("json");
+                        self.home_filter = "最近".into();
+                    }
+                    25 => {
+                        self.page = Page::Plugins;
+                        self.plugins.select("plugin:local-text/deduplicate");
+                    }
+                    _ => {
+                        self.page = Page::Home;
+                        self.open_launcher();
+                        self.launcher_query = "去重".into();
+                    }
+                }
+            }
             _ => {
                 self.page = Page::Home;
                 self.open_launcher();
                 self.launcher_query = "json".into();
             }
         }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_plugin_navigation(&self) -> bool {
+        self.page == Page::Plugins
+            && self.plugins.selected.as_deref() == Some("plugin:local-text/deduplicate")
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_navigation(&self) -> (bool, bool) {
@@ -413,10 +538,12 @@ impl DevToolsApp {
             window_handle,
             theme,
             colors: palette(theme),
-            preferences, preferences_path,
+            preferences, preferences_path: preferences_path.clone(),
             tool_search: String::new(), launcher_query: String::new(), launcher_open: false,
             launcher_focus: false, launcher_index: 0, toast: None,
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
+            plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
+            integrations: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(),
         };
         if restore_services {
             app.spawn_restore();
@@ -574,12 +701,18 @@ impl DevToolsApp {
                             Page::SmallTools
                         };
                         self.tool_state.select(kind);
+                        self.visit(kind.id());
                     }
-                    TrayTool::Http => self.page = Page::Http,
-                    TrayTool::Diff => self.page = Page::Diff,
-                    TrayTool::Network => self.page = Page::Network,
-                    TrayTool::Data => self.page = Page::Data,
-                    TrayTool::Files => self.page = Page::Files,
+                    TrayTool::Http => self.navigate(Page::Http, None),
+                    TrayTool::Diff => self.navigate(Page::Diff, None),
+                    TrayTool::Network => self.navigate(Page::Network, None),
+                    TrayTool::Data => self.navigate(Page::Data, None),
+                    TrayTool::Files => self.navigate(Page::Files, None),
+                    TrayTool::Plugins => {
+                        self.plugins.selected = None;
+                        self.navigate(Page::Plugins, None);
+                    }
+                    TrayTool::Integrations => self.navigate(Page::Integrations, None),
                 },
                 BackgroundEvent::NetworkResult(request_id, result) => {
                     if self.network_state.request_id == request_id {
@@ -696,6 +829,8 @@ impl DevToolsApp {
                     .show(ui, |ui| {
                         nav_button(ui, &mut self.page, Page::Home, "工具首页");
                         nav_button(ui, &mut self.page, Page::Services, "本地服务");
+                        nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
+                        nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         ui.add_space(10.0);
                         ui.label(RichText::new("轻量工具").size(11.0).strong().color(p.muted));
                         ui.add_space(4.0);
@@ -721,7 +856,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 15  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 16  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -757,6 +892,15 @@ impl DevToolsApp {
             });
         if self.page != previous_page {
             self.tool_search.clear();
+            if self.page == Page::Plugins {
+                self.plugins.selected = None;
+            }
+            if let Some(e) = catalog()
+                .into_iter()
+                .find(|e| e.page == self.page && e.kind.is_none())
+            {
+                self.visit(&e.id);
+            }
         }
     }
 
@@ -773,6 +917,15 @@ impl DevToolsApp {
             self.tool_state.select(kind);
         }
         self.launcher_open = false;
+        let id = kind.map(|k| k.id().to_owned()).or_else(|| {
+            catalog()
+                .into_iter()
+                .find(|e| e.page == page && e.kind.is_none())
+                .map(|e| e.id)
+        });
+        if let Some(id) = id {
+            self.visit(&id);
+        }
     }
     fn toggle_favorite(&mut self, id: &str) {
         self.preferences.toggle(id);
@@ -781,111 +934,188 @@ impl DevToolsApp {
         }
     }
 
+    fn entries(&self, query: &str) -> Vec<ToolEntry> {
+        let mut entries = catalog();
+        entries.extend(
+            self.plugins
+                .store
+                .tools()
+                .into_iter()
+                .map(|(id, t)| ToolEntry {
+                    id,
+                    title: t.name,
+                    description: t.description,
+                    category: t.category,
+                    keywords: t.keywords.join(" "),
+                    page: Page::Plugins,
+                    kind: None,
+                }),
+        );
+        entries.retain(|e| e.score(query).is_some());
+        entries.sort_by_key(|e| {
+            std::cmp::Reverse(
+                e.score(query).unwrap_or(0)
+                    + if self.preferences.favorites.contains(&e.id) {
+                        30
+                    } else {
+                        0
+                    }
+                    + self
+                        .preferences
+                        .recent
+                        .iter()
+                        .position(|id| id == &e.id)
+                        .map(|i| 20 - i as u32)
+                        .unwrap_or(0)
+                    + self
+                        .preferences
+                        .usage
+                        .get(&e.id)
+                        .copied()
+                        .unwrap_or(0)
+                        .min(10),
+            )
+        });
+        entries
+    }
+    fn visit(&mut self, id: &str) {
+        self.preferences.visit(id);
+        if let Err(e) = self.preferences.save(&self.preferences_path) {
+            self.toast = Some((e.to_string(), Instant::now()));
+        }
+    }
+    fn open_entry(&mut self, e: &ToolEntry) {
+        if e.id.starts_with("plugin:") {
+            self.plugins.select(&e.id);
+            self.page = Page::Plugins;
+            self.launcher_open = false;
+            self.visit(&e.id);
+        } else {
+            if e.page == Page::Plugins {
+                self.plugins.selected = None;
+            }
+            self.navigate(e.page, e.kind);
+        }
+    }
     fn home_page(&mut self, ui: &mut egui::Ui) {
         let p = self.colors;
-        ui.heading(RichText::new("今天想处理什么？").size(30.0));
+        ui.heading(RichText::new("你的工具工作台").size(30.0));
         ui.label(
             RichText::new(format!(
-                "{} 个轻量工具 · 5 个开发工作台 · 本地服务管理",
-                ToolKind::ALL.len()
+                "{} 项内置能力 · {} 项已启用插件工具 · Ctrl K 随时打开",
+                catalog().len(),
+                self.plugins.store.tools().len()
             ))
             .color(p.muted),
         );
-        ui.add_space(20.0);
-        let response = ui.add_sized(
-            [ui.available_width(), 40.0],
+        ui.add_space(16.0);
+        ui.add_sized(
+            [ui.available_width(), 38.0],
             egui::TextEdit::singleline(&mut self.tool_search)
-                .hint_text("搜索名称或用途，例如 JSON、子网、文件校验…"),
+                .hint_text("搜索名称、用途或关键词，例如 JSON 提取、LLM、文件…"),
         );
-        if response.changed() {
-            ui.ctx().request_repaint();
-        }
-        ui.add_space(18.0);
-        let query = self.tool_search.to_lowercase();
-        let entries = catalog()
-            .into_iter()
-            .filter(|e| e.matches(&query))
-            .collect::<Vec<_>>();
-        if entries.is_empty() {
-            ui.add_space(35.0);
-            ui.label(RichText::new("没有找到匹配的工具").size(20.0));
-            ui.label("试试英文名称、中文用途，或清空关键词。");
-            if ui.button("清空搜索").clicked() {
-                self.tool_search.clear();
+        ui.add_space(12.0);
+        ui.horizontal_wrapped(|ui| {
+            for filter in ["全部", "收藏", "最近", "常用"] {
+                ui.selectable_value(&mut self.home_filter, filter.into(), filter);
             }
-            return;
-        }
-        let has_favorites = entries
-            .iter()
-            .any(|e| self.preferences.favorites.iter().any(|id| id == e.id));
-        for favorites in [true, false] {
-            if favorites && !has_favorites {
-                continue;
-            }
-            ui.label(
-                RichText::new(if favorites {
-                    "已收藏"
-                } else {
-                    "全部工具"
-                })
-                .size(13.0)
-                .strong()
-                .color(p.muted),
-            );
-            ui.add_space(8.0);
-            let filtered = entries
-                .iter()
-                .filter(|e| !favorites || self.preferences.favorites.iter().any(|id| id == e.id))
-                .collect::<Vec<_>>();
-            let columns = if ui.available_width() >= 750.0 { 3 } else { 2 };
-            for row in filtered.chunks(columns) {
-                ui.columns(columns, |cols| {
-                    for (col, entry) in cols.iter_mut().zip(row) {
-                        egui::Frame::new()
-                            .fill(p.card)
-                            .stroke(egui::Stroke::new(1.0, p.surface))
-                            .corner_radius(12)
-                            .inner_margin(15.0)
-                            .show(col, |ui| {
-                                ui.set_min_height(108.0);
-                                ui.set_min_width(ui.available_width());
-                                ui.horizontal(|ui| {
-                                    ui.label(RichText::new(entry.title).size(16.0).strong());
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            let selected = self
-                                                .preferences
-                                                .favorites
-                                                .iter()
-                                                .any(|id| id == entry.id);
-                                            if ui
-                                                .small_button(if selected { "★" } else { "☆" })
-                                                .on_hover_text(if selected {
-                                                    "取消收藏"
-                                                } else {
-                                                    "收藏工具"
-                                                })
-                                                .clicked()
-                                            {
-                                                self.toggle_favorite(entry.id);
-                                            }
-                                        },
-                                    );
-                                });
-                                ui.add_space(5.0);
-                                ui.label(
-                                    RichText::new(entry.description).size(12.0).color(p.muted),
-                                );
-                                ui.add_space(9.0);
-                                if ui.button("打开工具  →").clicked() {
-                                    self.navigate(entry.page, entry.kind);
-                                }
-                            });
+            ui.separator();
+            egui::ComboBox::from_id_salt("tool-category")
+                .selected_text(&self.home_category)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.home_category, "全部分类".into(), "全部分类");
+                    for category in crate::plugins::CATEGORIES {
+                        ui.selectable_value(&mut self.home_category, (*category).into(), *category);
                     }
                 });
-                ui.add_space(10.0);
+            if ui.small_button("重置筛选").clicked() {
+                self.tool_search.clear();
+                self.home_category = "全部分类".into();
+                self.home_filter = "全部".into();
             }
+        });
+        let mut entries = self.entries(&self.tool_search);
+        entries.retain(|e| {
+            (self.home_category == "全部分类" || e.category == self.home_category)
+                && match self.home_filter.as_str() {
+                    "收藏" => self.preferences.favorites.contains(&e.id),
+                    "最近" => self.preferences.recent.contains(&e.id),
+                    "常用" => self.preferences.usage.contains_key(&e.id),
+                    _ => true,
+                }
+        });
+        if self.home_filter == "最近" {
+            entries.sort_by_key(|e| {
+                self.preferences
+                    .recent
+                    .iter()
+                    .position(|id| id == &e.id)
+                    .unwrap_or(usize::MAX)
+            });
+        }
+        if self.home_filter == "常用" {
+            entries.sort_by_key(|e| {
+                std::cmp::Reverse(self.preferences.usage.get(&e.id).copied().unwrap_or(0))
+            });
+        }
+        ui.add_space(12.0);
+        ui.label(format!("{} 个匹配工具", entries.len()));
+        if entries.is_empty() {
+            ui.add_space(30.0);
+            ui.strong("这个视图还没有工具");
+            ui.label("试试其他分类、清空搜索，或在插件中心安装并启用连接器。打开工具后会自动进入最近与常用。");
+        }
+        let columns = if ui.available_width() >= 750.0 { 3 } else { 2 };
+        for row in entries.chunks(columns) {
+            ui.columns(columns, |cols| {
+                for (col, e) in cols.iter_mut().zip(row) {
+                    egui::Frame::new()
+                        .fill(p.card)
+                        .stroke(egui::Stroke::new(1.0, p.surface))
+                        .corner_radius(12)
+                        .inner_margin(14.0)
+                        .show(col, |ui| {
+                            ui.set_min_height(132.0);
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(&e.category).small().color(p.muted));
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let selected = self.preferences.favorites.contains(&e.id);
+                                        if ui
+                                            .small_button(if selected { "★" } else { "☆" })
+                                            .on_hover_text("收藏 / 取消收藏")
+                                            .clicked()
+                                        {
+                                            self.toggle_favorite(&e.id);
+                                        }
+                                    },
+                                );
+                            });
+                            ui.label(RichText::new(&e.title).size(16.0).strong());
+                            ui.label(RichText::new(&e.description).small().color(p.muted));
+                            ui.label(
+                                RichText::new(if e.id.starts_with("plugin:") {
+                                    "插件"
+                                } else {
+                                    "内置"
+                                })
+                                .small()
+                                .color(p.muted),
+                            );
+                            if ui
+                                .add_sized(
+                                    [ui.available_width(), 28.0],
+                                    egui::Button::new("打开工具 →"),
+                                )
+                                .clicked()
+                            {
+                                self.open_entry(e);
+                            }
+                        });
+                }
+            });
             ui.add_space(10.0);
         }
     }
@@ -916,10 +1146,7 @@ impl DevToolsApp {
                     self.launcher_index = 0;
                 }
                 let query = self.launcher_query.to_lowercase();
-                let entries = catalog()
-                    .into_iter()
-                    .filter(|e| e.matches(&query))
-                    .collect::<Vec<_>>();
+                let entries = self.entries(&query);
                 if entries.is_empty() {
                     ui.label("没有匹配的工具");
                 } else {
@@ -937,19 +1164,28 @@ impl DevToolsApp {
                             for (i, e) in entries.iter().enumerate() {
                                 let response = ui.selectable_label(
                                     i == self.launcher_index,
-                                    format!("{}     {}", e.title, e.description),
+                                    format!(
+                                        "{}   ·   {}   ·   {}",
+                                        e.title,
+                                        e.category,
+                                        if e.id.starts_with("plugin:") {
+                                            "插件"
+                                        } else {
+                                            "内置"
+                                        }
+                                    ),
                                 );
                                 if i == self.launcher_index {
                                     response.scroll_to_me(Some(egui::Align::Center));
                                 }
                                 if response.clicked() {
-                                    chosen = Some((e.page, e.kind));
+                                    chosen = Some(e.id.clone());
                                 }
                             }
                         });
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
                         let e = &entries[self.launcher_index];
-                        chosen = Some((e.page, e.kind));
+                        chosen = Some(e.id.clone());
                     }
                 }
                 ui.separator();
@@ -962,8 +1198,10 @@ impl DevToolsApp {
         if !open || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.launcher_open = false;
         }
-        if let Some((page, kind)) = chosen {
-            self.navigate(page, kind);
+        if let Some(id) = chosen
+            && let Some(entry) = self.entries("").into_iter().find(|e| e.id == id)
+        {
+            self.open_entry(&entry);
         }
     }
 
@@ -1349,6 +1587,7 @@ impl DevToolsApp {
                     .fill(if selected { p.accent } else { p.surface });
                 if ui.add(button).on_hover_text(kind.description()).clicked() {
                     self.tool_state.select(kind);
+                    self.visit(kind.id());
                 }
             }
         });
@@ -2490,6 +2729,22 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical().show(ui, |ui| self.network_page(ui, ctx));
                 }
                 Page::Settings => self.settings_page(ui, ctx),
+                Page::Plugins => {
+                    let previous = self.plugins.selected.clone();
+                    egui::ScrollArea::vertical()
+                        .id_salt("plugins-page")
+                        .show(ui, |ui| self.plugins.ui(ui));
+                    if self.plugins.selected != previous
+                        && let Some(id) = self.plugins.selected.clone()
+                    {
+                        self.visit(&id);
+                    }
+                }
+                Page::Integrations => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("integrations-page")
+                        .show(ui, |ui| self.integrations.ui(ui));
+                }
             });
         self.overlays(ctx);
         self.launcher(ctx);
@@ -2695,6 +2950,21 @@ fn action_label(action: &str) -> &'static str {
 mod service_filter_tests {
     use super::*;
 
+    #[test]
+    fn registry_has_unique_categories_and_multiterm_search() {
+        let entries = catalog();
+        let ids: std::collections::HashSet<_> = entries.iter().map(|e| &e.id).collect();
+        assert_eq!(ids.len(), entries.len());
+        assert!(
+            entries
+                .iter()
+                .all(|e| crate::plugins::CATEGORIES.contains(&e.category.as_str()))
+        );
+        let json = entries.iter().find(|e| e.id == "json").unwrap();
+        assert!(json.score("JSON format").is_some());
+        assert!(json.score("json unmatched").is_none());
+        assert!(json.score("json").unwrap() > json.score("format").unwrap());
+    }
     #[test]
     fn separates_managed_external_and_stopped_services() {
         assert!(ServiceFilter::Managed.matches(ServiceState::Running, true));

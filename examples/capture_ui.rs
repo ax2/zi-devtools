@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 21] = [
+const NAMES: [&str; 27] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -29,6 +29,12 @@ const NAMES: [&str; 21] = [
     "random-dark",
     "unicode-light",
     "unicode-dark",
+    "plugins-light",
+    "plugins-dark",
+    "category-light",
+    "recent-dark",
+    "plugin-tool-light",
+    "plugin-search-dark",
 ];
 
 struct Capture {
@@ -42,15 +48,20 @@ struct Capture {
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        input.events.push(egui::Event::PointerGone);
         if self.scene != NAMES.len() {
             return;
         }
         let event = match self.frames {
             2 => Some((egui::Key::K, egui::Modifiers::CTRL)),
             4 => Some((egui::Key::ArrowDown, egui::Modifiers::NONE)),
-            6 => Some((egui::Key::Enter, egui::Modifiers::NONE)),
+            6 | 14 => Some((egui::Key::Enter, egui::Modifiers::NONE)),
+            10 => Some((egui::Key::K, egui::Modifiers::CTRL)),
             _ => None,
         };
+        if self.frames == 12 {
+            input.events.push(egui::Event::Text("保持顺序去重".into()));
+        }
         if let Some((key, modifiers)) = event {
             input.modifiers = modifiers;
             input.events.push(egui::Event::Key {
@@ -117,6 +128,13 @@ impl eframe::App for Capture {
                     "ArrowDown + Enter opens Files"
                 );
                 println!("PASS keyboard: Ctrl K, ArrowDown, Enter navigation");
+            }
+            if self.frames == 16 {
+                assert!(
+                    self.app.preview_plugin_navigation(),
+                    "Ctrl K routes installed plugin tool"
+                );
+                println!("PASS keyboard: plugin search and navigation");
                 // The product intentionally hides on Close; this disposable fixture must exit.
                 std::process::exit(0);
             }

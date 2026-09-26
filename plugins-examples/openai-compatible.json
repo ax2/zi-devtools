@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "openai-local",
+  "name": "OpenAI 兼容本地服务",
+  "version": "1.0.0",
+  "description": "默认连接 127.0.0.1:1234，可适配 LM Studio。修改地址后安装；远程地址必须为 HTTPS。",
+  "tools": [
+    {"id":"models","name":"兼容接口模型列表","description":"GET /v1/models；服务需自行启动","category":"AI 与模型","keywords":["LM Studio","OpenAI","模型"],"adapter":{"type":"http","url":"http://127.0.0.1:1234/v1/models","method":"GET"}},
+    {"id":"chat","name":"兼容接口单轮问答","description":"非流式 Chat Completions；令牌仅保留在当前会话","category":"AI 与模型","keywords":["LLM","OpenAI","大模型","chat"],"sample":"请用三句话解释 MCP。","adapter":{"type":"http","url":"http://127.0.0.1:1234/v1/chat/completions","method":"POST","body":{"model":"$model","messages":[{"role":"user","content":"$input"}],"stream":false},"response_pointer":"/choices/0/message/content"}}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "local-text",
+  "name": "本地文本配方",
+  "version": "1.0.0",
+  "description": "声明式插件示例：复用内置引擎，不访问网络。",
+  "tools": [
+    {"id":"deduplicate","name":"保持顺序去重","description":"删除重复行，保留首次出现顺序","category":"文本与编码","keywords":["去重","unique","dedup"],"sample":"Rust\nPython\nRust","adapter":{"type":"builtin","tool":"lines","action":0}},
+    {"id":"extract-names","name":"批量提取名称","description":"从 items 数组提取 name 字段","category":"数据与格式","keywords":["JSON","提取","extract"],"sample":"{\"items\":[{\"name\":\"Rust\"},{\"name\":\"Python\"}]}","adapter":{"type":"builtin","tool":"json-path","pattern":"$.items[*].name"}}
+  ]
+}

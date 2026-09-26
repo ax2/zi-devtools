@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "ollama-local",
+  "name": "Ollama 本地连接器",
+  "version": "1.0.0",
+  "description": "连接已启动的本机 Ollama；不会自动安装、启动服务或下载模型。",
+  "tools": [
+    {"id":"models","name":"Ollama 模型列表","description":"查看本机服务已下载模型","category":"AI 与模型","keywords":["本地模型","list models"],"adapter":{"type":"http","url":"http://127.0.0.1:11434/api/tags","method":"GET"}},
+    {"id":"chat","name":"Ollama 单轮问答","description":"输入模型名称和问题，发送至本机 Ollama","category":"AI 与模型","keywords":["LLM","聊天","chat","大模型"],"sample":"请解释 JSON 和 YAML 的区别。","adapter":{"type":"http","url":"http://127.0.0.1:11434/api/chat","method":"POST","body":{"model":"$model","messages":[{"role":"user","content":"$input"}],"stream":false},"response_pointer":"/message/content"}}
+  ]
+}
