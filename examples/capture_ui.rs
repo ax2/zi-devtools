@@ -1,0 +1,163 @@
+//! Renders synthetic, credential-free fixtures through the real eframe renderer.
+use eframe::egui;
+use std::{
+    fs,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+use zi_devtools::app::DevToolsApp;
+
+const NAMES: [&str; 9] = [
+    "home-dark",
+    "home-light",
+    "yaml-dark",
+    "yaml-light-compact",
+    "data-dark",
+    "data-light",
+    "files-dark",
+    "files-light-compact",
+    "launcher-light",
+];
+
+struct Capture {
+    app: DevToolsApp,
+    folder: PathBuf,
+    fixture: PathBuf,
+    scene: usize,
+    frames: usize,
+    pending: bool,
+    started: Instant,
+}
+impl eframe::App for Capture {
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        if self.scene != NAMES.len() {
+            return;
+        }
+        let event = match self.frames {
+            2 => Some((egui::Key::K, egui::Modifiers::CTRL)),
+            4 => Some((egui::Key::ArrowDown, egui::Modifiers::NONE)),
+            6 => Some((egui::Key::Enter, egui::Modifiers::NONE)),
+            _ => None,
+        };
+        if let Some((key, modifiers)) = event {
+            input.modifiers = modifiers;
+            input.events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            });
+        }
+    }
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if self.started.elapsed() > Duration::from_secs(100) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+        let screenshots = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| {
+                    if let egui::Event::Screenshot { image, .. } = e {
+                        Some(image.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+        for image in screenshots {
+            let file =
+                fs::File::create(self.folder.join(format!("{}.png", NAMES[self.scene]))).unwrap();
+            let mut encoder = png::Encoder::new(file, image.size[0] as u32, image.size[1] as u32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let bytes = image
+                .pixels
+                .iter()
+                .flat_map(|p| p.to_array())
+                .collect::<Vec<_>>();
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&bytes)
+                .unwrap();
+            println!(
+                "Captured {}: {}x{}",
+                NAMES[self.scene], image.size[0], image.size[1]
+            );
+            self.scene += 1;
+            self.frames = 0;
+            self.pending = false;
+        }
+        if self.scene == NAMES.len() {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 0, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 3 {
+                assert!(self.app.preview_navigation().0, "Ctrl K opens launcher");
+            }
+            if self.frames == 8 {
+                assert_eq!(
+                    self.app.preview_navigation(),
+                    (false, true),
+                    "ArrowDown + Enter opens Files"
+                );
+                println!("PASS keyboard: Ctrl K, ArrowDown, Enter navigation");
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if self.frames == 0 {
+            self.app
+                .preview_scene(ctx, self.scene, self.fixture.clone());
+            let size = if self.scene == 3 || self.scene == 7 {
+                egui::vec2(980.0, 760.0)
+            } else {
+                egui::vec2(1280.0, 900.0)
+            };
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+        }
+        self.app.update(ctx, frame);
+        self.frames += 1;
+        if self.frames >= 18 && !self.pending {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            self.pending = true;
+        }
+        ctx.request_repaint_after(Duration::from_millis(60));
+    }
+}
+fn main() -> Result<(), eframe::Error> {
+    let folder = PathBuf::from(std::env::args().nth(1).expect("capture output directory"));
+    fs::create_dir_all(&folder).unwrap();
+    let folder = folder.canonicalize().unwrap();
+    let fixture = folder.join("sample.txt");
+    fs::write(&fixture, b"abc").unwrap();
+    let config = folder.join("services.yml");
+    fs::write(&config,format!("state_dir: '{}'\nservices:\n  demo:\n    name: Demo fixture\n    repo: '{}'\n    command: 'echo fixture'\n",folder.join("state").display(),folder.display())).unwrap();
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("Zi DevTools — UI preview fixture")
+            .with_inner_size([1280.0, 900.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Zi DevTools UI capture",
+        options,
+        Box::new(move |cc| {
+            Ok(Box::new(Capture {
+                app: DevToolsApp::new(cc, config, false),
+                folder,
+                fixture,
+                scene: 0,
+                frames: 0,
+                pending: false,
+                started: Instant::now(),
+            }))
+        }),
+    )
+}

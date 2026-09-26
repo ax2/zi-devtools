@@ -1,0 +1,454 @@
+{
+  "version": "0.14.0",
+  "updated": "2026-09-26",
+  "tools": [
+    {
+      "id": "json",
+      "name": "JSON",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "格式化、压缩与校验 JSON"
+    },
+    {
+      "id": "base64",
+      "name": "Base64",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "UTF-8 文本与 Base64 编解码"
+    },
+    {
+      "id": "url",
+      "name": "URL 编码",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "URL 参数百分号编码与还原"
+    },
+    {
+      "id": "sha256",
+      "name": "SHA-256 文本摘要",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "计算文本的 SHA-256 摘要"
+    },
+    {
+      "id": "timestamp",
+      "name": "时间戳",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "Unix 时间戳与本地时间转换"
+    },
+    {
+      "id": "uuid",
+      "name": "UUID",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "生成随机 UUID v4"
+    },
+    {
+      "id": "jwt",
+      "name": "JWT 内容查看",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "查看 Header 与 Payload；不验证签名"
+    },
+    {
+      "id": "regex",
+      "name": "正则表达式",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "查找匹配与捕获组"
+    },
+    {
+      "id": "number",
+      "name": "进制转换",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "二、八、十、十六进制互转"
+    },
+    {
+      "id": "qr",
+      "name": "二维码",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "从文本生成二维码并保存 PNG"
+    },
+    {
+      "id": "color",
+      "name": "颜色转换",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "HEX、RGB、HSL 颜色表示"
+    },
+    {
+      "id": "text-stats",
+      "name": "文本统计",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "字符、字节、行数与词段统计"
+    },
+    {
+      "id": "html-escape",
+      "name": "HTML 转义",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "HTML 特殊字符转义与还原"
+    },
+    {
+      "id": "text-escape",
+      "name": "文本转义",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "JSON 字符串转义与还原"
+    },
+    {
+      "id": "case-convert",
+      "name": "命名转换",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "camel、Pascal、snake 与 kebab 命名"
+    },
+    {
+      "id": "yaml",
+      "name": "YAML / JSON",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "YAML 与 JSON 双向转换"
+    },
+    {
+      "id": "hex",
+      "name": "UTF-8 / Hex",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "UTF-8 文本与十六进制字节互转"
+    },
+    {
+      "id": "lines",
+      "name": "文本行处理",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "稳定去重、排序、去空行与空白处理"
+    },
+    {
+      "id": "url-inspect",
+      "name": "URL 解析",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "解析协议、主机、路径和重复查询参数"
+    },
+    {
+      "id": "cidr",
+      "name": "IPv4 CIDR",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "IPv4 掩码、网络地址与可用范围"
+    },
+    {
+      "id": "data",
+      "name": "CSV / JSON 数据工作台",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出"
+    },
+    {
+      "id": "files",
+      "name": "批量文件校验",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "SHA-256 / SHA-512、进度、取消、摘要对比"
+    },
+    {
+      "id": "http",
+      "name": "HTTP 请求调试",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "请求标签、站点配置、响应查看和脱敏历史"
+    },
+    {
+      "id": "diff",
+      "name": "文本差异对比",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "逐行比较两段文本"
+    },
+    {
+      "id": "network",
+      "name": "网络诊断",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "DNS 查询与单端口 TCP 连通测试"
+    },
+    {
+      "id": "services",
+      "name": "本地服务管理",
+      "status": "implemented",
+      "category": "系统能力",
+      "priority": "—",
+      "scope": "YAML 配置、启停重启、健康检查、日志与托盘"
+    },
+    {
+      "id": "json-path",
+      "name": "JSON 路径查询",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "JSONPath 子集、定位错误与导出匹配结果"
+    },
+    {
+      "id": "json-diff",
+      "name": "结构化 JSON 对比",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "字段增删改、数组策略、忽略路径"
+    },
+    {
+      "id": "data-schema",
+      "name": "数据质量检查",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "缺失值、重复行、列类型与统计报告"
+    },
+    {
+      "id": "data-transform",
+      "name": "数据列变换",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "选择/重命名列、类型转换、空值处理与操作预览"
+    },
+    {
+      "id": "csv-merge",
+      "name": "CSV 合并与关联",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "按列拼接、按键 Join、冲突与重复键报告"
+    },
+    {
+      "id": "checksum-manifest",
+      "name": "校验清单",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "生成和验证 SHA256SUMS，定位缺失/不匹配文件"
+    },
+    {
+      "id": "file-compare",
+      "name": "目录内容对比",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "只读扫描、大小与摘要对比、导出差异清单"
+    },
+    {
+      "id": "cron",
+      "name": "Cron 表达式",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "表达式解释、指定时区的后续运行时间"
+    },
+    {
+      "id": "random",
+      "name": "随机数据生成",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P1",
+      "scope": "密码、随机字符串与种子测试数据；使用安全随机源"
+    },
+    {
+      "id": "sql-format",
+      "name": "SQL 格式化",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "方言选择与格式化，不连接数据库"
+    },
+    {
+      "id": "json-schema",
+      "name": "JSON Schema 校验",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "本地 schema、错误字段路径、引用限制"
+    },
+    {
+      "id": "log-viewer",
+      "name": "日志工作台",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "大文件流式读取、级别筛选、时间定位和多行事件"
+    },
+    {
+      "id": "sqlite",
+      "name": "SQLite 浏览器",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "默认只读，表结构、限额查询、CSV 导出"
+    },
+    {
+      "id": "http-collections",
+      "name": "HTTP 集合与环境",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "请求集合、环境变量、导入导出脱敏"
+    },
+    {
+      "id": "curl-import",
+      "name": "cURL 导入",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "解析请求命令，不执行 shell，认证字段脱敏"
+    },
+    {
+      "id": "tls-inspect",
+      "name": "TLS 证书检查",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "证书链、有效期与主机名验证，只读连接"
+    },
+    {
+      "id": "encoding-detect",
+      "name": "文件编码转换",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "UTF-8/GB18030 等检测、预览与另存为"
+    },
+    {
+      "id": "file-rename",
+      "name": "批量重命名",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "规则预览、冲突检查、操作记录与撤销"
+    },
+    {
+      "id": "image-tools",
+      "name": "图片工作台",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "尺寸、格式转换与压缩预览，保留原文件"
+    },
+    {
+      "id": "markdown",
+      "name": "Markdown 预览",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "本地安全预览、HTML 导出、禁用脚本"
+    },
+    {
+      "id": "unicode",
+      "name": "Unicode 字符检查",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "码点、不可见字符、正规化对比"
+    },
+    {
+      "id": "escape-suite",
+      "name": "转义与转码扩展",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "Unicode、HTML 实体与 shell 引号的明确方言"
+    },
+    {
+      "id": "time-zone",
+      "name": "时区工作台",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "多时区比较、夏令时边界与批量时间转换"
+    },
+    {
+      "id": "regex-replace",
+      "name": "正则替换",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P2",
+      "scope": "批量替换预览、捕获组引用与匹配限额"
+    },
+    {
+      "id": "jwt-verify",
+      "name": "JWT 本地验签",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P3",
+      "scope": "显式算法白名单和本地公钥，不接受任意算法"
+    },
+    {
+      "id": "crypto",
+      "name": "加密与签名实验台",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P3",
+      "scope": "明确算法参数、测试向量、密钥仅内存"
+    },
+    {
+      "id": "pipeline",
+      "name": "可组合数据管线",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P3",
+      "scope": "串联本地转换步骤、预览、失败定位与配方导出"
+    },
+    {
+      "id": "file-search",
+      "name": "文件内容检索",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P3",
+      "scope": "限定目录、类型过滤、取消、隐私目录排除"
+    },
+    {
+      "id": "pdf-text",
+      "name": "PDF 文本提取",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P3",
+      "scope": "文本型 PDF 分页提取与检索；OCR 单独评估"
+    },
+    {
+      "id": "openapi",
+      "name": "OpenAPI 请求生成",
+      "status": "planned",
+      "category": "扩展工具",
+      "priority": "P3",
+      "scope": "本地规范校验、生成请求草稿与敏感字段标记"
+    }
+  ]
+}

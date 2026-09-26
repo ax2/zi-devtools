@@ -1,0 +1,15 @@
+# Zi DevTools standalone local-service configuration example.
+# Copy this file to %USERPROFILE%\.zi-devtools\services.yml and edit paths.
+state_dir: ~/.zi-devtools/services-state
+
+services:
+  static-preview:
+    name: Static Preview
+    description: Example local HTTP server; replace repo with your own project directory.
+    repo: C:/path/to/project
+    command: python -m http.server 8800
+    health_url: http://127.0.0.1:8800
+    port: 8800
+    config_files:
+      - README.md
+    tags: [local, preview]
