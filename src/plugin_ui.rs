@@ -21,6 +21,7 @@ pub struct PluginState {
     drafts: HashMap<String, Draft>,
     token: String,
     pending_remove: Option<String>,
+    copied_at: Option<std::time::Instant>,
     running: Option<(String, Receiver<Result<String, String>>)>,
 }
 impl PluginState {
@@ -34,6 +35,7 @@ impl PluginState {
             drafts: HashMap::new(),
             token: String::new(),
             pending_remove: None,
+            copied_at: None,
             running: None,
         }
     }
@@ -43,24 +45,33 @@ impl PluginState {
         }
         self.selected = Some(id.into());
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        if let Some((id, rx)) = &self.running {
-            match rx.try_recv() {
-                Ok(result) => {
-                    self.drafts.entry(id.clone()).or_default().output =
-                        result.unwrap_or_else(|e| format!("失败：{e}"));
-                    self.running = None;
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.message = "执行线程已退出".into();
-                    self.running = None;
-                }
-                _ => {
-                    ui.ctx()
-                        .request_repaint_after(std::time::Duration::from_millis(100));
-                }
+    pub fn clear_token(&mut self) {
+        self.token.clear();
+    }
+    pub fn is_running(&self) -> bool {
+        self.running.is_some()
+    }
+    pub fn poll(&mut self) -> Option<String> {
+        let (id, rx) = self.running.as_ref()?;
+        let result = match rx.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Disconnected) => Err("执行线程已退出".into()),
+            Err(mpsc::TryRecvError::Empty) => return None,
+        };
+        let succeeded = result.is_ok();
+        self.drafts.entry(id.clone()).or_default().output =
+            result.unwrap_or_else(|e| format!("失败：{e}"));
+        self.running = None;
+        Some(
+            if succeeded {
+                "插件执行完成"
+            } else {
+                "插件执行失败，请查看结果"
             }
-        }
+            .into(),
+        )
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui, allow_shortcuts: bool) {
         ui.heading(egui::RichText::new("插件与连接器").size(28.0));
         ui.label(
             "安装工具定义，按需连接本机或远程服务。已启用工具会自动进入分类、收藏与 Ctrl K 搜索。",
@@ -71,22 +82,38 @@ impl PluginState {
             self.token.clear();
         }
         if let Some(id) = self.selected.clone() {
-            if let Some((_, tool)) = self.store.tools().into_iter().find(|(key, _)| key == &id) {
+            if let Some((_, tool)) = self
+                .store
+                .tool_refs()
+                .find(|(key, _)| key == &id)
+                .map(|(key, t)| (key, t.clone()))
+            {
+                let busy = self.running.as_ref().is_some_and(|(key, _)| key == &id);
+                let get_only = matches!(&tool.adapter,Adapter::Http{method,..} if method=="GET");
                 ui.heading(&tool.name);
                 ui.label(&tool.description);
                 let draft = self.drafts.entry(id.clone()).or_insert_with(|| Draft {
                     model: tool.model.clone(),
                     ..Default::default()
                 });
-                if let Adapter::Http { url, method, .. } = &tool.adapter {
+                if let Adapter::Http {
+                    url, method, body, ..
+                } = &tool.adapter
+                {
                     ui.label(format!("请求目标：{method} {url}"));
                     ui.label(
                         "仅点击运行时发送输入；请求超时 30 秒。令牌不写入配置，切换工具时清除。",
                     );
-                    ui.horizontal(|ui| {
-                        ui.label("模型名称");
-                        ui.text_edit_singleline(&mut draft.model);
-                    });
+                    if method == "POST" && plugins::uses_model(body) {
+                        ui.horizontal(|ui| {
+                            ui.label("模型名称");
+                            ui.add_enabled(
+                                !busy,
+                                egui::TextEdit::singleline(&mut draft.model)
+                                    .hint_text("填入模型列表返回的名称"),
+                            );
+                        });
+                    }
                     ui.horizontal(|ui| {
                         ui.label("Bearer 令牌（可选）");
                         ui.add(egui::TextEdit::singleline(&mut self.token).password(true));
@@ -98,26 +125,46 @@ impl PluginState {
                     ui.label("本地配方 · 无网络请求");
                 }
                 ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.strong("输入");
-                    if ui
-                        .add_enabled(draft.input.is_empty(), egui::Button::new("填入示例"))
-                        .clicked()
-                    {
-                        draft.input = tool.sample.clone();
-                    }
-                    if ui.button("清空输入与结果").clicked() {
-                        draft.input.clear();
-                        draft.output.clear();
-                    }
-                });
-                ui.add_sized(
-                    [ui.available_width(), 160.0],
-                    egui::TextEdit::multiline(&mut draft.input).font(egui::TextStyle::Monospace),
-                );
-                if ui
-                    .add_enabled(self.running.is_none(), egui::Button::new("运行工具"))
+                if !get_only {
+                    ui.horizontal(|ui| {
+                        ui.strong("输入");
+                        if ui
+                            .add_enabled(
+                                !busy && draft.input.is_empty(),
+                                egui::Button::new("填入示例"),
+                            )
+                            .clicked()
+                        {
+                            draft.input = tool.sample.clone();
+                        }
+                        if ui
+                            .add_enabled(!busy, egui::Button::new("清空输入与结果"))
+                            .clicked()
+                        {
+                            draft.input.clear();
+                            draft.output.clear();
+                        }
+                    });
+                    ui.add_enabled_ui(!busy, |ui| {
+                        ui.add_sized(
+                            [ui.available_width(), 160.0],
+                            egui::TextEdit::multiline(&mut draft.input)
+                                .font(egui::TextStyle::Monospace),
+                        );
+                    });
+                } else {
+                    ui.label("此工具只读取接口结果，无需输入文本或模型名称。");
+                }
+                let shortcut = allow_shortcuts
+                    && ui.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
+                if (ui
+                    .add_enabled(
+                        self.running.is_none(),
+                        egui::Button::new("运行工具 · Ctrl Enter"),
+                    )
                     .clicked()
+                    || shortcut)
+                    && self.running.is_none()
                 {
                     let (input, model, token) =
                         (draft.input.clone(), draft.model.clone(), self.token.clone());
@@ -136,14 +183,21 @@ impl PluginState {
                     });
                 }
                 ui.horizontal(|ui| {
-                    ui.strong("结果");
+                    ui.strong("上次执行结果");
                     if ui
                         .add_enabled(!draft.output.is_empty(), egui::Button::new("复制结果"))
                         .clicked()
                     {
                         ui.ctx().copy_text(draft.output.clone());
+                        self.copied_at = Some(std::time::Instant::now());
                     }
                 });
+                if self
+                    .copied_at
+                    .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(2))
+                {
+                    ui.label("已复制结果");
+                }
                 let mut output = draft.output.as_str();
                 ui.add_sized(
                     [ui.available_width(), 260.0],
@@ -245,7 +299,13 @@ impl PluginState {
             self.token.clear();
         }
         ui.strong(format!("已安装 {} 个插件", self.store.packages.len()));
-        for package in self.store.packages.clone() {
+        enum Action {
+            Enable(String, bool),
+            Remove(String),
+            Open(String),
+        }
+        let mut action = None;
+        for package in &self.store.packages {
             let m = &package.manifest;
             egui::Frame::group(ui.style())
                 .fill(ui.visuals().faint_bg_color)
@@ -286,10 +346,7 @@ impl PluginState {
                             )
                             .clicked()
                         {
-                            if let Err(e) = self.store.set_enabled(&m.id, !package.enabled) {
-                                self.message = e.to_string();
-                            }
-                            self.token.clear();
+                            action = Some(Action::Enable(m.id.clone(), !package.enabled));
                         }
                         if ui
                             .add_enabled(self.running.is_none(), egui::Button::new("卸载"))
@@ -302,13 +359,7 @@ impl PluginState {
                         ui.horizontal(|ui| {
                             ui.label("移除清单与启用状态？");
                             if ui.button("确认卸载").clicked() {
-                                if let Err(e) = self.store.uninstall(&m.id) {
-                                    self.message = e.to_string();
-                                }
-                                self.drafts
-                                    .retain(|id, _| !id.starts_with(&format!("plugin:{}/", m.id)));
-                                self.token.clear();
-                                self.pending_remove = None;
+                                action = Some(Action::Remove(m.id.clone()));
                             }
                             if ui.button("取消").clicked() {
                                 self.pending_remove = None;
@@ -318,15 +369,70 @@ impl PluginState {
                     if package.enabled {
                         for t in &m.tools {
                             if ui.button(format!("打开 {} →", t.name)).clicked() {
-                                self.select(&format!("plugin:{}/{}", m.id, t.id));
+                                action = Some(Action::Open(format!("plugin:{}/{}", m.id, t.id)));
                             }
                         }
                     }
                 });
             ui.add_space(8.0);
         }
+        match action {
+            Some(Action::Enable(id, enabled)) => {
+                self.message = match self.store.set_enabled(&id, enabled) {
+                    Ok(()) => if enabled {
+                        "插件已启用"
+                    } else {
+                        "插件已停用"
+                    }
+                    .into(),
+                    Err(e) => e.to_string(),
+                };
+                self.token.clear();
+            }
+            Some(Action::Remove(id)) => {
+                match self.store.uninstall(&id) {
+                    Ok(()) => {
+                        self.drafts
+                            .retain(|key, _| !key.starts_with(&format!("plugin:{id}/")));
+                        self.message = "插件已卸载".into();
+                    }
+                    Err(e) => self.message = e.to_string(),
+                }
+                self.token.clear();
+                self.pending_remove = None;
+            }
+            Some(Action::Open(id)) => self.select(&id),
+            None => {}
+        }
         if self.running.is_some() {
             ui.label("有工具正在运行，完成后可停用或卸载。");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn background_result_keeps_own_draft_and_clears_busy() {
+        let root = std::env::temp_dir().join(format!("zi-plugin-ui-{}", uuid::Uuid::new_v4()));
+        let mut state = PluginState::new(root);
+        let (tx, rx) = mpsc::channel();
+        state.running = Some(("first".into(), rx));
+        state.select("second");
+        assert!(state.poll().is_none());
+        tx.send(Ok("done".into())).unwrap();
+        assert!(state.poll().is_some());
+        assert!(!state.is_running());
+        assert_eq!(state.drafts["first"].output, "done");
+        assert_eq!(state.selected.as_deref(), Some("second"));
+        state.token = "test-only".into();
+        state.select("first");
+        assert!(state.token.is_empty());
+        let (tx, rx) = mpsc::channel();
+        state.running = Some(("first".into(), rx));
+        drop(tx);
+        assert!(state.poll().unwrap().contains("失败"));
+        assert!(!state.is_running());
     }
 }

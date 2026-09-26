@@ -141,13 +141,19 @@ impl ToolEntry {
         })
     }
 }
+fn page_bounds(total: usize, index: usize) -> (std::ops::Range<usize>, usize) {
+    const SIZE: usize = 18;
+    let pages = total.div_ceil(SIZE).max(1);
+    let start = index.min(pages - 1) * SIZE;
+    (start..(start + SIZE).min(total), pages)
+}
 fn tool_category(id: &str) -> &'static str {
     match id {
         "data" | "json" | "json-path" | "json-diff" | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
         "files" | "services" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
-        "plugins" | "integrations" => "扩展与集成",
+        "plugins" | "integrations" | "java-trace" | "django-trace" => "扩展与集成",
         _ => "文本与编码",
     }
 }
@@ -242,6 +248,8 @@ fn catalog() -> Vec<ToolEntry> {
     for e in &mut entries {
         e.category = tool_category(&e.id).into();
         e.keywords.push_str(match e.id.as_str() {
+            "java-trace" => " java jvm spring exception stacktrace 异常 堆栈",
+            "django-trace" => " django python traceback error 异常 堆栈",
             "json" => " format validate minify 格式 校验 压缩",
             "data" => " csv tsv table filter sort 表格 筛选 排序",
             "files" => " hash checksum file 文件 摘要",
@@ -349,6 +357,8 @@ pub struct DevToolsApp {
     integrations: crate::integrations::IntegrationState,
     home_filter: String,
     home_category: String,
+    home_page_index: usize,
+    home_query_key: (String, String, String),
 }
 
 impl DevToolsApp {
@@ -362,6 +372,8 @@ impl DevToolsApp {
         self.tool_search.clear();
         self.preferences.recent.clear();
         self.preferences.usage.clear();
+        self.home_page_index = 0;
+        self.home_query_key = (String::new(), "全部".into(), "全部分类".into());
         self.home_filter = "全部".into();
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
@@ -408,6 +420,20 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            27..=30 => {
+                let kind = if scene <= 28 {
+                    ToolKind::JavaTrace
+                } else {
+                    ToolKind::DjangoTrace
+                };
+                self.navigate(Page::SmallTools, Some(kind));
+                self.tool_state.input = kind.sample().into();
+                self.tool_state.output = run_tool(kind, 0, &self.tool_state.input, "", 10).unwrap();
+            }
+            31 => {
+                self.page = Page::Home;
+                self.home_page_index = 1;
             }
             21..=26 => {
                 let bytes = include_bytes!("../plugins-examples/local-text.json");
@@ -543,7 +569,7 @@ impl DevToolsApp {
             launcher_focus: false, launcher_index: 0, toast: None,
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
-            integrations: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(),
+            integrations: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
             app.spawn_restore();
@@ -856,7 +882,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 16  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 17  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -936,47 +962,45 @@ impl DevToolsApp {
 
     fn entries(&self, query: &str) -> Vec<ToolEntry> {
         let mut entries = catalog();
-        entries.extend(
-            self.plugins
-                .store
-                .tools()
-                .into_iter()
-                .map(|(id, t)| ToolEntry {
-                    id,
-                    title: t.name,
-                    description: t.description,
-                    category: t.category,
-                    keywords: t.keywords.join(" "),
-                    page: Page::Plugins,
-                    kind: None,
-                }),
-        );
-        entries.retain(|e| e.score(query).is_some());
-        entries.sort_by_key(|e| {
-            std::cmp::Reverse(
-                e.score(query).unwrap_or(0)
-                    + if self.preferences.favorites.contains(&e.id) {
-                        30
-                    } else {
-                        0
-                    }
-                    + self
-                        .preferences
-                        .recent
-                        .iter()
-                        .position(|id| id == &e.id)
-                        .map(|i| 20 - i as u32)
-                        .unwrap_or(0)
-                    + self
-                        .preferences
-                        .usage
-                        .get(&e.id)
-                        .copied()
-                        .unwrap_or(0)
-                        .min(10),
-            )
-        });
-        entries
+        entries.extend(self.plugins.store.tool_refs().map(|(id, t)| ToolEntry {
+            id,
+            title: t.name.clone(),
+            description: t.description.clone(),
+            category: t.category.clone(),
+            keywords: t.keywords.join(" "),
+            page: Page::Plugins,
+            kind: None,
+        }));
+        let mut scored: Vec<_> = entries
+            .into_iter()
+            .filter_map(|e| {
+                e.score(query).map(|score| {
+                    let rank = score
+                        + if self.preferences.favorites.contains(&e.id) {
+                            30
+                        } else {
+                            0
+                        }
+                        + self
+                            .preferences
+                            .recent
+                            .iter()
+                            .position(|id| id == &e.id)
+                            .map(|i| 20_u32.saturating_sub(i as u32))
+                            .unwrap_or(0)
+                        + self
+                            .preferences
+                            .usage
+                            .get(&e.id)
+                            .copied()
+                            .unwrap_or(0)
+                            .min(10);
+                    (rank, e)
+                })
+            })
+            .collect();
+        scored.sort_by_key(|(rank, _)| std::cmp::Reverse(*rank));
+        scored.into_iter().map(|(_, e)| e).collect()
     }
     fn visit(&mut self, id: &str) {
         self.preferences.visit(id);
@@ -1004,7 +1028,7 @@ impl DevToolsApp {
             RichText::new(format!(
                 "{} 项内置能力 · {} 项已启用插件工具 · Ctrl K 随时打开",
                 catalog().len(),
-                self.plugins.store.tools().len()
+                self.plugins.store.tool_refs().count()
             ))
             .color(p.muted),
         );
@@ -1034,6 +1058,15 @@ impl DevToolsApp {
                 self.home_filter = "全部".into();
             }
         });
+        let key = (
+            self.tool_search.clone(),
+            self.home_filter.clone(),
+            self.home_category.clone(),
+        );
+        if self.home_query_key != key {
+            self.home_page_index = 0;
+            self.home_query_key = key;
+        }
         let mut entries = self.entries(&self.tool_search);
         entries.retain(|e| {
             (self.home_category == "全部分类" || e.category == self.home_category)
@@ -1059,14 +1092,42 @@ impl DevToolsApp {
             });
         }
         ui.add_space(12.0);
-        ui.label(format!("{} 个匹配工具", entries.len()));
+        let (_, pages) = page_bounds(entries.len(), self.home_page_index);
+        self.home_page_index = self.home_page_index.min(pages - 1);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(format!(
+                "{} 个匹配工具 · 第 {} / {} 页",
+                entries.len(),
+                self.home_page_index + 1,
+                pages
+            ));
+            if ui
+                .add_enabled(self.home_page_index > 0, egui::Button::new("上一页"))
+                .clicked()
+            {
+                self.home_page_index -= 1;
+            }
+            if ui
+                .add_enabled(
+                    self.home_page_index + 1 < pages,
+                    egui::Button::new("下一页"),
+                )
+                .clicked()
+            {
+                self.home_page_index += 1;
+            }
+            if self.home_filter == "常用" {
+                ui.label("按打开次数排序");
+            }
+        });
         if entries.is_empty() {
             ui.add_space(30.0);
             ui.strong("这个视图还没有工具");
             ui.label("试试其他分类、清空搜索，或在插件中心安装并启用连接器。打开工具后会自动进入最近与常用。");
         }
         let columns = if ui.available_width() >= 750.0 { 3 } else { 2 };
-        for row in entries.chunks(columns) {
+        let (range, _) = page_bounds(entries.len(), self.home_page_index);
+        for row in entries[range].chunks(columns) {
             ui.columns(columns, |cols| {
                 for (col, e) in cols.iter_mut().zip(row) {
                     egui::Frame::new()
@@ -2647,6 +2708,15 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(message) = self.plugins.poll() {
+            self.toast = Some((message, Instant::now()));
+        }
+        if self.plugins.is_running() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        if self.page != Page::Plugins {
+            self.plugins.clear_token();
+        }
         self.drain_events(ctx);
         if self.tray_exit_requested.swap(false, Ordering::AcqRel) {
             self.quit_requested = true;
@@ -2733,7 +2803,7 @@ impl eframe::App for DevToolsApp {
                     let previous = self.plugins.selected.clone();
                     egui::ScrollArea::vertical()
                         .id_salt("plugins-page")
-                        .show(ui, |ui| self.plugins.ui(ui));
+                        .show(ui, |ui| self.plugins.ui(ui, !self.launcher_open));
                     if self.plugins.selected != previous
                         && let Some(id) = self.plugins.selected.clone()
                     {
@@ -2950,6 +3020,13 @@ fn action_label(action: &str) -> &'static str {
 mod service_filter_tests {
     use super::*;
 
+    #[test]
+    fn pagination_reaches_last_tool_and_clamps_after_filtering() {
+        assert_eq!(page_bounds(100, 5), (90..100, 6));
+        assert_eq!(page_bounds(0, 99), (0..0, 1));
+        assert_eq!(page_bounds(18, 1), (0..18, 1));
+        assert_eq!(page_bounds(19, 1), (18..19, 2));
+    }
     #[test]
     fn registry_has_unique_categories_and_multiterm_search() {
         let entries = catalog();

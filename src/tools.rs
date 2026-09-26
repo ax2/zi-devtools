@@ -38,6 +38,8 @@ pub enum ToolKind {
     Cron,
     Random,
     Unicode,
+    JavaTrace,
+    DjangoTrace,
 }
 
 impl ToolKind {
@@ -69,6 +71,8 @@ impl ToolKind {
             Self::Cron => "cron",
             Self::Random => "random",
             Self::Unicode => "unicode",
+            Self::JavaTrace => "java-trace",
+            Self::DjangoTrace => "django-trace",
         }
     }
     pub fn description(self) -> &'static str {
@@ -99,10 +103,18 @@ impl ToolKind {
             Self::Cron => "五字段 Cron；预览未来 5 年内最多 10 次运行时间",
             Self::Random => "操作系统安全随机字符串，或可复现的测试数据",
             Self::Unicode => "检查码点、UTF-8、常见不可见字符与 Unicode 规范化",
+            Self::JavaTrace => "提取主异常链、Suppressed 分支和堆栈帧",
+            Self::DjangoTrace => "整理 Python 异常链与 Django 常见异常排查提示",
         }
     }
     pub fn sample(self) -> &'static str {
         match self {
+            Self::JavaTrace => {
+                "java.lang.RuntimeException: Request failed\n\tat demo.Service.run(Service.java:42)\nCaused by: java.lang.IllegalArgumentException: missing id\n\tat demo.Repository.get(Repository.java:18)\n\t... 1 more"
+            }
+            Self::DjangoTrace => {
+                "Traceback (most recent call last):\n  File \"app/views.py\", line 12, in detail\n    reverse(\"missing\")\ndjango.urls.exceptions.NoReverseMatch: route not found"
+            }
             Self::Json => r#"{"name":"Zi DevTools","local":true,"tools":["JSON","CSV"]}"#,
             Self::Yaml => "name: Zi DevTools\nlocal: true\ntools: [JSON, CSV]",
             Self::Timestamp => "1780000000",
@@ -155,9 +167,11 @@ impl ToolKind {
             Self::Cron => &["预览运行时间"],
             Self::Random => &["安全随机字符串", "种子测试数据（非安全）"],
             Self::Unicode => &["检查字符", "转换 NFC", "转换 NFKC"],
+            Self::JavaTrace => &["整理异常链"],
+            Self::DjangoTrace => &["整理 Traceback"],
         }
     }
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 28] = [
         Self::Json,
         Self::Base64,
         Self::Url,
@@ -184,6 +198,8 @@ impl ToolKind {
         Self::Cron,
         Self::Random,
         Self::Unicode,
+        Self::JavaTrace,
+        Self::DjangoTrace,
     ];
 
     pub fn label(self) -> &'static str {
@@ -214,6 +230,8 @@ impl ToolKind {
             Self::Cron => "Cron 预览",
             Self::Random => "随机数据生成",
             Self::Unicode => "Unicode 检查",
+            Self::JavaTrace => "Java 异常链",
+            Self::DjangoTrace => "Django / Python 堆栈",
         }
     }
 
@@ -252,6 +270,12 @@ impl ToolKind {
             }
             Self::Unicode => {
                 "按码点而非字形检查，最多 10000 码点。NFC 合并等价字符；NFKC 会折叠兼容字符，可能改变语义。"
+            }
+            Self::JavaTrace => {
+                "粘贴标准 printStackTrace 文本，去除时间戳前缀。省略帧不还原；Suppressed 不替代主异常链。最后可见异常不等于已确认根因。"
+            }
+            Self::DjangoTrace => {
+                "支持标准文本 Traceback 与异常链；不读取源码或运行 Python。暂不支持 HTML 调试页、ExceptionGroup 树。提示仅供排查。"
             }
             _ => "",
         }
@@ -361,6 +385,8 @@ pub fn run_tool(
         ToolKind::Cron => crate::tools_advanced::cron(input, pattern),
         ToolKind::Random => crate::tools_advanced::random(input, action == 1),
         ToolKind::Unicode => crate::tools_advanced::unicode(input, action),
+        ToolKind::JavaTrace => crate::diagnostics::java_trace(input),
+        ToolKind::DjangoTrace => crate::diagnostics::django_trace(input),
     }
 }
 

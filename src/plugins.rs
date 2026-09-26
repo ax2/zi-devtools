@@ -269,17 +269,13 @@ impl Store {
         *self = Self::load(self.root.clone());
         Ok(())
     }
-    pub fn tools(&self) -> Vec<(String, PluginTool)> {
-        self.packages
-            .iter()
-            .filter(|p| p.enabled)
-            .flat_map(|p| {
-                p.manifest
-                    .tools
-                    .iter()
-                    .map(|t| (format!("plugin:{}/{}", p.manifest.id, t.id), t.clone()))
-            })
-            .collect()
+    pub fn tool_refs(&self) -> impl Iterator<Item = (String, &PluginTool)> {
+        self.packages.iter().filter(|p| p.enabled).flat_map(|p| {
+            p.manifest
+                .tools
+                .iter()
+                .map(|t| (format!("plugin:{}/{}", p.manifest.id, t.id), t))
+        })
     }
 }
 pub fn read_manifest(path: &Path) -> Result<Vec<u8>> {
@@ -345,6 +341,22 @@ fn expand_value(value: &Value, input: &str, model: &str) -> Result<Value> {
         _ => value.clone(),
     })
 }
+pub fn uses_model(value: &Value) -> bool {
+    match value {
+        Value::String(s) => s == "$model",
+        Value::Array(a) => a.iter().any(uses_model),
+        Value::Object(o) => o.values().any(uses_model),
+        _ => false,
+    }
+}
+fn api_error(bytes: &[u8]) -> Option<String> {
+    let v: Value = serde_json::from_slice(bytes).ok()?;
+    let text = v
+        .pointer("/error/message")
+        .or_else(|| v.get("error"))
+        .and_then(Value::as_str)?;
+    Some(text.chars().filter(|c| !c.is_control()).take(300).collect())
+}
 pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Result<String> {
     crate::tools_extra::bounded(input)?;
     ensure!(
@@ -369,6 +381,10 @@ pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Resu
             body,
             response_pointer,
         } => {
+            ensure!(
+                method != "POST" || !uses_model(body) || !model.trim().is_empty(),
+                "此插件需要模型名称，请先查看模型列表并填写实际名称"
+            );
             let url = endpoint(url)?;
             let client = reqwest::blocking::Client::builder()
                 .no_proxy()
@@ -398,14 +414,17 @@ pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Resu
             }
             let response = request.send().context("连接失败或请求超时")?;
             let status = response.status();
-            ensure!(
-                status.is_success(),
-                "接口返回 HTTP {}（不跟随重定向）",
-                status.as_u16()
-            );
             let mut bytes = Vec::new();
             response.take(2 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
             ensure!(bytes.len() <= 2 * 1024 * 1024, "响应超过 2 MiB");
+            ensure!(
+                status.is_success(),
+                "接口返回 HTTP {}{}",
+                status.as_u16(),
+                api_error(&bytes)
+                    .map(|s| format!("：{s}"))
+                    .unwrap_or_default()
+            );
             let value: Value =
                 serde_json::from_slice(&bytes).context("接口未返回 JSON；暂不支持 SSE/流式响应")?;
             let value = if let Some(pointer) = response_pointer {
@@ -431,15 +450,15 @@ mod tests {
         let root = std::env::temp_dir().join(format!("zi-plugins-{}", uuid::Uuid::new_v4()));
         let mut store = Store::load(root.clone());
         store.install(DEMO).unwrap();
-        assert!(store.tools().is_empty());
+        assert!(store.tool_refs().next().is_none());
         assert!(store.install(DEMO).is_err());
         store.set_enabled("local-text", true).unwrap();
-        assert_eq!(store.tools().len(), 2);
+        assert_eq!(store.tool_refs().count(), 2);
         let mut bytes = DEMO.to_vec();
         bytes.push(b' ');
         fs::write(root.join("local-text.json"), bytes).unwrap();
         store = Store::load(root.clone());
-        assert!(store.tools().is_empty());
+        assert!(store.tool_refs().next().is_none());
         store.uninstall("local-text").unwrap();
         assert!(store.packages.is_empty());
         fs::remove_dir_all(root).unwrap();
@@ -477,6 +496,30 @@ mod tests {
         );
         let tool = parse(DEMO).unwrap().tools.remove(0);
         assert_eq!(execute(&tool, "z\na\nz", "", "").unwrap(), "z\na");
+    }
+    #[test]
+    fn model_validation_and_bounded_api_errors() {
+        let tool = parse(include_bytes!("../plugins-examples/ollama.json"))
+            .unwrap()
+            .tools
+            .remove(1);
+        assert!(
+            execute(&tool, "hello", "  ", "")
+                .unwrap_err()
+                .to_string()
+                .contains("模型")
+        );
+        assert!(uses_model(&serde_json::json!({"nested": ["$model"]})));
+        assert!(!uses_model(
+            &serde_json::json!({"literal": "prefix $model"})
+        ));
+        assert_eq!(
+            api_error(br#"{"error":{"message":"model not found"}}"#).as_deref(),
+            Some("model not found")
+        );
+        assert!(api_error(b"<html>upstream error</html>").is_none());
+        let data = serde_json::to_vec(&serde_json::json!({"error":"x".repeat(500)})).unwrap();
+        assert_eq!(api_error(&data).unwrap().chars().count(), 300);
     }
     #[test]
     fn http_adapter_works_with_local_fixture() {

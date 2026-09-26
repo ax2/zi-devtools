@@ -1,5 +1,5 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "updated": "2026-09-26",
   "tools": [
     {
@@ -801,6 +801,134 @@
       "category": "本地数据",
       "priority": "P2",
       "scope": "schema、分页预览、过滤与 CSV/JSON 导出，控制内存上限"
+    },
+    {
+      "id": "java-trace",
+      "name": "Java 异常链",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧"
+    },
+    {
+      "id": "django-trace",
+      "name": "Django / Python 堆栈",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目"
+    },
+    {
+      "id": "java-thread-dump",
+      "name": "Java 线程转储分析",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "导入 jstack/jcmd 文本；线程状态、锁等待链、显式死锁报告；区分采样阻塞与已证实死锁"
+    },
+    {
+      "id": "java-dependencies",
+      "name": "Maven / Gradle 依赖冲突",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "导入依赖树输出，定位版本选择与重复依赖路径；不自动执行项目 wrapper"
+    },
+    {
+      "id": "java-environment",
+      "name": "JDK / 构建环境诊断",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "对比用户选定 JDK、JAVA_HOME 与构建入口；显示版本兼容提示，不自动修改 PATH"
+    },
+    {
+      "id": "java-gc-log",
+      "name": "Java GC 日志分析",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "导入统一 GC 日志，展示停顿分布、回收频率与堆变化；明确支持的收集器与日志版本"
+    },
+    {
+      "id": "java-jfr",
+      "name": "JFR 录制报告浏览",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "通过独立可选解析器读取录制事件；时间线与热点摘要，限制文件大小，不替代专业 profiler"
+    },
+    {
+      "id": "spring-config",
+      "name": "Spring 配置对比",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "比较脱敏配置与 profile 差异；标明来源和未解析占位符，不声称推导完整运行时优先级"
+    },
+    {
+      "id": "spring-actuator",
+      "name": "Spring Actuator 只读诊断",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "显式配置端点并请求 health/info/metrics；单独授权网络，不默认抓取 env/configprops"
+    },
+    {
+      "id": "django-environment",
+      "name": "Python / Django 环境诊断",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "用户选择解释器后检查版本与 Django 导入位置，对比 django-admin 来源；不导入项目 settings"
+    },
+    {
+      "id": "django-migrations",
+      "name": "Django 迁移计划检查",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "导入 showmigrations/plan/sqlmigrate 输出，展示依赖与破坏性 SQL 提示；不自动 migrate 或 fake"
+    },
+    {
+      "id": "django-sql",
+      "name": "Django SQL / N+1 分析",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "导入脱敏 SQL 记录及请求分组；归一化重复查询与耗时，区分疑似 N+1 和证实请求上下文"
+    },
+    {
+      "id": "django-urls",
+      "name": "Django URL / reverse 检查",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "导入显式导出的 URL 清单，检查名称重复、namespace 与参数；导出步骤不隐式运行项目"
+    },
+    {
+      "id": "django-drf",
+      "name": "DRF OpenAPI 契约对比",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "比较 OpenAPI 文档的端点、字段和兼容性变化；不等同运行时权限测试"
+    },
+    {
+      "id": "django-checks",
+      "name": "Django 部署检查报告",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "导入 check --deploy 的脱敏输出，按检查编号分类并提供修复说明，不自动修改 settings"
+    },
+    {
+      "id": "celery-diagnostics",
+      "name": "Celery 任务故障分析",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P2",
+      "scope": "导入脱敏任务日志、重试与 worker 事件；关联失败与耗时，不连接 broker 或重放任务"
     }
   ],
   "plugin_examples": [

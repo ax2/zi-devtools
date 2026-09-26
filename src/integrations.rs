@@ -17,6 +17,11 @@ pub fn discover() -> String {
         ("Codex CLI", &["codex.exe", "codex.cmd", "codex.ps1"]),
         ("Claude CLI", &["claude.exe", "claude.cmd"]),
         ("Python", &["python.exe"]),
+        ("Java", &["java.exe"]),
+        ("Java 编译器", &["javac.exe"]),
+        ("Maven", &["mvn.cmd", "mvn.exe"]),
+        ("Gradle", &["gradle.bat", "gradle.exe"]),
+        ("Django CLI", &["django-admin.exe", "django-admin.cmd"]),
         ("Node.js", &["node.exe"]),
         ("uv", &["uv.exe"]),
         ("Docker", &["docker.exe"]),
@@ -34,6 +39,7 @@ pub fn discover() -> String {
             }
         ));
     }
+    lines.push("\nJava / Django：入口存在不代表项目环境一致。Django CLI 与默认 Python 可能来自不同虚拟环境；本检查不运行命令或导入项目设置。".into());
     lines.push("\n本地端口（仅 TCP 连通，不证明接口或模型可用）：".into());
     for (name, port) in [
         ("Ollama", 11434),

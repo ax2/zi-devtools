@@ -1,6 +1,7 @@
 pub mod app;
 pub mod config;
 pub mod dev_tools;
+pub mod diagnostics;
 pub mod fixture;
 pub mod integrations;
 pub mod network_tools;
