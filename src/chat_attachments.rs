@@ -16,8 +16,19 @@ pub struct State {
     files: Vec<Attachment>,
     path: String,
     message: String,
+    #[cfg(feature = "ui-preview")]
+    preview_scroll: bool,
 }
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview(&mut self) {
+        self.files = vec![Attachment {
+            name: "示例配置.json".into(),
+            content: "{\n  \"name\": \"demo\",\n  \"enabled\": true\n}".into(),
+        }];
+        self.message = "示例附件快照 · 截图未读取用户文件或发送请求".into();
+        self.preview_scroll = true;
+    }
     pub fn clear(&mut self) {
         self.files.clear();
         self.path.clear();
@@ -110,7 +121,10 @@ impl State {
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, enabled: bool) {
         ui.add_enabled_ui(enabled, |ui| {
-            ui.collapsing(format!("文本附件 · {} / 4", self.files.len()), |ui| {
+            let response = egui::CollapsingHeader::new(format!("文本附件 · {} / 4", self.files.len()))
+                .id_salt("chat-attachments")
+                .default_open(!self.files.is_empty())
+                .show(ui, |ui| {
                 ui.weak("发送时将文件名和完整正文交给当前模型。仅读取明确选择的文件，使用预览快照；不发送完整路径。单文件64 KiB，总计128 KiB。");
                 ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("UTF-8 文件完整路径").desired_width(f32::INFINITY));
                 if ui.button("读取附件并预览").clicked() {
@@ -121,9 +135,16 @@ impl State {
                     ui.horizontal(|ui| { ui.strong(format!("{} · {} 字节", file.name, file.content.len())); if ui.button("移除").clicked() { remove = Some(index); } });
                     egui::ScrollArea::vertical().id_salt(("attachment", index)).max_height(100.0).show(ui, |ui| { ui.monospace(&file.content); });
                 }
-                if let Some(index) = remove { self.files.remove(index); }
+                if let Some(index) = remove { self.files.remove(index); self.message = "附件已移除".into(); }
                 if !self.message.is_empty() { ui.label(&self.message); }
             });
+            #[cfg(feature = "ui-preview")]
+            if self.preview_scroll {
+                response.header_response.scroll_to_me(Some(egui::Align::TOP));
+                self.preview_scroll = false;
+            }
+            #[cfg(not(feature = "ui-preview"))]
+            let _ = response;
         });
     }
 }

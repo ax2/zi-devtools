@@ -71,6 +71,14 @@ pub struct PluginState {
 }
 impl PluginState {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_attachments(&mut self) {
+        self.preview_conversation();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        draft.conversation.clear();
+        draft.input = "检查附件中的配置，并说明 enabled 字段。".into();
+        draft.attachments.preview();
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_import(&mut self) {
         self.preview_conversation();
         let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();

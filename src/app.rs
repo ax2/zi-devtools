@@ -518,7 +518,7 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
-            78..=89 => {
+            78..=91 => {
                 self.page = Page::Plugins;
                 if !self
                     .plugins
@@ -549,8 +549,11 @@ impl DevToolsApp {
                 if (86..=87).contains(&scene) {
                     self.plugins.preview_stream();
                 }
-                if scene >= 88 {
+                if (88..=89).contains(&scene) {
                     self.plugins.preview_import();
+                }
+                if scene >= 90 {
+                    self.plugins.preview_attachments();
                 }
             }
             76 | 77 => {
