@@ -240,7 +240,8 @@ impl PluginState {
                 {
                     ui.add_enabled_ui(!busy, |ui| {
                         egui::CollapsingHeader::new("连接设置 · 地址与模型")
-                            .default_open(true)
+                            .id_salt(("connection-settings", &id))
+                            .default_open(draft.profile_editor)
                             .show(ui, |ui| {
                                 ui.label("完整接口地址（远程 HTTPS / 本机 HTTP）");
                                 if ui
@@ -344,15 +345,26 @@ impl PluginState {
                         ui.colored_label(ui.visuals().error_fg_color, error.to_string());
                     }
                     ui.label(format!("请求目标：{method} {url}"));
-                    ui.small("仅点击运行时发送输入；超时 30 秒。修改地址会清空临时令牌并取消使用已保存凭据。");
-                    ui.add_enabled_ui(!busy && connection_valid, |ui| {
-                        ui.checkbox(&mut self.use_saved, "本次使用 Windows 已保存凭据");
+                    if method == "POST" && plugins::uses_model(body) {
                         ui.horizontal_wrapped(|ui| {
+                            ui.label("当前模型");
+                            ui.strong(if draft.model.trim().is_empty() {
+                                "尚未设置 · 展开连接设置或发现模型"
+                            } else {
+                                &draft.model
+                            });
+                        });
+                    }
+                    ui.add_enabled_ui(!busy && connection_valid, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.checkbox(&mut self.use_saved, "使用已保存凭据");
                             ui.label("临时 Bearer 令牌（可选）");
                             ui.add_enabled(!self.use_saved, egui::TextEdit::singleline(&mut self.token).password(true));
                             if ui.small_button("清空输入").clicked() { self.token.clear(); }
                         });
-                        ui.horizontal_wrapped(|ui| {
+                        egui::CollapsingHeader::new("保存与管理凭据")
+                            .id_salt(("credential-management", &id)).show(ui, |ui| {
+                            ui.horizontal_wrapped(|ui| {
                             if ui.add_enabled(!self.token.trim().is_empty() && !self.use_saved, egui::Button::new("保存 / 替换凭据")).clicked() {
                                 self.credential_message = match crate::credentials::Target::plugin(&id, method, url).and_then(|target| crate::credentials::save(&target, &self.token)) {
                                     Ok(()) => { self.token.clear(); self.use_saved = true; "已保存到当前 Windows 用户的凭据管理器".into() },
@@ -365,8 +377,10 @@ impl PluginState {
                                     Err(e) => e.to_string(),
                                 };
                             }
+                            });
+                            ui.label("凭据仅用于当前工具、请求方法和接口地址，保存在 Windows 凭据管理器。更换地址后需重新选择认证。");
+                            ui.weak("删除不会中止已发送的请求。旧地址的凭据可在 Windows 凭据管理器中清理。");
                         });
-                        ui.small("凭据绑定当前插件工具、方法及精确接口地址，不写入 JSON。更换地址后不会使用旧凭据；旧条目可在 Windows 凭据管理器中删除。删除前可重新输入并保存，删除不会中止已发出的请求。");
                         if !self.credential_message.is_empty() { ui.label(&self.credential_message); }
                     });
                     if method == "POST" && plugins::uses_model(body) {
@@ -419,6 +433,7 @@ impl PluginState {
                     ui.label("本地配方 · 无网络请求");
                 }
                 ui.add_space(8.0);
+                ui.separator();
                 if !get_only {
                     ui.horizontal(|ui| {
                         ui.strong("输入");
