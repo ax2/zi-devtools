@@ -67,7 +67,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 23 / v0.23.0 开发中：推进多轮模型会话，支持内存上下文、失败重试、流式输出、客户端取消、Markdown/JSON 导出和 JSON 预览确认恢复与文本附件；更多附件格式和会话管理继续推进。公开版本仍为 v0.22.0。
+Stage 23 / v0.23.0：受支持的文本插件可使用内存多轮上下文、流式输出与停止、Markdown/JSON 会话导出、JSON 预览确认恢复和有界 UTF-8 文本附件。模型对话工具仍在开发中，真实模型服务兼容性、PDF/Word/图片解析和更多会话管理待验证或实现。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 发布结果为准。
 
 Stage 22 / v0.22.0：插件凭据、工具连接设置、命名档案与 OpenAI/Ollama 模型发现已完成本地验证。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 发布结果为准；通用设置 schema 与多轮/流式对话仍在规划中。
 
