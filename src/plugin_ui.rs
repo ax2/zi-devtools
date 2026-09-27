@@ -33,6 +33,9 @@ struct Draft {
     stream_mode: bool,
     export_json: bool,
     export_path: String,
+    import_path: String,
+    import_preview: Option<crate::conversation::Conversation>,
+    import_open: bool,
 }
 #[derive(Clone)]
 struct StreamControl {
@@ -66,6 +69,22 @@ pub struct PluginState {
     preview_stream_sender: Option<mpsc::Sender<Result<String, String>>>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_import(&mut self) {
+        self.preview_conversation();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        let mut candidate = crate::conversation::Conversation::default();
+        candidate.bind(draft.conversation.binding().into());
+        candidate
+            .complete(
+                "如何校验 JSON？".into(),
+                "将文本放入 JSON 工具并执行校验。".into(),
+            )
+            .unwrap();
+        draft.import_preview = Some(candidate);
+        draft.import_open = true;
+        draft.import_path = "示例会话.json（预览数据）".into();
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_stream(&mut self) {
         self.preview_conversation();
@@ -543,6 +562,13 @@ impl PluginState {
                 if draft.conversation.bind(binding.clone()) {
                     draft.chat_message = "连接、模型或工具定义已改变，旧会话已清空".into();
                 }
+                if draft
+                    .import_preview
+                    .as_ref()
+                    .is_some_and(|p| p.binding() != binding)
+                {
+                    draft.import_preview = None;
+                }
                 if chat_supported {
                     ui.add_enabled_ui(!busy, |ui| {
                         ui.horizontal_wrapped(|ui| {
@@ -569,6 +595,35 @@ impl PluginState {
                     });
                     if draft.chat_mode {
                         ui.weak("仅保存在内存；发送时包含本工具此前成功的问答。不会自动调用工具；切换模型或地址会清空上下文。");
+                        ui.add_enabled_ui(!busy, |ui| {
+                            egui::CollapsingHeader::new("导入会话 JSON").default_open(draft.import_open).show(ui, |ui| {
+                                ui.weak("只读入问答。确认后替换当前历史；下一次发送会将这些内容交给当前模型，不会自动运行。");
+                                if ui.add(egui::TextEdit::singleline(&mut draft.import_path).hint_text("会话 JSON 文件完整路径").desired_width(f32::INFINITY)).changed() {
+                                    draft.import_preview = None;
+                                }
+                                if ui.button("读取并预览").clicked() {
+                                    draft.import_preview = None;
+                                    match crate::conversation::Conversation::import_file(&draft.import_path, binding.clone()) {
+                                        Ok(candidate) => { draft.import_preview = Some(candidate); draft.chat_message.clear(); }
+                                        Err(error) => draft.chat_message = format!("导入失败，当前会话保留：{error}"),
+                                    }
+                                }
+                                if let Some(candidate) = &draft.import_preview {
+                                    ui.label(format!("待导入 {} 轮 · {} 字节；将替换当前 {} 轮", candidate.turns().len(), candidate.bytes(), draft.conversation.turns().len()));
+                                    egui::ScrollArea::vertical().id_salt(("import-preview", &id)).max_height(120.0).show(ui, |ui| {
+                                        for (q, a) in candidate.turns() { ui.strong("你"); ui.label(q); ui.strong("模型"); ui.label(a); ui.separator(); }
+                                    });
+                                    ui.horizontal(|ui| {
+                                        if ui.button("确认替换会话").clicked() {
+                                            draft.conversation = draft.import_preview.take().unwrap();
+                                            draft.output.clear();
+                                            draft.chat_message = "会话已导入，输入草稿保留；尚未发送请求".into();
+                                        }
+                                        if ui.button("取消导入").clicked() { draft.import_preview = None; }
+                                    });
+                                }
+                            });
+                        });
                         if !draft.conversation.turns().is_empty() {
                             ui.collapsing("导出会话", |ui| {
                                 ui.weak("仅导出成功问答；不包含连接设置、未发送输入或未完成输出。文件包含对话正文，请自行选择保存位置。");
@@ -1319,6 +1374,7 @@ mod tests {
                     Err(_) => panic!("fixture accept failed"),
                 }
             };
+            stream.set_nonblocking(false).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();

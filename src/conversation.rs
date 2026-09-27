@@ -1,10 +1,25 @@
 //! Bounded in-memory context with explicit text export; no automatic persistence.
 use crate::plugins::{Adapter, PluginTool};
 use anyhow::{Result, ensure};
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 pub const MAX_TURNS: usize = 16;
 pub const MAX_BYTES: usize = 256 * 1024;
+const MAX_IMPORT_BYTES: usize = 2 * 1024 * 1024;
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExportFile {
+    schema: String,
+    version: u32,
+    messages: Vec<ExportMessage>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExportMessage {
+    role: String,
+    content: String,
+}
 #[derive(Default)]
 pub struct Conversation {
     binding: String,
@@ -33,6 +48,44 @@ pub fn supported(tool: &PluginTool) -> bool {
     }
 }
 impl Conversation {
+    pub fn import_file(path: &str, binding: String) -> Result<Self> {
+        use std::io::Read;
+        let path = path.trim();
+        ensure!(std::fs::metadata(path)?.is_file(), "请选择普通 JSON 文件");
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)?
+            .take((MAX_IMPORT_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)?;
+        ensure!(bytes.len() <= MAX_IMPORT_BYTES, "会话文件超过 2 MiB");
+        Self::import(std::str::from_utf8(&bytes)?, binding)
+    }
+    fn import(text: &str, binding: String) -> Result<Self> {
+        ensure!(text.len() <= MAX_IMPORT_BYTES, "会话文件超过 2 MiB");
+        let file: ExportFile = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+            .map_err(|_| anyhow::anyhow!("会话 JSON 格式无效或包含未知字段"))?;
+        ensure!(
+            file.schema == "zi-devtools-conversation" && file.version == 1,
+            "不支持的会话格式或版本"
+        );
+        ensure!(
+            !file.messages.is_empty()
+                && file.messages.len().is_multiple_of(2)
+                && file.messages.len() <= MAX_TURNS * 2,
+            "会话必须包含 1 至 16 轮完整问答"
+        );
+        let mut candidate = Self {
+            binding,
+            turns: Vec::new(),
+        };
+        for pair in file.messages.chunks_exact(2) {
+            ensure!(
+                pair[0].role == "user" && pair[1].role == "assistant",
+                "仅支持按顺序排列的 user/assistant 问答，不支持工具或系统消息"
+            );
+            candidate.complete(pair[0].content.clone(), pair[1].content.clone())?;
+        }
+        Ok(candidate)
+    }
     pub fn bind(&mut self, binding: String) -> bool {
         if self.binding == binding {
             return false;
@@ -121,6 +174,71 @@ impl Conversation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn import_is_bounded_strict_and_preserves_exported_context() {
+        let mut original = Conversation::default();
+        original
+            .complete("原始🙂$model".into(), "答案\n```".into())
+            .unwrap();
+        let exported = original.export(true).unwrap();
+        let restored = Conversation::import(&exported, "current-binding".into()).unwrap();
+        assert_eq!(restored.turns(), original.turns());
+        assert_eq!(restored.binding(), "current-binding");
+        assert_eq!(
+            restored.prepare("继续").unwrap(),
+            original.prepare("继续").unwrap()
+        );
+        let base: Value = serde_json::from_str(&exported).unwrap();
+        let mut bad = Vec::new();
+        let mut v = base.clone();
+        v["messages"] = json!([]);
+        bad.push(v);
+        let mut v = base.clone();
+        v["messages"] = Value::Array(
+            base["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .cycle()
+                .take(34)
+                .cloned()
+                .collect(),
+        );
+        bad.push(v);
+        let mut v = base.clone();
+        v["version"] = json!(2);
+        bad.push(v);
+        let mut v = base.clone();
+        v["endpoint"] = json!("ignored?");
+        bad.push(v);
+        let mut v = base.clone();
+        v["messages"][0]["role"] = json!("system");
+        bad.push(v);
+        let mut v = base.clone();
+        v["messages"][0]["tool_calls"] = json!([]);
+        bad.push(v);
+        let mut v = base.clone();
+        v["messages"].as_array_mut().unwrap().pop();
+        bad.push(v);
+        let mut v = base.clone();
+        v["messages"][1]["content"] = json!(" ");
+        bad.push(v);
+        let mut v = base.clone();
+        v["messages"][1]["content"] = json!("x".repeat(MAX_BYTES));
+        bad.push(v);
+        for value in bad {
+            assert!(Conversation::import(&value.to_string(), String::new()).is_err());
+        }
+        assert!(Conversation::import(&" ".repeat(MAX_IMPORT_BYTES + 1), String::new()).is_err());
+        assert_eq!(original.turns().len(), 1);
+        let path = std::env::temp_dir().join(format!("zi-chat-{}.json", uuid::Uuid::new_v4()));
+        std::fs::write(&path, format!("\u{feff}{exported}")).unwrap();
+        let loaded = Conversation::import_file(path.to_str().unwrap(), "current".into()).unwrap();
+        assert_eq!(loaded.turns(), original.turns());
+        std::fs::write(&path, vec![b' '; MAX_IMPORT_BYTES + 1]).unwrap();
+        assert!(Conversation::import_file(path.to_str().unwrap(), String::new()).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
     #[test]
     fn export_preserves_text_without_connection_binding_or_incomplete_turns() {
         let mut chat = Conversation::default();

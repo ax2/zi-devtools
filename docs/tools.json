@@ -480,7 +480,7 @@
       "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON流式、客户端取消和成功会话Markdown/JSON导出；附件与更多会话管理待补"
+      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON流式、客户端取消和成功会话Markdown/JSON导出、JSON预览确认恢复；附件与更多会话管理待补"
     },
     {
       "id": "model-compare",
