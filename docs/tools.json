@@ -208,7 +208,7 @@
       "status": "implemented",
       "category": "系统能力",
       "priority": "—",
-      "scope": "YAML 配置、启停重启、健康检查、日志与托盘"
+      "scope": "YAML 配置、启停重启、健康检查、日志与托盘；优雅停止按目标进程验证身份并有界等待"
     },
     {
       "id": "json-path",

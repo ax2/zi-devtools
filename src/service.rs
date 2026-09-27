@@ -14,7 +14,7 @@ use chrono::Local;
 use parking_lot::{Mutex, RwLock};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 
 use crate::config::{DashboardConfig, ServiceSpec, expand_path};
 
@@ -389,7 +389,14 @@ impl ServiceManager {
         pid: u32,
     ) -> Result<bool> {
         let mut system = System::new();
-        system.refresh_processes(ProcessesToUpdate::All, true);
+        let target = [Pid::from_u32(pid)];
+        // Only identity/liveness is needed here. Refreshing memory and all other
+        // processes can consume the entire stop deadline on a busy Windows host.
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&target),
+            true,
+            ProcessRefreshKind::nothing(),
+        );
         if self.validated_pid(service_id, &system) != Some(pid) {
             return Ok(true);
         }
@@ -429,8 +436,13 @@ impl ServiceManager {
         let mut helper = command.spawn().context("无法启动优雅停止命令")?;
         let deadline = Instant::now() + Duration::from_millis(spec.stop_timeout_ms);
         loop {
+            // Re-open the target so a reused PID cannot retain cached identity.
             let mut system = System::new();
-            system.refresh_processes(ProcessesToUpdate::All, true);
+            system.refresh_processes_specifics(
+                ProcessesToUpdate::Some(&target),
+                true,
+                ProcessRefreshKind::nothing(),
+            );
             if self.validated_pid(service_id, &system) != Some(pid) {
                 stop_helper(&mut helper);
                 self.append_log(service_id, "优雅停止成功\n")?;
