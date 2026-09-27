@@ -31,6 +31,7 @@ struct Draft {
     pending_chat: Option<(String, String)>,
     chat_message: String,
     stream_mode: bool,
+    attachments: crate::chat_attachments::State,
     export_json: bool,
     export_path: String,
     import_path: String,
@@ -280,6 +281,7 @@ impl PluginState {
                     match draft.conversation.complete(input, output.clone()) {
                         Ok(()) => {
                             draft.input.clear();
+                            draft.attachments.clear();
                             draft.chat_message.clear();
                         }
                         Err(error) => draft.chat_message = error.to_string(),
@@ -688,6 +690,7 @@ impl PluginState {
                         {
                             draft.input.clear();
                             draft.output.clear();
+                            draft.attachments.clear();
                         }
                     });
                     ui.add_enabled_ui(!busy, |ui| {
@@ -702,6 +705,9 @@ impl PluginState {
                     });
                 } else {
                     ui.label("此工具只读取接口结果，无需输入文本或模型名称。");
+                }
+                if chat_supported {
+                    draft.attachments.ui(ui, !busy);
                 }
                 let shortcut = allow_shortcuts
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
@@ -718,8 +724,19 @@ impl PluginState {
                     && self.discovery_running.is_none()
                     && connection_valid
                 {
+                    let input = if chat_supported {
+                        match draft.attachments.compose(&draft.input) {
+                            Ok(input) => input,
+                            Err(error) => {
+                                draft.chat_message = error.to_string();
+                                return;
+                            }
+                        }
+                    } else {
+                        draft.input.clone()
+                    };
                     let messages = if draft.chat_mode {
-                        match draft.conversation.prepare(&draft.input) {
+                        match draft.conversation.prepare(&input) {
                             Ok(messages) => Some(messages),
                             Err(error) => {
                                 draft.chat_message = error.to_string();
@@ -730,7 +747,7 @@ impl PluginState {
                         None
                     };
                     let (input, model, token) = (
-                        draft.input.clone(),
+                        input,
                         draft.model.clone(),
                         if self.use_saved {
                             String::new()
