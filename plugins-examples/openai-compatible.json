@@ -24,7 +24,7 @@
     {
       "id": "chat",
       "name": "兼容接口单轮问答",
-      "description": "非流式 Chat Completions；支持临时令牌或显式使用 Windows 保存凭据",
+      "description": "Chat Completions；支持多轮、可停止的流式输出及 Windows 保存凭据",
       "category": "AI 与模型",
       "keywords": [
         "LLM",

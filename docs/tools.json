@@ -480,7 +480,7 @@
       "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "已接入受支持 OpenAI/Ollama 文本模板的内存多轮上下文、失败保留与显式重试、16轮/256KiB边界；流式、取消、附件待补"
+      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON流式和客户端取消，未完成输出不提交历史；附件与更多会话管理待补"
     },
     {
       "id": "model-compare",

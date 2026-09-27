@@ -518,7 +518,7 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
-            78..=85 => {
+            78..=87 => {
                 self.page = Page::Plugins;
                 if !self
                     .plugins
@@ -545,6 +545,9 @@ impl DevToolsApp {
                 }
                 if scene >= 84 {
                     self.plugins.preview_conversation();
+                }
+                if scene >= 86 {
+                    self.plugins.preview_stream();
                 }
             }
             76 | 77 => {

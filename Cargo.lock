@@ -4774,6 +4774,7 @@ dependencies = [
  "sha2",
  "similar",
  "sysinfo",
+ "tokio",
  "tray-icon",
  "unicode-normalization",
  "urlencoding",

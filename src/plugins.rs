@@ -362,7 +362,7 @@ fn api_error(bytes: &[u8]) -> Option<String> {
 pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Result<String> {
     execute_with_context(tool, input, model, token, None)
 }
-fn request_body(
+pub(crate) fn request_body(
     body: &Value,
     input: &str,
     model: &str,

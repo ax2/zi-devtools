@@ -4,6 +4,10 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     sync::mpsc::{self, Receiver},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 #[derive(Default)]
@@ -26,6 +30,12 @@ struct Draft {
     conversation: crate::conversation::Conversation,
     pending_chat: Option<(String, String)>,
     chat_message: String,
+    stream_mode: bool,
+}
+#[derive(Clone)]
+struct StreamControl {
+    cancel: Arc<AtomicBool>,
+    partial: Arc<Mutex<String>>,
 }
 struct DiscoveryJob {
     id: String,
@@ -49,8 +59,29 @@ pub struct PluginState {
     pending_remove: Option<String>,
     copied_at: Option<std::time::Instant>,
     running: Option<(String, Receiver<Result<String, String>>)>,
+    stream: Option<StreamControl>,
+    #[cfg(feature = "ui-preview")]
+    preview_stream_sender: Option<mpsc::Sender<Result<String, String>>>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_stream(&mut self) {
+        self.preview_conversation();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        draft.conversation.clear();
+        draft.stream_mode = true;
+        draft.chat_message = "示例流式状态 · 截图未发送请求".into();
+        let (sender, receiver) = mpsc::channel();
+        self.running = Some(("plugin:openai-local/chat".into(), receiver));
+        self.preview_stream_sender = Some(sender);
+        self.stream = Some(StreamControl {
+            cancel: Arc::new(AtomicBool::new(false)),
+            partial: Arc::new(Mutex::new(
+                "JSON 使用明确的键值与数组结构；YAML 使用缩进表达层级。下面是同一配置的两种写法…"
+                    .into(),
+            )),
+        });
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_conversation(&mut self) {
         self.preview_profiles();
@@ -155,6 +186,9 @@ impl PluginState {
             pending_remove: None,
             copied_at: None,
             running: None,
+            stream: None,
+            #[cfg(feature = "ui-preview")]
+            preview_stream_sender: None,
         }
     }
     pub fn select(&mut self, id: &str) {
@@ -201,11 +235,22 @@ impl PluginState {
             }
         }
         let (id, rx) = self.running.as_ref()?;
-        let result = match rx.try_recv() {
+        if let Some(stream) = &self.stream {
+            if let Ok(partial) = stream.partial.lock() {
+                self.drafts.entry(id.clone()).or_default().output = partial.clone();
+            }
+        }
+        let mut result = match rx.try_recv() {
             Ok(result) => result,
             Err(mpsc::TryRecvError::Disconnected) => Err("执行线程已退出".into()),
             Err(mpsc::TryRecvError::Empty) => return None,
         };
+        let partial = self.stream.take().map(|stream| {
+            if stream.cancel.load(Ordering::Relaxed) {
+                result = Err("已停止，部分输出未加入上下文".into());
+            }
+            stream.partial.lock().map(|s| s.clone()).unwrap_or_default()
+        });
         let succeeded = result.is_ok();
         let draft = self.drafts.entry(id.clone()).or_default();
         if let Some((binding, input)) = draft.pending_chat.take() {
@@ -223,7 +268,10 @@ impl PluginState {
                 }
             }
         }
-        draft.output = result.unwrap_or_else(|e| format!("失败：{e}"));
+        draft.output = result.unwrap_or_else(|e| match partial {
+            Some(partial) if !partial.is_empty() => format!("{partial}\n\n[未完成] {e}"),
+            _ => format!("失败：{e}"),
+        });
         self.running = None;
         Some(
             if succeeded {
@@ -502,6 +550,7 @@ impl PluginState {
                                 draft.conversation.clear();
                                 draft.chat_message = "已切回单轮并清空会话".into();
                             }
+                            ui.checkbox(&mut draft.stream_mode, "流式输出（可停止）");
                             if draft.chat_mode {
                                 ui.label(format!(
                                     "{} / 16 轮 · {} / 256 KiB",
@@ -612,21 +661,50 @@ impl PluginState {
                         },
                     );
                     let use_saved = self.use_saved;
+                    let stream_work =
+                        (draft.stream_mode && chat_supported).then(|| StreamControl {
+                            cancel: Arc::new(AtomicBool::new(false)),
+                            partial: Arc::new(Mutex::new(String::new())),
+                        });
+                    self.stream = stream_work.clone();
+                    if stream_work.is_some() {
+                        draft.output.clear();
+                    }
                     draft.pending_chat = draft.chat_mode.then(|| (binding, input.clone()));
                     let credential_id = id.clone();
                     self.token.clear();
                     let (tx, rx) = mpsc::channel();
                     self.running = Some((id, rx));
                     std::thread::spawn(move || {
-                        let result = execute_with_credentials(
-                            &tool,
-                            &credential_id,
-                            &input,
-                            &model,
-                            token,
-                            use_saved,
-                            messages.as_deref(),
-                        )
+                        let result = if let Some(stream) = stream_work {
+                            load_secret(&tool, &credential_id, token, use_saved).and_then(
+                                |secret| {
+                                    crate::chat_stream::run(
+                                        &tool,
+                                        &input,
+                                        &model,
+                                        secret,
+                                        messages.as_deref(),
+                                        &stream.cancel,
+                                        |value| {
+                                            if let Ok(mut partial) = stream.partial.lock() {
+                                                *partial = value;
+                                            }
+                                        },
+                                    )
+                                },
+                            )
+                        } else {
+                            execute_with_credentials(
+                                &tool,
+                                &credential_id,
+                                &input,
+                                &model,
+                                token,
+                                use_saved,
+                                messages.as_deref(),
+                            )
+                        }
                         .map_err(|e| e.to_string());
                         let _ = tx.send(result);
                     });
@@ -634,11 +712,30 @@ impl PluginState {
                 if self.running.is_some() {
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label("执行中，请求最多等待 30 秒；可切换页面");
+                        if let Some(stream) = &self.stream {
+                            let stopping = stream.cancel.load(Ordering::Relaxed);
+                            ui.label(if stopping {
+                                "正在停止客户端请求…"
+                            } else {
+                                "流式生成中 · 最长 120 秒 · 可切换页面"
+                            });
+                            if ui
+                                .add_enabled(!stopping, egui::Button::new("停止生成"))
+                                .clicked()
+                            {
+                                stream.cancel.store(true, Ordering::Relaxed);
+                            }
+                        } else {
+                            ui.label("执行中，请求最多等待 30 秒；可切换页面");
+                        }
                     });
                 }
                 ui.horizontal(|ui| {
-                    ui.strong("上次执行结果");
+                    ui.strong(if self.running.is_some() && self.stream.is_some() {
+                        "正在生成的内容"
+                    } else {
+                        "执行结果"
+                    });
                     if ui
                         .add_enabled(!draft.output.is_empty(), egui::Button::new("复制结果"))
                         .clicked()
@@ -977,15 +1074,12 @@ fn profiles_ui(
     applied
 }
 
-fn execute_with_credentials(
+fn load_secret(
     tool: &plugins::PluginTool,
     id: &str,
-    input: &str,
-    model: &str,
     temporary: String,
     saved: bool,
-    messages: Option<&[serde_json::Value]>,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<Option<crate::credentials::Secret>> {
     let secret = if saved {
         let Adapter::Http { url, method, .. } = &tool.adapter else {
             anyhow::bail!("本地配方不使用网络凭据");
@@ -999,6 +1093,19 @@ fn execute_with_credentials(
     } else {
         Some(crate::credentials::Secret::new(temporary)?)
     };
+    Ok(secret)
+}
+
+fn execute_with_credentials(
+    tool: &plugins::PluginTool,
+    id: &str,
+    input: &str,
+    model: &str,
+    temporary: String,
+    saved: bool,
+    messages: Option<&[serde_json::Value]>,
+) -> anyhow::Result<String> {
+    let secret = load_secret(tool, id, temporary, saved)?;
     let token = secret.as_ref().map_or("", |s| s.expose());
     let redact = |text: String| {
         if token.is_empty() {
@@ -1021,6 +1128,37 @@ fn execute_with_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stopped_stream_retains_partial_and_never_commits_late_success() {
+        let mut state = PluginState::new(
+            std::env::temp_dir().join(format!("zi-stream-ui-{}", uuid::Uuid::new_v4())),
+        );
+        let draft = state.drafts.entry("chat".into()).or_default();
+        draft.conversation.bind("binding".into());
+        draft.input = "question".into();
+        draft.pending_chat = Some(("binding".into(), "question".into()));
+        let (sender, receiver) = mpsc::channel();
+        state.running = Some(("chat".into(), receiver));
+        state.stream = Some(StreamControl {
+            cancel: Arc::new(AtomicBool::new(false)),
+            partial: Arc::new(Mutex::new("partial text".into())),
+        });
+        assert!(state.poll().is_none());
+        assert_eq!(state.drafts["chat"].output, "partial text");
+        state
+            .stream
+            .as_ref()
+            .unwrap()
+            .cancel
+            .store(true, Ordering::Relaxed);
+        sender.send(Ok("late completion".into())).unwrap();
+        assert!(state.poll().is_some());
+        let draft = &state.drafts["chat"];
+        assert!(draft.output.contains("partial text") && draft.output.contains("未完成"));
+        assert!(draft.conversation.turns().is_empty());
+        assert_eq!(draft.input, "question");
+        assert!(!state.is_running() && state.stream.is_none());
+    }
     #[test]
     fn chat_failure_keeps_draft_and_success_commits_once_in_original_tool() {
         let mut state = PluginState::new(
