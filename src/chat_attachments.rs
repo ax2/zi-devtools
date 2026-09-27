@@ -2,7 +2,10 @@
 use anyhow::{Result, ensure};
 use eframe::egui;
 use serde::Serialize;
-use std::{io::Read, path::Path};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 const FILE_LIMIT: usize = 64 * 1024;
 const TOTAL_LIMIT: usize = 128 * 1024;
@@ -35,8 +38,11 @@ impl State {
         self.message.clear();
     }
     fn load(&mut self) -> Result<()> {
+        let path = PathBuf::from(self.path.trim());
+        self.load_path(&path)
+    }
+    fn load_path(&mut self, path: &Path) -> Result<()> {
         ensure!(self.files.len() < 4, "最多添加 4 个文本附件");
-        let path = Path::new(self.path.trim());
         let extension = path
             .extension()
             .and_then(|s| s.to_str())
@@ -126,7 +132,21 @@ impl State {
                 .default_open(!self.files.is_empty())
                 .show(ui, |ui| {
                 ui.weak("发送时将文件名和完整正文交给当前模型。仅读取明确选择的文件，使用预览快照；不发送完整路径。单文件64 KiB，总计128 KiB。");
-                ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("UTF-8 文件完整路径").desired_width(f32::INFINITY));
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("UTF-8 文件完整路径").desired_width(ui.available_width() - 104.0));
+                    #[cfg(windows)]
+                    if ui.button("选择文件").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("文本与代码", &["txt", "md", "json", "yaml", "yml", "csv", "tsv", "log", "py", "java", "xml", "toml", "properties", "sql", "js", "ts", "html", "css", "rs", "ini"])
+                            .pick_file()
+                        {
+                            self.message = match self.load_path(&path) {
+                                Ok(()) => "附件已读取并预览，尚未发送；文件变化需移除后重新添加".into(),
+                                Err(e) => e.to_string(),
+                            };
+                        }
+                    }
+                });
                 if ui.button("读取附件并预览").clicked() {
                     self.message = match self.load() { Ok(()) => "附件已读取，尚未发送；文件变化需移除后重新添加".into(), Err(e) => e.to_string() };
                 }
