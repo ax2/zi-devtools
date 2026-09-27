@@ -1,6 +1,6 @@
 {
   "version": "0.22.0",
-  "updated": "2026-09-26",
+  "updated": "2026-09-27",
   "tools": [
     {
       "id": "json",
@@ -736,7 +736,7 @@
       "status": "in-progress",
       "category": "插件平台",
       "priority": "P1",
-      "scope": "已接入 Windows 凭据管理器与工具级地址/模型设置表单，支持保存及恢复默认；待补可复用连接档案与更多设置字段"
+      "scope": "已接入 Windows 凭据管理器、地址/模型设置及跨工具命名连接档案；支持兼容性筛选与快照应用；待补通用设置 schema 和连接测试"
     },
     {
       "id": "plugin-health",

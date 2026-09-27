@@ -67,7 +67,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 22 / v0.22.0 开发中：新增插件凭据保存、使用和删除，以及工具级地址/模型设置表单，尚未公开发版。跨工具连接档案继续推进。
+Stage 22 / v0.22.0 开发中：新增插件凭据保存、使用和删除，以及工具级地址/模型设置表单，尚未公开发版。新增跨工具命名连接档案，通用设置与连接测试继续推进。
 
 Stage 21 / v0.21.0：Windows 可运行目录 `dist\Stage-21`；公开安装包以 [GitHub Release](https://github.com/ax2/zi-devtools/releases/latest) 为准。
 

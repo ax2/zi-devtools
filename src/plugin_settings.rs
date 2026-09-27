@@ -26,10 +26,62 @@ impl Connection {
         Ok(())
     }
 }
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Profile {
+    pub name: String,
+    pub shape: String,
+    pub connection: Connection,
+}
+impl Profile {
+    fn validate(&self) -> Result<()> {
+        ensure!(
+            !self.name.trim().is_empty()
+                && self.name.len() <= 160
+                && !self.name.chars().any(char::is_control),
+            "档案名称须为 1–160 字节，不能包含控制字符"
+        );
+        ensure!(valid_key(&self.shape), "档案协议标识无效");
+        self.connection.validate()
+    }
+    pub fn for_tool(&self, tool: &crate::plugins::PluginTool) -> Result<Connection> {
+        ensure!(
+            request_shape(tool).as_deref() == Some(self.shape.as_str()),
+            "档案与当前工具的请求格式不兼容"
+        );
+        self.validate()?;
+        Ok(self.connection.clone())
+    }
+}
+/// Exact request/response template compatibility, independent of destination and model.
+pub fn request_shape(tool: &crate::plugins::PluginTool) -> Option<String> {
+    if let crate::plugins::Adapter::Http {
+        method,
+        body,
+        response_pointer,
+        ..
+    } = &tool.adapter
+    {
+        Some(format!(
+            "{:x}",
+            Sha256::digest(
+                serde_json::to_vec(&(method, body, response_pointer))
+                    .expect("serializable adapter")
+            )
+        ))
+    } else {
+        None
+    }
+}
+fn valid_key(key: &str) -> bool {
+    key.len() == 64 && key.bytes().all(|c| c.is_ascii_hexdigit())
+}
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Document {
     connections: BTreeMap<String, Connection>,
+    #[serde(default)]
+    profiles: BTreeMap<String, Profile>,
 }
 pub struct Settings {
     path: PathBuf,
@@ -62,6 +114,16 @@ impl Settings {
             );
             connection.validate()?;
         }
+        ensure!(data.profiles.len() <= 128, "连接档案过多");
+        let mut names = std::collections::BTreeSet::new();
+        for (id, profile) in &data.profiles {
+            ensure!(uuid::Uuid::parse_str(id).is_ok(), "档案 ID 无效");
+            profile.validate()?;
+            ensure!(
+                names.insert(profile.name.trim().to_lowercase()),
+                "档案名称重复"
+            );
+        }
         Ok(data)
     }
     /// A changed tool definition never silently inherits an old destination override.
@@ -74,6 +136,42 @@ impl Settings {
     pub fn get(&self, key: &str) -> Option<&Connection> {
         self.data.connections.get(key)
     }
+    pub fn profiles(&self) -> impl Iterator<Item = (&String, &Profile)> {
+        self.data.profiles.iter()
+    }
+    pub fn profile(&self, id: &str) -> Option<&Profile> {
+        self.data.profiles.get(id)
+    }
+    pub fn save_profile(&mut self, id: Option<&str>, mut profile: Profile) -> Result<String> {
+        profile.name = profile.name.trim().into();
+        profile.validate()?;
+        ensure!(
+            !self
+                .data
+                .profiles
+                .iter()
+                .any(|(key, p)| Some(key.as_str()) != id
+                    && p.name.to_lowercase() == profile.name.to_lowercase()),
+            "已有同名档案，请使用其他名称或更新选中档案"
+        );
+        let id = match id {
+            Some(id) => {
+                ensure!(self.data.profiles.contains_key(id), "选中档案已不存在");
+                id.to_owned()
+            }
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        let mut next = self.data.clone();
+        next.profiles.insert(id.clone(), profile);
+        ensure!(next.profiles.len() <= 128, "最多保存 128 个连接档案");
+        self.persist(next)?;
+        Ok(id)
+    }
+    pub fn delete_profile(&mut self, id: &str) -> Result<()> {
+        let mut next = self.data.clone();
+        ensure!(next.profiles.remove(id).is_some(), "选中档案已不存在");
+        self.persist(next)
+    }
     pub fn set(&mut self, key: &str, value: Option<Connection>) -> Result<()> {
         ensure!(self.error.is_none(), "设置文件异常，未覆盖原文件");
         ensure!(
@@ -83,15 +181,17 @@ impl Settings {
         if let Some(v) = &value {
             v.validate()?;
         }
-        let mut next = Document {
-            connections: self.data.connections.clone(),
-        };
+        let mut next = self.data.clone();
         if let Some(value) = value {
             next.connections.insert(key.into(), value);
         } else {
             next.connections.remove(key);
         }
         ensure!(next.connections.len() <= 512, "最多保存 512 个工具连接设置");
+        self.persist(next)
+    }
+    fn persist(&mut self, next: Document) -> Result<()> {
+        ensure!(self.error.is_none(), "设置文件异常，未覆盖原文件");
         let bytes = serde_json::to_vec_pretty(&next)?;
         ensure!(bytes.len() <= 1024 * 1024, "设置文件过大");
         let parent = self.path.parent().context("设置路径无效")?;
@@ -122,6 +222,71 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn profiles_migrate_reuse_update_and_delete_without_changing_tool_snapshots() {
+        let root = std::env::temp_dir().join(format!("zi-profiles-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("connections.json");
+        // Previous settings schema has no profiles field.
+        fs::write(&path, br#"{"connections":{}}"#).unwrap();
+        let mut store = Settings::load(path.clone());
+        assert!(store.error.is_none());
+        let manifest =
+            crate::plugins::parse(include_bytes!("../plugins-examples/openai-compatible.json"))
+                .unwrap();
+        let tool = manifest.tools.iter().find(|t| matches!(&t.adapter, crate::plugins::Adapter::Http { method, .. } if method == "POST")).unwrap();
+        let original = Profile {
+            name: " Local Model ".into(),
+            shape: request_shape(tool).unwrap(),
+            connection: Connection {
+                endpoint: "http://localhost:4321/v1/chat/completions".into(),
+                model: "fixture-model".into(),
+            },
+        };
+        let id = store.save_profile(None, original.clone()).unwrap();
+        let mut duplicate = original.clone();
+        duplicate.name = "local model".into();
+        assert!(store.save_profile(None, duplicate).is_err());
+        let mut other_tool = tool.clone();
+        other_tool.id = "other-chat".into();
+        if let crate::plugins::Adapter::Http { url, .. } = &mut other_tool.adapter {
+            *url = "https://example.com/other".into();
+        }
+        let copied = store.profile(&id).unwrap().for_tool(&other_tool).unwrap();
+        let key = Settings::key("plugin:other/chat", &other_tool);
+        store.set(&key, Some(copied.clone())).unwrap();
+        let mut changed = original;
+        changed.connection.model = "new-model".into();
+        store.save_profile(Some(&id), changed).unwrap();
+        let mut reloaded = Settings::load(path.clone());
+        assert!(reloaded.error.is_none());
+        assert_eq!(reloaded.profile(&id).unwrap().connection.model, "new-model");
+        assert_eq!(reloaded.get(&key).unwrap().model, "fixture-model");
+        if let crate::plugins::Adapter::Http { body, .. } = &mut other_tool.adapter {
+            *body = serde_json::json!({"prompt": "$input"});
+        }
+        assert!(
+            reloaded
+                .profile(&id)
+                .unwrap()
+                .for_tool(&other_tool)
+                .is_err()
+        );
+        reloaded.delete_profile(&id).unwrap();
+        let final_state = Settings::load(path.clone());
+        assert!(final_state.profile(&id).is_none());
+        assert!(final_state.get(&key) == Some(&copied));
+        // Invalid replacement cannot destroy the existing snapshot document.
+        let before = fs::read(&path).unwrap();
+        let bad = Profile {
+            name: "bad".into(),
+            shape: "bad".into(),
+            connection: copied,
+        };
+        assert!(reloaded.save_profile(None, bad).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn persisted_connections_replace_reset_and_preserve_invalid_file() {
         let root = std::env::temp_dir().join(format!("zi-settings-{}", uuid::Uuid::new_v4()));

@@ -14,6 +14,10 @@ struct Draft {
     endpoint: String,
     settings_key: String,
     settings_message: String,
+    profile_id: Option<String>,
+    profile_name: String,
+    profile_editor: bool,
+    profile_delete: bool,
 }
 pub struct PluginState {
     pub store: Store,
@@ -31,6 +35,52 @@ pub struct PluginState {
     running: Option<(String, Receiver<Result<String, String>>)>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_profiles(&mut self) {
+        let id = "plugin:openai-local/chat";
+        let tool = self
+            .store
+            .tool_refs()
+            .find(|(key, _)| key == id)
+            .unwrap()
+            .1
+            .clone();
+        let connection = crate::plugin_settings::Connection {
+            endpoint: "http://127.0.0.1:1234/v1/chat/completions".into(),
+            model: "local-example-model".into(),
+        };
+        let existing = self
+            .settings
+            .profiles()
+            .find(|(_, p)| p.name == "本机推理 · 示例")
+            .map(|(id, _)| id.clone());
+        let profile_id = match existing {
+            Some(id) => id,
+            None => self
+                .settings
+                .save_profile(
+                    None,
+                    crate::plugin_settings::Profile {
+                        name: "本机推理 · 示例".into(),
+                        shape: crate::plugin_settings::request_shape(&tool).unwrap(),
+                        connection: connection.clone(),
+                    },
+                )
+                .unwrap(),
+        };
+        self.drafts.insert(
+            id.into(),
+            Draft {
+                endpoint: connection.endpoint,
+                model: connection.model,
+                settings_key: crate::plugin_settings::Settings::key(id, &tool),
+                profile_id: Some(profile_id),
+                profile_name: "本机推理 · 示例".into(),
+                profile_editor: true,
+                ..Default::default()
+            },
+        );
+    }
     pub fn new(root: PathBuf) -> Self {
         Self {
             settings: crate::plugin_settings::Settings::load(
@@ -106,6 +156,7 @@ impl PluginState {
                 ui.heading(&tool.name);
                 ui.label(&tool.description);
                 let settings_key = crate::plugin_settings::Settings::key(&id, &tool);
+                let profile_tool = tool.clone();
                 let default_endpoint = match &tool.adapter {
                     Adapter::Http { url, .. } => url.clone(),
                     _ => String::new(),
@@ -118,6 +169,9 @@ impl PluginState {
                         saved.map_or_else(|| default_endpoint.clone(), |v| v.endpoint.clone());
                     draft.settings_key = settings_key.clone();
                     draft.settings_message.clear();
+                    draft.profile_id = None;
+                    draft.profile_name.clear();
+                    draft.profile_delete = false;
                     self.token.clear();
                     self.use_saved = false;
                     self.credential_message.clear();
@@ -157,6 +211,11 @@ impl PluginState {
                                             draft.settings_message.clear();
                                         }
                                     });
+                                }
+                                if profiles_ui(ui, &mut self.settings, draft, &profile_tool) {
+                                    self.token.clear();
+                                    self.use_saved = false;
+                                    self.credential_message.clear();
                                 }
                                 let value = crate::plugin_settings::Connection {
                                     endpoint: draft.endpoint.clone(),
@@ -555,6 +614,112 @@ impl PluginState {
             ui.label("有工具正在运行，完成后可停用或卸载。");
         }
     }
+}
+
+fn profiles_ui(
+    ui: &mut egui::Ui,
+    settings: &mut crate::plugin_settings::Settings,
+    draft: &mut Draft,
+    tool: &plugins::PluginTool,
+) -> bool {
+    use crate::plugin_settings::{Connection, Profile, request_shape};
+    let Some(shape) = request_shape(tool) else {
+        return false;
+    };
+    let mut applied = false;
+    let selected_name = draft
+        .profile_id
+        .as_deref()
+        .and_then(|id| settings.profile(id))
+        .map_or("选择兼容档案", |p| p.name.as_str())
+        .to_owned();
+    ui.horizontal_wrapped(|ui| {
+        ui.label("连接档案");
+        egui::ComboBox::from_id_salt("connection-profile")
+            .selected_text(selected_name)
+            .width(200.0)
+            .show_ui(ui, |ui| {
+                let mut profiles: Vec<_> = settings
+                    .profiles()
+                    .filter(|(_, p)| p.shape == shape)
+                    .collect();
+                profiles.sort_by(|a, b| a.1.name.cmp(&b.1.name));
+                if profiles.is_empty() {
+                    ui.weak("尚无兼容档案，可保存当前连接");
+                }
+                for (id, profile) in profiles {
+                    if ui
+                        .selectable_label(draft.profile_id.as_ref() == Some(id), &profile.name)
+                        .on_hover_text(&profile.connection.endpoint)
+                        .clicked()
+                    {
+                        draft.profile_id = Some(id.clone());
+                        draft.profile_name = profile.name.clone();
+                        draft.profile_delete = false;
+                    }
+                }
+            });
+        let selected = draft
+            .profile_id
+            .as_deref()
+            .and_then(|id| settings.profile(id));
+        if ui
+            .add_enabled(
+                selected.is_some_and(|p| p.shape == shape),
+                egui::Button::new("应用到当前工具"),
+            )
+            .clicked()
+        {
+            if let Some(value) = selected.and_then(|p| p.for_tool(tool).ok()) {
+                draft.endpoint = value.endpoint;
+                draft.model = value.model;
+                draft.settings_message =
+                    "已应用档案；请核对目标并重新选择认证，保存连接设置后可在重启时复用".into();
+                applied = true;
+            }
+        }
+        ui.toggle_value(&mut draft.profile_editor, "管理档案");
+    });
+    if draft.profile_editor {
+        ui.group(|ui| {
+            ui.label("档案只包含接口与模型；应用时复制配置，不自动发送请求。仅显示请求和响应格式兼容的档案。");
+            ui.horizontal_wrapped(|ui| {
+                ui.label("档案名称");
+                ui.add(egui::TextEdit::singleline(&mut draft.profile_name).hint_text("例如：本机推理 / 开发环境"));
+                let profile = Profile { name: draft.profile_name.clone(), shape: shape.clone(), connection: Connection { endpoint: draft.endpoint.clone(), model: draft.model.clone() } };
+                let valid = !profile.name.trim().is_empty() && profile.connection.validate().is_ok() && settings.error.is_none();
+                if ui.add_enabled(valid, egui::Button::new("另存新档案")).clicked() {
+                    match settings.save_profile(None, profile.clone()) {
+                        Ok(id) => { draft.profile_id = Some(id); draft.profile_delete = false; draft.settings_message = "档案已创建；未保存认证信息".into(); }
+                        Err(e) => draft.settings_message = e.to_string(),
+                    }
+                }
+                if ui.add_enabled(valid && draft.profile_id.is_some(), egui::Button::new("更新选中档案")).clicked() {
+                    draft.settings_message = match settings.save_profile(draft.profile_id.as_deref(), profile) {
+                        Ok(_) => "档案已更新；已应用到其他工具的设置保持原值".into(),
+                        Err(e) => e.to_string(),
+                    };
+                }
+                if ui.add_enabled(draft.profile_id.is_some() && settings.error.is_none(), egui::Button::new("删除档案")).clicked() { draft.profile_delete = true; }
+            });
+            if draft.profile_delete {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("删除选中档案？已应用的工具设置与系统凭据会保留。");
+                    if ui.button("确认删除").clicked() {
+                        if let Some(id) = &draft.profile_id {
+                            match settings.delete_profile(id) {
+                                Ok(()) => { draft.profile_id = None; draft.profile_name.clear(); draft.settings_message = "档案已删除".into(); }
+                                Err(e) => draft.settings_message = e.to_string(),
+                            }
+                        }
+                        draft.profile_delete = false;
+                    }
+                    if ui.button("取消").clicked() { draft.profile_delete = false; }
+                });
+            }
+        });
+    }
+    applied
 }
 
 fn execute_with_credentials(
