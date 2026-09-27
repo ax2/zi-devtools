@@ -31,6 +31,8 @@ struct Draft {
     pending_chat: Option<(String, String)>,
     chat_message: String,
     stream_mode: bool,
+    export_json: bool,
+    export_path: String,
 }
 #[derive(Clone)]
 struct StreamControl {
@@ -568,6 +570,27 @@ impl PluginState {
                     if draft.chat_mode {
                         ui.weak("仅保存在内存；发送时包含本工具此前成功的问答。不会自动调用工具；切换模型或地址会清空上下文。");
                         if !draft.conversation.turns().is_empty() {
+                            ui.collapsing("导出会话", |ui| {
+                                ui.weak("仅导出成功问答；不包含连接设置、未发送输入或未完成输出。文件包含对话正文，请自行选择保存位置。");
+                                ui.horizontal(|ui| {
+                                    ui.selectable_value(&mut draft.export_json, false, "Markdown");
+                                    ui.selectable_value(&mut draft.export_json, true, "JSON");
+                                    if ui.button("复制会话").clicked() {
+                                        match draft.conversation.export(draft.export_json) {
+                                            Ok(text) => { ui.ctx().copy_text(text); draft.chat_message = "会话已复制".into(); }
+                                            Err(error) => draft.chat_message = error.to_string(),
+                                        }
+                                    }
+                                });
+                                ui.add(egui::TextEdit::singleline(&mut draft.export_path).hint_text("新文件完整路径（.md 或 .json）").desired_width(f32::INFINITY));
+                                if ui.add_enabled(!draft.export_path.trim().is_empty(), egui::Button::new("保存到新文件")).clicked() {
+                                    draft.chat_message = match draft.conversation.export(draft.export_json)
+                                        .and_then(|text| crate::workbench::save_new_file(&draft.export_path, &text)) {
+                                            Ok(()) => "会话已保存；已有文件不会被覆盖".into(),
+                                            Err(error) => error.to_string(),
+                                        };
+                                }
+                            });
                             egui::ScrollArea::vertical()
                                 .id_salt(("conversation", &id))
                                 .max_height(180.0)

@@ -1,4 +1,4 @@
-//! Ephemeral, bounded user/assistant context. No files, tools, or automatic execution.
+//! Bounded in-memory context with explicit text export; no automatic persistence.
 use crate::plugins::{Adapter, PluginTool};
 use anyhow::{Result, ensure};
 use serde_json::{Value, json};
@@ -54,6 +54,37 @@ impl Conversation {
     pub fn bytes(&self) -> usize {
         self.turns.iter().map(|(q, a)| q.len() + a.len()).sum()
     }
+    pub fn export(&self, json_format: bool) -> Result<String> {
+        ensure!(!self.turns.is_empty(), "没有可导出的成功会话");
+        if json_format {
+            let messages: Vec<Value> = self
+                .turns
+                .iter()
+                .flat_map(|(q, a)| {
+                    [
+                        json!({"role":"user","content":q}),
+                        json!({"role":"assistant","content":a}),
+                    ]
+                })
+                .collect();
+            return Ok(serde_json::to_string_pretty(&json!({
+                "schema":"zi-devtools-conversation", "version":1, "messages":messages
+            }))?);
+        }
+        let mut text = String::from("# Zi DevTools 会话\n\n仅包含成功完成的问答。\n");
+        for (index, (question, answer)) in self.turns.iter().enumerate() {
+            for (role, content) in [("你", question), ("模型", answer)] {
+                // Fence original text, including HTML and Markdown, without altering it.
+                let longest = content.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+                let fence = "`".repeat(3.max(longest + 1));
+                text.push_str(&format!(
+                    "\n## 第 {} 轮 · {role}\n\n{fence}text\n{content}\n{fence}\n",
+                    index + 1
+                ));
+            }
+        }
+        Ok(text)
+    }
     pub fn prepare(&self, input: &str) -> Result<Vec<Value>> {
         ensure!(!input.trim().is_empty(), "请输入消息");
         ensure!(
@@ -90,6 +121,25 @@ impl Conversation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn export_preserves_text_without_connection_binding_or_incomplete_turns() {
+        let mut chat = Conversation::default();
+        chat.bind("private-connection-binding".into());
+        assert!(chat.export(false).is_err());
+        let input = "中文\n````\n<script>example</script>";
+        chat.complete(input.into(), "$input🙂".into()).unwrap();
+        let _pending = chat.prepare("未完成消息").unwrap();
+        let data: Value = serde_json::from_str(&chat.export(true).unwrap()).unwrap();
+        assert_eq!(data["messages"].as_array().unwrap().len(), 2);
+        assert_eq!(data["messages"][0]["content"], input);
+        let markdown = chat.export(false).unwrap();
+        assert!(markdown.contains("`````text\n"));
+        assert!(markdown.contains(input));
+        for exported in [markdown, chat.export(true).unwrap()] {
+            assert!(!exported.contains("private-connection-binding"));
+            assert!(!exported.contains("未完成消息"));
+        }
+    }
     #[test]
     fn context_is_ordered_bounded_and_destination_changes_clear_it() {
         let mut chat = Conversation::default();
