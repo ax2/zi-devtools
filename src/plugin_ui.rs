@@ -37,6 +37,28 @@ struct Draft {
     import_path: String,
     import_preview: Option<crate::conversation::Conversation>,
     import_open: bool,
+    library_name: String,
+    library_entries: Vec<crate::chat_library::Entry>,
+    library_selected: Option<String>,
+    library_preview: Option<crate::conversation::Conversation>,
+    library_loaded: bool,
+    library_open: bool,
+    library_skipped: usize,
+    library_truncated: bool,
+    library_delete_confirm: bool,
+}
+impl Draft {
+    fn bind_conversation(&mut self, binding: String) {
+        let changed = self.conversation.binding() != binding;
+        let had_context = self.conversation.bind(binding);
+        if changed {
+            self.import_preview = None;
+            self.library_preview = None;
+        }
+        if had_context {
+            self.chat_message = "连接、模型或工具定义已改变，旧会话已清空".into();
+        }
+    }
 }
 #[derive(Clone)]
 struct StreamControl {
@@ -52,6 +74,7 @@ struct DiscoveryJob {
 pub struct PluginState {
     pub store: Store,
     settings: crate::plugin_settings::Settings,
+    library: crate::chat_library::Library,
     pub selected: Option<String>,
     path: String,
     preview: Option<Vec<u8>>,
@@ -70,6 +93,32 @@ pub struct PluginState {
     preview_stream_sender: Option<mpsc::Sender<Result<String, String>>>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_library(&mut self) {
+        self.preview_conversation();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        draft.library_name = "示例项目讨论".into();
+        draft.library_entries = vec![crate::chat_library::Entry {
+            id: "preview-only".into(),
+            name: draft.library_name.clone(),
+            saved_at: "示例预览".into(),
+            turns: draft.conversation.turns().len(),
+            bytes: draft.conversation.bytes(),
+        }];
+        draft.library_skipped = 0;
+        draft.library_truncated = false;
+        draft.library_loaded = true;
+        draft.library_open = true;
+        draft.library_selected = Some("preview-only".into());
+        draft.library_preview = Some(
+            crate::conversation::Conversation::import(
+                &draft.conversation.export(true).unwrap(),
+                draft.conversation.binding().into(),
+            )
+            .unwrap(),
+        );
+        draft.chat_message = "示例会话库 · 截图未发送请求".into();
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_attachments(&mut self) {
         self.preview_conversation();
@@ -199,6 +248,7 @@ impl PluginState {
     }
     pub fn new(root: PathBuf) -> Self {
         Self {
+            library: crate::chat_library::Library::new(root.join("sessions")),
             settings: crate::plugin_settings::Settings::load(
                 root.join("settings/connections.json"),
             ),
@@ -569,16 +619,7 @@ impl PluginState {
                     crate::plugin_settings::Settings::key(&id, &tool),
                     draft.model
                 );
-                if draft.conversation.bind(binding.clone()) {
-                    draft.chat_message = "连接、模型或工具定义已改变，旧会话已清空".into();
-                }
-                if draft
-                    .import_preview
-                    .as_ref()
-                    .is_some_and(|p| p.binding() != binding)
-                {
-                    draft.import_preview = None;
-                }
+                draft.bind_conversation(binding.clone());
                 if chat_supported {
                     ui.add_enabled_ui(!busy, |ui| {
                         ui.horizontal_wrapped(|ui| {
@@ -586,6 +627,7 @@ impl PluginState {
                                 && !draft.chat_mode
                             {
                                 draft.conversation.clear();
+                                draft.library_preview = None;
                                 draft.chat_message = "已切回单轮并清空会话".into();
                             }
                             ui.checkbox(&mut draft.stream_mode, "流式输出（可停止）");
@@ -604,8 +646,111 @@ impl PluginState {
                         });
                     });
                     if draft.chat_mode {
-                        ui.weak("仅保存在内存；发送时包含本工具此前成功的问答。不会自动调用工具；切换模型或地址会清空上下文。");
+                        ui.weak("当前会话仅在内存中；只有主动保存才会写入本地会话库。发送时包含本工具此前成功的问答；切换模型或地址会清空上下文。");
                         ui.add_enabled_ui(!busy, |ui| {
+                            egui::CollapsingHeader::new("本地会话库").default_open(draft.library_open).show(ui, |ui| {
+                                ui.weak("主动保存成功问答到本机插件目录；正文可能包含你输入的信息。不会保存连接凭据、未发送草稿或未完成输出。");
+                                if !draft.library_loaded {
+                                    match self.library.list() {
+                                        Ok(listing) => {
+                                            draft.library_entries = listing.entries;
+                                            draft.library_skipped = listing.skipped;
+                                            draft.library_truncated = listing.truncated;
+                                            draft.library_loaded = true;
+                                        }
+                                        Err(error) => draft.chat_message = format!("读取会话库失败：{error}"),
+                                    }
+                                }
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::TextEdit::singleline(&mut draft.library_name).hint_text("会话名称，最多 80 字").desired_width(260.0));
+                                    if ui.add_enabled(!draft.conversation.turns().is_empty(), egui::Button::new("保存当前会话")).clicked() {
+                                        match self.library.save(&draft.library_name, &draft.conversation) {
+                                            Ok(entry) => {
+                                                draft.library_selected = Some(entry.id);
+                                                draft.library_preview = None;
+                                                draft.library_loaded = false;
+                                                draft.chat_message = "会话已保存在本机；当前内存会话未改变".into();
+                                            }
+                                            Err(error) => draft.chat_message = format!("保存失败：{error}"),
+                                        }
+                                    }
+                                });
+                                if ui.button("刷新列表").clicked() { draft.library_loaded = false; }
+                                if draft.library_skipped > 0 {
+                                    ui.weak(format!("{} 个无效或超额文件未显示", draft.library_skipped));
+                                }
+                                if draft.library_truncated {
+                                    ui.weak("会话文件超过扫描上限；请整理目录后再保存");
+                                }
+                                if draft.library_entries.is_empty() {
+                                    ui.weak("尚无已保存会话");
+                                } else {
+                                    egui::ScrollArea::vertical().id_salt(("library-list", &id)).max_height(140.0).show(ui, |ui| {
+                                        for entry in &draft.library_entries {
+                                            let selected = draft.library_selected.as_deref() == Some(&entry.id);
+                                            if ui.selectable_label(selected, format!("{} · {} 轮 · {}", entry.name, entry.turns, entry.saved_at)).clicked() {
+                                                draft.library_selected = Some(entry.id.clone());
+                                                draft.library_preview = None;
+                                                draft.library_delete_confirm = false;
+                                            }
+                                        }
+                                    });
+                                    if let Some(selected) = draft.library_selected.clone() {
+                                        ui.horizontal(|ui| {
+                                            if ui.button("预览所选").clicked() {
+                                                match self.library.load(&selected, binding.clone()) {
+                                                    Ok((_, candidate)) => {
+                                                        draft.library_preview = Some(candidate);
+                                                        draft.chat_message.clear();
+                                                    }
+                                                    Err(error) => {
+                                                        draft.library_preview = None;
+                                                        draft.chat_message = format!("预览失败，当前会话保留：{error}");
+                                                    }
+                                                }
+                                            }
+                                            if ui.button("删除所选").clicked() { draft.library_delete_confirm = true; }
+                                        });
+                                        if draft.library_delete_confirm {
+                                            ui.horizontal(|ui| {
+                                                ui.weak("删除本机这份会话文件？其他导出副本不会删除。");
+                                                if ui.button("确认删除").clicked() {
+                                                    match self.library.delete(&selected) {
+                                                        Ok(()) => {
+                                                            draft.library_selected = None;
+                                                            draft.library_preview = None;
+                                                            draft.library_loaded = false;
+                                                            draft.chat_message = "所选会话文件已删除；当前内存会话保留".into();
+                                                        }
+                                                        Err(error) => draft.chat_message = format!("删除失败：{error}"),
+                                                    }
+                                                    draft.library_delete_confirm = false;
+                                                }
+                                                if ui.button("取消").clicked() { draft.library_delete_confirm = false; }
+                                            });
+                                        }
+                                    }
+                                    if let Some(candidate) = &draft.library_preview {
+                                        ui.label(format!("待恢复 {} 轮 · {} 字节；将替换当前 {} 轮", candidate.turns().len(), candidate.bytes(), draft.conversation.turns().len()));
+                                        ui.horizontal(|ui| {
+                                            if ui.button("确认恢复到当前会话").clicked() {
+                                                draft.conversation = draft.library_preview.take().unwrap();
+                                                draft.output.clear();
+                                                draft.chat_message = "会话已恢复；输入草稿保留，尚未发送请求".into();
+                                            }
+                                            if ui.button("取消预览").clicked() { draft.library_preview = None; }
+                                        });
+                                        if let Some(candidate) = &draft.library_preview {
+                                            egui::ScrollArea::vertical().id_salt(("library-preview", &id)).max_height(120.0).show(ui, |ui| {
+                                                for (question, answer) in candidate.turns() {
+                                                    ui.strong("你"); ui.label(question);
+                                                    ui.strong("模型"); ui.label(answer); ui.separator();
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                            });
                             egui::CollapsingHeader::new("导入会话 JSON").default_open(draft.import_open).show(ui, |ui| {
                                 ui.weak("只读入问答。确认后替换当前历史；下一次发送会将这些内容交给当前模型，不会自动运行。");
                                 if ui.add(egui::TextEdit::singleline(&mut draft.import_path).hint_text("会话 JSON 文件完整路径").desired_width(f32::INFINITY)).changed() {
@@ -1231,6 +1376,20 @@ fn execute_with_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn changing_binding_discards_preview_even_when_current_history_is_empty() {
+        let mut draft = Draft::default();
+        draft.bind_conversation("old".into());
+        let mut candidate = crate::conversation::Conversation::default();
+        candidate.bind("old".into());
+        candidate.complete("q".into(), "a".into()).unwrap();
+        draft.library_preview = Some(candidate);
+        assert!(draft.conversation.turns().is_empty());
+        draft.bind_conversation("new".into());
+        assert!(draft.library_preview.is_none());
+        assert!(draft.conversation.turns().is_empty());
+        assert_eq!(draft.conversation.binding(), "new");
+    }
     #[test]
     fn stopped_stream_retains_partial_and_never_commits_late_success() {
         let mut state = PluginState::new(

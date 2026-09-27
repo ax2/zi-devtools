@@ -59,7 +59,7 @@ impl Conversation {
         ensure!(bytes.len() <= MAX_IMPORT_BYTES, "会话文件超过 2 MiB");
         Self::import(std::str::from_utf8(&bytes)?, binding)
     }
-    fn import(text: &str, binding: String) -> Result<Self> {
+    pub(crate) fn import(text: &str, binding: String) -> Result<Self> {
         ensure!(text.len() <= MAX_IMPORT_BYTES, "会话文件超过 2 MiB");
         let file: ExportFile = serde_json::from_str(text.trim_start_matches('\u{feff}'))
             .map_err(|_| anyhow::anyhow!("会话 JSON 格式无效或包含未知字段"))?;

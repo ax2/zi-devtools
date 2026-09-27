@@ -23,6 +23,7 @@ pub mod tasks;
 pub mod credentials;
 
 pub mod chat_attachments;
+pub mod chat_library;
 pub mod chat_stream;
 pub mod conversation;
 pub mod model_discovery;

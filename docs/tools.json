@@ -1,5 +1,5 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "updated": "2026-09-27",
   "tools": [
     {
@@ -480,7 +480,7 @@
       "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON流式、客户端取消和成功会话Markdown/JSON导出、JSON预览确认恢复、UTF-8文本附件快照；PDF/Word/图片与更多会话管理待补"
+      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON 流式、客户端取消、成功会话 Markdown/JSON 导出、JSON 预览确认恢复、有界 UTF-8 文本附件及显式保存的本地命名会话库；真实模型兼容性、PDF/Word/图片与更完整会话管理待补"
     },
     {
       "id": "model-compare",

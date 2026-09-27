@@ -67,6 +67,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
+Stage 24 / v0.24.0：文本插件多轮模式增加本地命名会话库。只有主动保存才会将成功问答写入本机插件数据目录；可刷新列表、预览、确认恢复与二次确认删除，不自动发送请求或保存凭据、未发送草稿。模型对话仍在开发中，真实模型服务兼容性待验收。
+
 Stage 23 / v0.23.0：受支持的文本插件可使用内存多轮上下文、流式输出与停止、Markdown/JSON 会话导出、JSON 预览确认恢复和有界 UTF-8 文本附件。模型对话工具仍在开发中，真实模型服务兼容性、PDF/Word/图片解析和更多会话管理待验证或实现。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 发布结果为准。
 
 Stage 22 / v0.22.0：插件凭据、工具连接设置、命名档案与 OpenAI/Ollama 模型发现已完成本地验证。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 发布结果为准；通用设置 schema 与多轮/流式对话仍在规划中。
@@ -83,7 +85,7 @@ Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整
 - **插件机制**：JSON 清单预览、安装、启停、刷新、卸载与内容指纹。支持内置配方和非流式 HTTP JSON 适配器，输入/结果不落盘；令牌可临时使用，或显式保存到 Windows 凭据管理器（v0.22.0）。[插件使用与开发](docs/plugins.md)。
 - **可选连接器**：3 个示例包、6 项工具，覆盖本地文本、Ollama、OpenAI 兼容服务。需要已有服务与模型，不自动下载或启动。
 - **本机发现**：只读检查 PATH 入口和常见服务端口；本次调查发现 Ollama、AnythingLLM、Codex CLI、Docker 等，具体运行与集成边界见 [架构与路线](docs/platform-roadmap.md)。
-- **扩展规划**：覆盖模型、MCP、RAG、Agent、插件生态和本地数据能力，当前目录共 116 项（50 内置已实现、66 规划）。模型连接器不等于完整 Agent/MCP/RAG。
+- **扩展规划**：覆盖模型、MCP、RAG、Agent、插件生态和本地数据能力，当前目录共 117 项（55 已实现、62 规划或开发中）。模型连接器不等于完整 Agent/MCP/RAG。
 - 现有 28 项轻量工具、CSV/JSON 工作台、文件校验、HTTP、差异、网络诊断及服务管理。数据操作限制见工具文档。
 
 ![Java / Django 诊断工作台](docs/images/java-django.png)
