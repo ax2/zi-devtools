@@ -22,6 +22,10 @@ struct Draft {
     models: Vec<String>,
     models_source: String,
     discovery_message: String,
+    chat_mode: bool,
+    conversation: crate::conversation::Conversation,
+    pending_chat: Option<(String, String)>,
+    chat_message: String,
 }
 struct DiscoveryJob {
     id: String,
@@ -47,6 +51,35 @@ pub struct PluginState {
     running: Option<(String, Receiver<Result<String, String>>)>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_conversation(&mut self) {
+        self.preview_profiles();
+        let id = "plugin:openai-local/chat";
+        let tool = self
+            .store
+            .tool_refs()
+            .find(|(key, _)| key == id)
+            .unwrap()
+            .1
+            .clone();
+        let draft = self.drafts.get_mut(id).unwrap();
+        draft.profile_editor = false;
+        draft.chat_mode = true;
+        draft.conversation.bind(format!(
+            "{}:{}",
+            crate::plugin_settings::Settings::key(id, &tool),
+            draft.model
+        ));
+        draft
+            .conversation
+            .complete(
+                "JSON 与 YAML 有什么区别？".into(),
+                "JSON 结构严格，适合程序交换数据；YAML 更方便手写配置，但需要注意缩进。".into(),
+            )
+            .unwrap();
+        draft.input = "为刚才的区别补充一个配置示例。".into();
+        draft.chat_message = "示例会话 · 截图未发送请求".into();
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_model_discovery(&mut self) {
         self.preview_profiles();
@@ -174,8 +207,23 @@ impl PluginState {
             Err(mpsc::TryRecvError::Empty) => return None,
         };
         let succeeded = result.is_ok();
-        self.drafts.entry(id.clone()).or_default().output =
-            result.unwrap_or_else(|e| format!("失败：{e}"));
+        let draft = self.drafts.entry(id.clone()).or_default();
+        if let Some((binding, input)) = draft.pending_chat.take() {
+            if draft.conversation.binding() == binding {
+                if let Ok(output) = &result {
+                    match draft.conversation.complete(input, output.clone()) {
+                        Ok(()) => {
+                            draft.input.clear();
+                            draft.chat_message.clear();
+                        }
+                        Err(error) => draft.chat_message = error.to_string(),
+                    }
+                } else {
+                    draft.chat_message = "请求失败，消息与此前上下文保留；可再次运行重试".into();
+                }
+            }
+        }
+        draft.output = result.unwrap_or_else(|e| format!("失败：{e}"));
         self.running = None;
         Some(
             if succeeded {
@@ -209,7 +257,11 @@ impl PluginState {
                         .as_ref()
                         .is_some_and(|job| job.id == id);
                 let get_only = matches!(&tool.adapter,Adapter::Http{method,..} if method=="GET");
-                ui.heading(&tool.name);
+                ui.heading(if self.drafts.get(&id).is_some_and(|d| d.chat_mode) {
+                    "多轮模型对话"
+                } else {
+                    &tool.name
+                });
                 ui.label(&tool.description);
                 let settings_key = crate::plugin_settings::Settings::key(&id, &tool);
                 let profile_tool = tool.clone();
@@ -432,6 +484,63 @@ impl PluginState {
                 } else {
                     ui.label("本地配方 · 无网络请求");
                 }
+                let chat_supported = crate::conversation::supported(&tool);
+                let binding = format!(
+                    "{}:{}",
+                    crate::plugin_settings::Settings::key(&id, &tool),
+                    draft.model
+                );
+                if draft.conversation.bind(binding.clone()) {
+                    draft.chat_message = "连接、模型或工具定义已改变，旧会话已清空".into();
+                }
+                if chat_supported {
+                    ui.add_enabled_ui(!busy, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.checkbox(&mut draft.chat_mode, "多轮上下文").changed()
+                                && !draft.chat_mode
+                            {
+                                draft.conversation.clear();
+                                draft.chat_message = "已切回单轮并清空会话".into();
+                            }
+                            if draft.chat_mode {
+                                ui.label(format!(
+                                    "{} / 16 轮 · {} / 256 KiB",
+                                    draft.conversation.turns().len(),
+                                    draft.conversation.bytes().div_ceil(1024)
+                                ));
+                                if ui.button("清空会话").clicked() {
+                                    draft.conversation.clear();
+                                    draft.output.clear();
+                                    draft.chat_message = "会话已清空".into();
+                                }
+                            }
+                        });
+                    });
+                    if draft.chat_mode {
+                        ui.weak("仅保存在内存；发送时包含本工具此前成功的问答。不会自动调用工具；切换模型或地址会清空上下文。");
+                        if !draft.conversation.turns().is_empty() {
+                            egui::ScrollArea::vertical()
+                                .id_salt(("conversation", &id))
+                                .max_height(180.0)
+                                .show(ui, |ui| {
+                                    for (index, (question, answer)) in
+                                        draft.conversation.turns().iter().enumerate()
+                                    {
+                                        ui.strong(format!("你 · 第 {} 轮", index + 1));
+                                        ui.label(question);
+                                        ui.strong("模型");
+                                        ui.label(answer);
+                                        ui.separator();
+                                    }
+                                });
+                        }
+                    }
+                    if !draft.chat_message.is_empty() {
+                        ui.label(&draft.chat_message);
+                    }
+                } else {
+                    draft.chat_mode = false;
+                }
                 ui.add_space(8.0);
                 ui.separator();
                 if !get_only {
@@ -456,7 +565,10 @@ impl PluginState {
                     });
                     ui.add_enabled_ui(!busy, |ui| {
                         ui.add_sized(
-                            [ui.available_width(), 160.0],
+                            [
+                                ui.available_width(),
+                                if draft.chat_mode { 100.0 } else { 160.0 },
+                            ],
                             egui::TextEdit::multiline(&mut draft.input)
                                 .font(egui::TextStyle::Monospace),
                         );
@@ -479,6 +591,17 @@ impl PluginState {
                     && self.discovery_running.is_none()
                     && connection_valid
                 {
+                    let messages = if draft.chat_mode {
+                        match draft.conversation.prepare(&draft.input) {
+                            Ok(messages) => Some(messages),
+                            Err(error) => {
+                                draft.chat_message = error.to_string();
+                                return;
+                            }
+                        }
+                    } else {
+                        None
+                    };
                     let (input, model, token) = (
                         draft.input.clone(),
                         draft.model.clone(),
@@ -489,6 +612,7 @@ impl PluginState {
                         },
                     );
                     let use_saved = self.use_saved;
+                    draft.pending_chat = draft.chat_mode.then(|| (binding, input.clone()));
                     let credential_id = id.clone();
                     self.token.clear();
                     let (tx, rx) = mpsc::channel();
@@ -501,6 +625,7 @@ impl PluginState {
                             &model,
                             token,
                             use_saved,
+                            messages.as_deref(),
                         )
                         .map_err(|e| e.to_string());
                         let _ = tx.send(result);
@@ -859,6 +984,7 @@ fn execute_with_credentials(
     model: &str,
     temporary: String,
     saved: bool,
+    messages: Option<&[serde_json::Value]>,
 ) -> anyhow::Result<String> {
     let secret = if saved {
         let Adapter::Http { url, method, .. } = &tool.adapter else {
@@ -887,7 +1013,7 @@ fn execute_with_credentials(
             )
         }
     };
-    plugins::execute(tool, input, model, token)
+    plugins::execute_with_context(tool, input, model, token, messages)
         .map(redact)
         .map_err(|e| anyhow::anyhow!(redact(e.to_string())))
 }
@@ -895,6 +1021,36 @@ fn execute_with_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn chat_failure_keeps_draft_and_success_commits_once_in_original_tool() {
+        let mut state = PluginState::new(
+            std::env::temp_dir().join(format!("zi-chat-{}", uuid::Uuid::new_v4())),
+        );
+        let draft = state.drafts.entry("chat".into()).or_default();
+        draft.conversation.bind("binding".into());
+        draft.input = "question".into();
+        for success in [false, true] {
+            let draft = state.drafts.get_mut("chat").unwrap();
+            draft.pending_chat = Some(("binding".into(), draft.input.clone()));
+            let (sender, receiver) = mpsc::channel();
+            state.running = Some(("chat".into(), receiver));
+            state.select("other");
+            sender
+                .send(if success {
+                    Ok("answer".into())
+                } else {
+                    Err("fixture error".into())
+                })
+                .unwrap();
+            assert!(state.poll().is_some());
+            let draft = &state.drafts["chat"];
+            assert_eq!(draft.conversation.turns().len(), usize::from(success));
+            assert_eq!(draft.input.is_empty(), success);
+            assert!(draft.pending_chat.is_none());
+            assert!(state.poll().is_none());
+        }
+        assert!(!state.drafts.contains_key("other"));
+    }
     #[test]
     fn discovery_result_returns_to_source_tool_and_discards_changed_destination() {
         let root = std::env::temp_dir().join(format!("zi-discovery-ui-{}", uuid::Uuid::new_v4()));
@@ -975,8 +1131,16 @@ mod tests {
         };
         // A different tool identity must fail before sending any request.
         assert!(
-            execute_with_credentials(&tool, &format!("{id}-other"), "", "", String::new(), true)
-                .is_err()
+            execute_with_credentials(
+                &tool,
+                &format!("{id}-other"),
+                "",
+                "",
+                String::new(),
+                true,
+                None
+            )
+            .is_err()
         );
         let server = std::thread::spawn(move || {
             listener.set_nonblocking(true).unwrap();
@@ -1013,7 +1177,8 @@ mod tests {
             write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
             authorized
         });
-        let result = execute_with_credentials(&tool, &id, "", "", String::new(), true).unwrap();
+        let result =
+            execute_with_credentials(&tool, &id, "", "", String::new(), true, None).unwrap();
         assert!(server.join().unwrap());
         assert_eq!(result, "[REDACTED]");
     }

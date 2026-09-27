@@ -1,5 +1,5 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "updated": "2026-09-27",
   "tools": [
     {
@@ -477,10 +477,10 @@
     {
       "id": "model-chat",
       "name": "多轮模型工作台",
-      "status": "planned",
+      "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "多轮会话、流式输出、取消、附件范围控制；上下文窗口与失败重试可见"
+      "scope": "已接入受支持 OpenAI/Ollama 文本模板的内存多轮上下文、失败保留与显式重试、16轮/256KiB边界；流式、取消、附件待补"
     },
     {
       "id": "model-compare",

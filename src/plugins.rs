@@ -360,6 +360,33 @@ fn api_error(bytes: &[u8]) -> Option<String> {
     Some(text.chars().filter(|c| !c.is_control()).take(300).collect())
 }
 pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Result<String> {
+    execute_with_context(tool, input, model, token, None)
+}
+fn request_body(
+    body: &Value,
+    input: &str,
+    model: &str,
+    messages: Option<&[Value]>,
+) -> Result<Vec<u8>> {
+    let mut expanded = expand(body, input, model)?;
+    if let Some(messages) = messages {
+        expanded["messages"] = Value::Array(messages.to_vec());
+    }
+    let bytes = serde_json::to_vec(&expanded)?;
+    ensure!(bytes.len() <= 2 * 1024 * 1024, "请求体超过 2 MiB");
+    Ok(bytes)
+}
+pub(crate) fn execute_with_context(
+    tool: &PluginTool,
+    input: &str,
+    model: &str,
+    token: &str,
+    messages: Option<&[Value]>,
+) -> Result<String> {
+    ensure!(
+        messages.is_none() || crate::conversation::supported(tool),
+        "此插件不支持多轮对话"
+    );
     crate::tools_extra::bounded(input)?;
     ensure!(
         model.len() <= 256 && token.len() <= 8192,
@@ -408,8 +435,7 @@ pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Resu
                 request = request.bearer_auth(token.trim());
             }
             if method == "POST" {
-                let body = serde_json::to_vec(&expand(body, input, model)?)?;
-                ensure!(body.len() <= 2 * 1024 * 1024, "请求体超过 2 MiB");
+                let body = request_body(body, input, model, messages)?;
                 request = request
                     .header("Content-Type", "application/json")
                     .body(body);
@@ -434,6 +460,12 @@ pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Resu
             } else {
                 &value
             };
+            if messages.is_some() {
+                return Ok(value
+                    .as_str()
+                    .context("多轮响应须为文本；暂不支持工具调用或结构化内容")?
+                    .to_owned());
+            }
             Ok(if let Some(s) = value.as_str() {
                 s.into()
             } else {
@@ -445,6 +477,111 @@ pub fn execute(tool: &PluginTool, input: &str, model: &str, token: &str) -> Resu
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chat_http_sends_full_context_and_rejects_non_text_completions() {
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+            time::{Duration, Instant},
+        };
+        let manifest =
+            super::parse(include_bytes!("../plugins-examples/openai-compatible.json")).unwrap();
+        for text_response in [true, false] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let mut tool = manifest
+                .tools
+                .iter()
+                .find(|t| t.id == "chat")
+                .unwrap()
+                .clone();
+            if let super::Adapter::Http { url, .. } = &mut tool.adapter {
+                *url = format!(
+                    "http://{}/v1/chat/completions",
+                    listener.local_addr().unwrap()
+                );
+            }
+            let server = std::thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((s, _)) => break s,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            assert!(Instant::now() < deadline);
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(_) => panic!("fixture accept failed"),
+                    }
+                };
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0; 1024];
+                let (start, size) = loop {
+                    let n = stream.read(&mut buffer).unwrap();
+                    assert!(n > 0);
+                    bytes.extend_from_slice(&buffer[..n]);
+                    assert!(bytes.len() < 65536);
+                    if let Some(end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&bytes[..end]).to_lowercase();
+                        let size: usize = headers
+                            .lines()
+                            .find_map(|l| l.strip_prefix("content-length:"))
+                            .unwrap()
+                            .trim()
+                            .parse()
+                            .unwrap();
+                        break (end + 4, size);
+                    }
+                };
+                while bytes.len() < start + size {
+                    let n = stream.read(&mut buffer).unwrap();
+                    assert!(n > 0);
+                    bytes.extend_from_slice(&buffer[..n]);
+                    assert!(bytes.len() < 65536);
+                }
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&bytes[start..start + size]).unwrap();
+                let body = if text_response {
+                    r#"{"choices":[{"message":{"content":"fixture-answer"}}]}"#
+                } else {
+                    r#"{"choices":[{"message":{"content":null}}]}"#
+                };
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+                payload
+            });
+            let messages = vec![
+                serde_json::json!({"role":"user","content":"$model"}),
+                serde_json::json!({"role":"assistant","content":"$input"}),
+                serde_json::json!({"role":"user","content":"next"}),
+            ];
+            let result =
+                super::execute_with_context(&tool, "next", "actual-model", "", Some(&messages));
+            let payload = server.join().unwrap();
+            assert_eq!(payload["messages"], serde_json::json!(messages));
+            assert_eq!(payload["model"], "actual-model");
+            assert_eq!(result.is_ok(), text_response);
+        }
+    }
+    #[test]
+    fn conversation_payload_preserves_literal_history_after_template_expansion() {
+        let body = serde_json::json!({"model":"$model", "messages":[{"role":"user", "content":"$input"}],"stream":false});
+        let history = vec![
+            serde_json::json!({"role":"user","content":"$model"}),
+            serde_json::json!({"role":"assistant","content":"$input"}),
+            serde_json::json!({"role":"user","content":"next"}),
+        ];
+        let bytes = super::request_body(&body, "next", "actual-model", Some(&history)).unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(payload["model"], "actual-model");
+        assert_eq!(payload["messages"], serde_json::json!(history));
+    }
     use super::*;
     const DEMO: &[u8] = include_bytes!("../plugins-examples/local-text.json");
     #[test]

@@ -518,7 +518,7 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
-            78..=83 => {
+            78..=85 => {
                 self.page = Page::Plugins;
                 if !self
                     .plugins
@@ -542,6 +542,9 @@ impl DevToolsApp {
                 }
                 if scene >= 82 {
                     self.plugins.preview_model_discovery();
+                }
+                if scene >= 84 {
+                    self.plugins.preview_conversation();
                 }
             }
             76 | 77 => {
@@ -1192,7 +1195,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 22  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 23  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

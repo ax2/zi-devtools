@@ -22,5 +22,6 @@ pub mod tasks;
 
 pub mod credentials;
 
+pub mod conversation;
 pub mod model_discovery;
 pub mod plugin_settings;
