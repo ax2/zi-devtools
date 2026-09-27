@@ -11,6 +11,8 @@ pub mod network_tools;
 pub mod plugin_ui;
 pub mod plugins;
 pub mod preferences;
+pub mod prompt_library;
+pub mod prompt_template;
 pub mod service;
 pub mod tools;
 pub mod tools_advanced;

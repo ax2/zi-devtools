@@ -1,4 +1,5 @@
 use crate::plugins::{self, Adapter, Store};
+mod prompts;
 use eframe::egui;
 use std::{
     collections::HashMap,
@@ -46,6 +47,7 @@ struct Draft {
     library_skipped: usize,
     library_truncated: bool,
     library_delete_confirm: bool,
+    prompts: prompts::State,
 }
 impl Draft {
     fn bind_conversation(&mut self, binding: String) {
@@ -57,6 +59,27 @@ impl Draft {
         }
         if had_context {
             self.chat_message = "连接、模型或工具定义已改变，旧会话已清空".into();
+        }
+    }
+    fn apply_prompt(&mut self, action: prompts::Apply, tool_id: &str, settings_key: &str) {
+        self.input = action.text;
+        self.output.clear();
+        if let Some(options) = action.options {
+            if options.tool_id != tool_id {
+                self.chat_message = "模板来源工具不匹配；仅填入正文，运行参数未更改".into();
+                return;
+            }
+            self.model = options.model;
+            self.stream_mode = options.stream;
+            self.chat_mode = options.multi_turn;
+            self.bind_conversation(format!("{settings_key}:{}", self.model));
+            if !self.chat_mode {
+                self.conversation.clear();
+            }
+            self.chat_message =
+                "模板正文与参数已填入；模型或多轮设置不兼容时已清空旧上下文，尚未发送请求".into();
+        } else {
+            self.chat_message = "模板正文已填入输入框；尚未发送请求".into();
         }
     }
 }
@@ -75,6 +98,7 @@ pub struct PluginState {
     pub store: Store,
     settings: crate::plugin_settings::Settings,
     library: crate::chat_library::Library,
+    prompt_library: crate::prompt_library::Library,
     pub selected: Option<String>,
     path: String,
     preview: Option<Vec<u8>>,
@@ -93,6 +117,18 @@ pub struct PluginState {
     preview_stream_sender: Option<mpsc::Sender<Result<String, String>>>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_prompts(&mut self) {
+        self.preview_conversation();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        draft.prompts.preview_fixture("plugin:openai-local/chat");
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_prompt_editor(&mut self) {
+        self.preview_prompts();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        draft.prompts.preview_editor();
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_library(&mut self) {
         self.preview_conversation();
@@ -249,6 +285,7 @@ impl PluginState {
     pub fn new(root: PathBuf) -> Self {
         Self {
             library: crate::chat_library::Library::new(root.join("sessions")),
+            prompt_library: crate::prompt_library::Library::new(root.join("prompts")),
             settings: crate::plugin_settings::Settings::load(
                 root.join("settings/connections.json"),
             ),
@@ -621,6 +658,29 @@ impl PluginState {
                 );
                 draft.bind_conversation(binding.clone());
                 if chat_supported {
+                    let prompt_action = ui
+                        .add_enabled_ui(!busy, |ui| {
+                            prompts::show(
+                                ui,
+                                &mut draft.prompts,
+                                &self.prompt_library,
+                                prompts::Current {
+                                    tool_id: &id,
+                                    input: &draft.input,
+                                    model: &draft.model,
+                                    stream: draft.stream_mode,
+                                    multi_turn: draft.chat_mode,
+                                },
+                            )
+                        })
+                        .inner;
+                    if let Some(action) = prompt_action {
+                        draft.apply_prompt(
+                            action,
+                            &id,
+                            &crate::plugin_settings::Settings::key(&id, &tool),
+                        );
+                    }
                     ui.add_enabled_ui(!busy, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             if ui.checkbox(&mut draft.chat_mode, "多轮上下文").changed()
@@ -1376,6 +1436,61 @@ fn execute_with_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn applying_prompt_never_runs_and_only_matching_tool_can_restore_parameters() {
+        let mut draft = Draft {
+            model: "old-model".into(),
+            chat_mode: true,
+            ..Default::default()
+        };
+        draft.conversation.bind("shape:old-model".into());
+        draft
+            .conversation
+            .complete("old".into(), "answer".into())
+            .unwrap();
+        let options = crate::prompt_template::RunOptions {
+            tool_id: "plugin:other/chat".into(),
+            model: "new-model".into(),
+            stream: true,
+            multi_turn: false,
+        };
+        draft.apply_prompt(
+            prompts::Apply {
+                text: "rendered".into(),
+                options: Some(options.clone()),
+            },
+            "plugin:here/chat",
+            "shape",
+        );
+        assert_eq!(draft.input, "rendered");
+        assert_eq!(draft.model, "old-model");
+        assert_eq!(draft.conversation.turns().len(), 1);
+        draft.apply_prompt(
+            prompts::Apply {
+                text: "rendered again".into(),
+                options: None,
+            },
+            "plugin:here/chat",
+            "shape",
+        );
+        assert_eq!(draft.conversation.turns().len(), 1);
+        draft.apply_prompt(
+            prompts::Apply {
+                text: "new input".into(),
+                options: Some(crate::prompt_template::RunOptions {
+                    tool_id: "plugin:here/chat".into(),
+                    ..options
+                }),
+            },
+            "plugin:here/chat",
+            "shape",
+        );
+        assert_eq!(draft.model, "new-model");
+        assert!(draft.stream_mode);
+        assert!(!draft.chat_mode);
+        assert!(draft.conversation.turns().is_empty());
+        assert_eq!(draft.conversation.binding(), "shape:new-model");
+    }
     #[test]
     fn changing_binding_discards_preview_even_when_current_history_is_empty() {
         let mut draft = Draft::default();

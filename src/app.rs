@@ -518,7 +518,7 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
-            78..=93 => {
+            78..=97 => {
                 self.page = Page::Plugins;
                 if !self
                     .plugins
@@ -555,8 +555,14 @@ impl DevToolsApp {
                 if (90..=91).contains(&scene) {
                     self.plugins.preview_attachments();
                 }
-                if scene >= 92 {
+                if (92..=93).contains(&scene) {
                     self.plugins.preview_library();
+                }
+                if (94..=95).contains(&scene) {
+                    self.plugins.preview_prompts();
+                }
+                if scene >= 96 {
+                    self.plugins.preview_prompt_editor();
                 }
             }
             76 | 77 => {
@@ -1207,7 +1213,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 24  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 25  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

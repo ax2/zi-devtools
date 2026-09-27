@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 94] = [
+const NAMES: [&str; 98] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -102,6 +102,10 @@ const NAMES: [&str; 94] = [
     "attachments-light",
     "library-dark",
     "library-light",
+    "prompts-dark",
+    "prompts-light",
+    "prompt-editor-dark",
+    "prompt-editor-light",
 ];
 
 struct Capture {
@@ -265,7 +269,9 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if self.scene == 3 || self.scene == 7 || self.scene == 59 {
+            let size = if self.scene == 96 || self.scene == 97 {
+                egui::vec2(1280.0, 1180.0)
+            } else if self.scene == 3 || self.scene == 7 || self.scene == 59 {
                 egui::vec2(980.0, 760.0)
             } else {
                 egui::vec2(1280.0, 900.0)

@@ -1,5 +1,5 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "updated": "2026-09-27",
   "tools": [
     {
@@ -493,10 +493,10 @@
     {
       "id": "prompt-library",
       "name": "提示词模板库",
-      "status": "planned",
+      "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "变量化模板、版本差异、标签搜索和运行参数复用"
+      "scope": "受支持文本插件已有本地命名模板、最多 20 个修订、标签搜索、变量填写与展开预览、相邻修订差异；正文可跨工具填入，同工具可明确应用模型/流式/多轮参数。真实模型端到端与完整交互验收待补"
     },
     {
       "id": "token-budget",
