@@ -518,7 +518,7 @@ impl DevToolsApp {
                 )
                 .unwrap();
             }
-            78..=81 => {
+            78..=83 => {
                 self.page = Page::Plugins;
                 if !self
                     .plugins
@@ -539,6 +539,9 @@ impl DevToolsApp {
                 self.plugins.select("plugin:openai-local/chat");
                 if scene >= 80 {
                     self.plugins.preview_profiles();
+                }
+                if scene >= 82 {
+                    self.plugins.preview_model_discovery();
                 }
             }
             76 | 77 => {

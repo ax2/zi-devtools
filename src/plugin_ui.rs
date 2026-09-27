@@ -18,6 +18,16 @@ struct Draft {
     profile_name: String,
     profile_editor: bool,
     profile_delete: bool,
+    discovery_open: bool,
+    models: Vec<String>,
+    models_source: String,
+    discovery_message: String,
+}
+struct DiscoveryJob {
+    id: String,
+    source: String,
+    settings_key: String,
+    receiver: Receiver<Result<crate::model_discovery::Report, String>>,
 }
 pub struct PluginState {
     pub store: Store,
@@ -29,12 +39,24 @@ pub struct PluginState {
     drafts: HashMap<String, Draft>,
     token: String,
     use_saved: bool,
+    discovery_token: String,
+    discovery_running: Option<DiscoveryJob>,
     credential_message: String,
     pending_remove: Option<String>,
     copied_at: Option<std::time::Instant>,
     running: Option<(String, Receiver<Result<String, String>>)>,
 }
 impl PluginState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_model_discovery(&mut self) {
+        self.preview_profiles();
+        let draft = self.drafts.get_mut("plugin:openai-local/chat").unwrap();
+        draft.profile_editor = false;
+        draft.discovery_open = true;
+        draft.models_source = draft.endpoint.clone();
+        draft.models = vec!["local-example-model".into(), "local-code-model".into()];
+        draft.discovery_message = "示例结果 · 2 个模型（截图未发送请求）".into();
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_profiles(&mut self) {
         let id = "plugin:openai-local/chat";
@@ -94,6 +116,8 @@ impl PluginState {
             drafts: HashMap::new(),
             token: String::new(),
             use_saved: false,
+            discovery_token: String::new(),
+            discovery_running: None,
             credential_message: String::new(),
             pending_remove: None,
             copied_at: None,
@@ -110,11 +134,39 @@ impl PluginState {
         self.use_saved = false;
         self.credential_message.clear();
         self.token.clear();
+        self.discovery_token.clear();
     }
     pub fn is_running(&self) -> bool {
-        self.running.is_some()
+        self.running.is_some() || self.discovery_running.is_some()
     }
     pub fn poll(&mut self) -> Option<String> {
+        if let Some(job) = &self.discovery_running {
+            let result = match job.receiver.try_recv() {
+                Ok(result) => Some(result),
+                Err(mpsc::TryRecvError::Disconnected) => Some(Err("模型查询线程已退出".into())),
+                Err(mpsc::TryRecvError::Empty) => None,
+            };
+            if let Some(result) = result {
+                let draft = self.drafts.entry(job.id.clone()).or_default();
+                if draft.endpoint == job.source && draft.settings_key == job.settings_key {
+                    draft.models.clear();
+                    draft.models_source = job.source.clone();
+                    draft.discovery_message = match result {
+                        Ok(report) => {
+                            draft.models = report.models;
+                            format!(
+                                "模型列表查询成功 · {} ms · {} 个模型；不代表生成请求一定可用",
+                                report.elapsed_ms,
+                                draft.models.len()
+                            )
+                        }
+                        Err(error) => format!("查询失败：{error}"),
+                    };
+                }
+                self.discovery_running = None;
+                return Some("模型查询已结束，请查看原工具的连接检查结果".into());
+            }
+        }
         let (id, rx) = self.running.as_ref()?;
         let result = match rx.try_recv() {
             Ok(result) => result,
@@ -151,7 +203,11 @@ impl PluginState {
                 .find(|(key, _)| key == &id)
                 .map(|(key, t)| (key, t.clone()))
             {
-                let busy = self.running.as_ref().is_some_and(|(key, _)| key == &id);
+                let busy = self.running.as_ref().is_some_and(|(key, _)| key == &id)
+                    || self
+                        .discovery_running
+                        .as_ref()
+                        .is_some_and(|job| job.id == id);
                 let get_only = matches!(&tool.adapter,Adapter::Http{method,..} if method=="GET");
                 ui.heading(&tool.name);
                 ui.label(&tool.description);
@@ -173,6 +229,7 @@ impl PluginState {
                     draft.profile_name.clear();
                     draft.profile_delete = false;
                     self.token.clear();
+                    self.discovery_token.clear();
                     self.use_saved = false;
                     self.credential_message.clear();
                 }
@@ -194,6 +251,7 @@ impl PluginState {
                                     .changed()
                                 {
                                     self.token.clear();
+                                    self.discovery_token.clear();
                                     self.use_saved = false;
                                     self.credential_message.clear();
                                     draft.settings_message.clear();
@@ -214,6 +272,7 @@ impl PluginState {
                                 }
                                 if profiles_ui(ui, &mut self.settings, draft, &profile_tool) {
                                     self.token.clear();
+                                    self.discovery_token.clear();
                                     self.use_saved = false;
                                     self.credential_message.clear();
                                 }
@@ -250,6 +309,7 @@ impl PluginState {
                                                 draft.endpoint = default_endpoint.clone();
                                                 draft.model = tool.model.clone();
                                                 self.token.clear();
+                                                self.discovery_token.clear();
                                                 self.use_saved = false;
                                                 self.credential_message.clear();
                                                 draft.settings_message =
@@ -309,6 +369,52 @@ impl PluginState {
                         ui.small("凭据绑定当前插件工具、方法及精确接口地址，不写入 JSON。更换地址后不会使用旧凭据；旧条目可在 Windows 凭据管理器中删除。删除前可重新输入并保存，删除不会中止已发出的请求。");
                         if !self.credential_message.is_empty() { ui.label(&self.credential_message); }
                     });
+                    if method == "POST" && plugins::uses_model(body) {
+                        ui.toggle_value(&mut draft.discovery_open, "发现模型 / 检查列表连接");
+                        if draft.discovery_open {
+                            ui.group(|ui| {
+                                let target = crate::model_discovery::target(url);
+                                match &target {
+                                    Ok(target) => { ui.label(format!("将发送 GET {target}")); }
+                                    Err(error) => { ui.weak(error.to_string()); }
+                                }
+                                ui.label("仅查询模型列表，不发送对话或生成请求。查询认证需单独输入临时令牌；不会读取已保存的问答凭据。");
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label("列表查询令牌（可选）");
+                                    ui.add_enabled(!busy, egui::TextEdit::singleline(&mut self.discovery_token).password(true));
+                                    if ui.add_enabled(self.discovery_running.is_none() && self.running.is_none() && target.is_ok() && connection_valid, egui::Button::new("查询模型列表")).clicked() {
+                                        let source = url.clone();
+                                        let token = std::mem::take(&mut self.discovery_token);
+                                        let (sender, receiver) = mpsc::channel();
+                                        self.discovery_running = Some(DiscoveryJob { id: id.clone(), source: source.clone(), settings_key: settings_key.clone(), receiver });
+                                        draft.models.clear();
+                                        draft.models_source = source.clone();
+                                        draft.discovery_message = "查询中，最长 10 秒；可切换页面".into();
+                                        std::thread::spawn(move || {
+                                            let result = crate::model_discovery::fetch(&source, token).map_err(|e| e.to_string());
+                                            let _ = sender.send(result);
+                                        });
+                                    }
+                                });
+                                if draft.models_source == *url {
+                                    if !draft.discovery_message.is_empty() { ui.label(&draft.discovery_message); }
+                                    if !draft.models.is_empty() {
+                                        ui.add_enabled_ui(!busy, |ui| {
+                                            egui::ComboBox::from_id_salt("discovered-models")
+                                                .selected_text("选择模型并填入名称").width(280.0).show_ui(ui, |ui| {
+                                                    for model in &draft.models {
+                                                        if ui.selectable_label(draft.model == *model, model).clicked() {
+                                                            draft.model = model.clone();
+                                                            draft.settings_message.clear();
+                                                        }
+                                                    }
+                                                });
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    }
                 } else {
                     ui.label("本地配方 · 无网络请求");
                 }
@@ -347,12 +453,15 @@ impl PluginState {
                     && ui.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
                 if (ui
                     .add_enabled(
-                        self.running.is_none() && connection_valid,
+                        self.running.is_none()
+                            && self.discovery_running.is_none()
+                            && connection_valid,
                         egui::Button::new("运行工具 · Ctrl Enter"),
                     )
                     .clicked()
                     || shortcut)
                     && self.running.is_none()
+                    && self.discovery_running.is_none()
                     && connection_valid
                 {
                     let (input, model, token) = (
@@ -498,7 +607,10 @@ impl PluginState {
         }
         ui.add_space(14.0);
         if ui
-            .add_enabled(self.running.is_none(), egui::Button::new("刷新已安装清单"))
+            .add_enabled(
+                self.running.is_none() && self.discovery_running.is_none(),
+                egui::Button::new("刷新已安装清单"),
+            )
             .clicked()
         {
             self.store = Store::load(self.store.root.clone());
@@ -537,7 +649,7 @@ impl PluginState {
                     ui.horizontal_wrapped(|ui| {
                         if ui
                             .add_enabled(
-                                self.running.is_none(),
+                                self.running.is_none() && self.discovery_running.is_none(),
                                 egui::Button::new(if package.enabled {
                                     "停用"
                                 } else if m
@@ -555,7 +667,10 @@ impl PluginState {
                             action = Some(Action::Enable(m.id.clone(), !package.enabled));
                         }
                         if ui
-                            .add_enabled(self.running.is_none(), egui::Button::new("卸载"))
+                            .add_enabled(
+                                self.running.is_none() && self.discovery_running.is_none(),
+                                egui::Button::new("卸载"),
+                            )
                             .clicked()
                         {
                             self.pending_remove = Some(m.id.clone());
@@ -765,6 +880,48 @@ fn execute_with_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn discovery_result_returns_to_source_tool_and_discards_changed_destination() {
+        let root = std::env::temp_dir().join(format!("zi-discovery-ui-{}", uuid::Uuid::new_v4()));
+        let mut state = PluginState::new(root);
+        state.drafts.insert(
+            "first".into(),
+            Draft {
+                endpoint: "http://localhost:1234/v1/chat/completions".into(),
+                settings_key: "original".into(),
+                ..Default::default()
+            },
+        );
+        for changed in [false, true] {
+            let (sender, receiver) = mpsc::channel();
+            state.discovery_running = Some(DiscoveryJob {
+                id: "first".into(),
+                source: "http://localhost:1234/v1/chat/completions".into(),
+                settings_key: "original".into(),
+                receiver,
+            });
+            state.discovery_token = "synthetic-only".into();
+            state.select("second");
+            state.clear_token();
+            assert!(state.discovery_token.is_empty());
+            if changed {
+                let draft = state.drafts.get_mut("first").unwrap();
+                draft.endpoint = "http://localhost:4321/v1/chat/completions".into();
+                draft.models.clear();
+            }
+            sender
+                .send(Ok(crate::model_discovery::Report {
+                    models: vec!["fixture".into()],
+                    elapsed_ms: 1,
+                }))
+                .unwrap();
+            assert!(state.is_running());
+            assert!(state.poll().is_some());
+            assert!(!state.is_running());
+            assert_eq!(state.drafts["first"].models.is_empty(), changed);
+            assert!(!state.drafts.contains_key("second"));
+        }
+    }
     #[cfg(windows)]
     #[test]
     #[ignore = "explicit isolated Windows vault and localhost HTTP integration"]

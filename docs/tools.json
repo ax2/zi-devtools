@@ -469,10 +469,10 @@
     {
       "id": "model-profiles",
       "name": "模型连接配置",
-      "status": "planned",
+      "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "多提供商连接档案、系统凭据存储、连通测试与明确的数据去向"
+      "scope": "已支持命名连接档案、工具级系统凭据、OpenAI/Ollama 模型发现与列表连接检查；通用提供商配置及生成能力验证待补"
     },
     {
       "id": "model-chat",
@@ -736,7 +736,7 @@
       "status": "in-progress",
       "category": "插件平台",
       "priority": "P1",
-      "scope": "已接入 Windows 凭据管理器、地址/模型设置及跨工具命名连接档案；支持兼容性筛选与快照应用；待补通用设置 schema 和连接测试"
+      "scope": "已接入 Windows 凭据管理器、地址/模型设置及跨工具命名档案，支持模型列表连接检查；待补通用设置 schema"
     },
     {
       "id": "plugin-health",
