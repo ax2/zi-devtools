@@ -113,6 +113,7 @@ enum Page {
     Settings,
     Plugins,
     Mcp,
+    Recorder,
     Integrations,
     Frameworks,
 }
@@ -163,7 +164,8 @@ fn tool_category(id: &str) -> &'static str {
         "data" | "data-transform" | "csv-merge" | "json" | "json-path" | "json-diff"
         | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
-        "task-center" | "files" | "services" | "global-launcher" | "file-intake" => "文件与系统",
+        "task-center" | "files" | "services" | "global-launcher" | "file-intake"
+        | "screen-recorder" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
@@ -290,6 +292,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "mcp stdio jsonrpc tool inspector agent 协议 连接 调试".into(),
+        },
+        ToolEntry {
+            id: "screen-recorder".into(),
+            title: "屏幕录制".into(),
+            description: "鼠标框选区域，录制主显示器并保存 MP4".into(),
+            page: Page::Recorder,
+            kind: None,
+            category: String::new(),
+            keywords: "screen recorder capture mp4 视频 录屏 区域 框选".into(),
         },
         ToolEntry {
             id: "services".into(),
@@ -460,6 +471,7 @@ pub struct DevToolsApp {
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
     mcp: crate::mcp_ui::McpState,
+    recorder: crate::recorder_ui::RecorderState,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -469,6 +481,14 @@ pub struct DevToolsApp {
 }
 
 impl DevToolsApp {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_begin_recorder_selection(&mut self) {
+        self.recorder.preview_begin_selection();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_recorder_region(&self) -> Option<crate::recorder::Region> {
+        self.recorder.preview_region()
+    }
     /// Only compiled for the isolated screenshot fixture, never a production entry point.
     #[cfg(feature = "ui-preview")]
     pub fn preview_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: PathBuf) {
@@ -533,6 +553,10 @@ impl DevToolsApp {
             98 | 99 => {
                 self.page = Page::Mcp;
                 self.mcp.preview_fixture();
+            }
+            100 | 101 => {
+                self.page = Page::Recorder;
+                self.recorder.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -874,6 +898,7 @@ impl DevToolsApp {
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: Default::default(),
+            recorder: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1204,6 +1229,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Tasks, "后台任务中心");
                         nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
                         nav_button(ui, &mut self.page, Page::Mcp, "MCP 协议调试台");
+                        nav_button(ui, &mut self.page, Page::Recorder, "屏幕录制");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Frameworks, "Java / Django 诊断");
                         ui.add_space(10.0);
@@ -1231,7 +1257,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 26  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 27  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3202,6 +3228,9 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.recorder.poll() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         self.poll_tasks(ctx);
         if let Some(message) = self.frameworks.poll() {
             self.toast = Some((message, Instant::now()));
@@ -3397,6 +3426,11 @@ impl eframe::App for DevToolsApp {
                         .id_salt("mcp-page")
                         .show(ui, |ui| self.mcp.ui(ui));
                 }
+                Page::Recorder => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("recorder-page")
+                        .show(ui, |ui| self.recorder.ui(ui));
+                }
                 Page::Frameworks => {
                     let before = self.frameworks.selected;
                     ui.horizontal(|ui| {
@@ -3431,6 +3465,7 @@ impl eframe::App for DevToolsApp {
         self.handoff_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
+        self.recorder.selection_overlay(ctx);
         if self.clear_tool_confirm {
             egui::Window::new("清空当前工具？")
                 .collapsible(false)

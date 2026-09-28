@@ -32,3 +32,7 @@ pub mod mcp;
 pub mod mcp_ui;
 pub mod model_discovery;
 pub mod plugin_settings;
+#[cfg(windows)]
+pub mod recorder;
+#[cfg(windows)]
+pub mod recorder_ui;

@@ -7,7 +7,7 @@ use std::{
 };
 use zi_devtools::app::DevToolsApp;
 
-const NAMES: [&str; 100] = [
+const NAMES: [&str; 102] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -108,6 +108,8 @@ const NAMES: [&str; 100] = [
     "prompt-editor-light",
     "mcp-dark",
     "mcp-light",
+    "recorder-dark",
+    "recorder-light",
 ];
 
 struct Capture {
@@ -157,6 +159,26 @@ impl eframe::App for Capture {
         }
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if std::env::args().nth(3).as_deref() == Some("recorder-interaction") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 100, self.fixture.clone());
+                self.app.preview_begin_recorder_selection();
+                std::thread::spawn(drag_recorder_region);
+            }
+            self.app.update(ctx, frame);
+            if let Some(region) = self.app.preview_recorder_region() {
+                if region.x != 180 || region.y != 120 {
+                    println!("PASS recorder drag: {region:?}");
+                    std::process::exit(0);
+                }
+            }
+            if self.started.elapsed() > Duration::from_secs(30) {
+                panic!("recorder drag timed out");
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if self.started.elapsed() > Duration::from_secs(240) {
             panic!("UI capture timed out before verification completed");
         }
@@ -289,6 +311,39 @@ impl eframe::App for Capture {
         ctx.request_repaint_after(Duration::from_millis(60));
     }
 }
+
+#[cfg(windows)]
+fn drag_recorder_region() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::SetCursorPos;
+    use windows_sys::Win32::UI::{
+        Input::KeyboardAndMouse::{MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, mouse_event},
+        WindowsAndMessaging::FindWindowW,
+    };
+    let title: Vec<u16> = "选择录制区域 · Esc 取消\0".encode_utf16().collect();
+    let deadline = Instant::now() + Duration::from_secs(12);
+    while unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) }.is_null() {
+        if Instant::now() >= deadline {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    unsafe {
+        SetCursorPos(200, 200);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+    }
+    for step in 1..=8 {
+        unsafe {
+            SetCursorPos(200 + step * 60, 200 + step * 35);
+        }
+        std::thread::sleep(Duration::from_millis(60));
+    }
+    unsafe {
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+    }
+}
+#[cfg(not(windows))]
+fn drag_recorder_region() {}
 fn main() -> Result<(), eframe::Error> {
     let folder = PathBuf::from(std::env::args().nth(1).expect("capture output directory"));
     fs::create_dir_all(&folder).unwrap();
