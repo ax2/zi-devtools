@@ -17,7 +17,10 @@ ids |= set(re.findall(r'id: "([a-z0-9-]+)"', app[app.index('fn catalog()'):app.i
 ids.add('services')
 framework = (root/'src/framework/mod.rs').read_text(encoding='utf-8')
 ids |= set(re.findall(r'Self::\w+ => "([a-z0-9-]+)"', framework[framework.index('pub fn id'):framework.index('pub fn label')]))
-assert ids == {t['id'] for t in items if t['status']=='implemented'}, 'Source/catalog implemented IDs differ'
+implemented_ids = {t['id'] for t in items if t['status']=='implemented'}
+visible_ids = {t['id'] for t in items if t['status'] in ('implemented', 'in-progress')}
+assert implemented_ids <= ids, 'Implemented catalog entries lack source UI IDs'
+assert ids <= visible_ids, 'Source UI IDs are missing or still marked planned'
 lines = ['# 工具清单与路线图', '', f"更新：{data['updated']} · 已实现版本：v{data['version']}", '', '本文件由 `docs/tools.json` 生成。规划表示方向，不代表已经可用，也不承诺发布日期。', '', '## 已实现', '', '| 工具 | 分类 | 当前范围 |', '| --- | --- | --- |']
 for t in items:
     if t['status']=='implemented': lines.append(f"| {t['name']} | {t['category']} | {t['scope']} |")
@@ -30,7 +33,7 @@ target = root/'docs/tools.md'
 if args.check:
     if not target.exists() or target.read_text(encoding='utf-8') != output: sys.exit('Run python scripts/sync_tools.py and commit docs/tools.md')
 else: target.write_text(output, encoding='utf-8')
-print(f"Catalog OK: {len(ids)} implemented, {len(items)-len(ids)} planned/in progress")
+print(f"Catalog OK: {len(implemented_ids)} implemented, {len(items)-len(implemented_ids)} planned/in progress")
 
 readme = root/'README.md'
 text = readme.read_text(encoding='utf-8')

@@ -54,7 +54,7 @@ pub fn discover() -> String {
             if open { "TCP 可连接" } else { "未连接" }
         ));
     }
-    lines.push("\n集成建议：Ollama / LM Studio 使用插件中心的 HTTP 连接器；AnythingLLM API、Codex CLI 任务、MCP 会话与 RAG 索引仍在规划，不会自动读取它们的数据。".into());
+    lines.push("\n集成建议：Ollama / LM Studio 使用插件中心的 HTTP 连接器；MCP 协议调试台可手动检查本机 stdio 服务。AnythingLLM API、Codex CLI 任务、持久 MCP 会话与 RAG 索引仍在规划，不会自动读取它们的数据。".into());
     lines.join("\n")
 }
 #[derive(Default)]

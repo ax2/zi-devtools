@@ -28,5 +28,7 @@ pub mod chat_attachments;
 pub mod chat_library;
 pub mod chat_stream;
 pub mod conversation;
+pub mod mcp;
+pub mod mcp_ui;
 pub mod model_discovery;
 pub mod plugin_settings;

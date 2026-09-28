@@ -112,6 +112,7 @@ enum Page {
     Files,
     Settings,
     Plugins,
+    Mcp,
     Integrations,
     Frameworks,
 }
@@ -167,6 +168,7 @@ fn tool_category(id: &str) -> &'static str {
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" => "扩展与集成",
+        "mcp-inspector" => "MCP 与 Agent",
         _ => "文本与编码",
     }
 }
@@ -279,6 +281,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "Ollama Codex Docker Python Node 软件".into(),
+        },
+        ToolEntry {
+            id: "mcp-inspector".into(),
+            title: "MCP 协议调试台".into(),
+            description: "本机 stdio 服务能力检查与手动工具调用".into(),
+            page: Page::Mcp,
+            kind: None,
+            category: String::new(),
+            keywords: "mcp stdio jsonrpc tool inspector agent 协议 连接 调试".into(),
         },
         ToolEntry {
             id: "services".into(),
@@ -448,6 +459,7 @@ pub struct DevToolsApp {
     file_state: FileState,
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
+    mcp: crate::mcp_ui::McpState,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -517,6 +529,10 @@ impl DevToolsApp {
                     10,
                 )
                 .unwrap();
+            }
+            98 | 99 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -857,6 +873,7 @@ impl DevToolsApp {
             launcher_focus: false, launcher_index: 0, toast: None,
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
+            mcp: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1186,6 +1203,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Services, "本地服务");
                         nav_button(ui, &mut self.page, Page::Tasks, "后台任务中心");
                         nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
+                        nav_button(ui, &mut self.page, Page::Mcp, "MCP 协议调试台");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Frameworks, "Java / Django 诊断");
                         ui.add_space(10.0);
@@ -1213,7 +1231,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 25  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 26  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1382,7 +1400,7 @@ impl DevToolsApp {
         ui.heading(RichText::new("你的工具工作台").size(30.0));
         ui.label(
             RichText::new(format!(
-                "{} 项内置能力 · {} 项已启用插件工具 · Ctrl K 随时打开",
+                "{} 个内置入口（含开发中） · {} 项已启用插件工具 · Ctrl K 随时打开",
                 catalog().len(),
                 self.plugins.store.tool_refs().count()
             ))
@@ -3373,6 +3391,11 @@ impl eframe::App for DevToolsApp {
                     {
                         self.visit(&id);
                     }
+                }
+                Page::Mcp => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("mcp-page")
+                        .show(ui, |ui| self.mcp.ui(ui));
                 }
                 Page::Frameworks => {
                     let before = self.frameworks.selected;

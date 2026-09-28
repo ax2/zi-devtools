@@ -20,6 +20,7 @@ pub const CATEGORIES: &[&str] = &[
     "AI 与模型",
     "知识与检索",
     "扩展与集成",
+    "MCP 与 Agent",
     "Java 与 JVM",
     "Python 与 Django",
 ];
