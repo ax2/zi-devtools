@@ -1050,6 +1050,8 @@ impl DevToolsApp {
                     self.last_refresh = Instant::now() - Duration::from_secs(30);
                 }
                 BackgroundEvent::TrayNavigate(action) => match action {
+                    TrayAction::RecorderTogglePause => self.recorder.toggle_pause(),
+                    TrayAction::RecorderStop => self.recorder.request_stop(),
                     TrayAction::QuickPanel => self.open_quick(ctx),
                     TrayAction::ShowWindow => {
                         self.quick_open = false;
@@ -1257,7 +1259,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 27  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 28  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3056,6 +3058,10 @@ fn start_tray_bridge(
                         let _ = tx.send(BackgroundEvent::TrayNavigate(action));
                         restore_main_window(window_handle, &ctx);
                     }
+                    action @ (TrayAction::RecorderTogglePause | TrayAction::RecorderStop) => {
+                        let _ = tx.send(BackgroundEvent::TrayNavigate(action));
+                        ctx.request_repaint();
+                    }
                     TrayAction::Exit => {
                         exit_requested.store(true, Ordering::Release);
                         restore_main_window(window_handle, &ctx);
@@ -3085,6 +3091,8 @@ fn start_tray_bridge(
                                 | TrayAction::Settings
                                 | TrayAction::OpenEntry(_)
                                 | TrayAction::Collection(_)
+                                | TrayAction::RecorderTogglePause
+                                | TrayAction::RecorderStop
                                 | TrayAction::Exit => unreachable!(),
                             };
                             let _ = tx.send(BackgroundEvent::Action(result));
@@ -3297,11 +3305,12 @@ impl eframe::App for DevToolsApp {
                 .collect(),
             &self.preferences,
         );
-        if let Some(tray) = &mut self.tray
-            && let Err(error) = tray.sync_navigation(model)
-        {
-            self.notification = format!("托盘快捷菜单更新失败：{error}");
-            self.notification_error = true;
+        if let Some(tray) = &mut self.tray {
+            tray.update_recorder(self.recorder.tray_status());
+            if let Err(error) = tray.sync_navigation(model) {
+                self.notification = format!("托盘快捷菜单更新失败：{error}");
+                self.notification_error = true;
+            }
         }
 
         if self.tray_exit_requested.swap(false, Ordering::AcqRel) {

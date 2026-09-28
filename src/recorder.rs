@@ -237,6 +237,27 @@ pub fn primary_size() -> Result<(u32, u32)> {
     Ok((m.width()?, m.height()?))
 }
 pub fn start(region: Region, output: PathBuf, audio: AudioMode) -> Result<Session> {
+    validate_request(region, &output)?;
+    let (tx, events) = unbounded();
+    let stop = Arc::new(AtomicBool::new(false));
+    let pause = Arc::new(PauseClock::default());
+    let stop_worker = stop.clone();
+    let pause_worker = pause.clone();
+    let worker = thread::spawn(move || {
+        let result = record(region, &output, audio, pause_worker, &stop_worker, &tx);
+        let _ = tx.send(Event::Finished(
+            result.map(|_| output).map_err(|e| format!("{e:#}")),
+        ));
+    });
+    Ok(Session {
+        stop,
+        pause,
+        events,
+        worker: Some(worker),
+    })
+}
+
+pub fn validate_request(region: Region, output: &Path) -> Result<()> {
     let (width, height) = primary_size()?;
     if !region.fits(width, height) {
         bail!("选区超出主显示器，或尺寸小于 32 像素");
@@ -255,23 +276,7 @@ pub fn start(region: Region, output: PathBuf, audio: AudioMode) -> Result<Sessio
     if !parent.is_dir() {
         bail!("输出文件夹不存在");
     }
-    let (tx, events) = unbounded();
-    let stop = Arc::new(AtomicBool::new(false));
-    let pause = Arc::new(PauseClock::default());
-    let stop_worker = stop.clone();
-    let pause_worker = pause.clone();
-    let worker = thread::spawn(move || {
-        let result = record(region, &output, audio, pause_worker, &stop_worker, &tx);
-        let _ = tx.send(Event::Finished(
-            result.map(|_| output).map_err(|e| format!("{e:#}")),
-        ));
-    });
-    Ok(Session {
-        stop,
-        pause,
-        events,
-        worker: Some(worker),
-    })
+    Ok(())
 }
 
 fn record(

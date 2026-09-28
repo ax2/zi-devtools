@@ -1,10 +1,42 @@
 use crate::recorder::{self, AudioMode, Event, Region, Session};
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrayRecordingStatus {
+    Idle,
+    Countdown,
+    Starting,
+    Recording,
+    Paused,
+    Saving,
+}
+
+fn next_output_path(folder: &Path) -> PathBuf {
+    let stem = format!(
+        "Zi-Recording-{}",
+        chrono::Local::now().format("%Y%m%d-%H%M%S")
+    );
+    available_named_path(folder, &stem)
+}
+
+fn available_named_path(folder: &Path, stem: &str) -> PathBuf {
+    let first = folder.join(format!("{stem}.mp4"));
+    if !first.exists() {
+        return first;
+    }
+    for suffix in 2..=10_000 {
+        let candidate = folder.join(format!("{stem}-{suffix}.mp4"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    folder.join(format!("{stem}-{}.mp4", uuid::Uuid::new_v4()))
+}
 
 pub struct RecorderState {
     selecting: bool,
@@ -45,6 +77,57 @@ impl Default for RecorderState {
 }
 
 impl RecorderState {
+    pub fn tray_status(&self) -> TrayRecordingStatus {
+        if self.countdown_deadline.is_some() {
+            return TrayRecordingStatus::Countdown;
+        }
+        let Some(session) = &self.session else {
+            return TrayRecordingStatus::Idle;
+        };
+        if session.stop.load(Ordering::Acquire) {
+            TrayRecordingStatus::Saving
+        } else if self.started.is_none() {
+            TrayRecordingStatus::Starting
+        } else if session.pause.is_paused() {
+            TrayRecordingStatus::Paused
+        } else {
+            TrayRecordingStatus::Recording
+        }
+    }
+
+    pub fn toggle_pause(&mut self) {
+        if !matches!(
+            self.tray_status(),
+            TrayRecordingStatus::Recording | TrayRecordingStatus::Paused
+        ) {
+            return;
+        }
+        let Some(session) = &self.session else { return };
+        let was_paused = session.pause.is_paused();
+        session.pause.set_paused(!was_paused);
+        if was_paused {
+            if let Some(at) = self.pause_started.take() {
+                self.paused_time += at.elapsed();
+            }
+            self.status = "正在录制…".into();
+        } else {
+            self.pause_started = Some(Instant::now());
+            self.status = "已暂停".into();
+        }
+    }
+
+    pub fn request_stop(&mut self) {
+        if self.countdown_deadline.take().is_some() {
+            self.status = "已取消录制".into();
+            return;
+        }
+        if let Some(session) = &self.session
+            && !session.stop.swap(true, Ordering::AcqRel)
+        {
+            self.status = "正在完成 MP4 文件…".into();
+        }
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_begin_selection(&mut self) {
         self.selecting = true;
@@ -91,6 +174,12 @@ impl RecorderState {
                         match result {
                             Ok(path) => {
                                 self.status = "录制完成，MP4 已保存".into();
+                                if self.output.trim() == path.to_string_lossy()
+                                    && let Some(parent) = path.parent()
+                                {
+                                    self.output =
+                                        next_output_path(parent).to_string_lossy().into_owned();
+                                }
                                 self.last_file = Some(path);
                                 self.error = false;
                             }
@@ -187,13 +276,7 @@ impl RecorderState {
             let directory = dirs::video_dir()
                 .or_else(dirs::document_dir)
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-            self.output = directory
-                .join(format!(
-                    "Zi-Recording-{}.mp4",
-                    chrono::Local::now().format("%Y%m%d-%H%M%S")
-                ))
-                .to_string_lossy()
-                .into_owned();
+            self.output = next_output_path(&directory).to_string_lossy().into_owned();
         }
         ui.label("保存位置");
         ui.horizontal(|ui| {
@@ -254,13 +337,20 @@ impl RecorderState {
                 )
                 .clicked()
             {
-                if self.countdown_seconds == 0 {
-                    self.begin_recording();
-                } else {
-                    self.countdown_deadline =
-                        Some(Instant::now() + Duration::from_secs(self.countdown_seconds));
-                    self.status = "倒计时中，请准备录制区域".into();
-                    self.error = false;
+                if let Some(region) = self.region {
+                    match recorder::validate_request(region, Path::new(self.output.trim())) {
+                        Ok(()) if self.countdown_seconds == 0 => self.begin_recording(),
+                        Ok(()) => {
+                            self.countdown_deadline =
+                                Some(Instant::now() + Duration::from_secs(self.countdown_seconds));
+                            self.status = "倒计时中，请准备录制区域".into();
+                            self.error = false;
+                        }
+                        Err(e) => {
+                            self.status = format!("无法开始录制：{e:#}");
+                            self.error = true;
+                        }
+                    }
                 }
             }
             if self.countdown_deadline.is_some() && ui.button("取消倒计时").clicked() {
@@ -278,16 +368,7 @@ impl RecorderState {
                     )
                     .clicked()
                 {
-                    session.pause.set_paused(!paused);
-                    if paused {
-                        if let Some(at) = self.pause_started.take() {
-                            self.paused_time += at.elapsed();
-                        }
-                        self.status = "正在录制…".into();
-                    } else {
-                        self.pause_started = Some(Instant::now());
-                        self.status = "已暂停".into();
-                    }
+                    self.toggle_pause();
                 }
             }
             if ui
@@ -310,10 +391,7 @@ impl RecorderState {
                 )
                 .clicked()
             {
-                if let Some(s) = &self.session {
-                    s.stop.store(true, Ordering::Release);
-                    self.status = "正在完成 MP4 文件…".into();
-                }
+                self.request_stop();
             }
             if let Some(started) = self.started {
                 let duration = started
@@ -455,5 +533,104 @@ impl Drop for RecorderState {
         if let Some(s) = &mut self.session {
             s.stop_and_join();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn consecutive_recordings_get_new_names_without_overwriting() {
+        let folder =
+            std::env::temp_dir().join(format!("zi-recorder-names-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let first = super::available_named_path(&folder, "Zi-Recording-fixed");
+        std::fs::write(&first, b"first video").unwrap();
+        let second = super::available_named_path(&folder, "Zi-Recording-fixed");
+        std::fs::write(&second, b"second video").unwrap();
+        let third = super::available_named_path(&folder, "Zi-Recording-fixed");
+        assert_eq!(second.file_name().unwrap(), "Zi-Recording-fixed-2.mp4");
+        assert_eq!(third.file_name().unwrap(), "Zi-Recording-fixed-3.mp4");
+        assert_eq!(std::fs::read(&first).unwrap(), b"first video");
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn tray_stop_cancels_countdown_before_capture_starts() {
+        let mut state = super::RecorderState::default();
+        state.countdown_deadline =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+        assert_eq!(state.tray_status(), super::TrayRecordingStatus::Countdown);
+        state.request_stop();
+        assert_eq!(state.tray_status(), super::TrayRecordingStatus::Idle);
+        assert!(state.session.is_none());
+    }
+
+    #[test]
+    #[ignore = "needs an unlocked interactive Windows desktop and working H.264 encoder"]
+    fn pause_resume_and_stop_commands_finalize_a_real_video() {
+        use super::{RecorderState, TrayRecordingStatus};
+        use crate::recorder::{self, AudioMode, Region};
+        use std::{
+            sync::atomic::Ordering,
+            time::{Duration, Instant},
+        };
+        let (width, height) = recorder::primary_size().unwrap();
+        let region = Region {
+            x: 0,
+            y: 0,
+            width: width.min(640) & !1,
+            height: height.min(360) & !1,
+        };
+        let path =
+            std::env::temp_dir().join(format!("zi-recorder-controls-{}.mp4", uuid::Uuid::new_v4()));
+        let mut state = RecorderState::default();
+        state.region = Some(region);
+        state.output = path.to_string_lossy().into_owned();
+        state.audio = AudioMode::None;
+        state.countdown_seconds = 0;
+        state.begin_recording();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Starting);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while state.tray_status() == TrayRecordingStatus::Starting && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            state.tray_status(),
+            TrayRecordingStatus::Recording,
+            "{}",
+            state.status
+        );
+        std::thread::sleep(Duration::from_millis(700));
+        state.toggle_pause();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Paused);
+        std::thread::sleep(Duration::from_millis(900));
+        state.toggle_pause();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Recording);
+        std::thread::sleep(Duration::from_millis(700));
+        state.request_stop();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Saving);
+        assert!(state.session.as_ref().unwrap().stop.load(Ordering::Acquire));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while state.tray_status() != TrayRecordingStatus::Idle && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            state.tray_status(),
+            TrayRecordingStatus::Idle,
+            "{}",
+            state.status
+        );
+        assert_eq!(
+            state.last_file.as_deref(),
+            Some(path.as_path()),
+            "{}",
+            state.status
+        );
+        assert_ne!(state.output, path.to_string_lossy());
+        let data = std::fs::read(&path).unwrap();
+        assert!(data.windows(4).any(|v| v == b"moov"));
+        std::fs::remove_file(path).unwrap();
     }
 }

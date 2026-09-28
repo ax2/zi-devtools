@@ -6,6 +6,7 @@ use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 
+use crate::recorder_ui::TrayRecordingStatus;
 use crate::{config::ServiceSpec, service::ServiceStatus, tools::ToolKind};
 
 const OPEN_ID: &str = "app.open";
@@ -38,6 +39,8 @@ pub enum TrayAction {
     OpenEntry(String),
     Collection(String),
     OpenTool(TrayTool),
+    RecorderTogglePause,
+    RecorderStop,
     Start(String),
     Stop(String),
     Restart(String),
@@ -163,6 +166,10 @@ pub struct TrayController {
     start_all: MenuItem,
     stop_all: MenuItem,
     summary: MenuItem,
+    recorder_status: MenuItem,
+    recorder_pause: MenuItem,
+    recorder_stop: MenuItem,
+    recorder_snapshot: TrayRecordingStatus,
     service_menus: HashMap<String, Submenu>,
     status_items: HashMap<String, MenuItem>,
     start_items: HashMap<String, MenuItem>,
@@ -181,6 +188,17 @@ impl TrayController {
         let open = MenuItem::with_id(OPEN_ID, "打开主窗口", true, None);
         let quick = MenuItem::with_id("app.quick", "快捷面板…", true, None);
         let search = MenuItem::with_id("app.search", "搜索工具…", true, None);
+        let recorder_menu = Submenu::new("屏幕录制", true);
+        let recorder_status = MenuItem::new("尚未录制", false, None);
+        let recorder_pause = MenuItem::with_id("recorder.pause", "暂停录制", false, None);
+        let recorder_stop = MenuItem::with_id("recorder.stop", "停止并保存", false, None);
+        recorder_menu.append_items(&[
+            &MenuItem::with_id("entry.screen-recorder", "打开录屏工具…", true, None),
+            &PredefinedMenuItem::separator(),
+            &recorder_status,
+            &recorder_pause,
+            &recorder_stop,
+        ])?;
         let summary = MenuItem::new("正在读取服务状态…", false, None);
         let favorites = Submenu::new("★  收藏", true);
         let recent = Submenu::new("最近使用", true);
@@ -192,6 +210,7 @@ impl TrayController {
             &open,
             &quick,
             &search,
+            &recorder_menu,
             &PredefinedMenuItem::separator(),
             &favorites,
             &recent,
@@ -260,6 +279,10 @@ impl TrayController {
             start_all,
             stop_all,
             summary,
+            recorder_status,
+            recorder_pause,
+            recorder_stop,
+            recorder_snapshot: TrayRecordingStatus::Idle,
             service_menus,
             status_items,
             start_items,
@@ -309,6 +332,28 @@ impl TrayController {
         }
         self.snapshot = Some(model);
         Ok(())
+    }
+
+    pub fn update_recorder(&mut self, state: TrayRecordingStatus) {
+        if self.recorder_snapshot == state {
+            return;
+        }
+        self.recorder_snapshot = state;
+        let (label, pause_label, stop_label, can_pause, can_stop) = match state {
+            TrayRecordingStatus::Idle => ("尚未录制", "暂停录制", "停止并保存", false, false),
+            TrayRecordingStatus::Countdown => ("倒计时中", "暂停录制", "取消倒计时", false, true),
+            TrayRecordingStatus::Starting => ("正在启动…", "暂停录制", "停止并保存", false, true),
+            TrayRecordingStatus::Recording => ("● 正在录制", "暂停录制", "停止并保存", true, true),
+            TrayRecordingStatus::Paused => ("Ⅱ 已暂停", "继续录制", "停止并保存", true, true),
+            TrayRecordingStatus::Saving => {
+                ("正在保存 MP4…", "暂停录制", "停止并保存", false, false)
+            }
+        };
+        self.recorder_status.set_text(label);
+        self.recorder_pause.set_text(pause_label);
+        self.recorder_stop.set_text(stop_label);
+        self.recorder_pause.set_enabled(can_pause);
+        self.recorder_stop.set_enabled(can_stop);
     }
 
     pub fn poll_actions() -> Vec<TrayAction> {
@@ -404,6 +449,8 @@ fn action_from_menu_id(id: &str) -> Option<TrayAction> {
         "app.quick" => Some(TrayAction::QuickPanel),
         "app.search" => Some(TrayAction::Search),
         "app.settings" => Some(TrayAction::Settings),
+        "recorder.pause" => Some(TrayAction::RecorderTogglePause),
+        "recorder.stop" => Some(TrayAction::RecorderStop),
         OPEN_ID => Some(TrayAction::ShowWindow),
         "tool.http" => Some(TrayAction::OpenTool(TrayTool::Http)),
         "tool.diff" => Some(TrayAction::OpenTool(TrayTool::Diff)),
@@ -556,6 +603,14 @@ mod tests {
 
     #[test]
     fn maps_each_service_menu_item_to_its_own_action() {
+        assert_eq!(
+            action_from_menu_id("recorder.pause"),
+            Some(TrayAction::RecorderTogglePause)
+        );
+        assert_eq!(
+            action_from_menu_id("recorder.stop"),
+            Some(TrayAction::RecorderStop)
+        );
         assert_eq!(
             action_from_menu_id("service.start.api.dev"),
             Some(TrayAction::Start("api.dev".to_owned()))
