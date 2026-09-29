@@ -42,6 +42,7 @@ pub enum AudioMode {
     None,
     System,
     Microphone,
+    SystemAndMicrophone,
 }
 impl Region {
     pub fn from_points(
@@ -333,6 +334,15 @@ fn record_to_temp(
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
 ) -> Result<()> {
+    // Device startup may take seconds. Complete it before the video clock begins so that the
+    // output never includes an invisible pre-roll while the UI still says "starting".
+    let mut audio_timeline = AudioTimeline::new(audio).context("音频设备启动失败")?;
+    if let Some(timeline) = &mut audio_timeline
+        && let Err(error) = timeline.discard_initial()
+    {
+        let _ = timeline.stop();
+        return Err(error.context("清理音频启动缓冲失败"));
+    }
     let settings = Settings::new(
         Monitor::primary()?,
         CursorCaptureSettings::WithCursor,
@@ -343,36 +353,39 @@ fn record_to_temp(
         ColorFormat::Bgra8,
         (region, output.to_path_buf(), audio, pause.clone()),
     );
-    let control =
-        Capture::start_free_threaded(settings).map_err(|e| anyhow!("捕获启动失败：{e}"))?;
-    let callback = control.callback();
-    let mut audio_input = if audio == AudioMode::None {
-        None
-    } else {
-        match AudioInput::new(audio) {
-            Ok(input) => Some(input),
-            Err(e) => {
-                let _ = control.stop();
-                return Err(e.context("音频设备启动失败"));
+    let control = match Capture::start_free_threaded(settings) {
+        Ok(control) => control,
+        Err(error) => {
+            if let Some(timeline) = &mut audio_timeline {
+                let _ = timeline.stop();
             }
+            return Err(anyhow!("捕获启动失败：{error}"));
         }
     };
+    let callback = control.callback();
+    let capture_started = callback.lock().started;
     let _ = tx.send(Event::Started);
     while !stop.load(Ordering::Acquire) && !control.is_finished() {
-        if let Some(input) = &mut audio_input {
-            if let Err(e) = input.drain_into(&callback, !pause.is_paused()) {
+        if let Some(timeline) = &mut audio_timeline {
+            if let Err(e) = timeline.tick(&callback, pause.elapsed_since(capture_started)) {
+                let _ = timeline.stop();
                 let _ = control.stop();
                 return Err(e.context("音频捕获失败"));
             }
         }
-        thread::sleep(Duration::from_millis(if audio_input.is_some() {
+        thread::sleep(Duration::from_millis(if audio_timeline.is_some() {
             10
         } else {
             80
         }));
     }
-    let audio_stop = audio_input.as_mut().map(|input| input.stop()).transpose();
+    let audio_tail = audio_timeline
+        .as_mut()
+        .map(|timeline| timeline.tick(&callback, Some(pause.duration_at_stop(capture_started))))
+        .transpose();
+    let audio_stop = audio_timeline.as_mut().map(AudioTimeline::stop).transpose();
     let capture_stop = control.stop().map_err(|e| anyhow!("停止捕获失败：{e}"));
+    audio_tail?;
     audio_stop?;
     capture_stop?;
     let encoder = {
@@ -392,15 +405,10 @@ struct AudioInput {
     bytes: std::collections::VecDeque<u8>,
 }
 impl AudioInput {
-    fn new(mode: AudioMode) -> Result<Self> {
+    fn new(direction: Direction) -> Result<Self> {
         wasapi::initialize_mta()
             .ok()
             .map_err(|e| anyhow!("初始化音频 COM 失败：{e}"))?;
-        let direction = if mode == AudioMode::System {
-            Direction::Render
-        } else {
-            Direction::Capture
-        };
         let device = DeviceEnumerator::new()?.get_default_device(&direction)?;
         let mut client = device.get_iaudioclient()?;
         let format = WaveFormat::new(16, 16, &SampleType::Int, 48_000, 2, None);
@@ -421,32 +429,169 @@ impl AudioInput {
             bytes: std::collections::VecDeque::new(),
         })
     }
-    fn drain_into(
-        &mut self,
-        callback: &std::sync::Arc<parking_lot::Mutex<Capture>>,
-        encode: bool,
-    ) -> Result<()> {
+    fn drain_bytes(&mut self) -> Result<Vec<u8>> {
         for _ in 0..32 {
             if self.capture.get_next_packet_size()?.unwrap_or(0) == 0 {
                 break;
             }
             self.capture.read_from_device_to_deque(&mut self.bytes)?;
         }
-        if !self.bytes.is_empty() && encode {
-            let chunk: Vec<u8> = self.bytes.drain(..).collect();
+        Ok(self.bytes.drain(..).collect())
+    }
+    fn stop(&mut self) -> Result<()> {
+        self.client.stop_stream()?;
+        Ok(())
+    }
+}
+
+const AUDIO_RATE: u64 = 48_000;
+const AUDIO_CHANNELS: usize = 2;
+const AUDIO_CHUNK_FRAMES: usize = 480;
+const MAX_PENDING_AUDIO_FRAMES: usize = 4_800;
+
+struct PcmMixer {
+    queues: Vec<std::collections::VecDeque<i16>>,
+    sent_frames: u64,
+}
+impl PcmMixer {
+    fn new(sources: usize) -> Self {
+        assert!((1..=2).contains(&sources));
+        Self {
+            queues: (0..sources)
+                .map(|_| std::collections::VecDeque::new())
+                .collect(),
+            sent_frames: 0,
+        }
+    }
+    fn push(&mut self, source: usize, bytes: &[u8]) -> Result<()> {
+        if !bytes
+            .len()
+            .is_multiple_of(AUDIO_CHANNELS * std::mem::size_of::<i16>())
+        {
+            bail!("音频设备返回了不完整的 PCM 采样帧");
+        }
+        let queue = &mut self.queues[source];
+        queue.extend(
+            bytes
+                .chunks_exact(2)
+                .map(|sample| i16::from_le_bytes([sample[0], sample[1]])),
+        );
+        let excess = queue
+            .len()
+            .saturating_sub(MAX_PENDING_AUDIO_FRAMES * AUDIO_CHANNELS);
+        queue.drain(..excess);
+        Ok(())
+    }
+    fn clear_pending(&mut self) {
+        for queue in &mut self.queues {
+            queue.clear();
+        }
+    }
+    fn next_chunk(&mut self, target_frames: u64) -> Option<Vec<u8>> {
+        let remaining = target_frames.saturating_sub(self.sent_frames);
+        if remaining == 0 {
+            return None;
+        }
+        let frames = remaining.min(AUDIO_CHUNK_FRAMES as u64) as usize;
+        let mut bytes = Vec::with_capacity(frames * AUDIO_CHANNELS * 2);
+        for _ in 0..frames * AUDIO_CHANNELS {
+            let first = self.queues[0].pop_front().unwrap_or(0) as i32;
+            let mixed = if self.queues.len() == 2 {
+                let second = self.queues[1].pop_front().unwrap_or(0) as i32;
+                ((first + second) / 2) as i16
+            } else {
+                first as i16
+            };
+            bytes.extend_from_slice(&mixed.to_le_bytes());
+        }
+        self.sent_frames += frames as u64;
+        Some(bytes)
+    }
+}
+
+fn audio_frames_at(elapsed: Duration) -> u64 {
+    (elapsed.as_nanos().saturating_mul(AUDIO_RATE as u128) / 1_000_000_000).min(u64::MAX as u128)
+        as u64
+}
+
+struct AudioTimeline {
+    inputs: Vec<AudioInput>,
+    mixer: PcmMixer,
+}
+impl AudioTimeline {
+    fn new(mode: AudioMode) -> Result<Option<Self>> {
+        let mut inputs = Vec::new();
+        if matches!(mode, AudioMode::System | AudioMode::SystemAndMicrophone) {
+            inputs.push(AudioInput::new(Direction::Render).context("系统播放设备不可用")?);
+        }
+        if matches!(mode, AudioMode::Microphone | AudioMode::SystemAndMicrophone) {
+            match AudioInput::new(Direction::Capture).context("默认麦克风不可用") {
+                Ok(input) => inputs.push(input),
+                Err(error) => {
+                    for input in &mut inputs {
+                        let _ = input.stop();
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        if inputs.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            mixer: PcmMixer::new(inputs.len()),
+            inputs,
+        }))
+    }
+    fn discard_initial(&mut self) -> Result<()> {
+        for input in &mut self.inputs {
+            for _ in 0..8 {
+                if input.drain_bytes()?.is_empty() {
+                    break;
+                }
+            }
+        }
+        self.mixer.clear_pending();
+        Ok(())
+    }
+    fn tick(
+        &mut self,
+        callback: &std::sync::Arc<parking_lot::Mutex<Capture>>,
+        elapsed: Option<Duration>,
+    ) -> Result<()> {
+        for (index, input) in self.inputs.iter_mut().enumerate() {
+            let bytes = input.drain_bytes()?;
+            if elapsed.is_some() {
+                self.mixer.push(index, &bytes)?;
+            }
+        }
+        let Some(elapsed) = elapsed else {
+            self.mixer.clear_pending();
+            return Ok(());
+        };
+        let target_frames = audio_frames_at(elapsed);
+        while let Some(bytes) = self.mixer.next_chunk(target_frames) {
             callback
                 .lock()
                 .encoder
                 .as_mut()
                 .context("编码器已停止")?
-                .send_audio_buffer(&chunk, 0)?;
+                .send_audio_buffer(&bytes, 0)?;
         }
-        self.bytes.clear();
         Ok(())
     }
     fn stop(&mut self) -> Result<()> {
-        self.client.stop_stream()?;
-        Ok(())
+        let mut first_error = None;
+        for input in &mut self.inputs {
+            if let Err(error) = input.stop() {
+                first_error.get_or_insert(error);
+            }
+        }
+        if let Some(error) = first_error {
+            Err(error)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -512,23 +657,64 @@ mod tests {
         );
     }
     #[test]
+    fn audio_clock_fills_silence_and_resumes_without_replaying_paused_samples() {
+        let mut mixer = super::PcmMixer::new(1);
+        let samples = [1_000i16, -1_000, 2_000, -2_000];
+        let bytes: Vec<_> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        mixer.push(0, &bytes).unwrap();
+        let chunk = mixer.next_chunk(4).unwrap();
+        let output: Vec<_> = chunk
+            .chunks_exact(2)
+            .map(|s| i16::from_le_bytes([s[0], s[1]]))
+            .collect();
+        assert_eq!(output, [1_000, -1_000, 2_000, -2_000, 0, 0, 0, 0]);
+        assert!(mixer.next_chunk(4).is_none());
+        mixer.push(0, &bytes).unwrap();
+        mixer.clear_pending();
+        assert_eq!(mixer.next_chunk(6).unwrap(), vec![0; 8]);
+        assert_eq!(super::audio_frames_at(Duration::from_millis(20)), 960);
+    }
+    #[test]
+    fn audio_mixer_bounds_backlog_and_averages_both_sources() {
+        let mut mixer = super::PcmMixer::new(2);
+        let first: Vec<u8> = (0..5_000i16)
+            .flat_map(|frame| [frame, frame].into_iter().flat_map(i16::to_le_bytes))
+            .collect();
+        mixer.push(0, &first).unwrap();
+        assert_eq!(mixer.queues[0].len(), super::MAX_PENDING_AUDIO_FRAMES * 2);
+        mixer.push(1, &[0xff, 0x7f, 0x00, 0x80]).unwrap();
+        let chunk = mixer.next_chunk(1).unwrap();
+        let left = i16::from_le_bytes([chunk[0], chunk[1]]);
+        let right = i16::from_le_bytes([chunk[2], chunk[3]]);
+        assert_eq!(left, ((200 + i16::MAX as i32) / 2) as i16);
+        assert_eq!(right, ((200 + i16::MIN as i32) / 2) as i16);
+    }
+    #[test]
     #[ignore = "needs an unlocked interactive Windows desktop and a working H.264 encoder"]
     fn records_a_playable_mp4_on_the_real_desktop() {
-        record_smoke(AudioMode::None);
+        record_smoke(AudioMode::None, false);
     }
     #[test]
     #[ignore = "needs an unlocked interactive desktop and default playback device"]
     fn records_system_audio_with_video() {
-        record_smoke(AudioMode::System);
+        record_smoke(AudioMode::System, false);
     }
     #[test]
     #[ignore = "needs an unlocked interactive desktop and default microphone"]
     fn records_microphone_with_video() {
-        record_smoke(AudioMode::Microphone);
+        record_smoke(AudioMode::Microphone, false);
     }
-    fn record_smoke(audio: AudioMode) {
+    #[test]
+    #[ignore = "needs an unlocked interactive desktop and default playback and microphone devices"]
+    fn records_system_and_microphone_with_video() {
+        record_smoke(AudioMode::SystemAndMicrophone, true);
+    }
+    fn record_smoke(audio: AudioMode, pause_during_capture: bool) {
         static CAPTURE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        let _guard = CAPTURE_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let _guard = CAPTURE_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (w, h) = super::primary_size().unwrap();
         let region = Region {
             x: 0,
@@ -550,7 +736,15 @@ mod tests {
             matches!(first, Event::Started),
             "unexpected recorder event: {first:?}"
         );
-        std::thread::sleep(Duration::from_secs(2));
+        if pause_during_capture {
+            std::thread::sleep(Duration::from_secs(1));
+            session.pause.set_paused(true);
+            std::thread::sleep(Duration::from_secs(1));
+            session.pause.set_paused(false);
+            std::thread::sleep(Duration::from_secs(1));
+        } else {
+            std::thread::sleep(Duration::from_secs(2));
+        }
         session.stop.store(true, Ordering::Release);
         match session
             .events
@@ -573,10 +767,85 @@ mod tests {
                 "MP4 has no audio track"
             );
         }
+        let tracks = mp4_track_durations(&data);
+        let video_seconds = tracks.iter().find(|(kind, _)| *kind == *b"vide").unwrap().1;
+        assert!(
+            (1.0..5.0).contains(&video_seconds),
+            "unexpected video duration: {video_seconds}"
+        );
+        if audio != AudioMode::None {
+            let audio_seconds = tracks.iter().find(|(kind, _)| *kind == *b"soun").unwrap().1;
+            assert!(
+                (1.0..5.0).contains(&audio_seconds),
+                "unexpected audio duration: {audio_seconds}"
+            );
+            assert!(
+                (audio_seconds - video_seconds).abs() < 0.75,
+                "audio/video drift: audio={audio_seconds:.3}s video={video_seconds:.3}s"
+            );
+        }
         if std::env::var_os("ZI_RECORDER_KEEP_SMOKE").is_some() {
             eprintln!("Recorder smoke file: {}", path.display());
         } else {
             std::fs::remove_file(path).unwrap();
         }
+    }
+
+    fn boxes_of<'a>(data: &'a [u8], kind: &[u8; 4]) -> Vec<&'a [u8]> {
+        let mut result = Vec::new();
+        let mut offset = 0usize;
+        while data.len().saturating_sub(offset) >= 8 {
+            let declared = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap());
+            let (size, header) = match declared {
+                0 => (data.len() - offset, 8),
+                1 if data.len().saturating_sub(offset) >= 16 => (
+                    u64::from_be_bytes(data[offset + 8..offset + 16].try_into().unwrap()) as usize,
+                    16,
+                ),
+                _ => (declared as usize, 8),
+            };
+            if size < header || size > data.len() - offset {
+                break;
+            }
+            if &data[offset + 4..offset + 8] == kind {
+                result.push(&data[offset + header..offset + size]);
+            }
+            offset += size;
+        }
+        result
+    }
+    fn mp4_track_durations(data: &[u8]) -> Vec<([u8; 4], f64)> {
+        let mut result = Vec::new();
+        for movie in boxes_of(data, b"moov") {
+            for track in boxes_of(movie, b"trak") {
+                for media in boxes_of(track, b"mdia") {
+                    let Some(handler) = boxes_of(media, b"hdlr").into_iter().next() else {
+                        continue;
+                    };
+                    let Some(header) = boxes_of(media, b"mdhd").into_iter().next() else {
+                        continue;
+                    };
+                    if handler.len() < 12 || header.len() < 20 {
+                        continue;
+                    }
+                    let kind: [u8; 4] = handler[8..12].try_into().unwrap();
+                    let (timescale, duration) = if header[0] == 1 && header.len() >= 32 {
+                        (
+                            u32::from_be_bytes(header[20..24].try_into().unwrap()),
+                            u64::from_be_bytes(header[24..32].try_into().unwrap()),
+                        )
+                    } else {
+                        (
+                            u32::from_be_bytes(header[12..16].try_into().unwrap()),
+                            u32::from_be_bytes(header[16..20].try_into().unwrap()) as u64,
+                        )
+                    };
+                    if timescale > 0 {
+                        result.push((kind, duration as f64 / timescale as f64));
+                    }
+                }
+            }
+        }
+        result
     }
 }

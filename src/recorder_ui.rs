@@ -95,6 +95,12 @@ impl RecorderState {
         }
     }
 
+    pub fn select_audio_mode(&mut self, mode: AudioMode) {
+        if self.session.is_none() && self.countdown_deadline.is_none() {
+            self.audio = mode;
+        }
+    }
+
     pub fn toggle_pause(&mut self) {
         if !matches!(
             self.tray_status(),
@@ -146,6 +152,7 @@ impl RecorderState {
             height: 720,
         });
         self.output = "C:\\Users\\demo\\Videos\\Zi-Recording-20260928-1928.mp4".into();
+        self.audio = AudioMode::SystemAndMicrophone;
         self.status = "区域已选好，点击“开始录制”".into();
     }
     pub fn poll(&mut self) -> bool {
@@ -304,11 +311,17 @@ impl RecorderState {
                         AudioMode::None => "不录声音",
                         AudioMode::System => "系统声音",
                         AudioMode::Microphone => "麦克风",
+                        AudioMode::SystemAndMicrophone => "系统声音 + 麦克风",
                     })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.audio, AudioMode::None, "不录声音");
                         ui.selectable_value(&mut self.audio, AudioMode::System, "系统声音");
                         ui.selectable_value(&mut self.audio, AudioMode::Microphone, "麦克风");
+                        ui.selectable_value(
+                            &mut self.audio,
+                            AudioMode::SystemAndMicrophone,
+                            "系统声音 + 麦克风",
+                        );
                     });
             });
         });
@@ -443,7 +456,9 @@ impl RecorderState {
             });
         }
         ui.add_space(12.0);
-        ui.small("录制主显示器画面和鼠标光标，可选系统声音或麦克风；目前不能同时混录两者。已有同名文件不会被覆盖。");
+        ui.small(
+            "录制主显示器画面和鼠标光标，可录系统声音、麦克风或两者混音。已有同名文件不会被覆盖。",
+        );
     }
 
     pub fn selection_overlay(&mut self, ctx: &egui::Context) {

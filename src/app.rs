@@ -164,8 +164,13 @@ fn tool_category(id: &str) -> &'static str {
         "data" | "data-transform" | "csv-merge" | "json" | "json-path" | "json-diff"
         | "data-schema" | "yaml" => "数据与格式",
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
-        "task-center" | "files" | "services" | "global-launcher" | "file-intake"
-        | "screen-recorder" => "文件与系统",
+        "task-center"
+        | "files"
+        | "services"
+        | "global-launcher"
+        | "file-intake"
+        | "screen-recorder"
+        | "screen-recorder-audio-mix" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
@@ -301,6 +306,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "screen recorder capture mp4 视频 录屏 区域 框选".into(),
+        },
+        ToolEntry {
+            id: "screen-recorder-audio-mix".into(),
+            title: "双声源混录".into(),
+            description: "录屏同时采集系统声音和麦克风".into(),
+            page: Page::Recorder,
+            kind: None,
+            category: String::new(),
+            keywords: "audio mix system microphone 声音 麦克风 录屏 混音".into(),
         },
         ToolEntry {
             id: "services".into(),
@@ -1259,7 +1273,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 28  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 29  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1404,6 +1418,12 @@ impl DevToolsApp {
         } else if e.id == "data-transform" {
             self.page = Page::Data;
             self.data_state.show_transform();
+            self.launcher_open = false;
+            self.visit(&e.id);
+        } else if e.id == "screen-recorder-audio-mix" {
+            self.recorder
+                .select_audio_mode(crate::recorder::AudioMode::SystemAndMicrophone);
+            self.page = Page::Recorder;
             self.launcher_open = false;
             self.visit(&e.id);
         } else if let Some(tool) = crate::framework::Tool::from_id(&e.id) {

@@ -1,6 +1,6 @@
 {
-  "version": "0.28.0",
-  "updated": "2026-09-28",
+  "version": "0.29.0",
+  "updated": "2026-09-29",
   "tools": [
     {
       "id": "json",
@@ -568,7 +568,7 @@
       "status": "implemented",
       "category": "文件与系统",
       "priority": "P1",
-      "scope": "主显示器框选或整屏，H.264 MP4 与光标，倒计时、托盘暂停/继续/停止、连续录制自动建议新文件名，可选系统声音或麦克风；跨显示器选区与双声源混录待规划"
+      "scope": "主显示器框选或整屏，H.264 MP4 与光标，倒计时、托盘暂停/继续/停止、连续录制新文件名，可选静音、系统声、麦克风或双声源；跨屏待规划"
     },
     {
       "id": "screen-recorder-multimonitor",
@@ -581,10 +581,18 @@
     {
       "id": "screen-recorder-audio-mix",
       "name": "双声源混录",
+      "status": "implemented",
+      "category": "文件与系统",
+      "priority": "P2",
+      "scope": "录屏时同时采集系统播放和麦克风，48 kHz 双声道等幅混音，暂停排除与音视频轨道时长校验"
+    },
+    {
+      "id": "screen-recorder-audio-gain",
+      "name": "录屏独立音量调节",
       "status": "planned",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "同时录入系统声音和麦克风，独立增益与同步测试"
+      "scope": "分别调节系统声与麦克风增益、监测电平并验证不同设备时钟下的长时同步"
     },
     {
       "id": "mcp-export",
