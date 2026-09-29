@@ -108,6 +108,95 @@ impl DevToolsApp {
         Ok(())
     }
 
+    fn quick_recorder_controls(&mut self, ui: &mut egui::Ui) {
+        use crate::recorder_ui::TrayRecordingStatus;
+        let status = self.recorder.tray_status();
+        if status == TrayRecordingStatus::Idle {
+            return;
+        }
+        let duration = self.recorder.elapsed_duration();
+        let label = match status {
+            TrayRecordingStatus::Countdown => "即将开始录制".to_owned(),
+            TrayRecordingStatus::Starting => "正在启动录制".to_owned(),
+            TrayRecordingStatus::Recording | TrayRecordingStatus::Paused => {
+                let elapsed = duration.unwrap_or_default().as_secs();
+                format!(
+                    "{}  {:02}:{:02}",
+                    if status == TrayRecordingStatus::Paused {
+                        "已暂停"
+                    } else {
+                        "录制中"
+                    },
+                    elapsed / 60,
+                    elapsed % 60
+                )
+            }
+            TrayRecordingStatus::Saving => "正在保存 MP4".to_owned(),
+            TrayRecordingStatus::Idle => unreachable!(),
+        };
+        enum Action {
+            Pause,
+            Stop,
+        }
+        let mut action = None;
+        egui::Frame::new()
+            .fill(self.colors.surface)
+            .corner_radius(9.0)
+            .inner_margin(10.0)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("●").color(
+                        if status == TrayRecordingStatus::Recording {
+                            self.colors.red
+                        } else {
+                            self.colors.amber
+                        },
+                    ));
+                    ui.strong(label);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if matches!(
+                            status,
+                            TrayRecordingStatus::Countdown
+                                | TrayRecordingStatus::Starting
+                                | TrayRecordingStatus::Recording
+                                | TrayRecordingStatus::Paused
+                        ) && ui
+                            .small_button(if status == TrayRecordingStatus::Countdown {
+                                "取消"
+                            } else {
+                                "停止保存"
+                            })
+                            .clicked()
+                        {
+                            action = Some(Action::Stop);
+                        }
+                        if matches!(
+                            status,
+                            TrayRecordingStatus::Recording | TrayRecordingStatus::Paused
+                        ) && ui
+                            .small_button(if status == TrayRecordingStatus::Paused {
+                                "继续"
+                            } else {
+                                "暂停"
+                            })
+                            .clicked()
+                        {
+                            action = Some(Action::Pause);
+                        }
+                    });
+                });
+            });
+        match action {
+            Some(Action::Pause) => self.recorder.toggle_pause(),
+            Some(Action::Stop) => {
+                self.recorder.request_stop();
+                self.quick_open = false;
+            }
+            None => {}
+        }
+        ui.add_space(12.0);
+    }
+
     pub(super) fn quick_panel(&mut self, ctx: &egui::Context) {
         if !self.quick_open {
             return;
@@ -162,6 +251,7 @@ impl DevToolsApp {
                         });
                     });
                     ui.add_space(14.0);
+                    self.quick_recorder_controls(ui);
                     let response = ui.add_sized(
                         [ui.available_width(), 38.0],
                         egui::TextEdit::singleline(&mut self.launcher_query)

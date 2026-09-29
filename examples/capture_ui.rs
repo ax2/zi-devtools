@@ -128,6 +128,7 @@ struct Capture {
     auto_minimize_smoke_at: Option<Instant>,
     auto_minimize_recording_at: Option<Instant>,
     auto_minimize_smoke_stop_requested: bool,
+    quick_smoke_phase: u8,
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
@@ -168,6 +169,102 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some(
+                "recorder-quick-panel-preview"
+                    | "recorder-quick-panel-smoke"
+                    | "recorder-quick-cancel-smoke"
+            )
+        ) {
+            let interactive = smoke_mode.as_deref() == Some("recorder-quick-panel-smoke");
+            let cancel = smoke_mode.as_deref() == Some("recorder-quick-cancel-smoke");
+            if self.frames == 0 {
+                self.app
+                    .preview_scene(ctx, self.scene, self.fixture.clone());
+                self.app
+                    .preview_start_recorder_auto_minimize(&self.folder, if cancel { 5 } else { 0 })
+                    .unwrap();
+            }
+            self.app.update(ctx, frame);
+            if self.quick_smoke_phase == 0
+                && self.app.preview_minimized()
+                && self.app.preview_recorder_status()
+                    == if cancel {
+                        zi_devtools::recorder_ui::TrayRecordingStatus::Countdown
+                    } else {
+                        zi_devtools::recorder_ui::TrayRecordingStatus::Recording
+                    }
+            {
+                self.app.preview_open_quick(ctx);
+                self.quick_smoke_phase = 1;
+            }
+            if self.quick_smoke_phase == 1 && self.app.preview_panel_rendered() {
+                println!("READY recorder quick panel");
+                self.quick_smoke_phase = 2;
+                if interactive || cancel {
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_millis(300));
+                        click_quick_recorder_control(cancel);
+                    });
+                }
+            }
+            if cancel
+                && self.quick_smoke_phase == 2
+                && self.app.preview_recorder_status()
+                    == zi_devtools::recorder_ui::TrayRecordingStatus::Idle
+                && !self.app.preview_minimized()
+            {
+                assert!(self.app.preview_recorder_last_file().is_none());
+                println!("PASS quick panel countdown cancellation restores window");
+                std::process::exit(0);
+            }
+            if interactive
+                && self.quick_smoke_phase == 2
+                && self.app.preview_recorder_status()
+                    == zi_devtools::recorder_ui::TrayRecordingStatus::Paused
+            {
+                println!("PASS quick panel pause");
+                self.quick_smoke_phase = 3;
+                std::thread::spawn(|| {
+                    std::thread::sleep(Duration::from_millis(300));
+                    click_quick_recorder_control(false);
+                });
+            }
+            if interactive
+                && self.quick_smoke_phase == 3
+                && self.app.preview_recorder_status()
+                    == zi_devtools::recorder_ui::TrayRecordingStatus::Recording
+            {
+                println!("PASS quick panel resume");
+                self.quick_smoke_phase = 4;
+                std::thread::spawn(|| {
+                    std::thread::sleep(Duration::from_millis(300));
+                    click_quick_recorder_control(true);
+                });
+            }
+            if !interactive
+                && !cancel
+                && self.quick_smoke_phase == 2
+                && self.started.elapsed() > Duration::from_secs(30)
+            {
+                self.app.preview_stop_recorder();
+                self.quick_smoke_phase = 4;
+            }
+            if let Some(path) = self.app.preview_recorder_last_file() {
+                assert!(!self.app.preview_minimized());
+                if interactive {
+                    assert_eq!(self.quick_smoke_phase, 4);
+                }
+                fs::remove_file(path).unwrap();
+                println!("PASS recorder quick panel rendered and stopped recording");
+                std::process::exit(0);
+            }
+            assert!(self.started.elapsed() < Duration::from_secs(45));
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some(
@@ -578,6 +675,29 @@ fn drag_recorder_region() {
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }
 }
+#[cfg(windows)]
+fn click_quick_recorder_control(stop: bool) {
+    use windows_sys::Win32::UI::{
+        Input::KeyboardAndMouse::{MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, mouse_event},
+        WindowsAndMessaging::{FindWindowW, GetWindowRect, SetCursorPos},
+    };
+    let title: Vec<u16> = "Zi DevTools · 快捷面板\0".encode_utf16().collect();
+    let window = unsafe { FindWindowW(std::ptr::null_mut(), title.as_ptr()) };
+    assert!(!window.is_null(), "快捷面板窗口未创建");
+    let mut rect = unsafe { std::mem::zeroed() };
+    assert_ne!(unsafe { GetWindowRect(window, &mut rect) }, 0);
+    let width = rect.right - rect.left;
+    let height = rect.bottom - rect.top;
+    let x = rect.left + width * if stop { 87 } else { 69 } / 100;
+    let y = rect.top + height * 17 / 100;
+    unsafe {
+        SetCursorPos(x, y);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+    }
+}
+#[cfg(not(windows))]
+fn click_quick_recorder_control(_stop: bool) {}
 #[cfg(not(windows))]
 fn drag_recorder_region() {}
 fn mp4_boxes<'a>(data: &'a [u8], kind: &[u8; 4]) -> Vec<&'a [u8]> {
@@ -669,6 +789,7 @@ fn main() -> Result<(), eframe::Error> {
                 auto_minimize_smoke_at: None,
                 auto_minimize_recording_at: None,
                 auto_minimize_smoke_stop_requested: false,
+                quick_smoke_phase: 0,
             }))
         }),
     )

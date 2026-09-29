@@ -238,6 +238,19 @@ impl RecorderState {
         }
     }
 
+    pub fn elapsed_duration(&self) -> Option<Duration> {
+        self.started.map(|started| {
+            started
+                .elapsed()
+                .saturating_sub(self.paused_time)
+                .saturating_sub(
+                    self.pause_started
+                        .map(|at| at.elapsed())
+                        .unwrap_or_default(),
+                )
+        })
+    }
+
     pub fn select_audio_mode(&mut self, mode: AudioMode) {
         if self.session.is_none() && self.countdown_deadline.is_none() {
             self.audio = mode;
@@ -750,15 +763,7 @@ impl RecorderState {
             {
                 self.request_stop();
             }
-            if let Some(started) = self.started {
-                let duration = started
-                    .elapsed()
-                    .saturating_sub(self.paused_time)
-                    .saturating_sub(
-                        self.pause_started
-                            .map(|at| at.elapsed())
-                            .unwrap_or_default(),
-                    );
+            if let Some(duration) = self.elapsed_duration() {
                 ui.strong(format!(
                     "● {:02}:{:02}",
                     duration.as_secs() / 60,

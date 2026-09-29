@@ -557,6 +557,11 @@ impl DevToolsApp {
     pub fn preview_recorder_status(&self) -> crate::recorder_ui::TrayRecordingStatus {
         self.recorder.tray_status()
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_open_quick(&mut self, ctx: &egui::Context) {
+        self.preview_panel_frames = 0;
+        self.open_quick(ctx);
+    }
     /// Only compiled for the isolated screenshot fixture, never a production entry point.
     #[cfg(feature = "ui-preview")]
     pub fn preview_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: PathBuf) {
@@ -1360,7 +1365,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 35  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 36  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
