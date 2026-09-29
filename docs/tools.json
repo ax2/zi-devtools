@@ -1,5 +1,5 @@
 {
-  "version": "0.40.0",
+  "version": "0.41.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -365,10 +365,10 @@
     {
       "id": "image-batch",
       "name": "图片批处理",
-      "status": "planned",
+      "status": "implemented",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "多文件选取、统一尺寸和格式规则、冲突预览、批量进度与取消"
+      "scope": "多选 1–100 张 PNG/JPEG/WebP，统一最大宽度、输出格式和 JPEG 质量；后台预检输出目录及同名/已有目标冲突，确认清单后逐张编码并显示实际输出大小、进度与结果，可取消余下任务；create_new 拒绝覆盖"
     },
     {
       "id": "image-crop-annotate",

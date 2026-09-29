@@ -171,6 +171,7 @@ fn tool_category(id: &str) -> &'static str {
         "task-center"
         | "files"
         | "image-tools"
+        | "image-batch"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -314,6 +315,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "image png jpeg webp resize compress 图片 缩放 转换 压缩".into(),
+        },
+        ToolEntry {
+            id: "image-batch".into(),
+            title: "图片批处理".into(),
+            description: "批量缩放与格式转换，预检冲突和逐项进度".into(),
+            page: Page::Images,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "image batch 图片 批处理 多文件 缩放 转换".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -657,6 +667,10 @@ impl DevToolsApp {
             104 | 105 => {
                 self.page = Page::Images;
                 self.images.preview_fixture(ctx);
+            }
+            106 | 107 => {
+                self.page = Page::Images;
+                self.images.preview_batch_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1434,7 +1448,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 40  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 41  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1589,7 +1603,11 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
-        if e.id == "csv-merge" {
+        if e.id == "image-batch" {
+            self.images.show_batch();
+            self.navigate(Page::Images, None);
+            self.visit(&e.id);
+        } else if e.id == "csv-merge" {
             self.page = Page::Data;
             self.data_state.show_join();
             self.launcher_open = false;

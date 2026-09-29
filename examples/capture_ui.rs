@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 106] = [
+const NAMES: [&str; 108] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -116,6 +116,8 @@ const NAMES: [&str; 106] = [
     "recorder-interrupted-light",
     "images-dark",
     "images-light",
+    "image-batch-dark",
+    "image-batch-light",
 ];
 
 struct Capture {

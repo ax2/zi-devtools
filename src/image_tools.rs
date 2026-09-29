@@ -1,4 +1,5 @@
 //! Bounded, local image inspection and explicit preview-before-save transforms.
+mod batch;
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
 use image::{
@@ -16,29 +17,29 @@ const MAX_PIXELS: u64 = 16_000_000;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum Format {
+pub(crate) enum Format {
     #[default]
     Png,
     Jpeg,
     WebP,
 }
 impl Format {
-    const ALL: [Self; 3] = [Self::Png, Self::Jpeg, Self::WebP];
-    fn label(self) -> &'static str {
+    pub(crate) const ALL: [Self; 3] = [Self::Png, Self::Jpeg, Self::WebP];
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Png => "PNG（无损）",
             Self::Jpeg => "JPEG（可调质量）",
             Self::WebP => "WebP（无损）",
         }
     }
-    fn extension(self) -> &'static str {
+    pub(crate) fn extension(self) -> &'static str {
         match self {
             Self::Png => "png",
             Self::Jpeg => "jpg",
             Self::WebP => "webp",
         }
     }
-    fn image_format(self) -> ImageFormat {
+    pub(crate) fn image_format(self) -> ImageFormat {
         match self {
             Self::Png => ImageFormat::Png,
             Self::Jpeg => ImageFormat::Jpeg,
@@ -63,6 +64,8 @@ enum Job {
 
 #[derive(Default)]
 pub struct State {
+    batch_mode: bool,
+    batch: batch::State,
     input: String,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -77,6 +80,14 @@ pub struct State {
     pending: Option<mpsc::Receiver<Result<Job, String>>>,
 }
 impl State {
+    pub fn show_batch(&mut self) {
+        self.batch_mode = true;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_fixture(&mut self) {
+        self.batch_mode = true;
+        self.batch.preview_fixture();
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, ctx: &egui::Context) {
         let pixels = image::ImageBuffer::from_fn(960, 540, |x, y| {
@@ -247,6 +258,15 @@ impl State {
         }
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.batch_mode, false, "单张图片");
+            ui.selectable_value(&mut self.batch_mode, true, "批量处理");
+        });
+        ui.add_space(10.0);
+        if self.batch_mode {
+            self.batch.ui(ui);
+            return;
+        }
         self.poll(ui.ctx());
         ui.heading("图片工作台");
         ui.label("在本机查看图片、缩小尺寸、转换格式并预览编码后的文件大小；原图不会被覆盖。");
@@ -393,6 +413,18 @@ fn preview_image(image: &DynamicImage) -> egui::ColorImage {
     )
 }
 fn load_image(path: &Path) -> Result<Job> {
+    let (_, _, size) = inspect_image(path)?;
+    let mut reader = ImageReader::open(path)?.with_guessed_format()?;
+    reader.limits(image_limits());
+    let image = reader.decode()?;
+    let preview = preview_image(&image);
+    Ok(Job::Loaded {
+        image: Arc::new(image),
+        bytes: size,
+        preview,
+    })
+}
+pub(crate) fn inspect_image(path: &Path) -> Result<(u32, u32, u64)> {
     let size = fs::metadata(path)?.len();
     ensure!(
         size > 0 && size <= MAX_INPUT_BYTES,
@@ -413,15 +445,13 @@ fn load_image(path: &Path) -> Result<Job> {
         u64::from(width) * u64::from(height) <= MAX_PIXELS,
         "图片像素数超过 1600 万"
     );
+    Ok((width, height, size))
+}
+pub(crate) fn decode_image(path: &Path) -> Result<DynamicImage> {
+    inspect_image(path)?;
     let mut reader = ImageReader::open(path)?.with_guessed_format()?;
     reader.limits(image_limits());
-    let image = reader.decode()?;
-    let preview = preview_image(&image);
-    Ok(Job::Loaded {
-        image: Arc::new(image),
-        bytes: size,
-        preview,
-    })
+    Ok(reader.decode()?)
 }
 fn image_limits() -> Limits {
     let mut limits = Limits::default();
@@ -431,6 +461,21 @@ fn image_limits() -> Limits {
     limits
 }
 fn encode_preview(source: &DynamicImage, width: u32, format: Format, quality: u8) -> Result<Job> {
+    let (encoded, width, height) = encode_image(source, width, format, quality)?;
+    let decoded = image::load_from_memory_with_format(&encoded, format.image_format())?;
+    Ok(Job::Preview {
+        encoded,
+        preview: preview_image(&decoded),
+        width,
+        height,
+    })
+}
+pub(crate) fn encode_image(
+    source: &DynamicImage,
+    width: u32,
+    format: Format,
+    quality: u8,
+) -> Result<(Vec<u8>, u32, u32)> {
     ensure!(
         width >= 1 && width <= source.width(),
         "输出宽度超出原图范围"
@@ -453,13 +498,7 @@ fn encode_preview(source: &DynamicImage, width: u32, format: Format, quality: u8
     if encoded.len() > MAX_OUTPUT_BYTES {
         bail!("输出超过 128 MiB，请减小尺寸");
     }
-    let decoded = image::load_from_memory_with_format(&encoded, format.image_format())?;
-    Ok(Job::Preview {
-        encoded,
-        preview: preview_image(&decoded),
-        width,
-        height,
-    })
+    Ok((encoded, width, height))
 }
 
 #[cfg(test)]
