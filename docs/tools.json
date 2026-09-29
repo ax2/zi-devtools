@@ -1,5 +1,5 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -605,10 +605,10 @@
     {
       "id": "screen-recorder-long-audio",
       "name": "录屏长时音频稳定性",
-      "status": "planned",
+      "status": "in-progress",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "验证不同声卡时钟下的长时同步、设备热拔插与异常恢复"
+      "scope": "静态桌面及动态窗口的 12 秒音画轨同步已实测；更长时间、不同声卡时钟、设备热拔插与异常恢复仍待验收"
     },
     {
       "id": "mcp-export",

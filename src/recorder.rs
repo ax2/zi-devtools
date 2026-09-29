@@ -298,9 +298,7 @@ impl GraphicsCaptureApiHandler for Capture {
                 &pixels[(r.height as usize - 1 - row) * stride..(r.height as usize - row) * stride],
             );
         }
-        // This Windows encoder's MP4 track runs at twice the supplied video timestamp.
-        // Calibrate against the audio sample clock; the real-device smoke checks the result.
-        let timestamp = elapsed.as_nanos().saturating_div(200).min(i64::MAX as u128) as i64;
+        let timestamp = elapsed.as_nanos().saturating_div(100).min(i64::MAX as u128) as i64;
         self.encoder
             .as_mut()
             .ok_or_else(|| anyhow!("视频编码器已停止"))?
@@ -310,6 +308,22 @@ impl GraphicsCaptureApiHandler for Capture {
     }
 }
 impl Capture {
+    fn keep_video_alive(&mut self, elapsed: Duration) -> Result<()> {
+        if self.flipped.is_empty()
+            || self
+                .last_frame_elapsed
+                .is_some_and(|last| elapsed.saturating_sub(last) < Duration::from_millis(250))
+        {
+            return Ok(());
+        }
+        let timestamp = elapsed.as_nanos().saturating_div(100).min(i64::MAX as u128) as i64;
+        self.encoder
+            .as_mut()
+            .context("编码器已停止")?
+            .send_frame_buffer(&self.flipped, timestamp)?;
+        self.last_frame_elapsed = Some(elapsed);
+        Ok(())
+    }
     fn extend_to_stop(&mut self, elapsed: Duration) -> Result<()> {
         if self.flipped.is_empty() {
             bail!("没有捕获到画面帧，未创建空视频");
@@ -320,11 +334,11 @@ impl Capture {
         if near_end > last {
             let timestamp = near_end
                 .as_nanos()
-                .saturating_div(200)
+                .saturating_div(100)
                 .min(i64::MAX as u128) as i64;
             encoder.send_frame_buffer(&self.flipped, timestamp)?;
         }
-        let timestamp = elapsed.as_nanos().saturating_div(200).min(i64::MAX as u128) as i64;
+        let timestamp = elapsed.as_nanos().saturating_div(100).min(i64::MAX as u128) as i64;
         encoder.send_frame_buffer(&self.flipped, timestamp)?;
         Ok(())
     }
@@ -551,6 +565,15 @@ fn record_to_temp(
                 let _ = control.stop();
                 return Err(e.context("音频捕获失败"));
             }
+        }
+        if let Some(elapsed) = signals.pause.elapsed_since(capture_started)
+            && let Err(error) = callback.lock().keep_video_alive(elapsed)
+        {
+            if let Some(timeline) = &mut audio_timeline {
+                let _ = timeline.stop();
+            }
+            let _ = control.stop();
+            return Err(error.context("维持视频时间线失败"));
         }
         thread::sleep(Duration::from_millis(if audio_timeline.is_some() {
             10
@@ -1010,22 +1033,27 @@ mod tests {
     #[test]
     #[ignore = "needs an unlocked interactive Windows desktop and a working H.264 encoder"]
     fn records_a_playable_mp4_on_the_real_desktop() {
-        record_smoke(AudioMode::None, false);
+        record_smoke(AudioMode::None, false, 2);
     }
     #[test]
     #[ignore = "needs an unlocked interactive desktop and default playback device"]
     fn records_system_audio_with_video() {
-        record_smoke(AudioMode::System, false);
+        record_smoke(AudioMode::System, false, 2);
     }
     #[test]
     #[ignore = "needs an unlocked interactive desktop and default microphone"]
     fn records_microphone_with_video() {
-        record_smoke(AudioMode::Microphone, false);
+        record_smoke(AudioMode::Microphone, false, 2);
     }
     #[test]
     #[ignore = "needs an unlocked interactive desktop and default playback and microphone devices"]
     fn records_system_and_microphone_with_video() {
-        record_smoke(AudioMode::SystemAndMicrophone, true);
+        record_smoke(AudioMode::SystemAndMicrophone, true, 2);
+    }
+    #[test]
+    #[ignore = "needs an unlocked interactive desktop and default microphone; records for 12 seconds"]
+    fn records_twelve_seconds_with_synchronized_audio() {
+        record_smoke(AudioMode::Microphone, false, 12);
     }
     #[test]
     #[ignore = "needs an unlocked interactive desktop and default playback device"]
@@ -1104,7 +1132,7 @@ mod tests {
             "system audio meter stayed silent: {max_level}"
         );
     }
-    fn record_smoke(audio: AudioMode, pause_during_capture: bool) {
+    fn record_smoke(audio: AudioMode, pause_during_capture: bool, capture_seconds: u64) {
         static CAPTURE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         let _guard = CAPTURE_LOCK
             .get_or_init(|| Mutex::new(()))
@@ -1151,7 +1179,7 @@ mod tests {
             session.pause.set_paused(false);
             std::thread::sleep(Duration::from_secs(1));
         } else {
-            std::thread::sleep(Duration::from_secs(2));
+            std::thread::sleep(Duration::from_secs(capture_seconds));
         }
         session.stop.store(true, Ordering::Release);
         match session
@@ -1177,14 +1205,20 @@ mod tests {
         }
         let tracks = mp4_track_durations(&data);
         let video_seconds = tracks.iter().find(|(kind, _)| *kind == *b"vide").unwrap().1;
+        let expected_seconds = if pause_during_capture {
+            2.0
+        } else {
+            capture_seconds as f64
+        };
+        eprintln!("recorded MP4 tracks: {tracks:?}, target={expected_seconds:.3}s");
         assert!(
-            (1.0..5.0).contains(&video_seconds),
+            (video_seconds - expected_seconds).abs() < 0.75,
             "unexpected video duration: {video_seconds}"
         );
         if audio != AudioMode::None {
             let audio_seconds = tracks.iter().find(|(kind, _)| *kind == *b"soun").unwrap().1;
             assert!(
-                (1.0..5.0).contains(&audio_seconds),
+                (audio_seconds - expected_seconds).abs() < 0.75,
                 "unexpected audio duration: {audio_seconds}"
             );
             assert!(

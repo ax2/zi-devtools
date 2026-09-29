@@ -69,7 +69,9 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 32 / v0.32.0：录屏可按设备名选择显示器；框选窗口按物理边界放置，录制前复核拓扑变化。当前主屏真实测试通过，非主屏、混合 DPI 与跨屏合成未验证或未实现，因此显示器选择保持“进行中”。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
+Stage 33 / v0.33.0：录屏在静态桌面期间补送当前帧，保持视频时间线连续；主屏的四种声音模式短录、12 秒静态桌面和动态窗口音画轨同步已实测。更长时间、不同设备、非主屏和混合 DPI 待验收，相关能力保持“进行中”。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
+
+Stage 32 / v0.32.0：录屏可按设备名选择显示器；框选窗口按物理边界放置，录制前复核拓扑变化。当前主屏真实测试通过，非主屏、混合 DPI 与跨屏合成未验证或未实现，因此显示器选择保持“进行中”。
 
 Stage 31 / v0.31.0：录屏新增系统声与麦克风实时短时峰值电平，静音或暂停时归零；受控本地音调使系统声电平有响应，麦克风独立实声验证和长时设备同步仍待验收。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
 

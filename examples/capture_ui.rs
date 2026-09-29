@@ -167,8 +167,9 @@ impl eframe::App for Capture {
         let smoke_mode = std::env::args().nth(3);
         if matches!(
             smoke_mode.as_deref(),
-            Some("recorder-smoke" | "recorder-fullscreen-smoke")
+            Some("recorder-smoke" | "recorder-fullscreen-smoke" | "recorder-dynamic-smoke")
         ) {
+            let dynamic = smoke_mode.as_deref() == Some("recorder-dynamic-smoke");
             if self.frames == 0 {
                 let display = recorder::primary_display().unwrap();
                 println!(
@@ -197,7 +198,11 @@ impl eframe::App for Capture {
                             "recorder-eframe-smoke-{}.mp4",
                             uuid::Uuid::new_v4()
                         )),
-                        AudioMode::None,
+                        if dynamic {
+                            AudioMode::Microphone
+                        } else {
+                            AudioMode::None
+                        },
                         AudioGains::default(),
                         display,
                     )
@@ -236,23 +241,51 @@ impl eframe::App for Capture {
                                 })
                                 .expect("MP4 track dimensions");
                             assert_eq!(Some(track_size), self.recorder_smoke_size);
+                            if dynamic {
+                                let tracks = mp4_track_durations(&data);
+                                let video =
+                                    tracks.iter().find(|(kind, _)| kind == b"vide").unwrap().1;
+                                let audio =
+                                    tracks.iter().find(|(kind, _)| kind == b"soun").unwrap().1;
+                                assert!((video - 12.0).abs() < 0.75, "video={video:.3}s");
+                                assert!(
+                                    (audio - video).abs() < 0.75,
+                                    "audio={audio:.3}s video={video:.3}s"
+                                );
+                                println!("dynamic MP4 tracks: video={video:.3}s audio={audio:.3}s");
+                            }
                             fs::remove_file(path).unwrap();
                             println!("PASS eframe recorder smoke");
                             std::process::exit(0);
                         }
                     }
                 }
-                if self
-                    .recorder_smoke_started
-                    .is_some_and(|at| at.elapsed() >= Duration::from_secs(2))
-                {
+                if self.recorder_smoke_started.is_some_and(|at| {
+                    at.elapsed() >= Duration::from_secs(if dynamic { 12 } else { 2 })
+                }) {
                     session.stop.store(true, Ordering::Release);
                 }
             }
-            if self.started.elapsed() > Duration::from_secs(20) {
+            if self.started.elapsed() > Duration::from_secs(if dynamic { 35 } else { 20 }) {
                 panic!("eframe recorder smoke timed out");
             }
-            self.app.update(ctx, frame);
+            if dynamic {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let rect = ui.available_rect_before_wrap();
+                    let phase = self.started.elapsed().as_secs_f32() * 2.0;
+                    ui.painter()
+                        .rect_filled(rect, 0.0, egui::Color32::from_rgb(23, 31, 46));
+                    let x = rect.left() + 100.0 + (phase.sin() + 1.0) * 140.0;
+                    ui.painter().circle_filled(
+                        egui::pos2(x, rect.top() + 120.0),
+                        55.0,
+                        egui::Color32::from_rgb(51, 208, 174),
+                    );
+                    ui.label(format!("Animated capture fixture · frame {}", self.frames));
+                });
+            } else {
+                self.app.update(ctx, frame);
+            }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(30));
             return;
@@ -442,6 +475,55 @@ fn drag_recorder_region() {
 }
 #[cfg(not(windows))]
 fn drag_recorder_region() {}
+fn mp4_boxes<'a>(data: &'a [u8], kind: &[u8; 4]) -> Vec<&'a [u8]> {
+    let mut result = Vec::new();
+    let mut offset = 0;
+    while offset + 8 <= data.len() {
+        let size = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+        if size < 8 || offset + size > data.len() {
+            break;
+        }
+        if &data[offset + 4..offset + 8] == kind {
+            result.push(&data[offset + 8..offset + size]);
+        }
+        offset += size;
+    }
+    result
+}
+fn mp4_track_durations(data: &[u8]) -> Vec<([u8; 4], f64)> {
+    let mut result = Vec::new();
+    for movie in mp4_boxes(data, b"moov") {
+        for track in mp4_boxes(movie, b"trak") {
+            for media in mp4_boxes(track, b"mdia") {
+                let Some(handler) = mp4_boxes(media, b"hdlr").into_iter().next() else {
+                    continue;
+                };
+                let Some(header) = mp4_boxes(media, b"mdhd").into_iter().next() else {
+                    continue;
+                };
+                if handler.len() < 12 || header.len() < 20 {
+                    continue;
+                }
+                let kind = handler[8..12].try_into().unwrap();
+                let (timescale, duration) = if header[0] == 1 && header.len() >= 32 {
+                    (
+                        u32::from_be_bytes(header[20..24].try_into().unwrap()),
+                        u64::from_be_bytes(header[24..32].try_into().unwrap()),
+                    )
+                } else {
+                    (
+                        u32::from_be_bytes(header[12..16].try_into().unwrap()),
+                        u32::from_be_bytes(header[16..20].try_into().unwrap()) as u64,
+                    )
+                };
+                if timescale > 0 {
+                    result.push((kind, duration as f64 / timescale as f64));
+                }
+            }
+        }
+    }
+    result
+}
 fn main() -> Result<(), eframe::Error> {
     let folder = PathBuf::from(std::env::args().nth(1).expect("capture output directory"));
     fs::create_dir_all(&folder).unwrap();
@@ -451,10 +533,14 @@ fn main() -> Result<(), eframe::Error> {
     fs::write(folder.join("订单数据.csv"), "name,count\nexample,3\n").unwrap();
     let config = folder.join("services.yml");
     fs::write(&config,format!("state_dir: '{}'\nservices:\n  demo:\n    name: Demo fixture\n    repo: '{}'\n    command: 'echo fixture'\n",folder.join("state").display(),folder.display())).unwrap();
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("Zi DevTools — UI preview fixture")
+        .with_inner_size([1280.0, 900.0]);
+    if std::env::args().nth(3).as_deref() == Some("recorder-dynamic-smoke") {
+        viewport = viewport.with_position([0.0, 0.0]);
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Zi DevTools — UI preview fixture")
-            .with_inner_size([1280.0, 900.0]),
+        viewport,
         ..Default::default()
     };
     eframe::run_native(
