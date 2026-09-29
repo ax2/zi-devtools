@@ -366,23 +366,20 @@ impl State {
             d.endpoint = "health".into();
         }
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, shortcuts: bool) {
-        ui.heading(egui::RichText::new("Java / Django 诊断工作台").size(27.0));
+    pub fn ui(&mut self, ui: &mut egui::Ui, shortcuts: bool, category: &str) {
+        ui.heading(egui::RichText::new(format!("{category}诊断工作台")).size(27.0));
         ui.label("环境、性能与项目诊断 · 每个工具独立保留本次会话草稿");
         ui.add_space(8.0);
-        for category in ["Java 与 JVM", "Python 与 Django"] {
-            ui.horizontal_wrapped(|ui| {
-                ui.strong(category);
-                for tool in Tool::ALL.into_iter().filter(|t| t.category() == category) {
-                    if ui
-                        .selectable_label(self.selected == tool, tool.label())
-                        .clicked()
-                    {
-                        self.select(tool);
-                    }
+        ui.horizontal_wrapped(|ui| {
+            for tool in Tool::ALL.into_iter().filter(|t| t.category() == category) {
+                if ui
+                    .selectable_label(self.selected == tool, tool.label())
+                    .clicked()
+                {
+                    self.select(tool);
                 }
-            });
-        }
+            }
+        });
         ui.separator();
         let tool = self.selected;
         let busy = self.running.is_some();

@@ -103,6 +103,40 @@ struct CaptureTarget {
     region: Region,
     display: DisplayInfo,
 }
+#[derive(Clone, Copy)]
+struct CaptureOptions {
+    audio: AudioMode,
+    gains: AudioGains,
+    quality: RecordingQuality,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum RecordingQuality {
+    Compact,
+    #[default]
+    Balanced,
+    Detailed,
+}
+impl RecordingQuality {
+    pub const ALL: [Self; 3] = [Self::Compact, Self::Balanced, Self::Detailed];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Compact => "节省空间 · 4 Mbps",
+            Self::Balanced => "均衡 · 8 Mbps",
+            Self::Detailed => "高画质 · 16 Mbps",
+        }
+    }
+    pub fn bitrate(self) -> u32 {
+        match self {
+            Self::Compact => 4_000_000,
+            Self::Balanced => 8_000_000,
+            Self::Detailed => 16_000_000,
+        }
+    }
+    pub fn estimated_megabytes(self, seconds: u64, audio: AudioMode) -> f64 {
+        let audio_bitrate = if audio == AudioMode::None { 0 } else { 192_000 };
+        (f64::from(self.bitrate() + audio_bitrate) * seconds as f64 / 8.0 / 1_000_000.0) * 1.05
+    }
+}
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AudioMode {
     #[default]
@@ -254,15 +288,21 @@ struct Capture {
 }
 type CaptureError = Box<dyn std::error::Error + Send + Sync>;
 impl GraphicsCaptureApiHandler for Capture {
-    type Flags = (Region, PathBuf, AudioMode, Arc<PauseClock>);
+    type Flags = (
+        Region,
+        PathBuf,
+        AudioMode,
+        RecordingQuality,
+        Arc<PauseClock>,
+    );
     type Error = CaptureError;
     fn new(ctx: Context<Self::Flags>) -> std::result::Result<Self, Self::Error> {
-        let (region, path, audio, pause) = ctx.flags;
+        let (region, path, audio, quality, pause) = ctx.flags;
         let encoder = VideoEncoder::new(
             VideoSettingsBuilder::new(region.width, region.height)
                 .sub_type(VideoSettingsSubType::H264)
                 .frame_rate(30)
-                .bitrate(8_000_000),
+                .bitrate(quality.bitrate()),
             AudioSettingsBuilder::default().disabled(audio == AudioMode::None),
             ContainerSettingsBuilder::default(),
             path,
@@ -399,13 +439,21 @@ pub fn start_with_gains(
     audio: AudioMode,
     gains: AudioGains,
 ) -> Result<Session> {
-    start_on_display(region, output, audio, gains, primary_display()?)
+    start_on_display(
+        region,
+        output,
+        audio,
+        gains,
+        RecordingQuality::default(),
+        primary_display()?,
+    )
 }
 pub fn start_on_display(
     region: Region,
     output: PathBuf,
     audio: AudioMode,
     gains: AudioGains,
+    quality: RecordingQuality,
     display: DisplayInfo,
 ) -> Result<Session> {
     validate_request_for_display(region, &output, &display)?;
@@ -435,7 +483,18 @@ pub fn start_on_display(
             #[cfg(test)]
             interrupt_for_test: interrupt_worker,
         };
-        let result = record(target, &output, audio, gains, signals, &stop_worker, &tx);
+        let result = record(
+            target,
+            &output,
+            CaptureOptions {
+                audio,
+                gains,
+                quality,
+            },
+            signals,
+            &stop_worker,
+            &tx,
+        );
         let event = match result {
             Ok(Some(reason)) => Event::Interrupted {
                 path: output,
@@ -489,8 +548,7 @@ pub fn validate_request_for_display(
 fn record(
     target: CaptureTarget,
     output: &Path,
-    audio: AudioMode,
-    gains: AudioGains,
+    options: CaptureOptions,
     signals: RecordingSignals,
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
@@ -503,7 +561,7 @@ fn record(
         ".{filename}.{}.recording.mp4",
         uuid::Uuid::new_v4()
     ));
-    let warning = match record_to_temp(target, &temp, audio, gains, signals, stop, tx) {
+    let warning = match record_to_temp(target, &temp, options, signals, stop, tx) {
         Ok(warning) => warning,
         Err(error) => {
             let _ = std::fs::remove_file(&temp);
@@ -538,8 +596,7 @@ fn commit_temp(temp: &Path, output: &Path) -> Result<()> {
 fn record_to_temp(
     target: CaptureTarget,
     output: &Path,
-    audio: AudioMode,
-    gains: AudioGains,
+    options: CaptureOptions,
     signals: RecordingSignals,
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
@@ -547,7 +604,8 @@ fn record_to_temp(
     // Device startup may take seconds. Complete it before the video clock begins so that the
     // output never includes an invisible pre-roll while the UI still says "starting".
     let mut audio_timeline =
-        AudioTimeline::new(audio, gains, signals.levels.clone()).context("音频设备启动失败")?;
+        AudioTimeline::new(options.audio, options.gains, signals.levels.clone())
+            .context("音频设备启动失败")?;
     if let Some(timeline) = &mut audio_timeline
         && let Err(error) = timeline.discard_initial()
     {
@@ -567,7 +625,13 @@ fn record_to_temp(
         MinimumUpdateIntervalSettings::Custom(Duration::from_millis(33)),
         DirtyRegionSettings::Default,
         ColorFormat::Bgra8,
-        (region, output.to_path_buf(), audio, signals.pause.clone()),
+        (
+            region,
+            output.to_path_buf(),
+            options.audio,
+            options.quality,
+            signals.pause.clone(),
+        ),
     );
     let control = match Capture::start_free_threaded(settings) {
         Ok(control) => control,
@@ -917,6 +981,64 @@ impl AudioTimeline {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn quality_presets_increase_estimated_size_and_audio_adds_capacity() {
+        use super::{AudioMode, RecordingQuality};
+        let compact = RecordingQuality::Compact.estimated_megabytes(60, AudioMode::None);
+        let balanced = RecordingQuality::Balanced.estimated_megabytes(60, AudioMode::None);
+        let detailed = RecordingQuality::Detailed.estimated_megabytes(60, AudioMode::None);
+        assert!(compact > 25.0 && compact < balanced && balanced < detailed);
+        assert!(
+            RecordingQuality::Balanced.estimated_megabytes(60, AudioMode::Microphone) > balanced
+        );
+    }
+    #[test]
+    #[ignore = "needs an unlocked interactive Windows desktop and H.264 encoder"]
+    fn quality_presets_produce_real_mp4_files() {
+        use super::{AudioGains, AudioMode, Event, RecordingQuality, Region};
+        use std::{sync::atomic::Ordering, time::Duration};
+        let display = super::primary_display().unwrap();
+        for quality in [RecordingQuality::Compact, RecordingQuality::Detailed] {
+            let path = std::env::temp_dir().join(format!(
+                "zi-quality-{quality:?}-{}.mp4",
+                uuid::Uuid::new_v4()
+            ));
+            let session = super::start_on_display(
+                Region {
+                    x: 0,
+                    y: 0,
+                    width: 320,
+                    height: 180,
+                },
+                path.clone(),
+                AudioMode::None,
+                AudioGains::default(),
+                quality,
+                display.clone(),
+            )
+            .unwrap();
+            assert!(matches!(
+                session
+                    .events
+                    .recv_timeout(Duration::from_secs(15))
+                    .unwrap(),
+                Event::Started
+            ));
+            std::thread::sleep(Duration::from_secs(2));
+            session.stop.store(true, Ordering::Release);
+            assert!(matches!(
+                session
+                    .events
+                    .recv_timeout(Duration::from_secs(20))
+                    .unwrap(),
+                Event::Finished(Ok(_))
+            ));
+            let data = std::fs::read(&path).unwrap();
+            assert!(data.len() > 1024 && data.windows(4).any(|part| part == b"moov"));
+            eprintln!("{quality:?}: {} bytes", data.len());
+            std::fs::remove_file(path).unwrap();
+        }
+    }
     use super::{AudioMode, Event, Region};
     use std::{
         sync::{Mutex, OnceLock, atomic::Ordering},
@@ -1227,6 +1349,7 @@ mod tests {
             path.clone(),
             audio,
             super::AudioGains::default(),
+            super::RecordingQuality::default(),
             super::primary_display().unwrap(),
         )
         .unwrap();

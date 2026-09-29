@@ -1,4 +1,6 @@
-use crate::recorder::{self, AudioGains, AudioMode, DisplayInfo, Event, Region, Session};
+use crate::recorder::{
+    self, AudioGains, AudioMode, DisplayInfo, Event, RecordingQuality, Region, Session,
+};
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use std::{
     path::{Path, PathBuf},
@@ -97,16 +99,107 @@ fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn capture_display_snapshot(display: &DisplayInfo) -> anyhow::Result<egui::ColorImage> {
+    use anyhow::{bail, ensure};
+    use windows_sys::Win32::Graphics::Gdi::{
+        BI_RGB, BITMAPINFO, BitBlt, CAPTUREBLT, CreateCompatibleBitmap, CreateCompatibleDC,
+        DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetDIBits, ReleaseDC, SRCCOPY, SelectObject,
+    };
+    let width = usize::try_from(display.width)?;
+    let height = usize::try_from(display.height)?;
+    ensure!(
+        width > 0 && height > 0 && width.saturating_mul(height) <= 16_000_000,
+        "屏幕太大，无法安全生成框选预览"
+    );
+    let screen = unsafe { GetDC(std::ptr::null_mut()) };
+    if screen.is_null() {
+        bail!("无法读取当前屏幕画面");
+    }
+    let memory = unsafe { CreateCompatibleDC(screen) };
+    let bitmap = if memory.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { CreateCompatibleBitmap(screen, display.width as i32, display.height as i32) }
+    };
+    let result = (|| {
+        ensure!(
+            !memory.is_null() && !bitmap.is_null(),
+            "无法创建框选画面缓冲"
+        );
+        let old = unsafe { SelectObject(memory, bitmap as _) };
+        ensure!(!old.is_null(), "无法选择框选画面缓冲");
+        let copied = unsafe {
+            BitBlt(
+                memory,
+                0,
+                0,
+                display.width as i32,
+                display.height as i32,
+                screen,
+                display.x,
+                display.y,
+                SRCCOPY | CAPTUREBLT,
+            )
+        } != 0;
+        unsafe { SelectObject(memory, old) };
+        ensure!(copied, "无法读取所选屏幕的当前内容");
+        let mut info: BITMAPINFO = unsafe { std::mem::zeroed() };
+        info.bmiHeader.biSize = std::mem::size_of_val(&info.bmiHeader) as u32;
+        info.bmiHeader.biWidth = display.width as i32;
+        info.bmiHeader.biHeight = -(display.height as i32);
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        let mut pixels = vec![0u8; width * height * 4];
+        ensure!(
+            unsafe {
+                GetDIBits(
+                    screen,
+                    bitmap,
+                    0,
+                    display.height,
+                    pixels.as_mut_ptr().cast(),
+                    &mut info,
+                    DIB_RGB_COLORS,
+                )
+            } == display.height as i32,
+            "读取框选画面像素失败"
+        );
+        for rgba in pixels.chunks_exact_mut(4) {
+            rgba.swap(0, 2);
+            rgba[3] = 255;
+        }
+        Ok(egui::ColorImage::from_rgba_unmultiplied(
+            [width, height],
+            &pixels,
+        ))
+    })();
+    unsafe {
+        if !bitmap.is_null() {
+            DeleteObject(bitmap as _);
+        }
+        if !memory.is_null() {
+            DeleteDC(memory);
+        }
+        ReleaseDC(std::ptr::null_mut(), screen);
+    }
+    result
+}
+
 pub struct RecorderState {
     displays_loaded: bool,
     displays: Vec<DisplayInfo>,
     display: Option<DisplayInfo>,
     selecting: bool,
+    selection_texture: Option<egui::TextureHandle>,
     drag_start: Option<egui::Pos2>,
     region: Option<Region>,
     output: String,
     audio: AudioMode,
     gains: AudioGains,
+    quality: RecordingQuality,
+    size_preview_minutes: u16,
     countdown_seconds: u64,
     countdown_deadline: Option<Instant>,
     auto_minimize: bool,
@@ -132,11 +225,14 @@ impl Default for RecorderState {
             displays: Vec::new(),
             display: None,
             selecting: false,
+            selection_texture: None,
             drag_start: None,
             region: None,
             output: String::new(),
             audio: AudioMode::None,
             gains: AudioGains::default(),
+            quality: RecordingQuality::default(),
+            size_preview_minutes: 5,
             countdown_seconds: 3,
             countdown_deadline: None,
             auto_minimize: true,
@@ -158,6 +254,12 @@ impl Default for RecorderState {
 }
 
 impl RecorderState {
+    pub fn quality(&self) -> RecordingQuality {
+        self.quality
+    }
+    pub fn set_quality(&mut self, quality: RecordingQuality) {
+        self.quality = quality;
+    }
     pub fn auto_minimize(&self) -> bool {
         self.auto_minimize
     }
@@ -303,10 +405,64 @@ impl RecorderState {
         }
     }
 
+    pub fn request_start(&mut self, tray_available: bool) -> bool {
+        if self.session.is_some() || self.countdown_deadline.is_some() {
+            return false;
+        }
+        if !self.displays_loaded {
+            self.refresh_displays();
+        }
+        let Some(region) = self.region else {
+            self.status = "请先用鼠标框选区域或选择整个屏幕".into();
+            self.error = true;
+            return false;
+        };
+        let check = self
+            .display
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("未选择显示器"))
+            .and_then(|display| {
+                recorder::validate_request_for_display(
+                    region,
+                    Path::new(self.output.trim()),
+                    display,
+                )
+            });
+        if let Err(error) = check {
+            self.status = format!("无法开始录制：{error:#}");
+            self.error = true;
+            return false;
+        }
+        if self.countdown_seconds == 0 {
+            self.begin_recording();
+            if self.session.is_none() {
+                return false;
+            }
+        } else {
+            self.countdown_deadline =
+                Some(Instant::now() + Duration::from_secs(self.countdown_seconds));
+            self.status = "倒计时中，请准备录制区域".into();
+            self.error = false;
+        }
+        self.request_auto_minimize(tray_available);
+        true
+    }
+
     #[cfg(feature = "ui-preview")]
-    pub fn preview_begin_selection(&mut self) {
+    pub fn preview_begin_selection(&mut self, ctx: &egui::Context) {
         self.selecting = true;
-        self.drag_start = None;
+        self.drag_start = Some(egui::pos2(280.0, 220.0));
+        let mut pixels = Vec::with_capacity(640 * 400 * 4);
+        for y in 0..400u32 {
+            for x in 0..640u32 {
+                pixels.extend_from_slice(&[(32 + x / 5) as u8, (72 + y / 4) as u8, 170, 255]);
+            }
+        }
+        self.selection_texture = Some(ctx.load_texture(
+            "recorder-selection-fixture",
+            egui::ColorImage::from_rgba_unmultiplied([640, 400], &pixels),
+            egui::TextureOptions::LINEAR,
+        ));
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_region(&self) -> Option<Region> {
@@ -361,6 +517,7 @@ impl RecorderState {
         self.output = "C:\\Users\\demo\\Videos\\Zi-Recording-20260928-1928.mp4".into();
         self.audio = AudioMode::SystemAndMicrophone;
         self.auto_stop_minutes = 5;
+        self.quality = RecordingQuality::Detailed;
         self.preview_levels = Some((62, 38));
         self.status = "界面预览：电平为示例值，真实录制时自动更新".into();
     }
@@ -401,7 +558,15 @@ impl RecorderState {
                         self.finish_auto_minimize();
                         match result {
                             Ok(path) => {
-                                self.status = "录制完成，MP4 已保存".into();
+                                self.status = format!(
+                                    "录制完成，MP4 已保存{}",
+                                    std::fs::metadata(&path)
+                                        .map(|m| format!(
+                                            " · 实际 {:.2} MB",
+                                            m.len() as f64 / 1_000_000.0
+                                        ))
+                                        .unwrap_or_default()
+                                );
                                 if self.output.trim() == path.to_string_lossy()
                                     && let Some(parent) = path.parent()
                                 {
@@ -423,7 +588,12 @@ impl RecorderState {
                         self.pause_started = None;
                         self.session = None;
                         self.finish_auto_minimize();
-                        self.status = format!("录制提前结束，已保存 MP4 片段：{reason}");
+                        self.status = format!(
+                            "录制提前结束，已保存 MP4 片段{}：{reason}",
+                            std::fs::metadata(&path)
+                                .map(|m| format!(" · 实际 {:.2} MB", m.len() as f64 / 1_000_000.0))
+                                .unwrap_or_default()
+                        );
                         self.error = true;
                         if self.output.trim() == path.to_string_lossy()
                             && let Some(parent) = path.parent()
@@ -470,6 +640,7 @@ impl RecorderState {
             PathBuf::from(self.output.trim()),
             self.audio,
             self.gains,
+            self.quality,
             display,
         ) {
             Ok(session) => {
@@ -492,6 +663,7 @@ impl RecorderState {
         }
         ui.heading("屏幕录制");
         ui.label("选择显示器，用鼠标框选区域，开始录制后保存为 MP4。");
+        ui.small("全局快捷键：Ctrl+Alt+Shift+R 开始 · +P 暂停/继续 · +S 停止保存。快捷键被其他程序占用时请使用页面或托盘按钮。");
         ui.add_space(16.0);
         let busy = self.session.is_some() || self.countdown_deadline.is_some();
         ui.horizontal(|ui| {
@@ -554,10 +726,26 @@ impl RecorderState {
                     .and_then(recorder::validate_display)
                 {
                     Ok(_) => {
-                        self.selecting = true;
+                        #[cfg(windows)]
+                        match capture_display_snapshot(self.display.as_ref().unwrap()) {
+                            Ok(image) => {
+                                self.selection_texture = Some(ui.ctx().load_texture(
+                                    "recorder-selection-snapshot",
+                                    image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
+                                self.selecting = true;
+                            }
+                            Err(error) => {
+                                self.status = format!("无法预览当前屏幕：{error:#}");
+                                self.error = true;
+                            }
+                        }
                         self.drag_start = None;
-                        self.status = "按住鼠标左键拖出录制区域，Esc 取消".into();
-                        self.error = false;
+                        if self.selecting {
+                            self.status = "当前屏幕画面已显示，按住鼠标拖出区域；Esc 取消".into();
+                            self.error = false;
+                        }
                     }
                     Err(e) => {
                         self.status = format!("无法选择显示器：{e:#}");
@@ -647,6 +835,29 @@ impl RecorderState {
                     });
             });
         });
+        ui.horizontal(|ui| {
+            ui.label("录制质量");
+            ui.add_enabled_ui(!busy, |ui| {
+                egui::ComboBox::from_id_salt("recorder-quality")
+                    .selected_text(self.quality.label())
+                    .show_ui(ui, |ui| {
+                        for quality in RecordingQuality::ALL {
+                            ui.selectable_value(&mut self.quality, quality, quality.label());
+                        }
+                    });
+            });
+            ui.label("H.264 · 30 fps");
+        });
+        ui.horizontal(|ui| {
+            ui.label("大小预览");
+            ui.add(egui::Slider::new(&mut self.size_preview_minutes, 1..=60).suffix(" 分钟"));
+            let seconds = u64::from(self.size_preview_minutes) * 60;
+            ui.strong(format!(
+                "约 {:.0} MB",
+                self.quality.estimated_megabytes(seconds, self.audio)
+            ));
+        });
+        ui.small("按目标码率、声音和时长推算；静止画面文件可能远小于估算值，保存后显示实际大小。此值不是文件上限。");
         if self.audio != AudioMode::None {
             ui.add_enabled_ui(!busy, |ui| {
                 if matches!(
@@ -768,37 +979,7 @@ impl RecorderState {
                 )
                 .clicked()
             {
-                if let Some(region) = self.region {
-                    match self
-                        .display
-                        .as_ref()
-                        .ok_or_else(|| anyhow::anyhow!("未选择显示器"))
-                        .and_then(|display| {
-                            recorder::validate_request_for_display(
-                                region,
-                                Path::new(self.output.trim()),
-                                display,
-                            )
-                        }) {
-                        Ok(()) if self.countdown_seconds == 0 => {
-                            self.begin_recording();
-                            if self.session.is_some() {
-                                self.request_auto_minimize(tray_available);
-                            }
-                        }
-                        Ok(()) => {
-                            self.countdown_deadline =
-                                Some(Instant::now() + Duration::from_secs(self.countdown_seconds));
-                            self.status = "倒计时中，请准备录制区域".into();
-                            self.error = false;
-                            self.request_auto_minimize(tray_available);
-                        }
-                        Err(e) => {
-                            self.status = format!("无法开始录制：{e:#}");
-                            self.error = true;
-                        }
-                    }
-                }
+                self.request_start(tray_available);
             }
             if self.countdown_deadline.is_some() && ui.button("取消倒计时").clicked() {
                 self.request_stop();
@@ -892,11 +1073,22 @@ impl RecorderState {
         }
         let Some(display) = self.display.clone() else {
             self.selecting = false;
+            self.selection_texture = None;
             self.status = "没有可用的显示器，请刷新屏幕列表".into();
             self.error = true;
             return;
         };
         let placement_error = place_selection_overlay(&display).err();
+        if self.selection_texture.is_none() {
+            #[cfg(windows)]
+            if let Ok(image) = capture_display_snapshot(&display) {
+                self.selection_texture = Some(ctx.load_texture(
+                    "recorder-selection-snapshot",
+                    image,
+                    egui::TextureOptions::LINEAR,
+                ));
+            }
+        }
         let id = egui::ViewportId::from_hash_of("zi-recorder-select");
         let builder = egui::ViewportBuilder::default()
             .with_title("选择录制区域 · Esc 取消")
@@ -910,6 +1102,7 @@ impl RecorderState {
         ctx.show_viewport_immediate(id, builder, |panel, _| {
             if let Some(error) = &placement_error {
                 self.selecting = false;
+                self.selection_texture = None;
                 self.status = format!("无法在所选屏幕框选区域：{error:#}");
                 self.error = true;
                 panel.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -917,32 +1110,61 @@ impl RecorderState {
             }
             if panel.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
                 self.selecting = false;
+                self.selection_texture = None;
                 self.drag_start = None;
                 self.status = "已取消区域选择".into();
                 panel.send_viewport_cmd(egui::ViewportCommand::Close);
                 return;
             }
             egui::CentralPanel::default()
-                .frame(egui::Frame::new().fill(Color32::from_rgba_unmultiplied(9, 17, 29, 110)))
+                .frame(egui::Frame::new().fill(Color32::TRANSPARENT))
                 .show(panel, |ui| {
                     let (rect, response) =
                         ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+                    if let Some(texture) = &self.selection_texture {
+                        ui.painter().image(
+                            texture.id(),
+                            rect,
+                            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                            Color32::WHITE,
+                        );
+                    }
+                    ui.painter().rect_filled(
+                        rect,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(9, 17, 29, 58),
+                    );
                     let pointer = response.interact_pointer_pos();
                     if response.drag_started() {
                         self.drag_start = pointer;
                     }
                     if let (Some(a), Some(b)) = (self.drag_start, pointer) {
                         let selection = egui::Rect::from_two_pos(a, b).intersect(rect);
+                        if let Some(texture) = &self.selection_texture {
+                            ui.painter().with_clip_rect(selection).image(
+                                texture.id(),
+                                rect,
+                                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                                Color32::WHITE,
+                            );
+                        }
                         ui.painter().rect_filled(
                             selection,
                             2.0,
-                            Color32::from_rgba_unmultiplied(80, 160, 245, 45),
+                            Color32::from_rgba_unmultiplied(80, 160, 245, 18),
                         );
                         ui.painter().rect_stroke(
                             selection,
                             2.0,
                             Stroke::new(2.0, Color32::from_rgb(120, 195, 255)),
                             StrokeKind::Inside,
+                        );
+                        ui.painter().text(
+                            selection.right_bottom() + egui::vec2(-8.0, -8.0),
+                            egui::Align2::RIGHT_BOTTOM,
+                            format!("{:.0} × {:.0}", selection.width(), selection.height()),
+                            egui::FontId::proportional(16.0),
+                            Color32::WHITE,
                         );
                     }
                     ui.painter().text(
@@ -968,6 +1190,7 @@ impl RecorderState {
                                     self.status = "区域已选好，点击“开始录制”".into();
                                     self.error = false;
                                     self.selecting = false;
+                                    self.selection_texture = None;
                                     panel.send_viewport_cmd(egui::ViewportCommand::Close);
                                 }
                                 None => {

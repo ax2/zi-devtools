@@ -1,5 +1,5 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -357,10 +357,34 @@
     {
       "id": "image-tools",
       "name": "图片工作台",
-      "status": "planned",
-      "category": "扩展工具",
+      "status": "implemented",
+      "category": "文件与系统",
       "priority": "P2",
-      "scope": "尺寸、格式转换与压缩预览，保留原文件"
+      "scope": "本机读取 PNG/JPEG/WebP，查看尺寸、缩小宽度并按比例输出，转换格式及 JPEG 质量；显示最终编码预览和精确预览文件大小，明确另存新文件且拒绝覆盖原图；单文件 32 MiB、1600 万像素上限"
+    },
+    {
+      "id": "image-batch",
+      "name": "图片批处理",
+      "status": "planned",
+      "category": "文件与系统",
+      "priority": "P2",
+      "scope": "多文件选取、统一尺寸和格式规则、冲突预览、批量进度与取消"
+    },
+    {
+      "id": "image-crop-annotate",
+      "name": "图片裁剪与标注",
+      "status": "planned",
+      "category": "文件与系统",
+      "priority": "P2",
+      "scope": "可视化裁剪、遮挡敏感区域与简单箭头/文字标注，导出前确认"
+    },
+    {
+      "id": "image-metadata",
+      "name": "图片元数据检查与清理",
+      "status": "planned",
+      "category": "文件与系统",
+      "priority": "P2",
+      "scope": "EXIF/ICC 信息检查、位置等敏感元数据提示及显式清理副本"
     },
     {
       "id": "markdown",
@@ -568,7 +592,7 @@
       "status": "implemented",
       "category": "文件与系统",
       "priority": "P1",
-      "scope": "鼠标框选或整屏，H.264 MP4 与光标，倒计时、可选录满后自动停止、自动最小化与恢复、托盘和快捷面板控制、连续录制新文件名，可选静音、系统声、麦克风或双声源；中断时尽可能封装已录片段并提示原因；主屏实测"
+      "scope": "显示当前屏幕画面的鼠标框选或整屏，H.264 MP4 与光标，4/8/16 Mbps 质量档位及按时长大小估算、保存后实际大小，倒计时、自动停止、自动最小化与恢复、托盘/快捷面板及全局录屏热键，可选静音、系统声、麦克风或双声源；中断时尽可能保存已录片段；主屏实测"
     },
     {
       "id": "screen-recorder-multimonitor",

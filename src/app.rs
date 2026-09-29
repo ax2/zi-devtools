@@ -112,12 +112,14 @@ enum Page {
     Network,
     Data,
     Files,
+    Images,
     Settings,
     Plugins,
     Mcp,
     Recorder,
     Integrations,
-    Frameworks,
+    Java,
+    Django,
 }
 
 struct ToolEntry {
@@ -168,6 +170,7 @@ fn tool_category(id: &str) -> &'static str {
         "http" | "network" | "url" | "url-inspect" | "cidr" | "jwt" => "网络与接口",
         "task-center"
         | "files"
+        | "image-tools"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -304,6 +307,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "mcp stdio jsonrpc tool inspector agent 协议 连接 调试".into(),
         },
         ToolEntry {
+            id: "image-tools".into(),
+            title: "图片工作台".into(),
+            description: "本地查看、缩小、转换与编码大小预览".into(),
+            page: Page::Images,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "image png jpeg webp resize compress 图片 缩放 转换 压缩".into(),
+        },
+        ToolEntry {
             id: "screen-recorder".into(),
             title: "屏幕录制".into(),
             description: "鼠标框选区域，录制屏幕并保存 MP4".into(),
@@ -373,7 +385,11 @@ fn catalog() -> Vec<ToolEntry> {
                     tool.description(),
                     tool.help()
                 ),
-                page: Page::Frameworks,
+                page: if tool.category() == "Java 与 JVM" {
+                    Page::Java
+                } else {
+                    Page::Django
+                },
                 kind: None,
             }),
     );
@@ -463,6 +479,8 @@ pub struct DevToolsApp {
     hotkey: crate::hotkey::Service,
     hotkey_edit: crate::hotkey::Setting,
     hotkey_status: String,
+    recorder_hotkeys: crate::hotkey::RecorderHotkeys,
+    recorder_hotkey_status: String,
     quick_open: bool,
     quick_active: Arc<AtomicBool>,
     quick_focus: bool,
@@ -518,6 +536,7 @@ pub struct DevToolsApp {
     plugins: crate::plugin_ui::PluginState,
     mcp: crate::mcp_ui::McpState,
     recorder: crate::recorder_ui::RecorderState,
+    images: crate::image_tools::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -528,8 +547,8 @@ pub struct DevToolsApp {
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
-    pub fn preview_begin_recorder_selection(&mut self) {
-        self.recorder.preview_begin_selection();
+    pub fn preview_begin_recorder_selection(&mut self, ctx: &egui::Context) {
+        self.recorder.preview_begin_selection(ctx);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_recorder_region(&self) -> Option<crate::recorder::Region> {
@@ -635,6 +654,10 @@ impl DevToolsApp {
                 self.page = Page::Recorder;
                 self.recorder.preview_interrupted();
             }
+            104 | 105 => {
+                self.page = Page::Images;
+                self.images.preview_fixture(ctx);
+            }
             78..=97 => {
                 self.page = Page::Plugins;
                 if !self
@@ -732,9 +755,13 @@ impl DevToolsApp {
                 }
             }
             32..=59 => {
-                self.page = Page::Frameworks;
-                self.frameworks
-                    .preview(crate::framework::Tool::ALL[(scene - 32) / 2]);
+                let tool = crate::framework::Tool::ALL[(scene - 32) / 2];
+                self.page = if tool.category() == "Java 与 JVM" {
+                    Page::Java
+                } else {
+                    Page::Django
+                };
+                self.frameworks.preview(tool);
             }
             27..=30 => {
                 let kind = if scene <= 28 {
@@ -831,6 +858,30 @@ impl DevToolsApp {
         }
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_taskbar_detached(&self) -> bool {
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_TOOLWINDOW,
+            };
+            self.window_handle.is_some_and(|handle| unsafe {
+                GetWindowLongPtrW(handle as _, GWL_EXSTYLE) & WS_EX_TOOLWINDOW as isize != 0
+            })
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_hide_and_restore_taskbar(&mut self, ctx: &egui::Context, restore: bool) {
+        if restore {
+            restore_main_window(self.window_handle, ctx);
+        } else {
+            self.hide_to_tray(ctx);
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_minimized(&self) -> bool {
         #[cfg(windows)]
         {
@@ -875,8 +926,7 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_framework_navigation(&self) -> (bool, bool) {
         (
-            self.page == Page::Frameworks
-                && self.frameworks.selected == crate::framework::Tool::Sql,
+            self.page == Page::Django && self.frameworks.selected == crate::framework::Tool::Sql,
             self.frameworks.preview_completed > 0 && !self.frameworks.is_running(),
         )
     }
@@ -938,14 +988,21 @@ impl DevToolsApp {
         let hotkey = crate::hotkey::Service::new(hotkey_edit.clone(), move || {
             wake_main_window(window_handle, &wake_ctx)
         });
+        let recorder_wake = cc.egui_ctx.clone();
+        let recorder_hotkeys =
+            crate::hotkey::RecorderHotkeys::new(!cfg!(feature = "ui-preview"), move || {
+                wake_main_window(window_handle, &recorder_wake)
+            });
         let duplicate_count = other_instance_count();
         let mut recorder = crate::recorder_ui::RecorderState::default();
         recorder.set_auto_minimize(preferences.recorder_auto_minimize);
         recorder.set_auto_stop_minutes(preferences.recorder_auto_stop_minutes);
+        recorder.set_quality(preferences.recorder_quality);
         let mut app = Self {
             #[cfg(feature = "ui-preview")]
             preview_panel_frames: 0,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
+            recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,
             quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), tasks: Default::default(), handoff: None,
             manager,
@@ -990,6 +1047,7 @@ impl DevToolsApp {
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: Default::default(),
             recorder,
+            images: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1200,7 +1258,11 @@ impl DevToolsApp {
                     TrayTool::Integrations => self.navigate(Page::Integrations, None),
                     TrayTool::Framework(tool) => {
                         self.frameworks.select(tool);
-                        self.page = Page::Frameworks;
+                        self.page = if tool.category() == "Java 与 JVM" {
+                            Page::Java
+                        } else {
+                            Page::Django
+                        };
                         self.visit(tool.id());
                     }
                 },
@@ -1343,8 +1405,10 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
                         nav_button(ui, &mut self.page, Page::Mcp, "MCP 协议调试台");
                         nav_button(ui, &mut self.page, Page::Recorder, "屏幕录制");
+                        nav_button(ui, &mut self.page, Page::Images, "图片工作台");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
-                        nav_button(ui, &mut self.page, Page::Frameworks, "Java / Django 诊断");
+                        nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
+                        nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
                         ui.add_space(10.0);
                         ui.label(RichText::new("轻量工具").size(11.0).strong().color(p.muted));
                         ui.add_space(4.0);
@@ -1370,14 +1434,20 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 39  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 40  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
                     ui.horizontal(|ui| {
                         if ui
-                            .small_button(self.theme.label())
-                            .on_hover_text("切换亮 / 暗主题，自动保存")
+                            .add_sized(
+                                [36.0, 32.0],
+                                egui::Button::new(RichText::new("☀").size(20.0)),
+                            )
+                            .on_hover_text(format!(
+                                "当前{} · 点击切换主题，自动保存",
+                                self.theme.label()
+                            ))
                             .clicked()
                         {
                             self.set_theme(
@@ -1390,13 +1460,24 @@ impl DevToolsApp {
                             );
                         }
                         if ui
-                            .add_enabled(self.tray.is_some(), egui::Button::new("托盘").small())
-                            .on_hover_text("隐藏主窗口，任务继续运行")
+                            .add_enabled(
+                                self.tray.is_some(),
+                                egui::Button::new(RichText::new("↓").size(20.0))
+                                    .min_size([36.0, 32.0].into()),
+                            )
+                            .on_hover_text("隐藏到托盘 · 任务继续运行；单击托盘图标可打开")
                             .clicked()
                         {
                             self.hide_to_tray(ctx);
                         }
-                        if ui.small_button("设置").clicked() {
+                        if ui
+                            .add_sized(
+                                [36.0, 32.0],
+                                egui::Button::new(RichText::new("⚙").size(20.0)),
+                            )
+                            .on_hover_text("设置")
+                            .clicked()
+                        {
                             self.page = Page::Settings;
                         }
                     });
@@ -1412,7 +1493,8 @@ impl DevToolsApp {
             if let Some(e) = catalog().into_iter().find(|e| {
                 e.page == self.page
                     && e.kind.is_none()
-                    && (e.page != Page::Frameworks || e.id == self.frameworks.selected.id())
+                    && (!matches!(e.page, Page::Java | Page::Django)
+                        || e.id == self.frameworks.selected.id())
             }) {
                 self.visit(&e.id);
             }
@@ -1530,7 +1612,11 @@ impl DevToolsApp {
             self.visit(&e.id);
         } else if let Some(tool) = crate::framework::Tool::from_id(&e.id) {
             self.frameworks.select(tool);
-            self.page = Page::Frameworks;
+            self.page = if tool.category() == "Java 与 JVM" {
+                Page::Java
+            } else {
+                Page::Django
+            };
             self.launcher_open = false;
             self.visit(&e.id);
         } else if e.id.starts_with("plugin:") {
@@ -3010,6 +3096,7 @@ impl DevToolsApp {
                 if ui.button("应用快捷键").clicked() { self.hotkey.configure(self.hotkey_edit.clone()); self.hotkey_status = "正在应用…".into(); }
                 ui.label(&self.hotkey_status);
                 if ui.button("打开快捷面板").clicked() { self.open_quick(ctx); }
+                ui.small(&self.recorder_hotkey_status);
                 ui.separator();
                 ui.label(RichText::new("托盘行为").strong());
                 ui.label("关闭窗口时程序继续驻留托盘，托管服务保持运行。左键打开快捷面板；右键可搜索工具、打开收藏/最近/常用、按分类访问插件和内置工具，并控制服务。");
@@ -3349,23 +3436,103 @@ fn hide_main_window(window_handle: Option<isize>) -> bool {
 
 #[cfg(windows)]
 fn set_main_window_cloaked(window_handle: Option<isize>, cloaked: bool) -> bool {
+    use std::sync::{Mutex, OnceLock};
     use windows_sys::Win32::{
         Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute},
-        UI::WindowsAndMessaging::IsWindow,
+        UI::WindowsAndMessaging::{
+            GWL_EXSTYLE, GetWindowLongPtrW, IsWindow, SW_HIDE, SW_SHOWNA, SWP_FRAMECHANGED,
+            SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos,
+            ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+        },
     };
+    static ORIGINAL_STYLE: OnceLock<Mutex<Option<(isize, isize)>>> = OnceLock::new();
     let Some(handle) = window_handle else {
         return false;
     };
     let window = handle as windows_sys::Win32::Foundation::HWND;
     let value = u32::from(cloaked);
-    unsafe {
-        IsWindow(window) != 0
-            && DwmSetWindowAttribute(
+    let Ok(mut saved) = ORIGINAL_STYLE.get_or_init(|| Mutex::new(None)).lock() else {
+        return false;
+    };
+    if unsafe { IsWindow(window) } == 0 {
+        return false;
+    }
+    if cloaked {
+        if saved.as_ref().is_some_and(|(hwnd, _)| *hwnd == handle) {
+            return true;
+        }
+        let style = unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) };
+        let hidden_style = (style | WS_EX_TOOLWINDOW as isize) & !(WS_EX_APPWINDOW as isize);
+        unsafe { SetWindowLongPtrW(window, GWL_EXSTYLE, hidden_style) };
+        if unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } != hidden_style {
+            return false;
+        }
+        let ok = unsafe {
+            DwmSetWindowAttribute(
                 window,
                 DWMWA_CLOAK as u32,
                 (&raw const value).cast(),
                 std::mem::size_of_val(&value) as u32,
             ) >= 0
+                && SetWindowPos(
+                    window,
+                    std::ptr::null_mut(),
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+                ) != 0
+        };
+        if ok {
+            // Force the shell to refresh taskbar membership after switching to a tool window.
+            // Show it immediately while DWM-cloaked so eframe continues processing tray events.
+            unsafe {
+                ShowWindow(window, SW_HIDE);
+                ShowWindow(window, SW_SHOWNA);
+            }
+            *saved = Some((handle, style));
+            return true;
+        }
+        unsafe {
+            SetWindowLongPtrW(window, GWL_EXSTYLE, style);
+            let zero = 0u32;
+            DwmSetWindowAttribute(
+                window,
+                DWMWA_CLOAK as u32,
+                (&raw const zero).cast(),
+                std::mem::size_of_val(&zero) as u32,
+            );
+        }
+        false
+    } else {
+        let ok = unsafe {
+            DwmSetWindowAttribute(
+                window,
+                DWMWA_CLOAK as u32,
+                (&raw const value).cast(),
+                std::mem::size_of_val(&value) as u32,
+            ) >= 0
+        };
+        if let Some((hwnd, style)) = saved.take() {
+            if hwnd == handle {
+                unsafe {
+                    SetWindowLongPtrW(window, GWL_EXSTYLE, style);
+                    SetWindowPos(
+                        window,
+                        std::ptr::null_mut(),
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+                    );
+                }
+            } else {
+                *saved = Some((hwnd, style));
+            }
+        }
+        ok
     }
 }
 
@@ -3405,7 +3572,7 @@ impl eframe::App for DevToolsApp {
         if self.frameworks.is_running() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
-        if self.page != Page::Frameworks {
+        if !matches!(self.page, Page::Java | Page::Django) {
             self.frameworks.clear_token();
         }
         if let Some(message) = self.plugins.poll() {
@@ -3436,6 +3603,28 @@ impl eframe::App for DevToolsApp {
                     }
                     Err(error) => self.hotkey_status = error,
                 },
+            }
+        }
+        let recorder_events: Vec<_> = self.recorder_hotkeys.events.try_iter().collect();
+        for event in recorder_events {
+            match event {
+                crate::hotkey::RecorderEvent::Registration(status) => {
+                    self.recorder_hotkey_status = status;
+                }
+                crate::hotkey::RecorderEvent::Action(crate::hotkey::RecorderAction::Start) => {
+                    self.page = Page::Recorder;
+                    if !self.recorder.request_start(self.tray.is_some()) {
+                        restore_main_window(self.window_handle, ctx);
+                    }
+                }
+                crate::hotkey::RecorderEvent::Action(
+                    crate::hotkey::RecorderAction::TogglePause,
+                ) => {
+                    self.recorder.toggle_pause();
+                }
+                crate::hotkey::RecorderEvent::Action(crate::hotkey::RecorderAction::Stop) => {
+                    self.recorder.request_stop();
+                }
             }
         }
         if let Some(result) = self.intake.poll() {
@@ -3593,21 +3782,41 @@ impl eframe::App for DevToolsApp {
                 Page::Recorder => {
                     let previous_auto_minimize = self.recorder.auto_minimize();
                     let previous_auto_stop = self.recorder.auto_stop_minutes();
+                    let previous_quality = self.recorder.quality();
                     egui::ScrollArea::vertical()
                         .id_salt("recorder-page")
                         .show(ui, |ui| self.recorder.ui(ui, self.tray.is_some()));
                     if self.recorder.auto_minimize() != previous_auto_minimize
                         || self.recorder.auto_stop_minutes() != previous_auto_stop
+                        || self.recorder.quality() != previous_quality
                     {
                         self.preferences.recorder_auto_minimize = self.recorder.auto_minimize();
                         self.preferences.recorder_auto_stop_minutes =
                             self.recorder.auto_stop_minutes();
+                        self.preferences.recorder_quality = self.recorder.quality();
                         if let Err(error) = self.preferences.save(&self.preferences_path) {
                             self.toast = Some((error.to_string(), Instant::now()));
                         }
                     }
                 }
-                Page::Frameworks => {
+                Page::Images => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("image-tools-page")
+                        .show(ui, |ui| self.images.ui(ui));
+                }
+                Page::Java | Page::Django => {
+                    let category = if self.page == Page::Java {
+                        "Java 与 JVM"
+                    } else {
+                        "Python 与 Django"
+                    };
+                    if self.frameworks.selected.category() != category {
+                        self.frameworks.select(if self.page == Page::Java {
+                            crate::framework::Tool::JavaEnvironment
+                        } else {
+                            crate::framework::Tool::PythonEnvironment
+                        });
+                    }
                     let before = self.frameworks.selected;
                     ui.horizontal(|ui| {
                         let id = self.frameworks.selected.id();
@@ -3625,8 +3834,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt(("frameworks", self.frameworks.selected.id()))
                         .show(ui, |ui| {
-                            self.frameworks
-                                .ui(ui, !self.launcher_open && self.handoff.is_none())
+                            self.frameworks.ui(
+                                ui,
+                                !self.launcher_open && self.handoff.is_none(),
+                                category,
+                            )
                         });
                     if self.frameworks.selected != before {
                         self.visit(self.frameworks.selected.id());
@@ -3886,8 +4098,8 @@ mod service_filter_tests {
 mod native_window_tests {
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, IsIconic, IsWindowVisible, IsZoomed, SW_MAXIMIZE,
-        SW_MINIMIZE, ShowWindow, WS_OVERLAPPEDWINDOW,
+        CreateWindowExW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, IsIconic, IsWindowVisible,
+        IsZoomed, SW_MAXIMIZE, SW_MINIMIZE, ShowWindow, WS_EX_TOOLWINDOW, WS_OVERLAPPEDWINDOW,
     };
 
     #[test]
@@ -3915,14 +4127,23 @@ mod native_window_tests {
         assert_eq!(unsafe { IsWindowVisible(window) }, 0);
         restore_main_window(Some(window as isize), &egui::Context::default());
         assert_ne!(unsafe { IsWindowVisible(window) }, 0);
+        let original_style = unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) };
         assert!(hide_main_window(Some(window as isize)));
         assert!(main_window_cloaked(Some(window as isize)));
+        assert_ne!(
+            unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) } & WS_EX_TOOLWINDOW as isize,
+            0
+        );
         unsafe {
             ShowWindow(window, SW_MAXIMIZE);
         }
         assert_ne!(unsafe { IsZoomed(window) }, 0);
         assert!(hide_main_window(Some(window as isize)));
         restore_main_window(Some(window as isize), &egui::Context::default());
+        assert_eq!(
+            unsafe { GetWindowLongPtrW(window, GWL_EXSTYLE) },
+            original_style
+        );
         assert_ne!(
             unsafe { IsZoomed(window) },
             0,

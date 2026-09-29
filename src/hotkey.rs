@@ -55,6 +55,117 @@ pub enum Event {
     Triggered,
     Configured(Setting, Result<(), String>),
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RecorderAction {
+    Start,
+    TogglePause,
+    Stop,
+}
+pub enum RecorderEvent {
+    Action(RecorderAction),
+    Registration(String),
+}
+pub struct RecorderHotkeys {
+    pub events: mpsc::Receiver<RecorderEvent>,
+    stop: mpsc::Sender<()>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl RecorderHotkeys {
+    pub fn new(enabled: bool, wake: impl Fn() + Send + 'static) -> Self {
+        let (stop, rx) = mpsc::channel();
+        let (out, events) = mpsc::channel();
+        let thread = std::thread::spawn(move || recorder_worker(enabled, rx, out, wake));
+        Self {
+            events,
+            stop,
+            thread: Some(thread),
+        }
+    }
+}
+impl Drop for RecorderHotkeys {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+#[cfg(windows)]
+fn recorder_worker(
+    enabled: bool,
+    stop: mpsc::Receiver<()>,
+    out: mpsc::Sender<RecorderEvent>,
+    wake: impl Fn(),
+) {
+    use windows_sys::Win32::UI::{
+        Input::KeyboardAndMouse::{MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey},
+        WindowsAndMessaging::{MSG, PM_REMOVE, PeekMessageW, WM_HOTKEY},
+    };
+    if !enabled {
+        return;
+    }
+    let bindings = [
+        (11, "Ctrl+Alt+Shift+R", RecorderAction::Start),
+        (12, "Ctrl+Alt+Shift+P", RecorderAction::TogglePause),
+        (13, "Ctrl+Alt+Shift+S", RecorderAction::Stop),
+    ];
+    let mut active = Vec::new();
+    let mut failures = Vec::new();
+    for (id, label, action) in bindings {
+        let Ok((modifiers, key)) = parse(label) else {
+            continue;
+        };
+        if unsafe { RegisterHotKey(std::ptr::null_mut(), id, modifiers | MOD_NOREPEAT, key) } != 0 {
+            active.push((id, action));
+        } else {
+            failures.push(label);
+        }
+    }
+    let status = if failures.is_empty() {
+        "录屏热键已启用：Ctrl+Alt+Shift+R 开始、+P 暂停/继续、+S 停止".to_owned()
+    } else {
+        format!(
+            "录屏热键被占用：{}；其余已注册热键仍可用",
+            failures.join("、")
+        )
+    };
+    let _ = out.send(RecorderEvent::Registration(status));
+    wake();
+    loop {
+        if stop.recv_timeout(Duration::from_millis(25)).is_ok() {
+            break;
+        }
+        let mut msg: MSG = unsafe { std::mem::zeroed() };
+        while unsafe {
+            PeekMessageW(
+                &mut msg,
+                std::ptr::null_mut(),
+                WM_HOTKEY,
+                WM_HOTKEY,
+                PM_REMOVE,
+            )
+        } != 0
+        {
+            if let Some((_, action)) = active.iter().find(|(id, _)| *id as usize == msg.wParam) {
+                let _ = out.send(RecorderEvent::Action(*action));
+                wake();
+            }
+        }
+    }
+    for (id, _) in active {
+        unsafe { UnregisterHotKey(std::ptr::null_mut(), id) };
+    }
+}
+#[cfg(not(windows))]
+fn recorder_worker(
+    _enabled: bool,
+    stop: mpsc::Receiver<()>,
+    _out: mpsc::Sender<RecorderEvent>,
+    _wake: impl Fn(),
+) {
+    let _ = stop.recv();
+}
 enum Command {
     Configure(Setting),
     Stop,
@@ -182,6 +293,38 @@ fn worker(rx: mpsc::Receiver<Command>, out: mpsc::Sender<Event>, wake: impl Fn()
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires an unlocked interactive Windows desktop with recorder hotkeys available"]
+    fn recorder_hotkeys_dispatch_start_pause_and_stop() {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{KEYEVENTF_KEYUP, keybd_event};
+        let service = RecorderHotkeys::new(true, || {});
+        let RecorderEvent::Registration(status) =
+            service.events.recv_timeout(Duration::from_secs(3)).unwrap()
+        else {
+            panic!("missing registration")
+        };
+        assert!(status.contains("已启用"), "{status}");
+        for (key, expected) in [
+            (b'R', RecorderAction::Start),
+            (b'P', RecorderAction::TogglePause),
+            (b'S', RecorderAction::Stop),
+        ] {
+            unsafe {
+                keybd_event(0x11, 0, 0, 0); // Ctrl
+                keybd_event(0x12, 0, 0, 0); // Alt
+                keybd_event(0x10, 0, 0, 0); // Shift
+                keybd_event(key, 0, 0, 0);
+                keybd_event(key, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(0x10, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(0x11, 0, KEYEVENTF_KEYUP, 0);
+            }
+            assert!(
+                matches!(service.events.recv_timeout(Duration::from_secs(3)).unwrap(), RecorderEvent::Action(action) if action == expected)
+            );
+        }
+    }
     #[test]
     fn shortcut_parser_rejects_ambiguous_and_plain_keys() {
         assert_eq!(parse(" ctrl + ALT + space ").unwrap(), (3, 32));

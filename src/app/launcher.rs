@@ -101,7 +101,11 @@ impl DevToolsApp {
                     _ => Tool::Celery,
                 };
                 self.frameworks.import_text(tool, value.text)?;
-                self.page = Page::Frameworks;
+                self.page = if tool.category() == "Java 与 JVM" {
+                    Page::Java
+                } else {
+                    Page::Django
+                };
                 self.visit(tool.id());
             }
         }

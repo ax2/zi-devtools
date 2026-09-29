@@ -5,6 +5,7 @@ pub mod diagnostics;
 pub mod fixture;
 pub mod framework;
 pub mod hotkey;
+pub mod image_tools;
 pub mod intake;
 pub mod integrations;
 pub mod network_tools;

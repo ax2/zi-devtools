@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.39.0"
+version = "0.40.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -38,6 +38,7 @@ tray-icon = "0.21"
 urlencoding = "2.1"
 uuid = { version = "1.18", features = ["v4"] }
 unicode-normalization = "0.1"
+image = { version = "0.25.8", default-features = false, features = ["png", "jpeg", "webp"] }
 
 [features]
 ui-preview = []

@@ -118,8 +118,8 @@ impl DevToolsApp {
             Page::Data => Some(("数据工作台导出".into(), &self.data_state.output)),
             Page::Diff => Some(("文本差异报告".into(), &self.diff_state.diff_output)),
             Page::Network => Some(("网络诊断报告".into(), &self.network_state.output)),
-            Page::Frameworks => Some((
-                "Java / Django 诊断报告".into(),
+            Page::Java | Page::Django => Some((
+                format!("{}诊断报告", self.frameworks.selected.category()),
                 self.frameworks.result_text(),
             )),
             Page::Http => self

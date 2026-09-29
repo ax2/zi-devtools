@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 104] = [
+const NAMES: [&str; 106] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -114,6 +114,8 @@ const NAMES: [&str; 104] = [
     "recorder-light",
     "recorder-interrupted-dark",
     "recorder-interrupted-light",
+    "images-dark",
+    "images-light",
 ];
 
 struct Capture {
@@ -171,6 +173,33 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("taskbar-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 0, self.fixture.clone());
+            }
+            if self.frames == 5 {
+                self.app.preview_hide_and_restore_taskbar(ctx, false);
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 16 {
+                assert!(
+                    self.app.preview_hidden() && self.app.preview_taskbar_detached(),
+                    "hidden workbench must leave taskbar"
+                );
+                self.app.preview_hide_and_restore_taskbar(ctx, true);
+            }
+            if self.frames == 26 {
+                assert!(
+                    !self.app.preview_hidden() && !self.app.preview_taskbar_detached(),
+                    "restored workbench must return to taskbar"
+                );
+                println!("PASS eframe taskbar style hide and restore");
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some(
@@ -402,6 +431,7 @@ impl eframe::App for Capture {
                         )),
                         audio_mode,
                         AudioGains::default(),
+                        recorder::RecordingQuality::default(),
                         display,
                     )
                     .unwrap(),
@@ -500,7 +530,7 @@ impl eframe::App for Capture {
         if std::env::args().nth(3).as_deref() == Some("recorder-interaction") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 100, self.fixture.clone());
-                self.app.preview_begin_recorder_selection();
+                self.app.preview_begin_recorder_selection(ctx);
                 std::thread::spawn(drag_recorder_region);
             }
             self.app.update(ctx, frame);
@@ -512,6 +542,19 @@ impl eframe::App for Capture {
             }
             if self.started.elapsed() > Duration::from_secs(30) {
                 panic!("recorder drag timed out");
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
+        if std::env::args().nth(3).as_deref() == Some("recorder-visual") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 100, self.fixture.clone());
+                self.app.preview_begin_recorder_selection(ctx);
+            }
+            self.app.update(ctx, frame);
+            if self.started.elapsed() > Duration::from_secs(60) {
+                std::process::exit(0);
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(30));

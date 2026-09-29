@@ -16,6 +16,7 @@ pub struct Preferences {
     pub usage: std::collections::BTreeMap<String, u32>,
     pub recorder_auto_minimize: bool,
     pub recorder_auto_stop_minutes: u16,
+    pub recorder_quality: crate::recorder::RecordingQuality,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -27,6 +28,7 @@ impl Default for Preferences {
             usage: Default::default(),
             recorder_auto_minimize: true,
             recorder_auto_stop_minutes: 0,
+            recorder_quality: crate::recorder::RecordingQuality::default(),
         }
     }
 }
@@ -116,6 +118,7 @@ mod tests {
         prefs.visit("json");
         prefs.recorder_auto_minimize = false;
         prefs.recorder_auto_stop_minutes = 15;
+        prefs.recorder_quality = crate::recorder::RecordingQuality::Detailed;
         prefs.favorites.push("plugin:disabled/tool".into());
         prefs.save(&path).unwrap();
         let restored = Preferences::load(&path);
@@ -124,6 +127,10 @@ mod tests {
         assert_eq!(restored.usage["json"], 1);
         assert!(!restored.recorder_auto_minimize);
         assert_eq!(restored.recorder_auto_stop_minutes, 15);
+        assert_eq!(
+            restored.recorder_quality,
+            crate::recorder::RecordingQuality::Detailed
+        );
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::write(&path, "invalid").unwrap();
         assert!(Preferences::load(&path).recent.is_empty());
@@ -139,6 +146,10 @@ mod tests {
         assert!(p.recent.is_empty());
         assert!(p.recorder_auto_minimize);
         assert_eq!(p.recorder_auto_stop_minutes, 0);
+        assert_eq!(
+            p.recorder_quality,
+            crate::recorder::RecordingQuality::Balanced
+        );
         for i in 0..30 {
             p.visit(&format!("tool-{i}"));
         }
