@@ -631,6 +631,10 @@ impl DevToolsApp {
                 self.page = Page::Recorder;
                 self.recorder.preview_fixture();
             }
+            102 | 103 => {
+                self.page = Page::Recorder;
+                self.recorder.preview_interrupted();
+            }
             78..=97 => {
                 self.page = Page::Plugins;
                 if !self
@@ -1366,7 +1370,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 38  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 39  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

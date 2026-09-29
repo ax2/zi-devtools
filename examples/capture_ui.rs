@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 102] = [
+const NAMES: [&str; 104] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -112,6 +112,8 @@ const NAMES: [&str; 102] = [
     "mcp-light",
     "recorder-dark",
     "recorder-light",
+    "recorder-interrupted-dark",
+    "recorder-interrupted-light",
 ];
 
 struct Capture {
@@ -458,6 +460,9 @@ impl eframe::App for Capture {
                             fs::remove_file(path).unwrap();
                             println!("PASS eframe recorder smoke");
                             std::process::exit(0);
+                        }
+                        Event::Interrupted { reason, .. } => {
+                            panic!("recorder smoke interrupted: {reason}");
                         }
                     }
                 }

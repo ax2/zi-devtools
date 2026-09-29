@@ -79,6 +79,7 @@ impl DisplayInfo {
     }
     fn same_topology(&self, other: &Self) -> bool {
         self.device_name == other.device_name
+            && self.primary == other.primary
             && (self.x, self.y, self.width, self.height)
                 == (other.x, other.y, other.width, other.height)
     }
@@ -97,10 +98,10 @@ impl DisplayInfo {
         )
     }
 }
-#[derive(Clone, Copy)]
 struct CaptureTarget {
     monitor: Monitor,
     region: Region,
+    display: DisplayInfo,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AudioMode {
@@ -177,17 +178,22 @@ impl Region {
 pub enum Event {
     Started,
     Finished(Result<PathBuf, String>),
+    Interrupted { path: PathBuf, reason: String },
 }
 pub struct Session {
     pub stop: Arc<AtomicBool>,
     pub pause: Arc<PauseClock>,
     pub levels: Arc<AtomicU32>,
     pub events: Receiver<Event>,
+    #[cfg(test)]
+    pub(crate) interrupt_for_test: Arc<AtomicU32>,
     worker: Option<thread::JoinHandle<()>>,
 }
 struct RecordingSignals {
     pause: Arc<PauseClock>,
     levels: Arc<AtomicU32>,
+    #[cfg(test)]
+    interrupt_for_test: Arc<AtomicU32>,
 }
 impl Session {
     pub fn stop_and_join(&mut self) {
@@ -409,6 +415,7 @@ pub fn start_on_display(
     let target = CaptureTarget {
         monitor: resolve_display(&display)?,
         region,
+        display,
     };
     let (tx, events) = unbounded();
     let stop = Arc::new(AtomicBool::new(false));
@@ -417,21 +424,35 @@ pub fn start_on_display(
     let stop_worker = stop.clone();
     let pause_worker = pause.clone();
     let levels_worker = levels.clone();
+    #[cfg(test)]
+    let interrupt_for_test = Arc::new(AtomicU32::new(0));
+    #[cfg(test)]
+    let interrupt_worker = interrupt_for_test.clone();
     let worker = thread::spawn(move || {
         let signals = RecordingSignals {
             pause: pause_worker,
             levels: levels_worker,
+            #[cfg(test)]
+            interrupt_for_test: interrupt_worker,
         };
         let result = record(target, &output, audio, gains, signals, &stop_worker, &tx);
-        let _ = tx.send(Event::Finished(
-            result.map(|_| output).map_err(|e| format!("{e:#}")),
-        ));
+        let event = match result {
+            Ok(Some(reason)) => Event::Interrupted {
+                path: output,
+                reason,
+            },
+            Ok(None) => Event::Finished(Ok(output)),
+            Err(error) => Event::Finished(Err(format!("{error:#}"))),
+        };
+        let _ = tx.send(event);
     });
     Ok(Session {
         stop,
         pause,
         levels,
         events,
+        #[cfg(test)]
+        interrupt_for_test,
         worker: Some(worker),
     })
 }
@@ -473,7 +494,7 @@ fn record(
     signals: RecordingSignals,
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
-) -> Result<()> {
+) -> Result<Option<String>> {
     let filename = output
         .file_stem()
         .and_then(|v| v.to_str())
@@ -482,13 +503,15 @@ fn record(
         ".{filename}.{}.recording.mp4",
         uuid::Uuid::new_v4()
     ));
-    let result = record_to_temp(target, &temp, audio, gains, signals, stop, tx);
-    if let Err(error) = result {
-        let _ = std::fs::remove_file(&temp);
-        return Err(error);
-    }
+    let warning = match record_to_temp(target, &temp, audio, gains, signals, stop, tx) {
+        Ok(warning) => warning,
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp);
+            return Err(error);
+        }
+    };
     commit_temp(&temp, output)?;
-    Ok(())
+    Ok(warning)
 }
 
 fn commit_temp(temp: &Path, output: &Path) -> Result<()> {
@@ -520,7 +543,7 @@ fn record_to_temp(
     signals: RecordingSignals,
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
-) -> Result<()> {
+) -> Result<Option<String>> {
     // Device startup may take seconds. Complete it before the video clock begins so that the
     // output never includes an invisible pre-roll while the UI still says "starting".
     let mut audio_timeline =
@@ -531,20 +554,20 @@ fn record_to_temp(
         let _ = timeline.stop();
         return Err(error.context("清理音频启动缓冲失败"));
     }
+    let CaptureTarget {
+        monitor,
+        region,
+        display,
+    } = target;
     let settings = Settings::new(
-        target.monitor,
+        monitor,
         CursorCaptureSettings::WithCursor,
         DrawBorderSettings::WithoutBorder,
         SecondaryWindowSettings::Include,
         MinimumUpdateIntervalSettings::Custom(Duration::from_millis(33)),
         DirtyRegionSettings::Default,
         ColorFormat::Bgra8,
-        (
-            target.region,
-            output.to_path_buf(),
-            audio,
-            signals.pause.clone(),
-        ),
+        (region, output.to_path_buf(), audio, signals.pause.clone()),
     );
     let control = match Capture::start_free_threaded(settings) {
         Ok(control) => control,
@@ -558,22 +581,41 @@ fn record_to_temp(
     let callback = control.callback();
     let capture_started = callback.lock().started;
     let _ = tx.send(Event::Started);
+    let mut warnings = Vec::new();
+    let mut audio_fault = false;
+    let mut last_topology_check = Instant::now();
     while !stop.load(Ordering::Acquire) && !control.is_finished() {
+        #[cfg(test)]
+        if let injected @ 1..=2 = signals.interrupt_for_test.load(Ordering::Acquire) {
+            if injected == 2 {
+                warnings.push("测试模拟音频采集中断".to_owned());
+                audio_fault = true;
+            } else {
+                warnings.push("测试模拟画面采集中断".to_owned());
+            }
+            break;
+        }
+        if last_topology_check.elapsed() >= Duration::from_secs(1) {
+            if let Err(error) = validate_display(&display) {
+                warnings.push(format!("显示器在录制中变化或断开：{error:#}"));
+                break;
+            }
+            last_topology_check = Instant::now();
+        }
         if let Some(timeline) = &mut audio_timeline {
-            if let Err(e) = timeline.tick(&callback, signals.pause.elapsed_since(capture_started)) {
-                let _ = timeline.stop();
-                let _ = control.stop();
-                return Err(e.context("音频捕获失败"));
+            if let Err(error) =
+                timeline.tick(&callback, signals.pause.elapsed_since(capture_started))
+            {
+                warnings.push(format!("音频捕获失败：{error:#}"));
+                audio_fault = true;
+                break;
             }
         }
         if let Some(elapsed) = signals.pause.elapsed_since(capture_started)
             && let Err(error) = callback.lock().keep_video_alive(elapsed)
         {
-            if let Some(timeline) = &mut audio_timeline {
-                let _ = timeline.stop();
-            }
-            let _ = control.stop();
-            return Err(error.context("维持视频时间线失败"));
+            warnings.push(format!("维持视频时间线失败：{error:#}"));
+            break;
         }
         thread::sleep(Duration::from_millis(if audio_timeline.is_some() {
             10
@@ -581,29 +623,50 @@ fn record_to_temp(
             80
         }));
     }
+    if control.is_finished() && !stop.load(Ordering::Acquire) && warnings.is_empty() {
+        warnings.push("画面采集意外结束".to_owned());
+    }
     // Capture shutdown can take seconds. Freeze the timeline before stopping it so the
     // terminal video frame and audio tail refer to the same user-visible stop instant.
     let final_duration = signals.pause.duration_at_stop(capture_started);
-    let audio_tail = audio_timeline
-        .as_mut()
-        .map(|timeline| timeline.tick(&callback, Some(final_duration)))
-        .transpose();
-    let audio_stop = audio_timeline.as_mut().map(AudioTimeline::stop).transpose();
+    if !audio_fault
+        && let Some(timeline) = &mut audio_timeline
+        && let Err(error) = timeline.tick(&callback, Some(final_duration))
+    {
+        warnings.push(format!("补齐末尾音频失败：{error:#}"));
+    }
+    if let Some(timeline) = &mut audio_timeline
+        && let Err(error) = timeline.stop()
+    {
+        warnings.push(format!("停止音频设备失败：{error:#}"));
+    }
     signals.levels.store(0, Ordering::Release);
     signals.pause.set_paused(true);
-    let capture_stop = control.stop().map_err(|e| anyhow!("停止捕获失败：{e}"));
-    audio_tail?;
-    audio_stop?;
-    capture_stop?;
-    let encoder = {
+    if let Err(error) = control.stop() {
+        warnings.push(format!("停止画面采集失败：{error}"));
+    }
+    let (extend_error, encoder) = {
         let mut capture = callback.lock();
-        capture.extend_to_stop(final_duration)?;
-        capture.encoder.take().context("编码器未创建")?
+        if capture.flipped.is_empty() {
+            bail!("没有捕获到画面帧，未创建空视频");
+        }
+        let extend_error = capture.extend_to_stop(final_duration).err();
+        let encoder = capture.encoder.take().context("编码器未创建")?;
+        (extend_error, encoder)
     };
+    if let Some(error) = extend_error {
+        warnings.push(format!("补齐最后画面失败：{error:#}"));
+    }
     encoder
         .finish()
         .map_err(|e| anyhow!("保存 MP4 失败：{e}"))?;
-    Ok(())
+    Ok((!warnings.is_empty()).then(|| {
+        warnings
+            .into_iter()
+            .map(|warning| warning.chars().take(300).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("；")
+    }))
 }
 
 struct AudioInput {
@@ -896,6 +959,9 @@ mod tests {
         let mut resized = display.clone();
         resized.width = 1_600;
         assert!(!display.same_topology(&resized));
+        let mut primary_changed = display.clone();
+        primary_changed.primary = true;
+        assert!(!display.same_topology(&primary_changed));
         let region = Region::from_points(
             (0.0, 0.0),
             (960.0, 540.0),

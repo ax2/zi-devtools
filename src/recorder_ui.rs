@@ -364,6 +364,17 @@ impl RecorderState {
         self.preview_levels = Some((62, 38));
         self.status = "界面预览：电平为示例值，真实录制时自动更新".into();
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_interrupted(&mut self) {
+        self.preview_fixture();
+        self.preview_levels = None;
+        self.status = "录制提前结束，已保存 MP4 片段：示例显示器在录制中断开".into();
+        self.error = true;
+        self.last_file = Some(PathBuf::from(
+            "C:\\Users\\demo\\Videos\\Zi-Recording-example.mp4",
+        ));
+        self.output = "C:\\Users\\demo\\Videos\\Zi-Recording-next.mp4".into();
+    }
     pub fn poll(&mut self) -> bool {
         let mut repaint = self.selecting || self.countdown_deadline.is_some();
         if let Some(deadline) = self.countdown_deadline
@@ -405,6 +416,21 @@ impl RecorderState {
                                 self.error = true;
                             }
                         }
+                        break;
+                    }
+                    Event::Interrupted { path, reason } => {
+                        self.started = None;
+                        self.pause_started = None;
+                        self.session = None;
+                        self.finish_auto_minimize();
+                        self.status = format!("录制提前结束，已保存 MP4 片段：{reason}");
+                        self.error = true;
+                        if self.output.trim() == path.to_string_lossy()
+                            && let Some(parent) = path.parent()
+                        {
+                            self.output = next_output_path(parent).to_string_lossy().into_owned();
+                        }
+                        self.last_file = Some(path);
                         break;
                     }
                 }
@@ -1231,6 +1257,129 @@ mod tests {
         let data = std::fs::read(&path).unwrap();
         assert!(data.windows(4).any(|part| part == b"moov"));
         eprintln!("auto-stop after {wall:?}, MP4 bytes={}", data.len());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "needs an unlocked interactive Windows desktop and working H.264 encoder"]
+    fn unexpected_capture_end_preserves_video_and_explains_it() {
+        use super::{RecorderState, TrayRecordingStatus};
+        use crate::recorder::{self, AudioMode, Region};
+        use std::{
+            sync::atomic::Ordering,
+            time::{Duration, Instant},
+        };
+
+        let display = recorder::primary_display().unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "zi-recorder-interrupted-{}.mp4",
+            uuid::Uuid::new_v4()
+        ));
+        let mut state = RecorderState::default();
+        state.display = Some(display.clone());
+        state.region = Some(Region {
+            x: 0,
+            y: 0,
+            width: display.width.min(640) & !1,
+            height: display.height.min(360) & !1,
+        });
+        state.output = path.to_string_lossy().into_owned();
+        state.audio = AudioMode::None;
+        state.begin_recording();
+        state.request_auto_minimize(true);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while state.tray_status() == TrayRecordingStatus::Starting && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Recording);
+        std::thread::sleep(Duration::from_secs(1));
+        state
+            .session
+            .as_ref()
+            .unwrap()
+            .interrupt_for_test
+            .store(1, Ordering::Release);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while state.tray_status() != TrayRecordingStatus::Idle && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            state.last_file.as_deref(),
+            Some(path.as_path()),
+            "{}",
+            state.status
+        );
+        assert!(state.error);
+        assert!(state.status.contains("提前结束"));
+        assert!(state.status.contains("测试模拟"));
+        assert!(state.take_restore_request());
+        assert_ne!(state.output, path.to_string_lossy());
+        let video = std::fs::read(&path).unwrap();
+        assert!(video.len() > 1024 && video.windows(4).any(|part| part == b"moov"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "needs an unlocked interactive Windows desktop and default microphone"]
+    fn microphone_interruption_preserves_recorded_segment() {
+        use super::{RecorderState, TrayRecordingStatus};
+        use crate::recorder::{self, AudioMode, Region};
+        use std::{
+            sync::atomic::Ordering,
+            time::{Duration, Instant},
+        };
+
+        let display = recorder::primary_display().unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "zi-recorder-audio-interrupted-{}.mp4",
+            uuid::Uuid::new_v4()
+        ));
+        let mut state = RecorderState::default();
+        state.display = Some(display.clone());
+        state.region = Some(Region {
+            x: 0,
+            y: 0,
+            width: display.width.min(640) & !1,
+            height: display.height.min(360) & !1,
+        });
+        state.output = path.to_string_lossy().into_owned();
+        state.audio = AudioMode::Microphone;
+        state.begin_recording();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while state.tray_status() == TrayRecordingStatus::Starting && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            state.tray_status(),
+            TrayRecordingStatus::Recording,
+            "{}",
+            state.status
+        );
+        std::thread::sleep(Duration::from_secs(1));
+        state
+            .session
+            .as_ref()
+            .unwrap()
+            .interrupt_for_test
+            .store(2, Ordering::Release);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while state.tray_status() != TrayRecordingStatus::Idle && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            state.last_file.as_deref(),
+            Some(path.as_path()),
+            "{}",
+            state.status
+        );
+        assert!(state.error && state.status.contains("音频"));
+        let video = std::fs::read(&path).unwrap();
+        assert!(video.windows(4).any(|part| part == b"moov"));
+        assert!(video.windows(4).any(|part| part == b"soun"));
         std::fs::remove_file(path).unwrap();
     }
 }
