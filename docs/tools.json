@@ -1,5 +1,5 @@
 {
-  "version": "0.30.0",
+  "version": "0.31.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -596,11 +596,19 @@
     },
     {
       "id": "screen-recorder-audio-meter",
-      "name": "录屏音频电平与长时同步",
+      "name": "录屏实时音频电平",
+      "status": "implemented",
+      "category": "文件与系统",
+      "priority": "P2",
+      "scope": "录制时分别显示系统声与麦克风短时峰值，暂停和静音自动归零；单次受控音调验证系统声输入"
+    },
+    {
+      "id": "screen-recorder-long-audio",
+      "name": "录屏长时音频稳定性",
       "status": "planned",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "实时监测两路电平，验证不同设备时钟下的长时同步与设备热拔插处理"
+      "scope": "验证不同声卡时钟下的长时同步、设备热拔插与异常恢复"
     },
     {
       "id": "mcp-export",

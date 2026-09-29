@@ -171,7 +171,8 @@ fn tool_category(id: &str) -> &'static str {
         | "file-intake"
         | "screen-recorder"
         | "screen-recorder-audio-mix"
-        | "screen-recorder-audio-gain" => "文件与系统",
+        | "screen-recorder-audio-gain"
+        | "screen-recorder-audio-meter" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
@@ -325,6 +326,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "audio gain volume system microphone 声音 音量 麦克风 录屏".into(),
+        },
+        ToolEntry {
+            id: "screen-recorder-audio-meter".into(),
+            title: "录屏实时音频电平".into(),
+            description: "录制时查看系统声音与麦克风输入电平".into(),
+            page: Page::Recorder,
+            kind: None,
+            category: String::new(),
+            keywords: "audio meter peak system microphone 声音 电平 静音 麦克风 录屏".into(),
         },
         ToolEntry {
             id: "services".into(),
@@ -1283,7 +1293,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 30  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 31  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1430,7 +1440,12 @@ impl DevToolsApp {
             self.data_state.show_transform();
             self.launcher_open = false;
             self.visit(&e.id);
-        } else if e.id == "screen-recorder-audio-mix" || e.id == "screen-recorder-audio-gain" {
+        } else if matches!(
+            e.id.as_str(),
+            "screen-recorder-audio-mix"
+                | "screen-recorder-audio-gain"
+                | "screen-recorder-audio-meter"
+        ) {
             self.recorder
                 .select_audio_mode(crate::recorder::AudioMode::SystemAndMicrophone);
             self.page = Page::Recorder;

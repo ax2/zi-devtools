@@ -54,6 +54,8 @@ pub struct RecorderState {
     status: String,
     error: bool,
     last_file: Option<PathBuf>,
+    #[cfg(feature = "ui-preview")]
+    preview_levels: Option<(u8, u8)>,
 }
 
 impl Default for RecorderState {
@@ -74,6 +76,8 @@ impl Default for RecorderState {
             status: String::new(),
             error: false,
             last_file: None,
+            #[cfg(feature = "ui-preview")]
+            preview_levels: None,
         }
     }
 }
@@ -155,7 +159,8 @@ impl RecorderState {
         });
         self.output = "C:\\Users\\demo\\Videos\\Zi-Recording-20260928-1928.mp4".into();
         self.audio = AudioMode::SystemAndMicrophone;
-        self.status = "区域已选好，点击“开始录制”".into();
+        self.preview_levels = Some((62, 38));
+        self.status = "界面预览：电平为示例值，真实录制时自动更新".into();
     }
     pub fn poll(&mut self) -> bool {
         let mut repaint = self.selecting || self.countdown_deadline.is_some();
@@ -354,6 +359,44 @@ impl RecorderState {
                 }
             });
             ui.small("100% 为原始音量；双声源各占一半，0% 可静音，过高可能削波。");
+        }
+        let live_levels = self
+            .session
+            .as_ref()
+            .map(|session| recorder::unpack_levels(session.levels.load(Ordering::Acquire)));
+        #[cfg(feature = "ui-preview")]
+        let levels = live_levels.or(self.preview_levels);
+        #[cfg(not(feature = "ui-preview"))]
+        let levels = live_levels;
+        if let Some((system, microphone)) = levels.filter(|_| self.audio != AudioMode::None) {
+            ui.add_space(6.0);
+            ui.small("录制电平（短时峰值）");
+            if matches!(
+                self.audio,
+                AudioMode::System | AudioMode::SystemAndMicrophone
+            ) {
+                ui.horizontal(|ui| {
+                    ui.label("系统声音");
+                    ui.add(egui::ProgressBar::new(f32::from(system) / 100.0).desired_width(150.0));
+                    if system == 0 {
+                        ui.small("静音");
+                    }
+                });
+            }
+            if matches!(
+                self.audio,
+                AudioMode::Microphone | AudioMode::SystemAndMicrophone
+            ) {
+                ui.horizontal(|ui| {
+                    ui.label("麦克风");
+                    ui.add(
+                        egui::ProgressBar::new(f32::from(microphone) / 100.0).desired_width(150.0),
+                    );
+                    if microphone == 0 {
+                        ui.small("静音");
+                    }
+                });
+            }
         }
         ui.horizontal(|ui| {
             ui.label("开始前倒计时");

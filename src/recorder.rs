@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
     thread,
     time::{Duration, Instant},
@@ -115,8 +115,13 @@ pub enum Event {
 pub struct Session {
     pub stop: Arc<AtomicBool>,
     pub pause: Arc<PauseClock>,
+    pub levels: Arc<AtomicU32>,
     pub events: Receiver<Event>,
     worker: Option<thread::JoinHandle<()>>,
+}
+struct RecordingSignals {
+    pause: Arc<PauseClock>,
+    levels: Arc<AtomicU32>,
 }
 impl Session {
     pub fn stop_and_join(&mut self) {
@@ -266,18 +271,16 @@ pub fn start_with_gains(
     let (tx, events) = unbounded();
     let stop = Arc::new(AtomicBool::new(false));
     let pause = Arc::new(PauseClock::default());
+    let levels = Arc::new(AtomicU32::new(0));
     let stop_worker = stop.clone();
     let pause_worker = pause.clone();
+    let levels_worker = levels.clone();
     let worker = thread::spawn(move || {
-        let result = record(
-            region,
-            &output,
-            audio,
-            gains,
-            pause_worker,
-            &stop_worker,
-            &tx,
-        );
+        let signals = RecordingSignals {
+            pause: pause_worker,
+            levels: levels_worker,
+        };
+        let result = record(region, &output, audio, gains, signals, &stop_worker, &tx);
         let _ = tx.send(Event::Finished(
             result.map(|_| output).map_err(|e| format!("{e:#}")),
         ));
@@ -285,6 +288,7 @@ pub fn start_with_gains(
     Ok(Session {
         stop,
         pause,
+        levels,
         events,
         worker: Some(worker),
     })
@@ -317,7 +321,7 @@ fn record(
     output: &Path,
     audio: AudioMode,
     gains: AudioGains,
-    pause: Arc<PauseClock>,
+    signals: RecordingSignals,
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
 ) -> Result<()> {
@@ -329,7 +333,7 @@ fn record(
         ".{filename}.{}.recording.mp4",
         uuid::Uuid::new_v4()
     ));
-    let result = record_to_temp(region, &temp, audio, gains, pause, stop, tx);
+    let result = record_to_temp(region, &temp, audio, gains, signals, stop, tx);
     if let Err(error) = result {
         let _ = std::fs::remove_file(&temp);
         return Err(error);
@@ -364,13 +368,14 @@ fn record_to_temp(
     output: &Path,
     audio: AudioMode,
     gains: AudioGains,
-    pause: Arc<PauseClock>,
+    signals: RecordingSignals,
     stop: &AtomicBool,
     tx: &crossbeam_channel::Sender<Event>,
 ) -> Result<()> {
     // Device startup may take seconds. Complete it before the video clock begins so that the
     // output never includes an invisible pre-roll while the UI still says "starting".
-    let mut audio_timeline = AudioTimeline::new(audio, gains).context("音频设备启动失败")?;
+    let mut audio_timeline =
+        AudioTimeline::new(audio, gains, signals.levels.clone()).context("音频设备启动失败")?;
     if let Some(timeline) = &mut audio_timeline
         && let Err(error) = timeline.discard_initial()
     {
@@ -385,7 +390,7 @@ fn record_to_temp(
         MinimumUpdateIntervalSettings::Custom(Duration::from_millis(33)),
         DirtyRegionSettings::Default,
         ColorFormat::Bgra8,
-        (region, output.to_path_buf(), audio, pause.clone()),
+        (region, output.to_path_buf(), audio, signals.pause.clone()),
     );
     let control = match Capture::start_free_threaded(settings) {
         Ok(control) => control,
@@ -401,7 +406,7 @@ fn record_to_temp(
     let _ = tx.send(Event::Started);
     while !stop.load(Ordering::Acquire) && !control.is_finished() {
         if let Some(timeline) = &mut audio_timeline {
-            if let Err(e) = timeline.tick(&callback, pause.elapsed_since(capture_started)) {
+            if let Err(e) = timeline.tick(&callback, signals.pause.elapsed_since(capture_started)) {
                 let _ = timeline.stop();
                 let _ = control.stop();
                 return Err(e.context("音频捕获失败"));
@@ -415,9 +420,15 @@ fn record_to_temp(
     }
     let audio_tail = audio_timeline
         .as_mut()
-        .map(|timeline| timeline.tick(&callback, Some(pause.duration_at_stop(capture_started))))
+        .map(|timeline| {
+            timeline.tick(
+                &callback,
+                Some(signals.pause.duration_at_stop(capture_started)),
+            )
+        })
         .transpose();
     let audio_stop = audio_timeline.as_mut().map(AudioTimeline::stop).transpose();
+    signals.levels.store(0, Ordering::Release);
     let capture_stop = control.stop().map_err(|e| anyhow!("停止捕获失败：{e}"));
     audio_tail?;
     audio_stop?;
@@ -485,6 +496,29 @@ const AUDIO_RATE: u64 = 48_000;
 const AUDIO_CHANNELS: usize = 2;
 const AUDIO_CHUNK_FRAMES: usize = 480;
 const MAX_PENDING_AUDIO_FRAMES: usize = 4_800;
+
+fn pcm_level(bytes: &[u8], gain: u16, source_count: usize) -> u8 {
+    if gain == 0 || bytes.is_empty() {
+        return 0;
+    }
+    let peak = bytes
+        .chunks_exact(2)
+        .map(|sample| i16::from_le_bytes([sample[0], sample[1]]) as i32)
+        .map(i32::abs)
+        .max()
+        .unwrap_or(0) as f64;
+    if peak == 0.0 {
+        return 0;
+    }
+    let divisor = if source_count == 2 { 200.0 } else { 100.0 };
+    let amplitude = (peak * f64::from(gain) / divisor).min(32_768.0);
+    let dbfs = 20.0 * (amplitude / 32_768.0).log10();
+    ((dbfs + 60.0) * (100.0 / 60.0)).round().clamp(0.0, 100.0) as u8
+}
+
+pub fn unpack_levels(packed: u32) -> (u8, u8) {
+    ((packed & 0xff) as u8, ((packed >> 8) & 0xff) as u8)
+}
 
 struct PcmMixer {
     queues: Vec<std::collections::VecDeque<i16>>,
@@ -558,18 +592,24 @@ fn audio_frames_at(elapsed: Duration) -> u64 {
 struct AudioTimeline {
     inputs: Vec<AudioInput>,
     mixer: PcmMixer,
+    levels: Arc<AtomicU32>,
+    level_slots: Vec<usize>,
+    displayed_levels: [u8; 2],
 }
 impl AudioTimeline {
-    fn new(mode: AudioMode, gains: AudioGains) -> Result<Option<Self>> {
+    fn new(mode: AudioMode, gains: AudioGains, levels: Arc<AtomicU32>) -> Result<Option<Self>> {
         let mut inputs = Vec::new();
         let mut input_gains = Vec::new();
+        let mut level_slots = Vec::new();
         if matches!(mode, AudioMode::System | AudioMode::SystemAndMicrophone) {
             inputs.push(AudioInput::prepare(Direction::Render).context("系统播放设备不可用")?);
             input_gains.push(gains.system);
+            level_slots.push(0);
         }
         if matches!(mode, AudioMode::Microphone | AudioMode::SystemAndMicrophone) {
             inputs.push(AudioInput::prepare(Direction::Capture).context("默认麦克风不可用")?);
             input_gains.push(gains.microphone);
+            level_slots.push(1);
         }
         if inputs.is_empty() {
             return Ok(None);
@@ -585,6 +625,9 @@ impl AudioTimeline {
         Ok(Some(Self {
             mixer: PcmMixer::new(input_gains),
             inputs,
+            levels,
+            level_slots,
+            displayed_levels: [0, 0],
         }))
     }
     fn discard_initial(&mut self) -> Result<()> {
@@ -599,16 +642,28 @@ impl AudioTimeline {
         callback: &std::sync::Arc<parking_lot::Mutex<Capture>>,
         elapsed: Option<Duration>,
     ) -> Result<()> {
+        let source_count = self.inputs.len();
         for (index, input) in self.inputs.iter_mut().enumerate() {
             let bytes = input.drain_bytes()?;
             if elapsed.is_some() {
+                let slot = self.level_slots[index];
+                let measured = pcm_level(&bytes, self.mixer.gains[index], source_count);
+                self.displayed_levels[slot] =
+                    measured.max(self.displayed_levels[slot].saturating_sub(2));
                 self.mixer.push(index, &bytes)?;
             }
         }
         let Some(elapsed) = elapsed else {
             self.mixer.clear_pending();
+            self.displayed_levels = [0, 0];
+            self.levels.store(0, Ordering::Release);
             return Ok(());
         };
+        let [system, microphone] = self.displayed_levels;
+        self.levels.store(
+            u32::from(system) | (u32::from(microphone) << 8),
+            Ordering::Release,
+        );
         let target_frames = audio_frames_at(elapsed);
         while let Some(bytes) = self.mixer.next_chunk(target_frames) {
             callback
@@ -751,6 +806,18 @@ mod tests {
         assert_eq!(left(&single.next_chunk(1).unwrap()), -10_000);
     }
     #[test]
+    fn audio_meter_maps_pcm_peaks_and_mute_without_overflow() {
+        let sample = |value: i16| value.to_le_bytes();
+        assert_eq!(super::pcm_level(&sample(0), 100, 1), 0);
+        assert_eq!(super::pcm_level(&sample(i16::MIN), 0, 1), 0);
+        assert_eq!(super::pcm_level(&sample(i16::MIN), 100, 1), 100);
+        assert_eq!(super::pcm_level(&sample(i16::MIN), 200, 2), 100);
+        assert!(
+            super::pcm_level(&sample(8_000), 100, 2) < super::pcm_level(&sample(8_000), 100, 1)
+        );
+        assert_eq!(super::unpack_levels(62 | (38 << 8)), (62, 38));
+    }
+    #[test]
     #[ignore = "needs an unlocked interactive Windows desktop and a working H.264 encoder"]
     fn records_a_playable_mp4_on_the_real_desktop() {
         record_smoke(AudioMode::None, false);
@@ -769,6 +836,83 @@ mod tests {
     #[ignore = "needs an unlocked interactive desktop and default playback and microphone devices"]
     fn records_system_and_microphone_with_video() {
         record_smoke(AudioMode::SystemAndMicrophone, true);
+    }
+    #[test]
+    #[ignore = "needs an unlocked interactive desktop and default playback device"]
+    fn system_audio_meter_reacts_to_a_local_pcm_tone() {
+        use std::{process::Command, sync::atomic::Ordering, time::Instant};
+        let sample_rate = 48_000u32;
+        let frames = sample_rate * 4;
+        let data_len = frames * 2;
+        let mut wave = Vec::with_capacity(44 + data_len as usize);
+        wave.extend_from_slice(b"RIFF");
+        wave.extend_from_slice(&(36 + data_len).to_le_bytes());
+        wave.extend_from_slice(b"WAVEfmt ");
+        wave.extend_from_slice(&16u32.to_le_bytes());
+        wave.extend_from_slice(&1u16.to_le_bytes());
+        wave.extend_from_slice(&1u16.to_le_bytes());
+        wave.extend_from_slice(&sample_rate.to_le_bytes());
+        wave.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+        wave.extend_from_slice(&2u16.to_le_bytes());
+        wave.extend_from_slice(&16u16.to_le_bytes());
+        wave.extend_from_slice(b"data");
+        wave.extend_from_slice(&data_len.to_le_bytes());
+        for index in 0..frames {
+            let phase = index as f32 * std::f32::consts::TAU * 440.0 / sample_rate as f32;
+            let sample = (phase.sin() * 12_000.0) as i16;
+            wave.extend_from_slice(&sample.to_le_bytes());
+        }
+        let unique = uuid::Uuid::new_v4();
+        let tone = std::env::temp_dir().join(format!("zi-recorder-tone-{unique}.wav"));
+        let video = std::env::temp_dir().join(format!("zi-recorder-tone-{unique}.mp4"));
+        std::fs::write(&tone, wave).unwrap();
+        let mut player = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "$player = New-Object System.Media.SoundPlayer $env:ZI_TEST_TONE; $player.PlaySync()",
+            ])
+            .env("ZI_TEST_TONE", &tone)
+            .spawn()
+            .unwrap();
+        let (width, height) = super::primary_size().unwrap();
+        let region = Region {
+            x: 0,
+            y: 0,
+            width: width.min(640) & !1,
+            height: height.min(360) & !1,
+        };
+        let session = super::start(region, video.clone(), AudioMode::System).unwrap();
+        assert!(matches!(
+            session
+                .events
+                .recv_timeout(Duration::from_secs(15))
+                .unwrap(),
+            Event::Started
+        ));
+        let mut max_level = 0;
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < deadline {
+            max_level =
+                max_level.max(super::unpack_levels(session.levels.load(Ordering::Acquire)).0);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        session.stop.store(true, Ordering::Release);
+        assert!(matches!(
+            session
+                .events
+                .recv_timeout(Duration::from_secs(30))
+                .unwrap(),
+            Event::Finished(Ok(_))
+        ));
+        let _ = player.wait();
+        std::fs::remove_file(tone).unwrap();
+        std::fs::remove_file(video).unwrap();
+        eprintln!("system audio meter peak: {max_level}/100");
+        assert!(
+            max_level > 20,
+            "system audio meter stayed silent: {max_level}"
+        );
     }
     fn record_smoke(audio: AudioMode, pause_during_capture: bool) {
         static CAPTURE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -806,6 +950,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(1));
             session.pause.set_paused(true);
             std::thread::sleep(Duration::from_secs(1));
+            assert_eq!(session.levels.load(Ordering::Acquire), 0);
             session.pause.set_paused(false);
             std::thread::sleep(Duration::from_secs(1));
         } else {
