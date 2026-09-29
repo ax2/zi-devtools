@@ -1,4 +1,4 @@
-use crate::recorder::{self, AudioMode, Event, Region, Session};
+use crate::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use std::{
     path::{Path, PathBuf},
@@ -44,6 +44,7 @@ pub struct RecorderState {
     region: Option<Region>,
     output: String,
     audio: AudioMode,
+    gains: AudioGains,
     countdown_seconds: u64,
     countdown_deadline: Option<Instant>,
     session: Option<Session>,
@@ -63,6 +64,7 @@ impl Default for RecorderState {
             region: None,
             output: String::new(),
             audio: AudioMode::None,
+            gains: AudioGains::default(),
             countdown_seconds: 3,
             countdown_deadline: None,
             session: None,
@@ -208,7 +210,12 @@ impl RecorderState {
             return;
         };
         self.last_file = None;
-        match recorder::start(region, PathBuf::from(self.output.trim()), self.audio) {
+        match recorder::start_with_gains(
+            region,
+            PathBuf::from(self.output.trim()),
+            self.audio,
+            self.gains,
+        ) {
             Ok(session) => {
                 self.session = Some(session);
                 self.status = "正在启动捕获…".into();
@@ -325,6 +332,29 @@ impl RecorderState {
                     });
             });
         });
+        if self.audio != AudioMode::None {
+            ui.add_enabled_ui(!busy, |ui| {
+                if matches!(
+                    self.audio,
+                    AudioMode::System | AudioMode::SystemAndMicrophone
+                ) {
+                    ui.horizontal(|ui| {
+                        ui.label("系统声音");
+                        ui.add(egui::Slider::new(&mut self.gains.system, 0..=200).suffix("%"));
+                    });
+                }
+                if matches!(
+                    self.audio,
+                    AudioMode::Microphone | AudioMode::SystemAndMicrophone
+                ) {
+                    ui.horizontal(|ui| {
+                        ui.label("麦克风");
+                        ui.add(egui::Slider::new(&mut self.gains.microphone, 0..=200).suffix("%"));
+                    });
+                }
+            });
+            ui.small("100% 为原始音量；双声源各占一半，0% 可静音，过高可能削波。");
+        }
         ui.horizontal(|ui| {
             ui.label("开始前倒计时");
             ui.add_enabled_ui(!busy, |ui| {

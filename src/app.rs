@@ -170,7 +170,8 @@ fn tool_category(id: &str) -> &'static str {
         | "global-launcher"
         | "file-intake"
         | "screen-recorder"
-        | "screen-recorder-audio-mix" => "文件与系统",
+        | "screen-recorder-audio-mix"
+        | "screen-recorder-audio-gain" => "文件与系统",
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
@@ -315,6 +316,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "audio mix system microphone 声音 麦克风 录屏 混音".into(),
+        },
+        ToolEntry {
+            id: "screen-recorder-audio-gain".into(),
+            title: "录屏音量调节".into(),
+            description: "分别调节系统声音与麦克风录制音量".into(),
+            page: Page::Recorder,
+            kind: None,
+            category: String::new(),
+            keywords: "audio gain volume system microphone 声音 音量 麦克风 录屏".into(),
         },
         ToolEntry {
             id: "services".into(),
@@ -1273,7 +1283,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 29  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 30  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1420,7 +1430,7 @@ impl DevToolsApp {
             self.data_state.show_transform();
             self.launcher_open = false;
             self.visit(&e.id);
-        } else if e.id == "screen-recorder-audio-mix" {
+        } else if e.id == "screen-recorder-audio-mix" || e.id == "screen-recorder-audio-gain" {
             self.recorder
                 .select_audio_mode(crate::recorder::AudioMode::SystemAndMicrophone);
             self.page = Page::Recorder;

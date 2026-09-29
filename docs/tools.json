@@ -1,5 +1,5 @@
 {
-  "version": "0.29.0",
+  "version": "0.30.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -589,10 +589,18 @@
     {
       "id": "screen-recorder-audio-gain",
       "name": "录屏独立音量调节",
+      "status": "implemented",
+      "category": "文件与系统",
+      "priority": "P2",
+      "scope": "录制前分别设置系统声与麦克风 0–200% 增益，支持单路静音及双声源混音削波保护"
+    },
+    {
+      "id": "screen-recorder-audio-meter",
+      "name": "录屏音频电平与长时同步",
       "status": "planned",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "分别调节系统声与麦克风增益、监测电平并验证不同设备时钟下的长时同步"
+      "scope": "实时监测两路电平，验证不同设备时钟下的长时同步与设备热拔插处理"
     },
     {
       "id": "mcp-export",
