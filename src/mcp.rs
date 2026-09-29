@@ -56,6 +56,8 @@ impl Config {
 pub enum Action {
     Inspect,
     Call { tool: String, arguments: Value },
+    ReadResource { uri: String },
+    GetPrompt { name: String, arguments: Value },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -66,6 +68,8 @@ pub struct Report {
     pub resources: Vec<Value>,
     pub prompts: Vec<Value>,
     pub call_result: Option<Value>,
+    pub resource_result: Option<(String, Value)>,
+    pub prompt_result: Option<(String, Value)>,
 }
 
 enum Frame {
@@ -385,6 +389,16 @@ impl Session {
                 }),
                 "MCP {field} 列表包含无效名称"
             );
+            if field == "resources" {
+                ensure!(
+                    page_items.iter().all(|item| {
+                        item.get("uri")
+                            .and_then(Value::as_str)
+                            .is_some_and(|uri| !uri.is_empty() && uri.len() <= 2048)
+                    }),
+                    "MCP 资源列表包含无效 URI"
+                );
+            }
             items.extend(page_items.iter().cloned());
             cursor = response
                 .get("nextCursor")
@@ -406,20 +420,43 @@ impl Session {
 }
 
 pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result<Report> {
-    if let Action::Call { tool, arguments } = &action {
-        ensure!(
-            !tool.is_empty() && tool.len() <= 128 && arguments.is_object(),
-            "工具名称或 JSON 参数无效"
-        );
-        ensure!(
-            serde_json::to_vec(arguments)?.len() <= 240 * 1024,
-            "工具参数超过 240 KiB"
-        );
+    match &action {
+        Action::Call { tool, arguments } => {
+            ensure!(
+                !tool.is_empty() && tool.len() <= 128 && arguments.is_object(),
+                "工具名称或 JSON 参数无效"
+            );
+            ensure!(
+                serde_json::to_vec(arguments)?.len() <= 240 * 1024,
+                "工具参数超过 240 KiB"
+            );
+        }
+        Action::ReadResource { uri } => {
+            ensure!(
+                !uri.is_empty() && uri.len() <= 2048 && !uri.contains('\0'),
+                "资源 URI 无效"
+            );
+        }
+        Action::GetPrompt { name, arguments } => {
+            ensure!(
+                !name.is_empty()
+                    && name.len() <= 128
+                    && arguments.as_object().is_some_and(|items| {
+                        items.len() <= 32 && items.values().all(Value::is_string)
+                    }),
+                "提示词名称或参数无效；参数须为字符串值的 JSON 对象"
+            );
+            ensure!(
+                serde_json::to_vec(arguments)?.len() <= 240 * 1024,
+                "提示词参数超过 240 KiB"
+            );
+        }
+        Action::Inspect => {}
     }
-    let timeout = if matches!(action, Action::Call { .. }) {
-        Duration::from_secs(30)
-    } else {
+    let timeout = if matches!(action, Action::Inspect) {
         Duration::from_secs(15)
+    } else {
+        Duration::from_secs(30)
     };
     let mut session = Session::new(&config, timeout, cancelled)?;
     let (server, protocol, capabilities) = session.initialize()?;
@@ -437,16 +474,50 @@ pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result
     if capabilities.get("prompts").is_some() {
         report.prompts = session.list("prompts/list", "prompts")?;
     }
-    if let Action::Call { tool, arguments } = action {
-        ensure!(
-            report
-                .tools
-                .iter()
-                .any(|item| item.get("name").and_then(Value::as_str) == Some(&tool)),
-            "服务没有列出该工具，调用已拒绝"
-        );
-        report.call_result =
-            Some(session.request("tools/call", json!({"name":tool,"arguments":arguments}))?);
+    match action {
+        Action::Call { tool, arguments } => {
+            ensure!(
+                report
+                    .tools
+                    .iter()
+                    .any(|item| item.get("name").and_then(Value::as_str) == Some(&tool)),
+                "服务没有列出该工具，调用已拒绝"
+            );
+            report.call_result =
+                Some(session.request("tools/call", json!({"name":tool,"arguments":arguments}))?);
+        }
+        Action::ReadResource { uri } => {
+            ensure!(
+                report
+                    .resources
+                    .iter()
+                    .any(|item| item.get("uri").and_then(Value::as_str) == Some(&uri)),
+                "服务没有列出该资源，读取已拒绝"
+            );
+            let result = session.request("resources/read", json!({"uri":uri}))?;
+            ensure!(
+                result.get("contents").and_then(Value::as_array).is_some(),
+                "MCP 资源响应缺少 contents 列表"
+            );
+            report.resource_result = Some((uri, result));
+        }
+        Action::GetPrompt { name, arguments } => {
+            ensure!(
+                report
+                    .prompts
+                    .iter()
+                    .any(|item| item.get("name").and_then(Value::as_str) == Some(&name)),
+                "服务没有列出该提示词，获取已拒绝"
+            );
+            let result =
+                session.request("prompts/get", json!({"name":name,"arguments":arguments}))?;
+            ensure!(
+                result.get("messages").and_then(Value::as_array).is_some(),
+                "MCP 提示词响应缺少 messages 列表"
+            );
+            report.prompt_result = Some((name, result));
+        }
+        Action::Inspect => {}
     }
     Ok(report)
 }

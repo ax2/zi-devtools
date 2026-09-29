@@ -116,3 +116,119 @@ fn rejects_unsupported_version_and_invalid_capability_entries() {
         .to_string();
     assert!(message.contains("无效名称"), "{message}");
 }
+
+#[test]
+fn reads_only_listed_resources_and_prompts_with_bounded_arguments() {
+    let resource = mcp::run(
+        config("normal"),
+        Action::ReadResource {
+            uri: "fixture://guide".into(),
+        },
+        token(),
+    )
+    .unwrap();
+    assert_eq!(
+        resource
+            .resource_result
+            .as_ref()
+            .unwrap()
+            .1
+            .pointer("/contents/0/text"),
+        Some(&json!("本地测试指南"))
+    );
+
+    let prompt = mcp::run(
+        config("normal"),
+        Action::GetPrompt {
+            name: "summary".into(),
+            arguments: json!({"topic":"Rust"}),
+        },
+        token(),
+    )
+    .unwrap();
+    assert_eq!(
+        prompt
+            .prompt_result
+            .as_ref()
+            .unwrap()
+            .1
+            .pointer("/messages/0/content/text"),
+        Some(&json!("概括：Rust"))
+    );
+
+    for (action, expected) in [
+        (
+            Action::ReadResource {
+                uri: "fixture://unlisted".into(),
+            },
+            "没有列出该资源",
+        ),
+        (
+            Action::GetPrompt {
+                name: "unlisted".into(),
+                arguments: json!({}),
+            },
+            "没有列出该提示词",
+        ),
+        (
+            Action::GetPrompt {
+                name: "summary".into(),
+                arguments: json!({"topic":42}),
+            },
+            "字符串值",
+        ),
+    ] {
+        let error = mcp::run(config("normal"), action, token())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(expected), "{error}");
+    }
+    assert!(
+        mcp::run(
+            config("bad_resource_result"),
+            Action::ReadResource {
+                uri: "fixture://guide".into(),
+            },
+            token()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("contents")
+    );
+    assert!(
+        mcp::run(
+            config("bad_prompt_result"),
+            Action::GetPrompt {
+                name: "summary".into(),
+                arguments: json!({}),
+            },
+            token()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("messages")
+    );
+}
+
+#[test]
+fn cancelling_resource_read_exits_the_disposable_server() {
+    let cancellation = token();
+    let trigger = Arc::clone(&cancellation);
+    let handle = std::thread::spawn(move || {
+        mcp::run(
+            config("hang_resource"),
+            Action::ReadResource {
+                uri: "fixture://guide".into(),
+            },
+            cancellation,
+        )
+        .unwrap_err()
+        .to_string()
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    let start = Instant::now();
+    trigger.store(true, Ordering::Relaxed);
+    let message = handle.join().unwrap();
+    assert!(message.contains("已停止"), "{message}");
+    assert!(start.elapsed() < Duration::from_secs(2));
+}

@@ -1,5 +1,5 @@
 {
-  "version": "0.36.0",
+  "version": "0.37.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -552,7 +552,7 @@
       "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "本机 stdio 短会话已支持初始化、版本校验、tools/resources/prompts 有界分页枚举、schema 查看、JSON 参数手动调用及取消；Streamable HTTP、持久会话、参数表单、协议日志和真实第三方服务器兼容性待补"
+      "scope": "本机 stdio 短会话已支持初始化、版本校验、tools/resources/prompts 有界分页枚举、schema 查看、JSON 参数手动工具调用、选中资源读取、提示词获取及取消；Streamable HTTP、持久会话、参数表单、协议日志和真实第三方服务器兼容性待补"
     },
     {
       "id": "mcp-permissions",

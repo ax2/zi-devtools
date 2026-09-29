@@ -625,7 +625,7 @@ impl DevToolsApp {
             }
             98 | 99 => {
                 self.page = Page::Mcp;
-                self.mcp.preview_fixture();
+                self.mcp.preview_fixture(scene == 99);
             }
             100 | 101 => {
                 self.page = Page::Recorder;
@@ -1365,7 +1365,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 36  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 37  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

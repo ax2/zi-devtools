@@ -24,12 +24,23 @@ fn display_json(value: &Value, limit: usize) -> String {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum McpSection {
+    Tools,
+    Resources,
+    Prompts,
+}
+
 pub struct McpState {
     executable: String,
     arguments: String,
     report: Option<Report>,
+    section: McpSection,
     selected_tool: String,
+    selected_resource: String,
+    selected_prompt: String,
     call_arguments: String,
+    prompt_arguments: String,
     call_confirm: bool,
     receiver: Option<Receiver<Result<Report, String>>>,
     cancelled: Arc<AtomicBool>,
@@ -42,8 +53,12 @@ impl Default for McpState {
             executable: String::new(),
             arguments: "[]".into(),
             report: None,
+            section: McpSection::Tools,
             selected_tool: String::new(),
+            selected_resource: String::new(),
+            selected_prompt: String::new(),
             call_arguments: "{}".into(),
+            prompt_arguments: "{}".into(),
             call_confirm: false,
             receiver: None,
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -60,7 +75,7 @@ impl Drop for McpState {
 
 impl McpState {
     #[cfg(feature = "ui-preview")]
-    pub fn preview_fixture(&mut self) {
+    pub fn preview_fixture(&mut self, show_prompts: bool) {
         self.executable = r"C:\Tools\mcp-demo.exe".into();
         self.arguments = "[\"--stdio\"]".into();
         self.report = Some(Report {
@@ -73,8 +88,23 @@ impl McpState {
             resources: vec![json!({"name":"说明文档","uri":"demo://guide"})],
             prompts: vec![json!({"name":"summarize","description":"概括选定笔记"})],
             call_result: None,
+            resource_result: Some((
+                "demo://guide".into(),
+                json!({"contents":[{"uri":"demo://guide","mimeType":"text/plain","text":"合成测试说明，不读取真实文件"}]}),
+            )),
+            prompt_result: Some((
+                "summarize".into(),
+                json!({"messages":[{"role":"user","content":{"type":"text","text":"概括选定笔记"}}]}),
+            )),
         });
         self.selected_tool = "search_notes".into();
+        self.selected_resource = "demo://guide".into();
+        self.selected_prompt = "summarize".into();
+        self.section = if show_prompts {
+            McpSection::Prompts
+        } else {
+            McpSection::Resources
+        };
         self.call_arguments = "{\n  \"query\": \"Rust 错误处理\"\n}".into();
         self.message = "合成界面预览 · 未启动外部程序".into();
     }
@@ -99,10 +129,12 @@ impl McpState {
             }
         };
         let (sender, receiver) = mpsc::channel();
-        if matches!(action, Action::Inspect) {
+        if matches!(&action, Action::Inspect) {
             self.report = None;
         } else if let Some(report) = &mut self.report {
             report.call_result = None;
+            report.resource_result = None;
+            report.prompt_result = None;
         }
         self.cancelled = Arc::new(AtomicBool::new(false));
         let cancelled = Arc::clone(&self.cancelled);
@@ -121,11 +153,16 @@ impl McpState {
         };
         match receiver.try_recv() {
             Ok(Ok(report)) => {
-                if report.call_result.is_some() {
-                    self.message = "工具响应已收到；本次会话已退出".into();
+                self.message = if report.call_result.is_some() {
+                    "工具响应已收到；本次会话已退出"
+                } else if report.resource_result.is_some() {
+                    "资源内容已收到；本次会话已退出"
+                } else if report.prompt_result.is_some() {
+                    "提示词内容已收到；本次会话已退出"
                 } else {
-                    self.message = "能力清单已读取；本次会话已退出".into();
+                    "能力清单已读取；本次会话已退出"
                 }
+                .into();
                 if !report.tools.iter().any(|tool| {
                     tool.get("name").and_then(Value::as_str) == Some(&self.selected_tool)
                 }) {
@@ -133,6 +170,28 @@ impl McpState {
                         .tools
                         .first()
                         .and_then(|tool| tool.get("name"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .into();
+                }
+                if !report.resources.iter().any(|resource| {
+                    resource.get("uri").and_then(Value::as_str) == Some(&self.selected_resource)
+                }) {
+                    self.selected_resource = report
+                        .resources
+                        .first()
+                        .and_then(|resource| resource.get("uri"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .into();
+                }
+                if !report.prompts.iter().any(|prompt| {
+                    prompt.get("name").and_then(Value::as_str) == Some(&self.selected_prompt)
+                }) {
+                    self.selected_prompt = report
+                        .prompts
+                        .first()
+                        .and_then(|prompt| prompt.get("name"))
                         .and_then(Value::as_str)
                         .unwrap_or("")
                         .into();
@@ -158,7 +217,7 @@ impl McpState {
         self.poll(ui);
         let busy = self.receiver.is_some();
         ui.heading("MCP 协议调试台");
-        ui.label("明确启动本机 stdio 服务，查看能力并手动调用工具。每次操作建立短会话；不会保存路径、参数或结果。");
+        ui.label("明确启动本机 stdio 服务，查看能力并手动调用工具、读取资源或获取提示词。每次操作建立短会话；不会保存路径、参数或结果。");
         ui.add_space(8.0);
         ui.group(|ui| {
             ui.strong("连接目标");
@@ -225,7 +284,7 @@ impl McpState {
             ui.label(&self.message);
         }
         let Some(report) = &self.report else { return };
-        let mut requested_call = None;
+        let mut requested_action = None;
         ui.add_space(8.0);
         ui.heading(format!("{} · MCP {}", report.server, report.protocol));
         ui.label(format!(
@@ -235,7 +294,24 @@ impl McpState {
             report.prompts.len()
         ));
         ui.weak("能力与结果仅供本次查看；列表不会自动读取资源或执行工具。");
-        if !report.tools.is_empty() {
+        ui.horizontal(|ui| {
+            ui.selectable_value(
+                &mut self.section,
+                McpSection::Tools,
+                format!("工具 ({})", report.tools.len()),
+            );
+            ui.selectable_value(
+                &mut self.section,
+                McpSection::Resources,
+                format!("资源 ({})", report.resources.len()),
+            );
+            ui.selectable_value(
+                &mut self.section,
+                McpSection::Prompts,
+                format!("提示词 ({})", report.prompts.len()),
+            );
+        });
+        if self.section == McpSection::Tools && !report.tools.is_empty() {
             ui.separator();
             ui.strong("工具清单");
             egui::ComboBox::from_id_salt("mcp-tool")
@@ -300,7 +376,7 @@ impl McpState {
                     if ui.button("确认调用").clicked() {
                         match serde_json::from_str::<Value>(&self.call_arguments) {
                             Ok(arguments) if arguments.is_object() => {
-                                requested_call = Some(Action::Call {
+                                requested_action = Some(Action::Call {
                                     tool: self.selected_tool.clone(),
                                     arguments,
                                 })
@@ -314,24 +390,112 @@ impl McpState {
                 });
             }
         }
-        for (title, items) in [("资源", &report.resources), ("提示词", &report.prompts)] {
-            if !items.is_empty() {
-                egui::CollapsingHeader::new(format!("{title} · {} 项", items.len())).show(
-                    ui,
-                    |ui| {
-                        for item in items {
-                            let name = item.get("name").and_then(Value::as_str).unwrap_or("未命名");
-                            let detail = item.get("uri").and_then(Value::as_str).unwrap_or("");
-                            ui.label(format!(
-                                "{name}  {}",
-                                detail.chars().take(300).collect::<String>()
-                            ));
+        if self.section == McpSection::Resources && !report.resources.is_empty() {
+            ui.separator();
+            ui.strong(format!("资源 · {} 项", report.resources.len()));
+            egui::ComboBox::from_id_salt("mcp-resource")
+                .selected_text(
+                    report
+                        .resources
+                        .iter()
+                        .find(|item| {
+                            item.get("uri").and_then(Value::as_str) == Some(&self.selected_resource)
+                        })
+                        .and_then(|item| item.get("name"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("选择资源"),
+                )
+                .show_ui(ui, |ui| {
+                    for item in &report.resources {
+                        if let (Some(name), Some(uri)) = (
+                            item.get("name").and_then(Value::as_str),
+                            item.get("uri").and_then(Value::as_str),
+                        ) {
+                            ui.selectable_value(
+                                &mut self.selected_resource,
+                                uri.to_owned(),
+                                format!("{name} · {}", uri.chars().take(80).collect::<String>()),
+                            );
                         }
-                    },
-                );
+                    }
+                });
+            ui.weak(format!(
+                "URI：{}",
+                self.selected_resource.chars().take(300).collect::<String>()
+            ));
+            if ui
+                .add_enabled(
+                    !busy && !self.selected_resource.is_empty(),
+                    egui::Button::new("读取选中资源"),
+                )
+                .clicked()
+            {
+                requested_action = Some(Action::ReadResource {
+                    uri: self.selected_resource.clone(),
+                });
             }
         }
-        if let Some(result) = &report.call_result {
+        if self.section == McpSection::Prompts && !report.prompts.is_empty() {
+            ui.separator();
+            ui.strong(format!("提示词 · {} 项", report.prompts.len()));
+            egui::ComboBox::from_id_salt("mcp-prompt")
+                .selected_text(if self.selected_prompt.is_empty() {
+                    "选择提示词"
+                } else {
+                    &self.selected_prompt
+                })
+                .show_ui(ui, |ui| {
+                    for item in &report.prompts {
+                        if let Some(name) = item.get("name").and_then(Value::as_str) {
+                            ui.selectable_value(&mut self.selected_prompt, name.to_owned(), name);
+                        }
+                    }
+                });
+            if let Some(prompt) = report.prompts.iter().find(|item| {
+                item.get("name").and_then(Value::as_str) == Some(&self.selected_prompt)
+            }) {
+                if let Some(description) = prompt.get("description").and_then(Value::as_str) {
+                    ui.label(description.chars().take(500).collect::<String>());
+                }
+                if let Some(arguments) = prompt.get("arguments") {
+                    egui::CollapsingHeader::new("参数声明").show(ui, |ui| {
+                        ui.monospace(display_json(arguments, 12_000));
+                    });
+                }
+            }
+            ui.label("提示词参数 · 字符串值的 JSON 对象");
+            ui.add_enabled(
+                !busy,
+                egui::TextEdit::multiline(&mut self.prompt_arguments)
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY)
+                    .font(egui::TextStyle::Monospace),
+            );
+            if ui
+                .add_enabled(
+                    !busy && !self.selected_prompt.is_empty(),
+                    egui::Button::new("获取选中提示词"),
+                )
+                .clicked()
+            {
+                match serde_json::from_str::<Value>(&self.prompt_arguments) {
+                    Ok(arguments)
+                        if arguments.as_object().is_some_and(|items| {
+                            items.len() <= 32 && items.values().all(Value::is_string)
+                        }) =>
+                    {
+                        requested_action = Some(Action::GetPrompt {
+                            name: self.selected_prompt.clone(),
+                            arguments,
+                        });
+                    }
+                    _ => self.message = "提示词参数须为字符串值的 JSON 对象".into(),
+                }
+            }
+        }
+        if self.section == McpSection::Tools
+            && let Some(result) = &report.call_result
+        {
             ui.separator();
             ui.strong("工具响应");
             let display = display_json(result, 30_000);
@@ -341,7 +505,22 @@ impl McpState {
                     ui.monospace(display);
                 });
         }
-        if let Some(action) = requested_call {
+        let results = match self.section {
+            McpSection::Tools => None,
+            McpSection::Resources => Some(("资源内容", &report.resource_result)),
+            McpSection::Prompts => Some(("提示词消息", &report.prompt_result)),
+        };
+        if let Some((title, Some((name, value)))) = results {
+            ui.separator();
+            ui.strong(format!("{title} · {name}"));
+            let display = display_json(value, 30_000);
+            egui::ScrollArea::vertical()
+                .max_height(260.0)
+                .show(ui, |ui| {
+                    ui.monospace(display);
+                });
+        }
+        if let Some(action) = requested_action {
             self.start(action);
         }
     }

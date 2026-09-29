@@ -3,6 +3,9 @@ import json
 import sys
 import time
 
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
+
 MODE = sys.argv[1] if len(sys.argv) > 1 else "normal"
 
 
@@ -17,6 +20,9 @@ for line in sys.stdin:
     if method == "notifications/initialized":
         continue
     if MODE == "hang" and method == "initialize":
+        time.sleep(60)
+        continue
+    if MODE == "hang_resource" and method == "resources/read":
         time.sleep(60)
         continue
     if MODE == "oversize" and method == "initialize":
@@ -69,6 +75,37 @@ for line in sys.stdin:
             ],
             "isError": False,
         }
+    elif method == "resources/read":
+        response = (
+            {"wrong": []}
+            if MODE == "bad_resource_result"
+            else {
+                "contents": [
+                    {
+                        "uri": request["params"]["uri"],
+                        "mimeType": "text/plain",
+                        "text": "本地测试指南",
+                    }
+                ]
+            }
+        )
+    elif method == "prompts/get":
+        response = (
+            {"wrong": []}
+            if MODE == "bad_prompt_result"
+            else {
+                "description": "生成本地测试摘要",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": {
+                            "type": "text",
+                            "text": "概括：" + request["params"]["arguments"].get("topic", ""),
+                        },
+                    }
+                ],
+            }
+        )
     else:
         send({"jsonrpc": "2.0", "id": ident, "error": {"code": -32601, "message": "unknown"}})
         continue
