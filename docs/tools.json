@@ -1,5 +1,5 @@
 {
-  "version": "0.41.0",
+  "version": "0.42.0",
   "updated": "2026-09-29",
   "tools": [
     {
@@ -381,10 +381,10 @@
     {
       "id": "image-metadata",
       "name": "图片元数据检查与清理",
-      "status": "planned",
+      "status": "implemented",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "EXIF/ICC 信息检查、位置等敏感元数据提示及显式清理副本"
+      "scope": "本机有界扫描 PNG/JPEG/WebP 常见 EXIF/GPS、ICC、XMP、文本与 IPTC 块，不显示敏感原值；应用 EXIF 方向后重新编码、预览并复检清理副本，明确另存且不覆盖；动画图片拒绝处理，不能保证识别所有私有元数据"
     },
     {
       "id": "markdown",

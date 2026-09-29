@@ -1,5 +1,6 @@
 //! Bounded, local image inspection and explicit preview-before-save transforms.
 mod batch;
+mod metadata;
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
 use image::{
@@ -62,10 +63,19 @@ enum Job {
     },
 }
 
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    #[default]
+    Single,
+    Batch,
+    Metadata,
+}
+
 #[derive(Default)]
 pub struct State {
-    batch_mode: bool,
+    mode: Mode,
     batch: batch::State,
+    metadata: metadata::State,
     input: String,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -81,12 +91,20 @@ pub struct State {
 }
 impl State {
     pub fn show_batch(&mut self) {
-        self.batch_mode = true;
+        self.mode = Mode::Batch;
+    }
+    pub fn show_metadata(&mut self) {
+        self.mode = Mode::Metadata;
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_batch_fixture(&mut self) {
-        self.batch_mode = true;
+        self.mode = Mode::Batch;
         self.batch.preview_fixture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_fixture(&mut self, ctx: &egui::Context) {
+        self.mode = Mode::Metadata;
+        self.metadata.preview_fixture(ctx);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, ctx: &egui::Context) {
@@ -259,13 +277,15 @@ impl State {
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.batch_mode, false, "单张图片");
-            ui.selectable_value(&mut self.batch_mode, true, "批量处理");
+            ui.selectable_value(&mut self.mode, Mode::Single, "单张图片");
+            ui.selectable_value(&mut self.mode, Mode::Batch, "批量处理");
+            ui.selectable_value(&mut self.mode, Mode::Metadata, "元数据检查");
         });
         ui.add_space(10.0);
-        if self.batch_mode {
-            self.batch.ui(ui);
-            return;
+        match self.mode {
+            Mode::Batch => return self.batch.ui(ui),
+            Mode::Metadata => return self.metadata.ui(ui),
+            Mode::Single => {}
         }
         self.poll(ui.ctx());
         ui.heading("图片工作台");
