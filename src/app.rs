@@ -170,6 +170,7 @@ fn tool_category(id: &str) -> &'static str {
         | "global-launcher"
         | "file-intake"
         | "screen-recorder"
+        | "screen-recorder-multimonitor"
         | "screen-recorder-audio-mix"
         | "screen-recorder-audio-gain"
         | "screen-recorder-audio-meter" => "文件与系统",
@@ -303,11 +304,20 @@ fn catalog() -> Vec<ToolEntry> {
         ToolEntry {
             id: "screen-recorder".into(),
             title: "屏幕录制".into(),
-            description: "鼠标框选区域，录制主显示器并保存 MP4".into(),
+            description: "鼠标框选区域，录制屏幕并保存 MP4".into(),
             page: Page::Recorder,
             kind: None,
             category: String::new(),
             keywords: "screen recorder capture mp4 视频 录屏 区域 框选".into(),
+        },
+        ToolEntry {
+            id: "screen-recorder-multimonitor".into(),
+            title: "显示器选择（实验）".into(),
+            description: "选择目标屏幕，框选区域或录制整屏；非主屏待实测".into(),
+            page: Page::Recorder,
+            kind: None,
+            category: String::new(),
+            keywords: "monitor display multi screen 录屏 显示器 多屏 选屏".into(),
         },
         ToolEntry {
             id: "screen-recorder-audio-mix".into(),
@@ -1293,7 +1303,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 31  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 32  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

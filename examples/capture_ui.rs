@@ -3,9 +3,11 @@ use eframe::egui;
 use std::{
     fs,
     path::PathBuf,
+    sync::atomic::Ordering,
     time::{Duration, Instant},
 };
 use zi_devtools::app::DevToolsApp;
+use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
 const NAMES: [&str; 102] = [
     "home-dark",
@@ -120,6 +122,9 @@ struct Capture {
     frames: usize,
     pending: bool,
     started: Instant,
+    recorder_smoke: Option<Session>,
+    recorder_smoke_started: Option<Instant>,
+    recorder_smoke_size: Option<(u32, u32)>,
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
@@ -159,6 +164,99 @@ impl eframe::App for Capture {
         }
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("recorder-smoke" | "recorder-fullscreen-smoke")
+        ) {
+            if self.frames == 0 {
+                let display = recorder::primary_display().unwrap();
+                println!(
+                    "eframe primary display: {}x{}",
+                    display.width, display.height
+                );
+                let region = Region {
+                    x: 0,
+                    y: 0,
+                    width: if smoke_mode.as_deref() == Some("recorder-fullscreen-smoke") {
+                        display.width & !1
+                    } else {
+                        display.width.min(640) & !1
+                    },
+                    height: if smoke_mode.as_deref() == Some("recorder-fullscreen-smoke") {
+                        display.height & !1
+                    } else {
+                        display.height.min(360) & !1
+                    },
+                };
+                self.recorder_smoke_size = Some((region.width, region.height));
+                self.recorder_smoke = Some(
+                    recorder::start_on_display(
+                        region,
+                        self.folder.join(format!(
+                            "recorder-eframe-smoke-{}.mp4",
+                            uuid::Uuid::new_v4()
+                        )),
+                        AudioMode::None,
+                        AudioGains::default(),
+                        display,
+                    )
+                    .unwrap(),
+                );
+            }
+            if let Some(session) = &self.recorder_smoke {
+                for event in session.events.try_iter() {
+                    match event {
+                        Event::Started => self.recorder_smoke_started = Some(Instant::now()),
+                        Event::Finished(result) => {
+                            let path = result.unwrap();
+                            let data = fs::read(&path).unwrap();
+                            assert!(data.len() > 1024 && data.windows(4).any(|v| v == b"moov"));
+                            let track_size = data
+                                .windows(4)
+                                .enumerate()
+                                .find_map(|(pos, tag)| {
+                                    if tag != b"tkhd" || pos < 4 {
+                                        return None;
+                                    }
+                                    let start = pos - 4;
+                                    let size = u32::from_be_bytes(data[start..pos].try_into().ok()?)
+                                        as usize;
+                                    let end = start.checked_add(size)?;
+                                    if size < 16 || end > data.len() {
+                                        return None;
+                                    }
+                                    let width =
+                                        u32::from_be_bytes(data[end - 8..end - 4].try_into().ok()?)
+                                            >> 16;
+                                    let height =
+                                        u32::from_be_bytes(data[end - 4..end].try_into().ok()?)
+                                            >> 16;
+                                    Some((width, height))
+                                })
+                                .expect("MP4 track dimensions");
+                            assert_eq!(Some(track_size), self.recorder_smoke_size);
+                            fs::remove_file(path).unwrap();
+                            println!("PASS eframe recorder smoke");
+                            std::process::exit(0);
+                        }
+                    }
+                }
+                if self
+                    .recorder_smoke_started
+                    .is_some_and(|at| at.elapsed() >= Duration::from_secs(2))
+                {
+                    session.stop.store(true, Ordering::Release);
+                }
+            }
+            if self.started.elapsed() > Duration::from_secs(20) {
+                panic!("eframe recorder smoke timed out");
+            }
+            self.app.update(ctx, frame);
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if std::env::args().nth(3).as_deref() == Some("recorder-interaction") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 100, self.fixture.clone());
@@ -374,6 +472,9 @@ fn main() -> Result<(), eframe::Error> {
                 frames: 0,
                 pending: false,
                 started: Instant::now(),
+                recorder_smoke: None,
+                recorder_smoke_started: None,
+                recorder_smoke_size: None,
             }))
         }),
     )

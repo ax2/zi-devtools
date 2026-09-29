@@ -1,4 +1,4 @@
-//! Local primary-monitor capture. Encoding stays on a worker thread.
+//! Local monitor capture. Encoding stays on a worker thread.
 use anyhow::{Context as _, Result, anyhow, bail};
 use crossbeam_channel::{Receiver, unbounded};
 use std::{
@@ -35,6 +35,72 @@ pub struct Region {
     pub y: u32,
     pub width: u32,
     pub height: u32,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisplayInfo {
+    pub device_name: String,
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub primary: bool,
+}
+impl DisplayInfo {
+    fn from_monitor(monitor: Monitor) -> Result<Self> {
+        use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITORINFO};
+        let mut info: MONITORINFO = unsafe { std::mem::zeroed() };
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if unsafe { GetMonitorInfoW(monitor.as_raw_hmonitor(), &mut info) } == 0 {
+            bail!(
+                "读取显示器物理边界失败：{}",
+                std::io::Error::last_os_error()
+            );
+        }
+        let bounds = info.rcMonitor;
+        let width = u32::try_from(bounds.right - bounds.left).context("显示器宽度无效")?;
+        let height = u32::try_from(bounds.bottom - bounds.top).context("显示器高度无效")?;
+        let device_name = monitor.device_name()?;
+        let short_device = device_name.rsplit('\\').next().unwrap_or(&device_name);
+        let name = monitor
+            .name()
+            .ok()
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| format!("显示器 {}", short_device.trim_start_matches("DISPLAY")));
+        Ok(Self {
+            device_name,
+            name,
+            x: bounds.left,
+            y: bounds.top,
+            width,
+            height,
+            primary: info.dwFlags & 1 != 0,
+        })
+    }
+    fn same_topology(&self, other: &Self) -> bool {
+        self.device_name == other.device_name
+            && (self.x, self.y, self.width, self.height)
+                == (other.x, other.y, other.width, other.height)
+    }
+    pub fn label(&self) -> String {
+        let short_device = self
+            .device_name
+            .rsplit('\\')
+            .next()
+            .unwrap_or(&self.device_name);
+        format!(
+            "{} ({short_device}) · {} × {}{}",
+            self.name,
+            self.width,
+            self.height,
+            if self.primary { " · 主屏幕" } else { "" }
+        )
+    }
+}
+#[derive(Clone, Copy)]
+struct CaptureTarget {
+    monitor: Monitor,
+    region: Region,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AudioMode {
@@ -178,6 +244,7 @@ struct Capture {
     scratch: Vec<u8>,
     flipped: Vec<u8>,
     pause: Arc<PauseClock>,
+    last_frame_elapsed: Option<Duration>,
 }
 type CaptureError = Box<dyn std::error::Error + Send + Sync>;
 impl GraphicsCaptureApiHandler for Capture {
@@ -201,6 +268,7 @@ impl GraphicsCaptureApiHandler for Capture {
             scratch: Vec::new(),
             flipped: Vec::new(),
             pause,
+            last_frame_elapsed: None,
         })
     }
     fn on_frame_arrived(
@@ -211,6 +279,12 @@ impl GraphicsCaptureApiHandler for Capture {
         let Some(elapsed) = self.pause.elapsed_since(self.started) else {
             return Ok(());
         };
+        if self
+            .last_frame_elapsed
+            .is_some_and(|last| elapsed.saturating_sub(last) < Duration::from_millis(33))
+        {
+            return Ok(());
+        }
         let r = self.region;
         if !r.fits(frame.width(), frame.height()) {
             return Err(anyhow!("显示器尺寸在录制中变化；已停止录制").into());
@@ -224,36 +298,77 @@ impl GraphicsCaptureApiHandler for Capture {
                 &pixels[(r.height as usize - 1 - row) * stride..(r.height as usize - row) * stride],
             );
         }
-        let timestamp = elapsed.as_nanos().saturating_div(100).min(i64::MAX as u128) as i64;
+        // This Windows encoder's MP4 track runs at twice the supplied video timestamp.
+        // Calibrate against the audio sample clock; the real-device smoke checks the result.
+        let timestamp = elapsed.as_nanos().saturating_div(200).min(i64::MAX as u128) as i64;
         self.encoder
             .as_mut()
             .ok_or_else(|| anyhow!("视频编码器已停止"))?
             .send_frame_buffer(&self.flipped, timestamp)?;
+        self.last_frame_elapsed = Some(elapsed);
         Ok(())
     }
 }
 impl Capture {
-    fn extend_to_stop(&mut self) -> Result<()> {
+    fn extend_to_stop(&mut self, elapsed: Duration) -> Result<()> {
         if self.flipped.is_empty() {
             bail!("没有捕获到画面帧，未创建空视频");
         }
-        let timestamp = self
-            .pause
-            .duration_at_stop(self.started)
-            .as_nanos()
-            .saturating_div(100)
-            .min(i64::MAX as u128) as i64;
-        self.encoder
-            .as_mut()
-            .context("编码器已停止")?
-            .send_frame_buffer(&self.flipped, timestamp)?;
+        let encoder = self.encoder.as_mut().context("编码器已停止")?;
+        let last = self.last_frame_elapsed.unwrap_or_default();
+        let near_end = elapsed.saturating_sub(Duration::from_millis(33));
+        if near_end > last {
+            let timestamp = near_end
+                .as_nanos()
+                .saturating_div(200)
+                .min(i64::MAX as u128) as i64;
+            encoder.send_frame_buffer(&self.flipped, timestamp)?;
+        }
+        let timestamp = elapsed.as_nanos().saturating_div(200).min(i64::MAX as u128) as i64;
+        encoder.send_frame_buffer(&self.flipped, timestamp)?;
         Ok(())
     }
 }
 
+pub fn enumerate_displays() -> Result<Vec<DisplayInfo>> {
+    let mut displays = Monitor::enumerate()?
+        .into_iter()
+        .map(DisplayInfo::from_monitor)
+        .collect::<Result<Vec<_>>>()?;
+    displays.sort_by_key(|display| (!display.primary, display.x, display.y));
+    if displays.is_empty() {
+        bail!("没有找到可录制的显示器");
+    }
+    Ok(displays)
+}
+pub fn primary_display() -> Result<DisplayInfo> {
+    enumerate_displays()?
+        .into_iter()
+        .find(|display| display.primary)
+        .context("没有找到主显示器")
+}
 pub fn primary_size() -> Result<(u32, u32)> {
-    let m = Monitor::primary()?;
-    Ok((m.width()?, m.height()?))
+    let display = primary_display()?;
+    Ok((display.width, display.height))
+}
+fn resolve_display(display: &DisplayInfo) -> Result<Monitor> {
+    for monitor in Monitor::enumerate()? {
+        if monitor.device_name()? == display.device_name {
+            let current = DisplayInfo::from_monitor(monitor)?;
+            if !display.same_topology(&current) {
+                bail!("显示器布局或分辨率已变化，请重新选择录制区域");
+            }
+            return if display.primary {
+                Monitor::primary().map_err(Into::into)
+            } else {
+                Ok(monitor)
+            };
+        }
+    }
+    bail!("所选显示器已断开，请重新选择")
+}
+pub fn validate_display(display: &DisplayInfo) -> Result<()> {
+    resolve_display(display).map(|_| ())
 }
 pub fn start(region: Region, output: PathBuf, audio: AudioMode) -> Result<Session> {
     start_with_gains(region, output, audio, AudioGains::default())
@@ -264,10 +379,23 @@ pub fn start_with_gains(
     audio: AudioMode,
     gains: AudioGains,
 ) -> Result<Session> {
-    validate_request(region, &output)?;
+    start_on_display(region, output, audio, gains, primary_display()?)
+}
+pub fn start_on_display(
+    region: Region,
+    output: PathBuf,
+    audio: AudioMode,
+    gains: AudioGains,
+    display: DisplayInfo,
+) -> Result<Session> {
+    validate_request_for_display(region, &output, &display)?;
     if gains.system > 200 || gains.microphone > 200 {
         bail!("音量增益必须在 0–200% 之间");
     }
+    let target = CaptureTarget {
+        monitor: resolve_display(&display)?,
+        region,
+    };
     let (tx, events) = unbounded();
     let stop = Arc::new(AtomicBool::new(false));
     let pause = Arc::new(PauseClock::default());
@@ -280,7 +408,7 @@ pub fn start_with_gains(
             pause: pause_worker,
             levels: levels_worker,
         };
-        let result = record(region, &output, audio, gains, signals, &stop_worker, &tx);
+        let result = record(target, &output, audio, gains, signals, &stop_worker, &tx);
         let _ = tx.send(Event::Finished(
             result.map(|_| output).map_err(|e| format!("{e:#}")),
         ));
@@ -295,9 +423,16 @@ pub fn start_with_gains(
 }
 
 pub fn validate_request(region: Region, output: &Path) -> Result<()> {
-    let (width, height) = primary_size()?;
-    if !region.fits(width, height) {
-        bail!("选区超出主显示器，或尺寸小于 32 像素");
+    validate_request_for_display(region, output, &primary_display()?)
+}
+pub fn validate_request_for_display(
+    region: Region,
+    output: &Path,
+    display: &DisplayInfo,
+) -> Result<()> {
+    resolve_display(display)?;
+    if !region.fits(display.width, display.height) {
+        bail!("选区超出所选显示器，或尺寸小于 32 像素");
     }
     if output
         .extension()
@@ -317,7 +452,7 @@ pub fn validate_request(region: Region, output: &Path) -> Result<()> {
 }
 
 fn record(
-    region: Region,
+    target: CaptureTarget,
     output: &Path,
     audio: AudioMode,
     gains: AudioGains,
@@ -333,7 +468,7 @@ fn record(
         ".{filename}.{}.recording.mp4",
         uuid::Uuid::new_v4()
     ));
-    let result = record_to_temp(region, &temp, audio, gains, signals, stop, tx);
+    let result = record_to_temp(target, &temp, audio, gains, signals, stop, tx);
     if let Err(error) = result {
         let _ = std::fs::remove_file(&temp);
         return Err(error);
@@ -364,7 +499,7 @@ fn commit_temp(temp: &Path, output: &Path) -> Result<()> {
 }
 
 fn record_to_temp(
-    region: Region,
+    target: CaptureTarget,
     output: &Path,
     audio: AudioMode,
     gains: AudioGains,
@@ -383,14 +518,19 @@ fn record_to_temp(
         return Err(error.context("清理音频启动缓冲失败"));
     }
     let settings = Settings::new(
-        Monitor::primary()?,
+        target.monitor,
         CursorCaptureSettings::WithCursor,
         DrawBorderSettings::WithoutBorder,
         SecondaryWindowSettings::Include,
         MinimumUpdateIntervalSettings::Custom(Duration::from_millis(33)),
         DirtyRegionSettings::Default,
         ColorFormat::Bgra8,
-        (region, output.to_path_buf(), audio, signals.pause.clone()),
+        (
+            target.region,
+            output.to_path_buf(),
+            audio,
+            signals.pause.clone(),
+        ),
     );
     let control = match Capture::start_free_threaded(settings) {
         Ok(control) => control,
@@ -418,24 +558,23 @@ fn record_to_temp(
             80
         }));
     }
+    // Capture shutdown can take seconds. Freeze the timeline before stopping it so the
+    // terminal video frame and audio tail refer to the same user-visible stop instant.
+    let final_duration = signals.pause.duration_at_stop(capture_started);
     let audio_tail = audio_timeline
         .as_mut()
-        .map(|timeline| {
-            timeline.tick(
-                &callback,
-                Some(signals.pause.duration_at_stop(capture_started)),
-            )
-        })
+        .map(|timeline| timeline.tick(&callback, Some(final_duration)))
         .transpose();
     let audio_stop = audio_timeline.as_mut().map(AudioTimeline::stop).transpose();
     signals.levels.store(0, Ordering::Release);
+    signals.pause.set_paused(true);
     let capture_stop = control.stop().map_err(|e| anyhow!("停止捕获失败：{e}"));
     audio_tail?;
     audio_stop?;
     capture_stop?;
     let encoder = {
         let mut capture = callback.lock();
-        capture.extend_to_stop()?;
+        capture.extend_to_stop(final_duration)?;
         capture.encoder.take().context("编码器未创建")?
     };
     encoder
@@ -716,6 +855,57 @@ mod tests {
         );
     }
     #[test]
+    fn display_identity_rejects_topology_changes_and_keeps_local_coordinates() {
+        let display = super::DisplayInfo {
+            device_name: "\\\\.\\DISPLAY2".into(),
+            name: "Side display".into(),
+            x: -1_920,
+            y: -120,
+            width: 1_920,
+            height: 1_080,
+            primary: false,
+        };
+        assert!(display.label().contains("DISPLAY2"));
+        assert!(display.same_topology(&display.clone()));
+        let mut moved = display.clone();
+        moved.x = 0;
+        assert!(!display.same_topology(&moved));
+        let mut resized = display.clone();
+        resized.width = 1_600;
+        assert!(!display.same_topology(&resized));
+        let region = Region::from_points(
+            (0.0, 0.0),
+            (960.0, 540.0),
+            (display.width, display.height),
+            (960.0, 540.0),
+        )
+        .unwrap();
+        assert_eq!((region.x, region.y), (0, 0));
+        assert!(region.fits(display.width, display.height));
+    }
+    #[test]
+    fn display_snapshot_is_checked_before_recording() {
+        let current = super::primary_display().unwrap();
+        eprintln!(
+            "primary capture bounds: ({}, {}) {}x{}",
+            current.x, current.y, current.width, current.height
+        );
+        super::validate_display(&current).unwrap();
+        let mut stale = current.clone();
+        stale.width += 2;
+        assert!(super::validate_display(&stale).is_err());
+        let region = Region {
+            x: 0,
+            y: 0,
+            width: current.width.min(640) & !1,
+            height: current.height.min(360) & !1,
+        };
+        let path =
+            std::env::temp_dir().join(format!("zi-stale-display-{}.mp4", uuid::Uuid::new_v4()));
+        assert!(super::validate_request_for_display(region, &path, &stale).is_err());
+        assert!(!path.exists());
+    }
+    #[test]
     fn finishing_never_overwrites_a_newer_destination() {
         let folder = std::env::temp_dir();
         let unique = uuid::Uuid::new_v4();
@@ -933,7 +1123,14 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         let launch_started = std::time::Instant::now();
-        let session = super::start(region, path.clone(), audio).unwrap();
+        let session = super::start_on_display(
+            region,
+            path.clone(),
+            audio,
+            super::AudioGains::default(),
+            super::primary_display().unwrap(),
+        )
+        .unwrap();
         let first = session
             .events
             .recv_timeout(Duration::from_secs(15))

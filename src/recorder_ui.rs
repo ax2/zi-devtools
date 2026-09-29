@@ -1,4 +1,4 @@
-use crate::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
+use crate::recorder::{self, AudioGains, AudioMode, DisplayInfo, Event, Region, Session};
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use std::{
     path::{Path, PathBuf},
@@ -38,7 +38,69 @@ fn available_named_path(folder: &Path, stem: &str) -> PathBuf {
     folder.join(format!("{stem}-{}.mp4", uuid::Uuid::new_v4()))
 }
 
+fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowExW, GetWindowRect, GetWindowThreadProcessId, SWP_NOACTIVATE, SWP_NOZORDER,
+        SetWindowPos,
+    };
+    let title: Vec<u16> = "选择录制区域 · Esc 取消\0".encode_utf16().collect();
+    let mut window = std::ptr::null_mut();
+    loop {
+        window = unsafe {
+            FindWindowExW(
+                std::ptr::null_mut(),
+                window,
+                std::ptr::null(),
+                title.as_ptr(),
+            )
+        };
+        if window.is_null() {
+            return Ok(());
+        }
+        let mut owner = 0;
+        unsafe { GetWindowThreadProcessId(window, &mut owner) };
+        if owner == std::process::id() {
+            break;
+        }
+    }
+    let mut rect = unsafe { std::mem::zeroed() };
+    if unsafe { GetWindowRect(window, &mut rect) } == 0 {
+        anyhow::bail!("读取框选窗口位置失败：{}", std::io::Error::last_os_error());
+    }
+    if (
+        rect.left,
+        rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
+    ) == (
+        display.x,
+        display.y,
+        display.width as i32,
+        display.height as i32,
+    ) {
+        return Ok(());
+    }
+    if unsafe {
+        SetWindowPos(
+            window,
+            std::ptr::null_mut(),
+            display.x,
+            display.y,
+            display.width as i32,
+            display.height as i32,
+            SWP_NOACTIVATE | SWP_NOZORDER,
+        )
+    } == 0
+    {
+        anyhow::bail!("定位框选窗口失败：{}", std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 pub struct RecorderState {
+    displays_loaded: bool,
+    displays: Vec<DisplayInfo>,
+    display: Option<DisplayInfo>,
     selecting: bool,
     drag_start: Option<egui::Pos2>,
     region: Option<Region>,
@@ -61,6 +123,9 @@ pub struct RecorderState {
 impl Default for RecorderState {
     fn default() -> Self {
         Self {
+            displays_loaded: false,
+            displays: Vec::new(),
+            display: None,
             selecting: false,
             drag_start: None,
             region: None,
@@ -83,6 +148,45 @@ impl Default for RecorderState {
 }
 
 impl RecorderState {
+    fn refresh_displays(&mut self) {
+        self.displays_loaded = true;
+        match recorder::enumerate_displays() {
+            Ok(displays) => {
+                let retained = self.display.as_ref().and_then(|selected| {
+                    displays
+                        .iter()
+                        .find(|display| display.device_name == selected.device_name)
+                        .filter(|display| {
+                            (display.x, display.y, display.width, display.height)
+                                == (selected.x, selected.y, selected.width, selected.height)
+                        })
+                        .cloned()
+                });
+                if self.display.is_some() && retained.is_none() {
+                    self.region = None;
+                    self.status = "显示器布局已变化，请重新选择录制区域".into();
+                    self.error = true;
+                }
+                self.display = retained.or_else(|| displays.first().cloned());
+                self.displays = displays;
+            }
+            Err(error) => {
+                self.displays.clear();
+                self.display = None;
+                self.region = None;
+                self.status = format!("读取显示器失败：{error:#}");
+                self.error = true;
+            }
+        }
+    }
+    fn choose_display(&mut self, display: DisplayInfo) {
+        if self.display.as_ref().map(|current| &current.device_name) != Some(&display.device_name) {
+            self.region = None;
+            self.status = "已切换显示器，请重新框选区域".into();
+            self.error = false;
+        }
+        self.display = Some(display);
+    }
     pub fn tray_status(&self) -> TrayRecordingStatus {
         if self.countdown_deadline.is_some() {
             return TrayRecordingStatus::Countdown;
@@ -151,6 +255,7 @@ impl RecorderState {
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {
+        self.refresh_displays();
         self.region = Some(Region {
             x: 180,
             y: 120,
@@ -214,12 +319,18 @@ impl RecorderState {
         let Some(region) = self.region else {
             return;
         };
+        let Some(display) = self.display.clone() else {
+            self.status = "请先选择显示器".into();
+            self.error = true;
+            return;
+        };
         self.last_file = None;
-        match recorder::start_with_gains(
+        match recorder::start_on_display(
             region,
             PathBuf::from(self.output.trim()),
             self.audio,
             self.gains,
+            display,
         ) {
             Ok(session) => {
                 self.session = Some(session);
@@ -235,10 +346,58 @@ impl RecorderState {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        if !self.displays_loaded {
+            self.refresh_displays();
+        }
         ui.heading("屏幕录制");
-        ui.label("鼠标框选主显示器上的区域，开始录制后保存为 MP4。");
+        ui.label("选择显示器，用鼠标框选区域，开始录制后保存为 MP4。");
         ui.add_space(16.0);
         let busy = self.session.is_some() || self.countdown_deadline.is_some();
+        ui.horizontal(|ui| {
+            ui.label("录制屏幕");
+            let mut chosen = self
+                .display
+                .as_ref()
+                .map(|display| display.device_name.clone());
+            ui.add_enabled_ui(!busy, |ui| {
+                egui::ComboBox::from_id_salt("recorder-display")
+                    .selected_text(
+                        self.display
+                            .as_ref()
+                            .map(DisplayInfo::label)
+                            .unwrap_or_else(|| "未找到显示器".into()),
+                    )
+                    .show_ui(ui, |ui| {
+                        for display in &self.displays {
+                            ui.selectable_value(
+                                &mut chosen,
+                                Some(display.device_name.clone()),
+                                display.label(),
+                            );
+                        }
+                    });
+            });
+            if !busy
+                && chosen
+                    != self
+                        .display
+                        .as_ref()
+                        .map(|display| display.device_name.clone())
+                && let Some(display) = self
+                    .displays
+                    .iter()
+                    .find(|display| Some(&display.device_name) == chosen.as_ref())
+                    .cloned()
+            {
+                self.choose_display(display);
+            }
+            if ui
+                .add_enabled(!busy, egui::Button::new("刷新屏幕"))
+                .clicked()
+            {
+                self.refresh_displays();
+            }
+        });
         ui.horizontal(|ui| {
             if ui
                 .add_enabled(
@@ -247,7 +406,12 @@ impl RecorderState {
                 )
                 .clicked()
             {
-                match recorder::primary_size() {
+                match self
+                    .display
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("未选择显示器"))
+                    .and_then(recorder::validate_display)
+                {
                     Ok(_) => {
                         self.selecting = true;
                         self.drag_start = None;
@@ -255,28 +419,33 @@ impl RecorderState {
                         self.error = false;
                     }
                     Err(e) => {
-                        self.status = format!("无法读取主显示器：{e:#}");
+                        self.status = format!("无法选择显示器：{e:#}");
                         self.error = true;
                     }
                 }
             }
             if ui
-                .add_enabled(!busy, egui::Button::new("整个主屏幕"))
+                .add_enabled(!busy, egui::Button::new("整个屏幕"))
                 .clicked()
             {
-                match recorder::primary_size() {
-                    Ok((width, height)) => {
+                match self
+                    .display
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("未选择显示器"))
+                    .and_then(|display| recorder::validate_display(display).map(|_| display))
+                {
+                    Ok(display) => {
                         self.region = Some(Region {
                             x: 0,
                             y: 0,
-                            width: width & !1,
-                            height: height & !1,
+                            width: display.width & !1,
+                            height: display.height & !1,
                         });
-                        self.status = "已选择整个主屏幕".into();
+                        self.status = "已选择整个屏幕".into();
                         self.error = false;
                     }
                     Err(e) => {
-                        self.status = format!("无法读取主显示器：{e:#}");
+                        self.status = format!("无法选择显示器：{e:#}");
                         self.error = true;
                     }
                 }
@@ -424,7 +593,17 @@ impl RecorderState {
                 .clicked()
             {
                 if let Some(region) = self.region {
-                    match recorder::validate_request(region, Path::new(self.output.trim())) {
+                    match self
+                        .display
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("未选择显示器"))
+                        .and_then(|display| {
+                            recorder::validate_request_for_display(
+                                region,
+                                Path::new(self.output.trim()),
+                                display,
+                            )
+                        }) {
                         Ok(()) if self.countdown_seconds == 0 => self.begin_recording(),
                         Ok(()) => {
                             self.countdown_deadline =
@@ -530,7 +709,7 @@ impl RecorderState {
         }
         ui.add_space(12.0);
         ui.small(
-            "录制主显示器画面和鼠标光标，可录系统声音、麦克风或两者混音。已有同名文件不会被覆盖。",
+            "录制所选屏幕的画面和鼠标光标，可录系统声音、麦克风或两者混音。已有同名文件不会被覆盖。",
         );
     }
 
@@ -538,16 +717,31 @@ impl RecorderState {
         if !self.selecting {
             return;
         }
+        let Some(display) = self.display.clone() else {
+            self.selecting = false;
+            self.status = "没有可用的显示器，请刷新屏幕列表".into();
+            self.error = true;
+            return;
+        };
+        let placement_error = place_selection_overlay(&display).err();
         let id = egui::ViewportId::from_hash_of("zi-recorder-select");
         let builder = egui::ViewportBuilder::default()
             .with_title("选择录制区域 · Esc 取消")
-            .with_position([0.0, 0.0])
-            .with_fullscreen(true)
+            .with_position([display.x as f32, display.y as f32])
+            .with_inner_size([display.width as f32, display.height as f32])
+            .with_clamp_size_to_monitor_size(false)
             .with_decorations(false)
             .with_taskbar(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop)
             .with_transparent(true);
         ctx.show_viewport_immediate(id, builder, |panel, _| {
+            if let Some(error) = &placement_error {
+                self.selecting = false;
+                self.status = format!("无法在所选屏幕框选区域：{error:#}");
+                self.error = true;
+                panel.send_viewport_cmd(egui::ViewportCommand::Close);
+                return;
+            }
             if panel.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape)) {
                 self.selecting = false;
                 self.drag_start = None;
@@ -588,11 +782,11 @@ impl RecorderState {
                     if response.drag_stopped() {
                         if let (Some(a), Some(b)) = (self.drag_start.take(), pointer) {
                             let view = rect.size();
-                            match recorder::primary_size().ok().and_then(|(w, h)| {
+                            match recorder::validate_display(&display).ok().and_then(|_| {
                                 Region::from_points(
                                     (a.x - rect.left(), a.y - rect.top()),
                                     (b.x - rect.left(), b.y - rect.top()),
-                                    (w, h),
+                                    (display.width, display.height),
                                     (view.x, view.y),
                                 )
                             }) {
@@ -651,6 +845,36 @@ mod tests {
         state.request_stop();
         assert_eq!(state.tray_status(), super::TrayRecordingStatus::Idle);
         assert!(state.session.is_none());
+    }
+    #[test]
+    fn switching_or_resizing_display_discards_a_stale_region() {
+        let original = crate::recorder::primary_display().unwrap();
+        let mut state = super::RecorderState::default();
+        state.display = Some(original.clone());
+        state.region = Some(crate::recorder::Region {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 180,
+        });
+        let mut second = original.clone();
+        second.device_name = "\\\\.\\DISPLAY99".into();
+        state.choose_display(second);
+        assert!(state.region.is_none());
+        state.display = Some(original.clone());
+        state.region = Some(crate::recorder::Region {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 180,
+        });
+        state.display.as_mut().unwrap().width += 2;
+        state.refresh_displays();
+        assert!(state.region.is_none());
+        assert_eq!(
+            state.display.as_ref().unwrap().device_name,
+            original.device_name
+        );
     }
 
     #[test]
