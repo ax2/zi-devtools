@@ -244,9 +244,35 @@ impl eframe::App for Capture {
         }
         if matches!(
             smoke_mode.as_deref(),
-            Some("recorder-smoke" | "recorder-fullscreen-smoke" | "recorder-dynamic-smoke")
+            Some(
+                "recorder-smoke"
+                    | "recorder-fullscreen-smoke"
+                    | "recorder-dynamic-smoke"
+                    | "recorder-long-smoke"
+                    | "recorder-long-mix-smoke"
+            )
         ) {
-            let dynamic = smoke_mode.as_deref() == Some("recorder-dynamic-smoke");
+            let dynamic = matches!(
+                smoke_mode.as_deref(),
+                Some("recorder-dynamic-smoke" | "recorder-long-smoke" | "recorder-long-mix-smoke")
+            );
+            let record_seconds = if matches!(
+                smoke_mode.as_deref(),
+                Some("recorder-long-smoke" | "recorder-long-mix-smoke")
+            ) {
+                60
+            } else if dynamic {
+                12
+            } else {
+                2
+            };
+            let audio_mode = if smoke_mode.as_deref() == Some("recorder-long-mix-smoke") {
+                AudioMode::SystemAndMicrophone
+            } else if dynamic {
+                AudioMode::Microphone
+            } else {
+                AudioMode::None
+            };
             if self.frames == 0 {
                 let display = recorder::primary_display().unwrap();
                 println!(
@@ -275,11 +301,7 @@ impl eframe::App for Capture {
                             "recorder-eframe-smoke-{}.mp4",
                             uuid::Uuid::new_v4()
                         )),
-                        if dynamic {
-                            AudioMode::Microphone
-                        } else {
-                            AudioMode::None
-                        },
+                        audio_mode,
                         AudioGains::default(),
                         display,
                     )
@@ -324,12 +346,17 @@ impl eframe::App for Capture {
                                     tracks.iter().find(|(kind, _)| kind == b"vide").unwrap().1;
                                 let audio =
                                     tracks.iter().find(|(kind, _)| kind == b"soun").unwrap().1;
-                                assert!((video - 12.0).abs() < 0.75, "video={video:.3}s");
+                                assert!(
+                                    (video - record_seconds as f64).abs() < 1.5,
+                                    "video={video:.3}s expected={record_seconds}s"
+                                );
                                 assert!(
                                     (audio - video).abs() < 0.75,
                                     "audio={audio:.3}s video={video:.3}s"
                                 );
-                                println!("dynamic MP4 tracks: video={video:.3}s audio={audio:.3}s");
+                                println!(
+                                    "MP4 tracks: mode={audio_mode:?} video={video:.3}s audio={audio:.3}s"
+                                );
                             }
                             fs::remove_file(path).unwrap();
                             println!("PASS eframe recorder smoke");
@@ -337,13 +364,14 @@ impl eframe::App for Capture {
                         }
                     }
                 }
-                if self.recorder_smoke_started.is_some_and(|at| {
-                    at.elapsed() >= Duration::from_secs(if dynamic { 12 } else { 2 })
-                }) {
+                if self
+                    .recorder_smoke_started
+                    .is_some_and(|at| at.elapsed() >= Duration::from_secs(record_seconds))
+                {
                     session.stop.store(true, Ordering::Release);
                 }
             }
-            if self.started.elapsed() > Duration::from_secs(if dynamic { 35 } else { 20 }) {
+            if self.started.elapsed() > Duration::from_secs(record_seconds + 25) {
                 panic!("eframe recorder smoke timed out");
             }
             if dynamic {

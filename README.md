@@ -69,6 +69,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
+Stage 36 验证中：主屏 60 秒动态窗口录制的麦克风单路和系统声＋麦克风混录均完成 MP4 封装，音视频轨差分别为约 0.127 秒和 0.072 秒。不同设备、热拔插及更长时间仍待验收；当前公开运行版本仍为 v0.35.0。
+
 Stage 35 / v0.35.0：修复主工作台隐藏到托盘后快捷面板无法唤醒；Windows 使用 DWM cloak 隐藏工作台并保持事件处理，不支持时退回最小化。真实 eframe 窗口已验证深浅主题快捷面板与录屏自动最小化恢复。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
 
 Stage 34 / v0.34.0：录屏可在开始时自动最小化主窗口，并在取消、失败或保存完成后恢复；托盘不可用时保留窗口按钮。真实 eframe 窗口的立即开始、倒计时和取消路径已验证。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
