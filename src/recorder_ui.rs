@@ -110,6 +110,7 @@ pub struct RecorderState {
     countdown_seconds: u64,
     countdown_deadline: Option<Instant>,
     auto_minimize: bool,
+    auto_stop_minutes: u16,
     minimize_requested: bool,
     restore_after_finish: bool,
     restore_requested: bool,
@@ -139,6 +140,7 @@ impl Default for RecorderState {
             countdown_seconds: 3,
             countdown_deadline: None,
             auto_minimize: true,
+            auto_stop_minutes: 0,
             minimize_requested: false,
             restore_after_finish: false,
             restore_requested: false,
@@ -161,6 +163,16 @@ impl RecorderState {
     }
     pub fn set_auto_minimize(&mut self, enabled: bool) {
         self.auto_minimize = enabled;
+    }
+    pub fn auto_stop_minutes(&self) -> u16 {
+        self.auto_stop_minutes
+    }
+    pub fn set_auto_stop_minutes(&mut self, minutes: u16) {
+        self.auto_stop_minutes = if [0, 1, 5, 15, 30, 60].contains(&minutes) {
+            minutes
+        } else {
+            0
+        };
     }
     fn request_auto_minimize(&mut self, tray_available: bool) {
         if self.auto_minimize && tray_available {
@@ -348,6 +360,7 @@ impl RecorderState {
         });
         self.output = "C:\\Users\\demo\\Videos\\Zi-Recording-20260928-1928.mp4".into();
         self.audio = AudioMode::SystemAndMicrophone;
+        self.auto_stop_minutes = 5;
         self.preview_levels = Some((62, 38));
         self.status = "界面预览：电平为示例值，真实录制时自动更新".into();
     }
@@ -396,6 +409,18 @@ impl RecorderState {
                     }
                 }
             }
+        }
+        if self.auto_stop_minutes > 0
+            && matches!(
+                self.tray_status(),
+                TrayRecordingStatus::Recording | TrayRecordingStatus::Paused
+            )
+            && self.elapsed_duration().is_some_and(|elapsed| {
+                elapsed >= Duration::from_secs(u64::from(self.auto_stop_minutes) * 60)
+            })
+        {
+            self.request_stop();
+            self.status = format!("已录满 {} 分钟，正在完成 MP4 文件…", self.auto_stop_minutes);
         }
         repaint
     }
@@ -673,6 +698,31 @@ impl RecorderState {
                     });
             });
         });
+        ui.horizontal(|ui| {
+            ui.label("录满后自动停止");
+            ui.add_enabled_ui(!busy, |ui| {
+                egui::ComboBox::from_id_salt("recorder-auto-stop")
+                    .selected_text(if self.auto_stop_minutes == 0 {
+                        "关闭".to_owned()
+                    } else {
+                        format!("{} 分钟", self.auto_stop_minutes)
+                    })
+                    .show_ui(ui, |ui| {
+                        for minutes in [0, 1, 5, 15, 30, 60] {
+                            ui.selectable_value(
+                                &mut self.auto_stop_minutes,
+                                minutes,
+                                if minutes == 0 {
+                                    "关闭".to_owned()
+                                } else {
+                                    format!("{minutes} 分钟")
+                                },
+                            );
+                        }
+                    });
+            });
+        });
+        ui.small("按实际录制时间计时；暂停和倒计时不计入时长。关闭时需手动停止。");
         ui.add_enabled(
             !busy && tray_available,
             egui::Checkbox::new(
@@ -1065,6 +1115,122 @@ mod tests {
         assert_ne!(state.output, path.to_string_lossy());
         let data = std::fs::read(&path).unwrap();
         assert!(data.windows(4).any(|v| v == b"moov"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "needs an unlocked interactive Windows desktop and working H.264 encoder"]
+    fn auto_stop_finalizes_a_real_video_without_counting_pause() {
+        use super::{RecorderState, TrayRecordingStatus};
+        use crate::recorder::{self, AudioMode, Region};
+        use std::time::{Duration, Instant};
+
+        let display = recorder::primary_display().unwrap();
+        let path =
+            std::env::temp_dir().join(format!("zi-recorder-autostop-{}.mp4", uuid::Uuid::new_v4()));
+        let mut state = RecorderState::default();
+        state.display = Some(display.clone());
+        state.region = Some(Region {
+            x: 0,
+            y: 0,
+            width: display.width.min(640) & !1,
+            height: display.height.min(360) & !1,
+        });
+        state.output = path.to_string_lossy().into_owned();
+        state.audio = AudioMode::None;
+        state.set_auto_stop_minutes(1);
+        state.begin_recording();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while state.tray_status() == TrayRecordingStatus::Starting && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Recording);
+        std::thread::sleep(Duration::from_millis(500));
+        state.toggle_pause();
+        state.started = Some(Instant::now() - Duration::from_secs(60));
+        state.pause_started = Some(Instant::now() - Duration::from_secs(2));
+        state.poll();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Paused);
+        state.toggle_pause();
+        state.started = Some(Instant::now() - Duration::from_secs(63));
+        state.poll();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Saving);
+        assert!(state.status.contains("自动") || state.status.contains("录满"));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while state.tray_status() != TrayRecordingStatus::Idle && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            state.last_file.as_deref(),
+            Some(path.as_path()),
+            "{}",
+            state.status
+        );
+        let data = std::fs::read(&path).unwrap();
+        assert!(data.windows(4).any(|part| part == b"moov"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "needs an unlocked interactive Windows desktop; records for one minute plus pause"]
+    fn auto_stop_waits_for_one_real_minute_excluding_pause() {
+        use super::{RecorderState, TrayRecordingStatus};
+        use crate::recorder::{self, AudioMode, Region};
+        use std::time::{Duration, Instant};
+
+        let display = recorder::primary_display().unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "zi-recorder-autostop-minute-{}.mp4",
+            uuid::Uuid::new_v4()
+        ));
+        let mut state = RecorderState::default();
+        state.display = Some(display.clone());
+        state.region = Some(Region {
+            x: 0,
+            y: 0,
+            width: display.width.min(640) & !1,
+            height: display.height.min(360) & !1,
+        });
+        state.output = path.to_string_lossy().into_owned();
+        state.audio = AudioMode::None;
+        state.set_auto_stop_minutes(1);
+        state.begin_recording();
+        let startup_deadline = Instant::now() + Duration::from_secs(15);
+        while state.tray_status() == TrayRecordingStatus::Starting
+            && Instant::now() < startup_deadline
+        {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Recording);
+        let started = Instant::now();
+        std::thread::sleep(Duration::from_secs(2));
+        state.toggle_pause();
+        std::thread::sleep(Duration::from_secs(3));
+        state.poll();
+        assert_eq!(state.tray_status(), TrayRecordingStatus::Paused);
+        state.toggle_pause();
+        let deadline = started + Duration::from_secs(75);
+        while state.tray_status() != TrayRecordingStatus::Idle && Instant::now() < deadline {
+            state.poll();
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let wall = started.elapsed();
+        assert_eq!(
+            state.last_file.as_deref(),
+            Some(path.as_path()),
+            "{}",
+            state.status
+        );
+        assert!(
+            (Duration::from_secs(62)..Duration::from_secs(75)).contains(&wall),
+            "auto-stop wall time {wall:?}"
+        );
+        let data = std::fs::read(&path).unwrap();
+        assert!(data.windows(4).any(|part| part == b"moov"));
+        eprintln!("auto-stop after {wall:?}, MP4 bytes={}", data.len());
         std::fs::remove_file(path).unwrap();
     }
 }

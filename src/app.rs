@@ -937,6 +937,7 @@ impl DevToolsApp {
         let duplicate_count = other_instance_count();
         let mut recorder = crate::recorder_ui::RecorderState::default();
         recorder.set_auto_minimize(preferences.recorder_auto_minimize);
+        recorder.set_auto_stop_minutes(preferences.recorder_auto_stop_minutes);
         let mut app = Self {
             #[cfg(feature = "ui-preview")]
             preview_panel_frames: 0,
@@ -1365,7 +1366,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 37  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 38  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3587,11 +3588,16 @@ impl eframe::App for DevToolsApp {
                 }
                 Page::Recorder => {
                     let previous_auto_minimize = self.recorder.auto_minimize();
+                    let previous_auto_stop = self.recorder.auto_stop_minutes();
                     egui::ScrollArea::vertical()
                         .id_salt("recorder-page")
                         .show(ui, |ui| self.recorder.ui(ui, self.tray.is_some()));
-                    if self.recorder.auto_minimize() != previous_auto_minimize {
+                    if self.recorder.auto_minimize() != previous_auto_minimize
+                        || self.recorder.auto_stop_minutes() != previous_auto_stop
+                    {
                         self.preferences.recorder_auto_minimize = self.recorder.auto_minimize();
+                        self.preferences.recorder_auto_stop_minutes =
+                            self.recorder.auto_stop_minutes();
                         if let Err(error) = self.preferences.save(&self.preferences_path) {
                             self.toast = Some((error.to_string(), Instant::now()));
                         }

@@ -15,6 +15,7 @@ pub struct Preferences {
     pub recent: Vec<String>,
     pub usage: std::collections::BTreeMap<String, u32>,
     pub recorder_auto_minimize: bool,
+    pub recorder_auto_stop_minutes: u16,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -25,6 +26,7 @@ impl Default for Preferences {
             recent: Vec::new(),
             usage: Default::default(),
             recorder_auto_minimize: true,
+            recorder_auto_stop_minutes: 0,
         }
     }
 }
@@ -65,6 +67,9 @@ impl Preferences {
             .filter(|(id, count)| !id.is_empty() && id.len() <= 512 && *count > 0)
             .take(4096)
             .collect();
+        if ![0, 1, 5, 15, 30, 60].contains(&value.recorder_auto_stop_minutes) {
+            value.recorder_auto_stop_minutes = 0;
+        }
         value
     }
     pub fn save(&self, path: &Path) -> Result<()> {
@@ -110,6 +115,7 @@ mod tests {
         prefs.save(&path).unwrap();
         prefs.visit("json");
         prefs.recorder_auto_minimize = false;
+        prefs.recorder_auto_stop_minutes = 15;
         prefs.favorites.push("plugin:disabled/tool".into());
         prefs.save(&path).unwrap();
         let restored = Preferences::load(&path);
@@ -117,9 +123,12 @@ mod tests {
         assert_eq!(restored.recent, ["json"]);
         assert_eq!(restored.usage["json"], 1);
         assert!(!restored.recorder_auto_minimize);
+        assert_eq!(restored.recorder_auto_stop_minutes, 15);
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::write(&path, "invalid").unwrap();
         assert!(Preferences::load(&path).recent.is_empty());
+        fs::write(&path, r#"{"recorder_auto_stop_minutes":999}"#).unwrap();
+        assert_eq!(Preferences::load(&path).recorder_auto_stop_minutes, 0);
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -129,6 +138,7 @@ mod tests {
             serde_json::from_str(r#"{"light":true,"favorites":["json"]}"#).unwrap();
         assert!(p.recent.is_empty());
         assert!(p.recorder_auto_minimize);
+        assert_eq!(p.recorder_auto_stop_minutes, 0);
         for i in 0..30 {
             p.visit(&format!("tool-{i}"));
         }

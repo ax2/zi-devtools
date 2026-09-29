@@ -1056,6 +1056,11 @@ mod tests {
         record_smoke(AudioMode::Microphone, false, 12);
     }
     #[test]
+    #[ignore = "needs an unlocked interactive desktop and both audio devices; records for two minutes"]
+    fn records_two_minutes_with_dual_audio_and_pause() {
+        record_smoke(AudioMode::SystemAndMicrophone, true, 120);
+    }
+    #[test]
     #[ignore = "needs an unlocked interactive desktop and default playback device"]
     fn system_audio_meter_reacts_to_a_local_pcm_tone() {
         use std::{process::Command, sync::atomic::Ordering, time::Instant};
@@ -1172,12 +1177,12 @@ mod tests {
             launch_started.elapsed()
         );
         if pause_during_capture {
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_secs(capture_seconds / 2));
             session.pause.set_paused(true);
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_secs(3));
             assert_eq!(session.levels.load(Ordering::Acquire), 0);
             session.pause.set_paused(false);
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_secs(capture_seconds - capture_seconds / 2));
         } else {
             std::thread::sleep(Duration::from_secs(capture_seconds));
         }
@@ -1205,11 +1210,7 @@ mod tests {
         }
         let tracks = mp4_track_durations(&data);
         let video_seconds = tracks.iter().find(|(kind, _)| *kind == *b"vide").unwrap().1;
-        let expected_seconds = if pause_during_capture {
-            2.0
-        } else {
-            capture_seconds as f64
-        };
+        let expected_seconds = capture_seconds as f64;
         eprintln!("recorded MP4 tracks: {tracks:?}, target={expected_seconds:.3}s");
         assert!(
             (video_seconds - expected_seconds).abs() < 0.75,
