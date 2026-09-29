@@ -2,6 +2,8 @@ mod handoff;
 mod launcher;
 mod task_center;
 
+#[cfg(feature = "ui-preview")]
+use std::path::Path;
 use std::{
     fs,
     path::PathBuf,
@@ -533,6 +535,28 @@ impl DevToolsApp {
     pub fn preview_recorder_region(&self) -> Option<crate::recorder::Region> {
         self.recorder.preview_region()
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_start_recorder_auto_minimize(
+        &mut self,
+        folder: &Path,
+        countdown_seconds: u64,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(self.tray.is_some(), "托盘不可用，无法验证自动最小化");
+        self.recorder
+            .preview_start_auto_minimize(folder, countdown_seconds)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_stop_recorder(&mut self) {
+        self.recorder.request_stop();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_recorder_last_file(&self) -> Option<PathBuf> {
+        self.recorder.preview_last_file()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_recorder_status(&self) -> crate::recorder_ui::TrayRecordingStatus {
+        self.recorder.tray_status()
+    }
     /// Only compiled for the isolated screenshot fixture, never a production entry point.
     #[cfg(feature = "ui-preview")]
     pub fn preview_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: PathBuf) {
@@ -800,6 +824,19 @@ impl DevToolsApp {
         }
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_minimized(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.window_handle.is_some_and(|handle| unsafe {
+                windows_sys::Win32::UI::WindowsAndMessaging::IsIconic(handle as _) != 0
+            })
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_import_routes(&mut self) {
         use crate::intake::{Imported, Target};
         if !self.intake.paths.is_empty() {
@@ -895,6 +932,8 @@ impl DevToolsApp {
             wake_main_window(window_handle, &wake_ctx)
         });
         let duplicate_count = other_instance_count();
+        let mut recorder = crate::recorder_ui::RecorderState::default();
+        recorder.set_auto_minimize(preferences.recorder_auto_minimize);
         let mut app = Self {
             #[cfg(feature = "ui-preview")]
             preview_panel_frames: 0,
@@ -942,7 +981,7 @@ impl DevToolsApp {
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: Default::default(),
-            recorder: Default::default(),
+            recorder,
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1225,8 +1264,26 @@ impl DevToolsApp {
     }
 
     fn hide_to_tray(&self, ctx: &egui::Context) {
+        if self.recorder.tray_status() != crate::recorder_ui::TrayRecordingStatus::Idle {
+            self.minimize_for_recording(ctx);
+            return;
+        }
         hide_main_window(self.window_handle);
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        ctx.request_repaint();
+    }
+    fn minimize_for_recording(&self, ctx: &egui::Context) {
+        #[cfg(windows)]
+        if let Some(handle) = self.window_handle {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, SW_MINIMIZE, ShowWindow};
+            let window = handle as windows_sys::Win32::Foundation::HWND;
+            unsafe {
+                if IsWindow(window) != 0 {
+                    ShowWindow(window, SW_MINIMIZE);
+                }
+            }
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         ctx.request_repaint();
     }
 
@@ -1303,7 +1360,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 33  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 34  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3258,6 +3315,7 @@ fn restore_main_window(window_handle: Option<isize>, ctx: &egui::Context) {
                     },
                 );
                 SetForegroundWindow(window);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                 ctx.request_repaint();
                 return;
             }
@@ -3491,9 +3549,16 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.mcp.ui(ui));
                 }
                 Page::Recorder => {
+                    let previous_auto_minimize = self.recorder.auto_minimize();
                     egui::ScrollArea::vertical()
                         .id_salt("recorder-page")
-                        .show(ui, |ui| self.recorder.ui(ui));
+                        .show(ui, |ui| self.recorder.ui(ui, self.tray.is_some()));
+                    if self.recorder.auto_minimize() != previous_auto_minimize {
+                        self.preferences.recorder_auto_minimize = self.recorder.auto_minimize();
+                        if let Err(error) = self.preferences.save(&self.preferences_path) {
+                            self.toast = Some((error.to_string(), Instant::now()));
+                        }
+                    }
                 }
                 Page::Frameworks => {
                     let before = self.frameworks.selected;
@@ -3530,6 +3595,12 @@ impl eframe::App for DevToolsApp {
         self.overlays(ctx);
         self.launcher(ctx);
         self.recorder.selection_overlay(ctx);
+        if self.recorder.take_restore_request() {
+            restore_main_window(self.window_handle, ctx);
+        }
+        if self.recorder.take_minimize_request() {
+            self.minimize_for_recording(ctx);
+        }
         if self.clear_tool_confirm {
             egui::Window::new("清空当前工具？")
                 .collapsible(false)

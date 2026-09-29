@@ -125,6 +125,9 @@ struct Capture {
     recorder_smoke: Option<Session>,
     recorder_smoke_started: Option<Instant>,
     recorder_smoke_size: Option<(u32, u32)>,
+    auto_minimize_smoke_at: Option<Instant>,
+    auto_minimize_recording_at: Option<Instant>,
+    auto_minimize_smoke_stop_requested: bool,
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
@@ -165,6 +168,80 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some(
+                "recorder-auto-minimize-smoke"
+                    | "recorder-auto-minimize-countdown-smoke"
+                    | "recorder-auto-minimize-cancel-smoke"
+            )
+        ) {
+            let countdown = smoke_mode.as_deref() == Some("recorder-auto-minimize-countdown-smoke");
+            let cancel = smoke_mode.as_deref() == Some("recorder-auto-minimize-cancel-smoke");
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 100, self.fixture.clone());
+                self.app
+                    .preview_start_recorder_auto_minimize(
+                        &self.folder,
+                        if cancel {
+                            5
+                        } else if countdown {
+                            3
+                        } else {
+                            0
+                        },
+                    )
+                    .unwrap();
+            }
+            self.app.update(ctx, frame);
+            if self.app.preview_minimized() {
+                self.auto_minimize_smoke_at.get_or_insert_with(Instant::now);
+            }
+            if self.app.preview_recorder_status()
+                == zi_devtools::recorder_ui::TrayRecordingStatus::Recording
+            {
+                self.auto_minimize_recording_at
+                    .get_or_insert_with(Instant::now);
+            }
+            if !self.auto_minimize_smoke_stop_requested
+                && (if cancel {
+                    self.auto_minimize_smoke_at
+                        .is_some_and(|at| at.elapsed() >= Duration::from_secs(1))
+                } else {
+                    self.auto_minimize_recording_at
+                        .is_some_and(|at| at.elapsed() >= Duration::from_secs(2))
+                })
+            {
+                self.app.preview_stop_recorder();
+                self.auto_minimize_smoke_stop_requested = true;
+            }
+            if cancel
+                && self.auto_minimize_smoke_stop_requested
+                && self.app.preview_recorder_status()
+                    == zi_devtools::recorder_ui::TrayRecordingStatus::Idle
+                && !self.app.preview_minimized()
+            {
+                assert!(self.app.preview_recorder_last_file().is_none());
+                println!("PASS recorder countdown cancellation restores window");
+                std::process::exit(0);
+            }
+            if let Some(path) = self.app.preview_recorder_last_file() {
+                assert!(self.auto_minimize_smoke_at.is_some());
+                assert!(!self.app.preview_minimized(), "主窗口未在录制完成后恢复");
+                let bytes = fs::read(&path).unwrap();
+                assert!(bytes.len() > 1024 && bytes.windows(4).any(|part| part == b"moov"));
+                fs::remove_file(path).unwrap();
+                println!("PASS recorder auto-minimize and restore");
+                std::process::exit(0);
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(25),
+                "自动最小化录屏超时"
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some("recorder-smoke" | "recorder-fullscreen-smoke" | "recorder-dynamic-smoke")
@@ -561,6 +638,9 @@ fn main() -> Result<(), eframe::Error> {
                 recorder_smoke: None,
                 recorder_smoke_started: None,
                 recorder_smoke_size: None,
+                auto_minimize_smoke_at: None,
+                auto_minimize_recording_at: None,
+                auto_minimize_smoke_stop_requested: false,
             }))
         }),
     )

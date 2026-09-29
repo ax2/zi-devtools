@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
     pub light: bool,
@@ -14,6 +14,19 @@ pub struct Preferences {
     pub favorites: Vec<String>,
     pub recent: Vec<String>,
     pub usage: std::collections::BTreeMap<String, u32>,
+    pub recorder_auto_minimize: bool,
+}
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            light: false,
+            hotkey: Default::default(),
+            favorites: Vec::new(),
+            recent: Vec::new(),
+            usage: Default::default(),
+            recorder_auto_minimize: true,
+        }
+    }
 }
 pub fn path() -> PathBuf {
     dirs::home_dir()
@@ -96,12 +109,14 @@ mod tests {
         prefs.toggle("plugin:disabled/tool");
         prefs.save(&path).unwrap();
         prefs.visit("json");
+        prefs.recorder_auto_minimize = false;
         prefs.favorites.push("plugin:disabled/tool".into());
         prefs.save(&path).unwrap();
         let restored = Preferences::load(&path);
         assert_eq!(restored.favorites, ["plugin:disabled/tool"]);
         assert_eq!(restored.recent, ["json"]);
         assert_eq!(restored.usage["json"], 1);
+        assert!(!restored.recorder_auto_minimize);
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::write(&path, "invalid").unwrap();
         assert!(Preferences::load(&path).recent.is_empty());
@@ -113,6 +128,7 @@ mod tests {
         let mut p: Preferences =
             serde_json::from_str(r#"{"light":true,"favorites":["json"]}"#).unwrap();
         assert!(p.recent.is_empty());
+        assert!(p.recorder_auto_minimize);
         for i in 0..30 {
             p.visit(&format!("tool-{i}"));
         }

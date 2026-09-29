@@ -109,6 +109,10 @@ pub struct RecorderState {
     gains: AudioGains,
     countdown_seconds: u64,
     countdown_deadline: Option<Instant>,
+    auto_minimize: bool,
+    minimize_requested: bool,
+    restore_after_finish: bool,
+    restore_requested: bool,
     session: Option<Session>,
     started: Option<Instant>,
     pause_started: Option<Instant>,
@@ -134,6 +138,10 @@ impl Default for RecorderState {
             gains: AudioGains::default(),
             countdown_seconds: 3,
             countdown_deadline: None,
+            auto_minimize: true,
+            minimize_requested: false,
+            restore_after_finish: false,
+            restore_requested: false,
             session: None,
             started: None,
             pause_started: None,
@@ -148,6 +156,31 @@ impl Default for RecorderState {
 }
 
 impl RecorderState {
+    pub fn auto_minimize(&self) -> bool {
+        self.auto_minimize
+    }
+    pub fn set_auto_minimize(&mut self, enabled: bool) {
+        self.auto_minimize = enabled;
+    }
+    fn request_auto_minimize(&mut self, tray_available: bool) {
+        if self.auto_minimize && tray_available {
+            self.minimize_requested = true;
+            self.restore_after_finish = true;
+        }
+    }
+    fn finish_auto_minimize(&mut self) {
+        self.minimize_requested = false;
+        if self.restore_after_finish {
+            self.restore_requested = true;
+            self.restore_after_finish = false;
+        }
+    }
+    pub fn take_minimize_request(&mut self) -> bool {
+        std::mem::take(&mut self.minimize_requested)
+    }
+    pub fn take_restore_request(&mut self) -> bool {
+        std::mem::take(&mut self.restore_requested)
+    }
     fn refresh_displays(&mut self) {
         self.displays_loaded = true;
         match recorder::enumerate_displays() {
@@ -235,6 +268,7 @@ impl RecorderState {
     pub fn request_stop(&mut self) {
         if self.countdown_deadline.take().is_some() {
             self.status = "已取消录制".into();
+            self.finish_auto_minimize();
             return;
         }
         if let Some(session) = &self.session
@@ -252,6 +286,43 @@ impl RecorderState {
     #[cfg(feature = "ui-preview")]
     pub fn preview_region(&self) -> Option<Region> {
         self.region
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_start_auto_minimize(
+        &mut self,
+        folder: &Path,
+        countdown_seconds: u64,
+    ) -> anyhow::Result<()> {
+        self.refresh_displays();
+        let display = self
+            .display
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("无显示器"))?;
+        self.region = Some(Region {
+            x: 0,
+            y: 0,
+            width: display.width.min(640) & !1,
+            height: display.height.min(360) & !1,
+        });
+        self.output = folder
+            .join(format!("zi-autohide-smoke-{}.mp4", uuid::Uuid::new_v4()))
+            .to_string_lossy()
+            .into_owned();
+        self.audio = AudioMode::None;
+        if countdown_seconds == 0 {
+            self.begin_recording();
+            if self.session.is_none() {
+                anyhow::bail!("{}", self.status);
+            }
+        } else {
+            self.countdown_deadline = Some(Instant::now() + Duration::from_secs(countdown_seconds));
+        }
+        self.request_auto_minimize(true);
+        Ok(())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_last_file(&self) -> Option<PathBuf> {
+        self.last_file.clone()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {
@@ -290,6 +361,7 @@ impl RecorderState {
                         self.started = None;
                         self.pause_started = None;
                         self.session = None;
+                        self.finish_auto_minimize();
                         match result {
                             Ok(path) => {
                                 self.status = "录制完成，MP4 已保存".into();
@@ -317,11 +389,15 @@ impl RecorderState {
 
     fn begin_recording(&mut self) {
         let Some(region) = self.region else {
+            self.status = "录制区域已失效，请重新选择".into();
+            self.error = true;
+            self.finish_auto_minimize();
             return;
         };
         let Some(display) = self.display.clone() else {
             self.status = "请先选择显示器".into();
             self.error = true;
+            self.finish_auto_minimize();
             return;
         };
         self.last_file = None;
@@ -341,11 +417,12 @@ impl RecorderState {
             Err(e) => {
                 self.status = format!("启动失败：{e:#}");
                 self.error = true;
+                self.finish_auto_minimize();
             }
         }
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
+    pub fn ui(&mut self, ui: &mut egui::Ui, tray_available: bool) {
         if !self.displays_loaded {
             self.refresh_displays();
         }
@@ -583,6 +660,16 @@ impl RecorderState {
                     });
             });
         });
+        ui.add_enabled(
+            !busy && tray_available,
+            egui::Checkbox::new(
+                &mut self.auto_minimize,
+                "开始录制时最小化窗口，结束后自动恢复",
+            ),
+        );
+        if !tray_available {
+            ui.small("托盘不可用，录制时主窗口保持显示");
+        }
         ui.add_space(16.0);
         ui.horizontal(|ui| {
             if ui
@@ -604,12 +691,18 @@ impl RecorderState {
                                 display,
                             )
                         }) {
-                        Ok(()) if self.countdown_seconds == 0 => self.begin_recording(),
+                        Ok(()) if self.countdown_seconds == 0 => {
+                            self.begin_recording();
+                            if self.session.is_some() {
+                                self.request_auto_minimize(tray_available);
+                            }
+                        }
                         Ok(()) => {
                             self.countdown_deadline =
                                 Some(Instant::now() + Duration::from_secs(self.countdown_seconds));
                             self.status = "倒计时中，请准备录制区域".into();
                             self.error = false;
+                            self.request_auto_minimize(tray_available);
                         }
                         Err(e) => {
                             self.status = format!("无法开始录制：{e:#}");
@@ -619,8 +712,7 @@ impl RecorderState {
                 }
             }
             if self.countdown_deadline.is_some() && ui.button("取消倒计时").clicked() {
-                self.countdown_deadline = None;
-                self.status = "已取消录制".into();
+                self.request_stop();
             }
             if let Some(session) = &self.session
                 && self.started.is_some()
@@ -841,10 +933,31 @@ mod tests {
         let mut state = super::RecorderState::default();
         state.countdown_deadline =
             Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+        state.request_auto_minimize(true);
+        assert!(state.take_minimize_request());
         assert_eq!(state.tray_status(), super::TrayRecordingStatus::Countdown);
         state.request_stop();
         assert_eq!(state.tray_status(), super::TrayRecordingStatus::Idle);
         assert!(state.session.is_none());
+        assert!(state.take_restore_request());
+        assert!(!state.take_restore_request());
+    }
+    #[test]
+    fn auto_minimize_requires_tray_and_recovers_from_start_failure() {
+        let mut state = super::RecorderState::default();
+        state.request_auto_minimize(false);
+        assert!(!state.take_minimize_request());
+        state.region = Some(crate::recorder::Region {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 180,
+        });
+        state.request_auto_minimize(true);
+        assert!(state.take_minimize_request());
+        state.begin_recording();
+        assert!(state.error);
+        assert!(state.take_restore_request());
     }
     #[test]
     fn switching_or_resizing_display_discards_a_stale_region() {
@@ -896,11 +1009,14 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("zi-recorder-controls-{}.mp4", uuid::Uuid::new_v4()));
         let mut state = RecorderState::default();
+        state.display = Some(recorder::primary_display().unwrap());
         state.region = Some(region);
         state.output = path.to_string_lossy().into_owned();
         state.audio = AudioMode::None;
         state.countdown_seconds = 0;
         state.begin_recording();
+        state.request_auto_minimize(true);
+        assert!(state.take_minimize_request());
         assert_eq!(state.tray_status(), TrayRecordingStatus::Starting);
         let deadline = Instant::now() + Duration::from_secs(15);
         while state.tray_status() == TrayRecordingStatus::Starting && Instant::now() < deadline {
@@ -940,6 +1056,7 @@ mod tests {
             "{}",
             state.status
         );
+        assert!(state.take_restore_request());
         assert_ne!(state.output, path.to_string_lossy());
         let data = std::fs::read(&path).unwrap();
         assert!(data.windows(4).any(|v| v == b"moov"));
