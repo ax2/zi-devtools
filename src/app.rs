@@ -801,7 +801,7 @@ impl DevToolsApp {
         let wake_ctx = ctx.clone();
         let handle = self.window_handle;
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(500));
+            std::thread::sleep(Duration::from_millis(100));
             let _ = tx.send(BackgroundEvent::TrayNavigate(TrayAction::QuickPanel));
             wake_main_window(handle, &wake_ctx);
         });
@@ -814,9 +814,7 @@ impl DevToolsApp {
     pub fn preview_hidden(&self) -> bool {
         #[cfg(windows)]
         {
-            self.window_handle.is_some_and(|handle| unsafe {
-                windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible(handle as _) == 0
-            })
+            main_window_cloaked(self.window_handle)
         }
         #[cfg(not(windows))]
         {
@@ -1268,9 +1266,11 @@ impl DevToolsApp {
             self.minimize_for_recording(ctx);
             return;
         }
-        hide_main_window(self.window_handle);
-        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        ctx.request_repaint();
+        if !hide_main_window(self.window_handle) {
+            self.minimize_for_recording(ctx);
+        } else {
+            ctx.request_repaint();
+        }
     }
     fn minimize_for_recording(&self, ctx: &egui::Context) {
         #[cfg(windows)]
@@ -1360,7 +1360,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 34  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 35  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3306,6 +3306,7 @@ fn restore_main_window(window_handle: Option<isize>, ctx: &egui::Context) {
         // The handle comes from this app's eframe CreationContext and is checked before use.
         unsafe {
             if IsWindow(window) != 0 {
+                set_main_window_cloaked(window_handle, false);
                 ShowWindow(
                     window,
                     if IsIconic(window) != 0 {
@@ -3326,19 +3327,54 @@ fn restore_main_window(window_handle: Option<isize>, ctx: &egui::Context) {
     ctx.request_repaint();
 }
 
-fn hide_main_window(window_handle: Option<isize>) {
+fn hide_main_window(window_handle: Option<isize>) -> bool {
     #[cfg(windows)]
     if let Some(handle) = window_handle {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, SW_HIDE, ShowWindow};
-        let window = handle as windows_sys::Win32::Foundation::HWND;
-        unsafe {
-            if IsWindow(window) != 0 {
-                ShowWindow(window, SW_HIDE);
-            }
-        }
+        return set_main_window_cloaked(Some(handle), true);
     }
     #[cfg(not(windows))]
     let _ = window_handle;
+    false
+}
+
+#[cfg(windows)]
+fn set_main_window_cloaked(window_handle: Option<isize>, cloaked: bool) -> bool {
+    use windows_sys::Win32::{
+        Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute},
+        UI::WindowsAndMessaging::IsWindow,
+    };
+    let Some(handle) = window_handle else {
+        return false;
+    };
+    let window = handle as windows_sys::Win32::Foundation::HWND;
+    let value = u32::from(cloaked);
+    unsafe {
+        IsWindow(window) != 0
+            && DwmSetWindowAttribute(
+                window,
+                DWMWA_CLOAK as u32,
+                (&raw const value).cast(),
+                std::mem::size_of_val(&value) as u32,
+            ) >= 0
+    }
+}
+
+#[cfg(windows)]
+fn main_window_cloaked(window_handle: Option<isize>) -> bool {
+    use windows_sys::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
+    let Some(handle) = window_handle else {
+        return false;
+    };
+    let mut value = 0u32;
+    unsafe {
+        DwmGetWindowAttribute(
+            handle as _,
+            DWMWA_CLOAKED as u32,
+            (&raw mut value).cast(),
+            std::mem::size_of_val(&value) as u32,
+        ) >= 0
+            && value != 0
+    }
 }
 
 impl Drop for DevToolsApp {
@@ -3443,11 +3479,7 @@ impl eframe::App for DevToolsApp {
         }
 
         #[cfg(windows)]
-        if self.quick_open
-            && self.window_handle.is_some_and(|handle| unsafe {
-                windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible(handle as _) == 0
-            })
-        {
+        if self.quick_open && main_window_cloaked(self.window_handle) {
             return;
         }
 
@@ -3868,13 +3900,13 @@ mod native_window_tests {
         assert_eq!(unsafe { IsWindowVisible(window) }, 0);
         restore_main_window(Some(window as isize), &egui::Context::default());
         assert_ne!(unsafe { IsWindowVisible(window) }, 0);
-        hide_main_window(Some(window as isize));
-        assert_eq!(unsafe { IsWindowVisible(window) }, 0);
+        assert!(hide_main_window(Some(window as isize)));
+        assert!(main_window_cloaked(Some(window as isize)));
         unsafe {
             ShowWindow(window, SW_MAXIMIZE);
         }
         assert_ne!(unsafe { IsZoomed(window) }, 0);
-        hide_main_window(Some(window as isize));
+        assert!(hide_main_window(Some(window as isize)));
         restore_main_window(Some(window as isize), &egui::Context::default());
         assert_ne!(
             unsafe { IsZoomed(window) },

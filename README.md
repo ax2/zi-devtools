@@ -69,6 +69,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
+Stage 35 / v0.35.0：修复主工作台隐藏到托盘后快捷面板无法唤醒；Windows 使用 DWM cloak 隐藏工作台并保持事件处理，不支持时退回最小化。真实 eframe 窗口已验证深浅主题快捷面板与录屏自动最小化恢复。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
+
 Stage 34 / v0.34.0：录屏可在开始时自动最小化主窗口，并在取消、失败或保存完成后恢复；托盘不可用时保留窗口按钮。真实 eframe 窗口的立即开始、倒计时和取消路径已验证。正式安装包以 [GitHub Releases](https://github.com/ax2/zi-devtools/releases) 为准。
 
 Stage 33 / v0.33.0：录屏在静态桌面期间补送当前帧，保持视频时间线连续；主屏的四种声音模式短录、12 秒静态桌面和动态窗口音画轨同步已实测。更长时间、不同设备、非主屏和混合 DPI 待验收，相关能力保持“进行中”。
