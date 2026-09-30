@@ -920,7 +920,13 @@ impl DevToolsApp {
                 self.page = Page::KnowledgeEval;
                 self.knowledge_sources.preview_fixture();
                 self.knowledge_eval
-                    .preview_fixture(self.knowledge_sources.sources());
+                    .preview_fixture(self.knowledge_sources.sources(), false);
+            }
+            146 | 147 => {
+                self.page = Page::KnowledgeEval;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_eval
+                    .preview_fixture(self.knowledge_sources.sources(), true);
             }
             130 | 131 => {
                 self.page = Page::KnowledgeCapture;
@@ -1358,7 +1364,7 @@ impl DevToolsApp {
             knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path(), crate::vector_index::default_path()),
             embedding: Default::default(),
             knowledge_capture: Default::default(),
-            knowledge_eval: crate::knowledge_eval::State::new(crate::knowledge_index::default_path()),
+            knowledge_eval: crate::knowledge_eval::State::new(crate::knowledge_index::default_path(), crate::vector_index::default_path()),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1769,7 +1775,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 61  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 62  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

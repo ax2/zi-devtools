@@ -10,7 +10,8 @@ use std::{
     time::Duration,
 };
 use zi_devtools::{
-    hybrid_search, knowledge_answer, knowledge_index, knowledge_sources, vector_index,
+    hybrid_search, knowledge_answer, knowledge_eval, knowledge_index, knowledge_sources,
+    vector_index,
 };
 
 struct ModelFixture {
@@ -252,6 +253,41 @@ fn hybrid_uses_both_channels_filters_sources_and_rejects_changed_model() {
     .unwrap();
     assert_eq!(prepared_filtered.evidence.len(), 1);
     assert_eq!(prepared_filtered.evidence[0].hit.source_id, second.id);
+    let suite_text = serde_json::json!({
+        "version": 1,
+        "cases": [{
+            "id": "semantic-only",
+            "question": "Rust ownership?",
+            "terms": "Rust ownership",
+            "expected_source": "Primary",
+            "expected_relative": "solar.txt"
+        }]
+    })
+    .to_string();
+    let suite = knowledge_eval::parse_suite(&suite_text, &[first.clone(), second.clone()]).unwrap();
+    let comparison = knowledge_eval::compare(
+        &keyword,
+        &suite,
+        &[first.clone(), second.clone()],
+        3,
+        knowledge_answer::Retrieval::Hybrid {
+            vector_path: vectors.clone(),
+            endpoint: server.endpoint.clone(),
+            model: model.into(),
+            keyword_weight: 50,
+        },
+        &AtomicBool::new(false),
+        |_, _, _| {},
+    )
+    .unwrap();
+    assert_eq!(comparison.paired, 1);
+    assert_eq!((comparison.keyword_hits, comparison.hybrid_hits), (0, 1));
+    assert_eq!(comparison.hybrid_only, 1);
+    assert_eq!(comparison.keyword_mrr, 0.0);
+    assert!(comparison.hybrid_mrr > 0.0);
+    let report_path = root.join("comparison.json");
+    knowledge_eval::save_comparison_report(&report_path, &comparison).unwrap();
+    assert!(knowledge_eval::save_comparison_report(&report_path, &comparison).is_err());
 
     let old_hit = both
         .hits
@@ -327,6 +363,24 @@ fn hybrid_uses_both_channels_filters_sources_and_rejects_changed_model() {
     )
     .unwrap_err();
     assert!(stale_model.to_string().contains("版本已变化"));
+    let failed_comparison = knowledge_eval::compare(
+        &keyword,
+        &suite,
+        &[],
+        3,
+        knowledge_answer::Retrieval::Hybrid {
+            vector_path: vectors.clone(),
+            endpoint: server.endpoint.clone(),
+            model: model.into(),
+            keyword_weight: 50,
+        },
+        &AtomicBool::new(false),
+        |_, _, _| {},
+    )
+    .unwrap();
+    assert_eq!(failed_comparison.paired, 0);
+    assert_eq!(failed_comparison.hybrid_only, 0);
+    assert!(failed_comparison.results[0].hybrid_error.is_some());
     assert!(
         hybrid_search::search(
             &keyword,
