@@ -1,5 +1,5 @@
 {
-  "version": "0.47.0",
+  "version": "0.48.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -704,15 +704,15 @@
       "status": "implemented",
       "category": "知识与检索",
       "priority": "P1",
-      "scope": "用户明确添加最多 32 个本机文件/目录，配置默认及自定义排除规则；手动有界扫描 Markdown/TXT/HTML/PDF/DOCX，记录相对路径、大小、修改时间和 SHA-256 版本，比较新增/变化/移除并本机持久化；不保存正文、不自动扫整盘，解析/索引/问答仍在规划"
+      "scope": "用户明确添加最多 32 个本机文件/目录，配置默认及自定义排除规则；手动有界扫描 Markdown/TXT/HTML/PDF/DOCX，记录相对路径、大小、修改时间和 SHA-256 版本，比较新增/变化/移除并本机持久化；不保存正文、不自动扫整盘"
     },
     {
       "id": "rag-ingestion",
       "name": "文档解析与分块",
-      "status": "planned",
+      "status": "implemented",
       "category": "知识与检索",
       "priority": "P1",
-      "scope": "Markdown/TXT/HTML/PDF/DOCX 解析、分块预览、解析失败定位与内容哈希"
+      "scope": "从已扫描本地知识源选择单份 Markdown/TXT/HTML/PDF/DOCX，校验文件 SHA-256 后在后台解析；按页/段落定位、800 字符分块与 100 字符重叠、分块 SHA-256 和分页预览。单文件 16 MiB、正文 4 MiB、PDF 200 页、最多 2000 分块；正文不持久化，扫描 PDF 不支持 OCR"
     },
     {
       "id": "rag-index",

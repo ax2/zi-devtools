@@ -117,6 +117,7 @@ enum Page {
     FileEncoding,
     ChecksumManifest,
     KnowledgeSources,
+    DocumentIngestion,
     Settings,
     Plugins,
     Mcp,
@@ -193,7 +194,7 @@ fn tool_category(id: &str) -> &'static str {
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" | "markdown" => "扩展与集成",
         "mcp-inspector" => "MCP 与 Agent",
-        "rag-sources" => "知识与检索",
+        "rag-sources" | "rag-ingestion" => "知识与检索",
         _ => "文本与编码",
     }
 }
@@ -389,6 +390,15 @@ fn catalog() -> Vec<ToolEntry> {
             category: "知识与检索".into(),
             keywords: "rag knowledge document source vault markdown pdf docx 知识 文档 来源 目录"
                 .into(),
+        },
+        ToolEntry {
+            id: "rag-ingestion".into(),
+            title: "文档解析与分块".into(),
+            description: "本机解析 PDF、Word、网页与文本，校验版本并预览分块".into(),
+            page: Page::DocumentIngestion,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag ingestion pdf docx markdown html txt chunk 解析 分块".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -616,6 +626,7 @@ pub struct DevToolsApp {
     file_encoding: crate::file_encoding::State,
     checksum_manifest: crate::checksum_manifest::State,
     knowledge_sources: crate::knowledge_sources::State,
+    document_ingestion: crate::document_ingestion::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -764,6 +775,12 @@ impl DevToolsApp {
             118 | 119 => {
                 self.page = Page::KnowledgeSources;
                 self.knowledge_sources.preview_fixture();
+            }
+            120 | 121 => {
+                self.page = Page::DocumentIngestion;
+                self.knowledge_sources.preview_fixture();
+                self.document_ingestion
+                    .preview_fixture(self.knowledge_sources.sources());
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1159,6 +1176,7 @@ impl DevToolsApp {
             file_encoding: Default::default(),
             checksum_manifest: Default::default(),
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
+            document_ingestion: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1521,6 +1539,12 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::FileEncoding, "文件编码转换");
                         nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
                         nav_button(ui, &mut self.page, Page::KnowledgeSources, "本地知识源");
+                        nav_button(
+                            ui,
+                            &mut self.page,
+                            Page::DocumentIngestion,
+                            "文档解析与分块",
+                        );
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1549,7 +1573,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 47  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 48  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3950,6 +3974,14 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("knowledge-sources-page")
                         .show(ui, |ui| self.knowledge_sources.ui(ui));
+                }
+                Page::DocumentIngestion => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("document-ingestion-page")
+                        .show(ui, |ui| {
+                            self.document_ingestion
+                                .ui(ui, self.knowledge_sources.sources())
+                        });
                 }
                 Page::Java | Page::Django => {
                     let category = if self.page == Page::Java {

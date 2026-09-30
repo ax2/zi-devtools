@@ -2,6 +2,7 @@ pub mod app;
 pub mod config;
 pub mod dev_tools;
 pub mod diagnostics;
+pub mod document_ingestion;
 pub mod file_encoding;
 pub mod fixture;
 pub mod framework;
