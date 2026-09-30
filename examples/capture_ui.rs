@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 122] = [
+const NAMES: [&str; 124] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -132,6 +132,8 @@ const NAMES: [&str; 122] = [
     "knowledge-sources-light",
     "document-ingestion-dark",
     "document-ingestion-light",
+    "knowledge-index-dark",
+    "knowledge-index-light",
 ];
 
 struct Capture {

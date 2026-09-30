@@ -511,6 +511,10 @@ impl State {
     pub fn sources(&self) -> &[Source] {
         &self.sources
     }
+
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
     pub fn new(path: PathBuf) -> Self {
         let (sources, message, locked) = match load(&path) {
             Ok(registry) => (registry.sources, String::new(), false),
@@ -626,7 +630,7 @@ impl State {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll();
         ui.heading("本地知识源");
-        ui.label("明确添加文件或目录，再手动扫描。这里只建立可复查的来源与版本清单；可在“文档解析与分块”预览内容，索引和问答将在后续阶段接入。");
+        ui.label("明确添加文件或目录，再手动扫描。这里只建立可复查的来源与版本清单；可在“文档解析与分块”预览内容，或在“增量知识索引”手动建立本机索引。");
         ui.add_space(10.0);
         ui.group(|ui| {
             ui.strong("添加知识源");

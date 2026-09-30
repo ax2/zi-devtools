@@ -1,5 +1,5 @@
 {
-  "version": "0.48.0",
+  "version": "0.49.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -717,10 +717,18 @@
     {
       "id": "rag-index",
       "name": "增量知识索引",
-      "status": "planned",
+      "status": "implemented",
       "category": "知识与检索",
       "priority": "P1",
-      "scope": "全文索引+可选向量索引、增量更新、删除同步、重建和资源预算"
+      "scope": "用户手动同步已扫描来源到本机 SQLite FTS5 全文索引；按文件 SHA-256 增量更新、快照移除同步删除、事务性重建/取消回滚、来源计数、资源预算和确认后清空索引；正文只保存在本机数据库，向量索引另列规划"
+    },
+    {
+      "id": "rag-vectors",
+      "name": "可选本地向量索引",
+      "status": "planned",
+      "category": "知识与检索",
+      "priority": "P2",
+      "scope": "基于用户明确选择的本机嵌入模型或服务生成向量，版本迁移、增量同步、资源预算及与全文结果合并"
     },
     {
       "id": "rag-search",

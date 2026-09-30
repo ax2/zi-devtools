@@ -118,6 +118,7 @@ enum Page {
     ChecksumManifest,
     KnowledgeSources,
     DocumentIngestion,
+    KnowledgeIndex,
     Settings,
     Plugins,
     Mcp,
@@ -194,7 +195,7 @@ fn tool_category(id: &str) -> &'static str {
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" | "markdown" => "扩展与集成",
         "mcp-inspector" => "MCP 与 Agent",
-        "rag-sources" | "rag-ingestion" => "知识与检索",
+        "rag-sources" | "rag-ingestion" | "rag-index" => "知识与检索",
         _ => "文本与编码",
     }
 }
@@ -399,6 +400,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "知识与检索".into(),
             keywords: "rag ingestion pdf docx markdown html txt chunk 解析 分块".into(),
+        },
+        ToolEntry {
+            id: "rag-index".into(),
+            title: "增量知识索引".into(),
+            description: "手动同步已扫描来源，更新或删除本机全文索引".into(),
+            page: Page::KnowledgeIndex,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag index fts sqlite 全文 索引 增量 重建".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -627,6 +637,7 @@ pub struct DevToolsApp {
     checksum_manifest: crate::checksum_manifest::State,
     knowledge_sources: crate::knowledge_sources::State,
     document_ingestion: crate::document_ingestion::State,
+    knowledge_index: crate::knowledge_index::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -780,6 +791,12 @@ impl DevToolsApp {
                 self.page = Page::DocumentIngestion;
                 self.knowledge_sources.preview_fixture();
                 self.document_ingestion
+                    .preview_fixture(self.knowledge_sources.sources());
+            }
+            122 | 123 => {
+                self.page = Page::KnowledgeIndex;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_index
                     .preview_fixture(self.knowledge_sources.sources());
             }
             78..=97 => {
@@ -1177,6 +1194,7 @@ impl DevToolsApp {
             checksum_manifest: Default::default(),
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
             document_ingestion: Default::default(),
+            knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1545,6 +1563,7 @@ impl DevToolsApp {
                             Page::DocumentIngestion,
                             "文档解析与分块",
                         );
+                        nav_button(ui, &mut self.page, Page::KnowledgeIndex, "增量知识索引");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1573,7 +1592,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 48  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 49  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3981,6 +4000,17 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| {
                             self.document_ingestion
                                 .ui(ui, self.knowledge_sources.sources())
+                        });
+                }
+                Page::KnowledgeIndex => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("knowledge-index-page")
+                        .show(ui, |ui| {
+                            self.knowledge_index.ui(
+                                ui,
+                                self.knowledge_sources.sources(),
+                                self.knowledge_sources.is_locked(),
+                            )
                         });
                 }
                 Page::Java | Page::Django => {
