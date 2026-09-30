@@ -82,7 +82,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 61 / v0.61.0 开发中：带引用问答新增关键词/混合证据模式、独立嵌入模型、可取消证据准备与两路贡献说明；一次性 HTTP 夹具和本机 `bge-m3:latest` + `qwen2.5:7b` 合成文档端到端通过。公开版本与官网待验证，固定样例评测仍按关键词基线。
+Stage 61 / v0.61.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.61.0)：带引用问答新增关键词/混合证据模式、独立嵌入模型、可取消证据准备与两路贡献说明；一次性 HTTP 夹具和本机 `bge-m3:latest` + `qwen2.5:7b` 合成文档端到端、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过。固定样例评测仍按关键词基线。
 
 Stage 60 / v0.60.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.60.0)：新增关键词与语义双通道混合检索、可调 RRF 权重、来源筛选、结果贡献解释与版本复核。本机服务夹具及 `bge-m3:latest` 合成文档测试、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过；带引用问答尚未使用混合结果。
 
