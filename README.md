@@ -82,7 +82,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 58 / v0.58.0 开发中：新增本机 Embedding 工作台；本机 `bge-m3:latest` 的真实两文本嵌入和数值校验通过，公开版本与官网待验证。
+Stage 58 / v0.58.0 已公开发布：新增本机 Embedding 工作台；本机 `bge-m3:latest` 的真实两文本嵌入和数值校验、公开 CI/Release、安装包以及官网桌面/手机验证通过。向量索引与混合检索仍在规划。
 
 Stage 57 / v0.57.0 已公开发布：MCP 调试台新增工具只读声明展示、未声明只读时的名称确认，以及调用前的完整工具定义复核。调试台仍是手动短会话，第三方服务兼容性与完整权限系统继续规划。
 
