@@ -9,6 +9,7 @@ pub mod hotkey;
 pub mod image_tools;
 pub mod intake;
 pub mod integrations;
+pub mod knowledge_sources;
 pub mod markdown_preview;
 pub mod network_tools;
 pub mod plugin_ui;

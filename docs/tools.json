@@ -1,5 +1,5 @@
 {
-  "version": "0.46.0",
+  "version": "0.47.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -701,10 +701,10 @@
     {
       "id": "rag-sources",
       "name": "本地知识源管理",
-      "status": "planned",
+      "status": "implemented",
       "category": "知识与检索",
       "priority": "P1",
-      "scope": "用户选定目录与文件、排除规则、来源和版本；默认不扫描整盘"
+      "scope": "用户明确添加最多 32 个本机文件/目录，配置默认及自定义排除规则；手动有界扫描 Markdown/TXT/HTML/PDF/DOCX，记录相对路径、大小、修改时间和 SHA-256 版本，比较新增/变化/移除并本机持久化；不保存正文、不自动扫整盘，解析/索引/问答仍在规划"
     },
     {
       "id": "rag-ingestion",

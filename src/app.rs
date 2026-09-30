@@ -116,6 +116,7 @@ enum Page {
     Markdown,
     FileEncoding,
     ChecksumManifest,
+    KnowledgeSources,
     Settings,
     Plugins,
     Mcp,
@@ -192,6 +193,7 @@ fn tool_category(id: &str) -> &'static str {
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" | "markdown" => "扩展与集成",
         "mcp-inspector" => "MCP 与 Agent",
+        "rag-sources" => "知识与检索",
         _ => "文本与编码",
     }
 }
@@ -377,6 +379,16 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "checksum sha256 sums manifest verify 文件 校验 清单".into(),
+        },
+        ToolEntry {
+            id: "rag-sources".into(),
+            title: "本地知识源".into(),
+            description: "明确添加文件或目录，预览排除与版本清单".into(),
+            page: Page::KnowledgeSources,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag knowledge document source vault markdown pdf docx 知识 文档 来源 目录"
+                .into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -603,6 +615,7 @@ pub struct DevToolsApp {
     markdown: crate::markdown_preview::State,
     file_encoding: crate::file_encoding::State,
     checksum_manifest: crate::checksum_manifest::State,
+    knowledge_sources: crate::knowledge_sources::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -747,6 +760,10 @@ impl DevToolsApp {
             116 | 117 => {
                 self.page = Page::ChecksumManifest;
                 self.checksum_manifest.preview_fixture();
+            }
+            118 | 119 => {
+                self.page = Page::KnowledgeSources;
+                self.knowledge_sources.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1141,6 +1158,7 @@ impl DevToolsApp {
             markdown: Default::default(),
             file_encoding: Default::default(),
             checksum_manifest: Default::default(),
+            knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1502,6 +1520,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Markdown, "Markdown 预览");
                         nav_button(ui, &mut self.page, Page::FileEncoding, "文件编码转换");
                         nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
+                        nav_button(ui, &mut self.page, Page::KnowledgeSources, "本地知识源");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1530,7 +1549,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 46  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 47  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3926,6 +3945,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("checksum-manifest-page")
                         .show(ui, |ui| self.checksum_manifest.ui(ui));
+                }
+                Page::KnowledgeSources => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("knowledge-sources-page")
+                        .show(ui, |ui| self.knowledge_sources.ui(ui));
                 }
                 Page::Java | Page::Django => {
                     let category = if self.page == Page::Java {
