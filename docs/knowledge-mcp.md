@@ -1,6 +1,6 @@
 # 本机知识库 MCP 服务
 
-Zi DevTools v0.54.0 提供独立的 `ZiDevToolsMcp.exe`（安装版）或 `ZiDevToolsMcp-0.54.0-windows-x64.exe`（便携版）。在桌面程序打开“本机知识库 MCP 服务”，可以看到当前已扫描知识源、索引文件数和可复制的服务程序绝对路径。在可信的 MCP 客户端中添加 **stdio** 服务，命令填此路径，参数留空。便携版需把主程序和 MCP 服务程序放在同一目录；MSI 会同时安装两者。
+Zi DevTools v0.56.0 提供独立的 `ZiDevToolsMcp.exe`（安装版）或 `ZiDevToolsMcp-0.56.0-windows-x64.exe`（便携版）。在桌面程序打开“本机知识库 MCP 服务”，可以看到当前已扫描知识源、索引文件数和可复制的服务程序绝对路径。在可信的 MCP 客户端中添加 **stdio** 服务，命令填此路径，参数留空。便携版需把主程序和 MCP 服务程序放在同一目录；MSI 会同时安装两者。
 
 使用前，先在“本地知识源”明确添加、扫描文件或目录，再在“增量知识索引”手动同步。服务只读当前用户的 `%USERPROFILE%\.zi-devtools\knowledge-sources.json` 和 `knowledge-index.sqlite3`；不会自动扫描、同步、联网、调用模型或写入文档。提供两个工具：
 
@@ -12,7 +12,7 @@ Zi DevTools v0.54.0 提供独立的 `ZiDevToolsMcp.exe`（安装版）或 `ZiDev
 便携版直接运行示例（PowerShell 中请使用实际绝对路径）：
 
 ```powershell
-& 'C:\path\to\ZiDevToolsMcp-0.54.0-windows-x64.exe'
+& 'C:\path\to\ZiDevToolsMcp-0.56.0-windows-x64.exe'
 ```
 
 此命令会等待 MCP 客户端从标准输入发送协议消息；普通交互式终端没有消息时看起来会停在原处。配置方法取决于客户端，关键是将上述 EXE 作为 stdio `command`，不通过 shell 包装。
