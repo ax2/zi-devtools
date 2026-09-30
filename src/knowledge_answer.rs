@@ -13,6 +13,7 @@ use std::{
 };
 
 use crate::{
+    hybrid_search,
     knowledge_index::{self, SearchHit},
     knowledge_search::verified_result_path,
     knowledge_sources::Source,
@@ -69,6 +70,27 @@ pub struct Evidence {
     pub hit: SearchHit,
     pub source_name: String,
     pub prompt_text: String,
+    pub hybrid_trace: Option<HybridTrace>,
+}
+
+#[derive(Clone, Debug)]
+pub struct HybridTrace {
+    pub keyword_rank: Option<usize>,
+    pub semantic_rank: Option<usize>,
+    pub keyword_contribution: f64,
+    pub semantic_contribution: f64,
+    pub cosine: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Retrieval {
+    Keyword,
+    Hybrid {
+        vector_path: PathBuf,
+        endpoint: String,
+        model: String,
+        keyword_weight: u8,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -77,8 +99,19 @@ pub struct Prepared {
     pub terms: String,
     pub source_id: Option<String>,
     pub top_k: usize,
+    pub retrieval: Retrieval,
     pub evidence: Vec<Evidence>,
     pub stale_skipped: usize,
+    pub keyword_candidates: usize,
+    pub semantic_candidates: usize,
+}
+
+pub struct PrepareRequest<'a> {
+    pub question: &'a str,
+    pub terms: &'a str,
+    pub source_id: Option<&'a str>,
+    pub top_k: usize,
+    pub retrieval: Retrieval,
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +169,33 @@ pub fn prepare(
     source_id: Option<&str>,
     top_k: usize,
 ) -> Result<Prepared> {
+    prepare_with(
+        path,
+        sources,
+        PrepareRequest {
+            question,
+            terms,
+            source_id,
+            top_k,
+            retrieval: Retrieval::Keyword,
+        },
+        &AtomicBool::new(false),
+    )
+}
+
+pub fn prepare_with(
+    path: &Path,
+    sources: &[Source],
+    request: PrepareRequest<'_>,
+    cancel: &AtomicBool,
+) -> Result<Prepared> {
+    let PrepareRequest {
+        question,
+        terms,
+        source_id,
+        top_k,
+        retrieval,
+    } = request;
     let question = question.trim();
     ensure!(
         (2..=1000).contains(&question.chars().count())
@@ -147,10 +207,72 @@ pub fn prepare(
     );
     ensure!([3, 5, 8].contains(&top_k), "证据数量只能为 3、5 或 8");
     let terms = terms.trim();
-    let hits = knowledge_index::search(path, terms, source_id, (top_k * 2).min(50))?.hits;
+    ensure!(!cancel.load(Ordering::Relaxed), "证据准备已取消");
+    let (hits, keyword_candidates, semantic_candidates, stale_dropped): (
+        Vec<(SearchHit, Option<HybridTrace>)>,
+        usize,
+        usize,
+        usize,
+    ) = match &retrieval {
+        Retrieval::Keyword => {
+            let result = knowledge_index::search(path, terms, source_id, (top_k * 2).min(50))?;
+            let count = result.hits.len();
+            (
+                result.hits.into_iter().map(|hit| (hit, None)).collect(),
+                count,
+                0,
+                0,
+            )
+        }
+        Retrieval::Hybrid {
+            vector_path,
+            endpoint,
+            model,
+            keyword_weight,
+        } => {
+            ensure!(!model.trim().is_empty(), "请填写向量索引使用的嵌入模型");
+            ensure!(
+                [25, 50, 75].contains(keyword_weight),
+                "关键词权重只能为 25%、50% 或 75%"
+            );
+            let result = hybrid_search::search(
+                path,
+                vector_path,
+                endpoint,
+                model,
+                terms,
+                hybrid_search::SearchOptions {
+                    source_id,
+                    limit: 50,
+                    keyword_weight: *keyword_weight,
+                },
+                cancel,
+            )?;
+            (
+                result
+                    .hits
+                    .into_iter()
+                    .map(|item| {
+                        let trace = HybridTrace {
+                            keyword_rank: item.keyword_rank,
+                            semantic_rank: item.semantic_rank,
+                            keyword_contribution: item.keyword_contribution,
+                            semantic_contribution: item.semantic_contribution,
+                            cosine: item.cosine,
+                        };
+                        (item.hit, Some(trace))
+                    })
+                    .collect(),
+                result.keyword_candidates,
+                result.semantic_candidates,
+                result.stale_dropped,
+            )
+        }
+    };
     let mut evidence = Vec::new();
-    let mut stale_skipped = 0;
-    for hit in hits {
+    let mut stale_skipped = stale_dropped;
+    for (hit, hybrid_trace) in hits {
+        ensure!(!cancel.load(Ordering::Relaxed), "证据准备已取消");
         let Some(source) = sources.iter().find(|source| source.id == hit.source_id) else {
             stale_skipped += 1;
             continue;
@@ -164,18 +286,23 @@ pub fn prepare(
             prompt_text: bounded_excerpt(&hit.text, terms),
             source_name: source.name.clone(),
             hit,
+            hybrid_trace,
         });
         if evidence.len() == top_k {
             break;
         }
     }
+    ensure!(!cancel.load(Ordering::Relaxed), "证据准备已取消");
     Ok(Prepared {
         question: question.into(),
         terms: terms.into(),
         source_id: source_id.map(str::to_owned),
         top_k,
+        retrieval,
         evidence,
         stale_skipped,
+        keyword_candidates,
+        semantic_candidates,
     })
 }
 
@@ -315,15 +442,21 @@ enum Event<T> {
 
 pub struct State {
     path: PathBuf,
+    vector_path: PathBuf,
     question: String,
     terms: String,
     source_id: String,
     top_k: usize,
+    hybrid_enabled: bool,
+    embed_endpoint: String,
+    embed_model: String,
+    keyword_weight: u8,
     protocol: Protocol,
     endpoint: String,
     model: String,
     discovered: Vec<String>,
     prepare_running: Option<Receiver<Event<Prepared>>>,
+    prepare_cancel: Arc<AtomicBool>,
     model_running: Option<Receiver<Event<Vec<String>>>>,
     answer_running: Option<Receiver<Event<Answer>>>,
     cancel: Arc<AtomicBool>,
@@ -332,25 +465,51 @@ pub struct State {
     message: String,
 }
 
+impl Drop for State {
+    fn drop(&mut self) {
+        self.prepare_cancel.store(true, Ordering::Relaxed);
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+}
+
 impl State {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf, vector_path: PathBuf) -> Self {
         Self {
             path,
+            vector_path,
             question: String::new(),
             terms: String::new(),
             source_id: String::new(),
             top_k: 3,
+            hybrid_enabled: false,
+            embed_endpoint: "http://127.0.0.1:11434/api/embed".into(),
+            embed_model: String::new(),
+            keyword_weight: 50,
             protocol: Protocol::Ollama,
             endpoint: Protocol::Ollama.default_endpoint().into(),
             model: String::new(),
             discovered: Vec::new(),
             prepare_running: None,
+            prepare_cancel: Arc::new(AtomicBool::new(false)),
             model_running: None,
             answer_running: None,
             cancel: Arc::new(AtomicBool::new(false)),
             prepared: None,
             answer: None,
             message: String::new(),
+        }
+    }
+
+    fn current_retrieval(&self) -> Retrieval {
+        if self.hybrid_enabled {
+            Retrieval::Hybrid {
+                vector_path: self.vector_path.clone(),
+                endpoint: self.embed_endpoint.trim().into(),
+                model: self.embed_model.trim().into(),
+                keyword_weight: self.keyword_weight,
+            }
+        } else {
+            Retrieval::Keyword
         }
     }
 
@@ -365,13 +524,31 @@ impl State {
         let terms = self.terms.clone();
         let source = (!self.source_id.is_empty()).then(|| self.source_id.clone());
         let top_k = self.top_k;
+        let retrieval = self.current_retrieval();
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.prepare_cancel = Arc::clone(&cancel);
         self.prepared = None;
         self.answer = None;
         self.prepare_running = Some(rx);
-        self.message = "正在检索并核验本机证据…".into();
+        self.message = if self.hybrid_enabled {
+            "正在查询两种索引、生成查询向量并核验证据…".into()
+        } else {
+            "正在检索并核验本机证据…".into()
+        };
         std::thread::spawn(move || {
-            let result = prepare(&path, &sources, &question, &terms, source.as_deref(), top_k)
-                .map_err(|e| format!("{e:#}"));
+            let result = prepare_with(
+                &path,
+                &sources,
+                PrepareRequest {
+                    question: &question,
+                    terms: &terms,
+                    source_id: source.as_deref(),
+                    top_k,
+                    retrieval,
+                },
+                &cancel,
+            )
+            .map_err(|e| format!("{e:#}"));
             let _ = tx.send(Event::Ready(result));
         });
     }
@@ -431,9 +608,11 @@ impl State {
     }
 
     #[cfg(feature = "ui-preview")]
-    pub fn preview_fixture(&mut self, sources: &[Source]) {
+    pub fn preview_fixture(&mut self, sources: &[Source], hybrid: bool) {
         self.question = "知识库如何保证引用可以核对？".into();
         self.terms = "知识库".into();
+        self.hybrid_enabled = hybrid;
+        self.embed_model = if hybrid { "bge-m3:latest" } else { "" }.into();
         self.model = "qwen2.5:7b".into();
         if let Some(source) = sources.first() {
             self.prepared = Some(Prepared {
@@ -441,11 +620,21 @@ impl State {
                 terms: self.terms.clone(),
                 source_id: None,
                 top_k: self.top_k,
+                retrieval: self.current_retrieval(),
                 stale_skipped: 0,
+                keyword_candidates: 3,
+                semantic_candidates: if hybrid { 5 } else { 0 },
                 evidence: vec![Evidence {
                     id: 1,
                     source_name: source.name.clone(),
                     prompt_text: "每条检索结果都保留文档路径、段落位置与文件版本摘要。".into(),
+                    hybrid_trace: hybrid.then_some(HybridTrace {
+                        keyword_rank: Some(2),
+                        semantic_rank: Some(1),
+                        keyword_contribution: 0.5 / 62.0,
+                        semantic_contribution: 0.5 / 61.0,
+                        cosine: Some(0.873),
+                    }),
                     hit: SearchHit {
                         source_id: source.id.clone(),
                         relative: "notes/knowledge.md".into(),
@@ -476,11 +665,20 @@ impl State {
                             prepared.stale_skipped
                         )
                     } else {
-                        format!(
-                            "已准备 {} 条证据；跳过 {} 条过期结果。请检查后手动生成答案。",
-                            prepared.evidence.len(),
-                            prepared.stale_skipped
-                        )
+                        match &prepared.retrieval {
+                            Retrieval::Keyword => format!(
+                                "已准备 {} 条关键词证据；跳过 {} 条过期结果。请检查后手动生成答案。",
+                                prepared.evidence.len(),
+                                prepared.stale_skipped
+                            ),
+                            Retrieval::Hybrid { .. } => format!(
+                                "关键词候选 {} 条、语义候选 {} 条；已准备 {} 条混合证据，跳过 {} 条过期/冲突结果。请检查后手动生成答案。",
+                                prepared.keyword_candidates,
+                                prepared.semantic_candidates,
+                                prepared.evidence.len(),
+                                prepared.stale_skipped
+                            ),
+                        }
                     };
                     self.prepared = Some(prepared);
                     self.prepare_running = None;
@@ -548,6 +746,45 @@ impl State {
         ui.heading("带引用的本机知识问答");
         ui.label("先从已同步索引准备并检查证据，再由你明确调用本机模型。没有证据不会发送请求；模型只能引用本次证据编号。");
         ui.add_space(8.0);
+        ui.add_enabled_ui(
+            self.answer_running.is_none() && self.prepare_running.is_none(),
+            |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("证据检索");
+                    ui.selectable_value(&mut self.hybrid_enabled, false, "关键词");
+                    ui.selectable_value(&mut self.hybrid_enabled, true, "关键词 + 向量");
+                });
+                if self.hybrid_enabled {
+                    ui.label(
+                        "混合模式需要已同步的本机向量索引；以下嵌入模型与生成答案的模型分别设置。",
+                    );
+                    ui.horizontal(|ui| {
+                        ui.label("嵌入模型");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.embed_model)
+                                .desired_width(220.0)
+                                .hint_text("与向量索引相同的模型"),
+                        );
+                        egui::ComboBox::from_id_salt("answer-hybrid-weight")
+                            .selected_text(format!("关键词 {}%", self.keyword_weight))
+                            .show_ui(ui, |ui| {
+                                for weight in [25, 50, 75] {
+                                    ui.selectable_value(
+                                        &mut self.keyword_weight,
+                                        weight,
+                                        format!("关键词 {weight}%"),
+                                    );
+                                }
+                            });
+                    });
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.embed_endpoint)
+                            .desired_width(ui.available_width().min(900.0))
+                            .hint_text("本机 Ollama /api/embed 地址"),
+                    );
+                }
+            },
+        );
         ui.label("问题");
         ui.add_enabled(
             self.answer_running.is_none() && self.prepare_running.is_none(),
@@ -556,7 +793,11 @@ impl State {
                 .desired_width(ui.available_width().min(900.0))
                 .hint_text("例如：项目文档如何处理文件变化？"),
         );
-        ui.label("检索词");
+        ui.label(if self.hybrid_enabled {
+            "检索词 / 语义查询"
+        } else {
+            "检索词"
+        });
         ui.add_enabled(
             self.answer_running.is_none() && self.prepare_running.is_none(),
             egui::TextEdit::singleline(&mut self.terms)
@@ -608,6 +849,9 @@ impl State {
             }
             if self.prepare_running.is_some() {
                 ui.spinner();
+                if ui.button("取消准备").clicked() {
+                    self.prepare_cancel.store(true, Ordering::Relaxed);
+                }
             }
         });
         if self.answer_running.is_none()
@@ -618,6 +862,7 @@ impl State {
                     || prepared.source_id.as_deref()
                         != (!self.source_id.is_empty()).then_some(self.source_id.as_str())
                     || prepared.top_k != self.top_k
+                    || prepared.retrieval != self.current_retrieval()
             })
         {
             self.prepared = None;
@@ -701,6 +946,20 @@ impl State {
                         item.id, item.source_name, item.hit.relative, item.hit.location
                     ));
                     ui.label(&item.prompt_text);
+                    if let Some(trace) = &item.hybrid_trace {
+                        let keyword = trace.keyword_rank.map_or_else(
+                            || "未命中".into(),
+                            |rank| format!("第 {rank} 名 · {:.5}", trace.keyword_contribution),
+                        );
+                        let semantic = trace.semantic_rank.map_or_else(
+                            || "未命中".into(),
+                            |rank| format!("第 {rank} 名 · {:.5}", trace.semantic_contribution),
+                        );
+                        ui.label(format!("关键词 {keyword} ｜ 语义 {semantic}"));
+                        if let Some(cosine) = trace.cosine {
+                            ui.small(format!("语义余弦 {cosine:.4} · 排名分不代表事实可信度"));
+                        }
+                    }
                     ui.small(format!(
                         "文件 SHA-256 {}…",
                         &item.hit.file_sha256[..item.hit.file_sha256.len().min(12)]

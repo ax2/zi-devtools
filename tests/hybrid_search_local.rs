@@ -9,7 +9,9 @@ use std::{
     thread,
     time::Duration,
 };
-use zi_devtools::{hybrid_search, knowledge_index, knowledge_sources, vector_index};
+use zi_devtools::{
+    hybrid_search, knowledge_answer, knowledge_index, knowledge_sources, vector_index,
+};
 
 struct ModelFixture {
     endpoint: String,
@@ -203,6 +205,53 @@ fn hybrid_uses_both_channels_filters_sources_and_rejects_changed_model() {
             .iter()
             .all(|item| item.hit.source_id == second.id)
     );
+    let prepared = knowledge_answer::prepare_with(
+        &keyword,
+        &[first.clone(), second.clone()],
+        knowledge_answer::PrepareRequest {
+            question: "How does Rust ownership work?",
+            terms: "Rust ownership",
+            source_id: None,
+            top_k: 3,
+            retrieval: knowledge_answer::Retrieval::Hybrid {
+                vector_path: vectors.clone(),
+                endpoint: server.endpoint.clone(),
+                model: model.into(),
+                keyword_weight: 50,
+            },
+        },
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!(prepared.evidence.len(), 3);
+    assert_eq!(prepared.semantic_candidates, 3);
+    assert!(prepared.evidence.iter().any(|item| {
+        item.hybrid_trace
+            .as_ref()
+            .is_some_and(|trace| trace.keyword_rank.is_none() && trace.semantic_rank.is_some())
+    }));
+    assert_eq!(prepared.evidence[0].id, 1);
+    assert!(knowledge_answer::messages(&prepared).is_ok());
+    let prepared_filtered = knowledge_answer::prepare_with(
+        &keyword,
+        &[first.clone(), second.clone()],
+        knowledge_answer::PrepareRequest {
+            question: "How does Rust ownership work?",
+            terms: "Rust ownership",
+            source_id: Some(&second.id),
+            top_k: 3,
+            retrieval: knowledge_answer::Retrieval::Hybrid {
+                vector_path: vectors.clone(),
+                endpoint: server.endpoint.clone(),
+                model: model.into(),
+                keyword_weight: 75,
+            },
+        },
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!(prepared_filtered.evidence.len(), 1);
+    assert_eq!(prepared_filtered.evidence[0].hit.source_id, second.id);
 
     let old_hit = both
         .hits
@@ -216,6 +265,16 @@ fn hybrid_uses_both_channels_filters_sources_and_rejects_changed_model() {
         "Updated Rust ownership avoids races.",
     )
     .unwrap();
+    let stale_answer = knowledge_answer::generate(
+        &prepared,
+        &[first.clone(), second.clone()],
+        "http://127.0.0.1:9/api/chat",
+        knowledge_answer::Protocol::Ollama,
+        "fixture",
+        &AtomicBool::new(false),
+    )
+    .unwrap_err();
+    assert!(format!("{stale_answer:#}").contains("预览后变化"));
     first.snapshot = Some(knowledge_sources::scan(&first, &AtomicBool::new(false)).unwrap());
     knowledge_index::sync_all(
         &keyword,
@@ -249,6 +308,25 @@ fn hybrid_uses_both_channels_filters_sources_and_rejects_changed_model() {
     assert!(revised.keyword_rank.is_some());
     assert!(revised.semantic_rank.is_none());
     *server.digest.lock().unwrap() = "b".repeat(64);
+    let stale_model = knowledge_answer::prepare_with(
+        &keyword,
+        &[],
+        knowledge_answer::PrepareRequest {
+            question: "How does Rust ownership work?",
+            terms: "Rust ownership",
+            source_id: None,
+            top_k: 3,
+            retrieval: knowledge_answer::Retrieval::Hybrid {
+                vector_path: vectors.clone(),
+                endpoint: server.endpoint.clone(),
+                model: model.into(),
+                keyword_weight: 50,
+            },
+        },
+        &AtomicBool::new(false),
+    )
+    .unwrap_err();
+    assert!(stale_model.to_string().contains("版本已变化"));
     assert!(
         hybrid_search::search(
             &keyword,

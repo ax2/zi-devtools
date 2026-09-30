@@ -1,5 +1,7 @@
 use std::{fs, sync::atomic::AtomicBool};
-use zi_devtools::{hybrid_search, knowledge_index, knowledge_sources, vector_index};
+use zi_devtools::{
+    hybrid_search, knowledge_answer, knowledge_index, knowledge_sources, vector_index,
+};
 
 #[test]
 #[ignore = "requires local Ollama with bge-m3:latest; uses only disposable synthetic documents"]
@@ -25,7 +27,7 @@ fn real_bge_m3_indexes_and_retrieves_disposable_documents() {
     let vectors = root.join("vectors.sqlite3");
     knowledge_index::sync_all(
         &keyword,
-        &[source],
+        &[source.clone()],
         false,
         &AtomicBool::new(false),
         |_, _, _| {},
@@ -73,5 +75,25 @@ fn real_bge_m3_indexes_and_retrieves_disposable_documents() {
     assert_eq!(hybrid.hits[0].hit.relative, "rust.txt");
     assert!(hybrid.hits[0].keyword_rank.is_some());
     assert!(hybrid.hits[0].semantic_rank.is_some());
+    let prepared = knowledge_answer::prepare_with(
+        &keyword,
+        &[source],
+        knowledge_answer::PrepareRequest {
+            question: "How does Rust prevent data races?",
+            terms: "Rust ownership",
+            source_id: None,
+            top_k: 3,
+            retrieval: knowledge_answer::Retrieval::Hybrid {
+                vector_path: vectors,
+                endpoint: endpoint.into(),
+                model: model.into(),
+                keyword_weight: 50,
+            },
+        },
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!(prepared.evidence[0].hit.relative, "rust.txt");
+    assert!(prepared.evidence[0].hybrid_trace.is_some());
     fs::remove_dir_all(root).unwrap();
 }

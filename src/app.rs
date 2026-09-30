@@ -908,7 +908,13 @@ impl DevToolsApp {
                 self.page = Page::KnowledgeAnswer;
                 self.knowledge_sources.preview_fixture();
                 self.knowledge_answer
-                    .preview_fixture(self.knowledge_sources.sources());
+                    .preview_fixture(self.knowledge_sources.sources(), false);
+            }
+            144 | 145 => {
+                self.page = Page::KnowledgeAnswer;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_answer
+                    .preview_fixture(self.knowledge_sources.sources(), true);
             }
             128 | 129 => {
                 self.page = Page::KnowledgeEval;
@@ -1349,7 +1355,7 @@ impl DevToolsApp {
             vector_index: crate::vector_index::State::new(crate::vector_index::default_path(), crate::knowledge_index::default_path()),
             knowledge_search: crate::knowledge_search::State::new(crate::knowledge_index::default_path()),
             hybrid_search: crate::hybrid_search::State::new(crate::knowledge_index::default_path(), crate::vector_index::default_path()),
-            knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path()),
+            knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path(), crate::vector_index::default_path()),
             embedding: Default::default(),
             knowledge_capture: Default::default(),
             knowledge_eval: crate::knowledge_eval::State::new(crate::knowledge_index::default_path()),
@@ -1763,7 +1769,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 60  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 61  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
