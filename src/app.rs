@@ -114,6 +114,7 @@ enum Page {
     Files,
     Images,
     Markdown,
+    FileEncoding,
     Settings,
     Plugins,
     Mcp,
@@ -175,6 +176,7 @@ fn tool_category(id: &str) -> &'static str {
         | "image-batch"
         | "image-metadata"
         | "image-crop-annotate"
+        | "encoding-detect"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -354,6 +356,16 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "扩展与集成".into(),
             keywords: "markdown md html 文档 预览 导出 安全".into(),
+        },
+        ToolEntry {
+            id: "encoding-detect".into(),
+            title: "文件编码检查与转换".into(),
+            description: "严格解码、目标字节预览与无覆盖另存".into(),
+            page: Page::FileEncoding,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "encoding charset utf8 utf16 gb18030 big5 shift-jis 编码 转换 文件 文本"
+                .into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -578,6 +590,7 @@ pub struct DevToolsApp {
     recorder: crate::recorder_ui::RecorderState,
     images: crate::image_tools::State,
     markdown: crate::markdown_preview::State,
+    file_encoding: crate::file_encoding::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -714,6 +727,10 @@ impl DevToolsApp {
             112 | 113 => {
                 self.page = Page::Markdown;
                 self.markdown.preview_fixture();
+            }
+            114 | 115 => {
+                self.page = Page::FileEncoding;
+                self.file_encoding.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1106,6 +1123,7 @@ impl DevToolsApp {
             recorder,
             images: Default::default(),
             markdown: Default::default(),
+            file_encoding: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1465,6 +1483,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Recorder, "屏幕录制");
                         nav_button(ui, &mut self.page, Page::Images, "图片工作台");
                         nav_button(ui, &mut self.page, Page::Markdown, "Markdown 预览");
+                        nav_button(ui, &mut self.page, Page::FileEncoding, "文件编码转换");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1493,7 +1512,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 44  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 45  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3879,6 +3898,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("markdown-page")
                         .show(ui, |ui| self.markdown.ui(ui));
+                }
+                Page::FileEncoding => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("file-encoding-page")
+                        .show(ui, |ui| self.file_encoding.ui(ui));
                 }
                 Page::Java | Page::Django => {
                     let category = if self.page == Page::Java {

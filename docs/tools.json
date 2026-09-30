@@ -1,5 +1,5 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -341,10 +341,10 @@
     {
       "id": "encoding-detect",
       "name": "文件编码转换",
-      "status": "planned",
-      "category": "扩展工具",
+      "status": "implemented",
+      "category": "文件与系统",
       "priority": "P2",
-      "scope": "UTF-8/GB18030 等检测、预览与另存为"
+      "scope": "本机 ≤8 MiB 文本有界读取；明确 BOM、合法 UTF-8 与启发式推测的差异，可手选 UTF-8/UTF-16 LE/BE/GB18030/Big5/Shift_JIS/Windows-1252，严格解码、回读核验、目标字节和 SHA-256 预览后另存新文件，拒绝替换字符与覆盖已有文件"
     },
     {
       "id": "file-rename",
