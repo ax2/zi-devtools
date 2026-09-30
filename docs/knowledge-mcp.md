@@ -16,3 +16,5 @@ Zi DevTools v0.54.0 提供独立的 `ZiDevToolsMcp.exe`（安装版）或 `ZiDev
 ```
 
 此命令会等待 MCP 客户端从标准输入发送协议消息；普通交互式终端没有消息时看起来会停在原处。配置方法取决于客户端，关键是将上述 EXE 作为 stdio `command`，不通过 shell 包装。
+
+v0.55.0 起，桌面端同一页面提供“客户端配置导出”：按当前同目录 MCP 服务程序路径，分别预览并复制 Codex CLI 命令、Codex TOML 和通用 `mcpServers` JSON。Codex CLI 示例采用 `codex mcp add zi-knowledge -- '<绝对 EXE 路径>'`；TOML 可放入 Codex 的 `config.toml`。通用 JSON 的字段名与放置位置须依目标客户端说明调整。按钮只复制文本，不自动读写任何客户端配置，也不包含凭据。若服务 EXE 缺失则不生成可执行配置。

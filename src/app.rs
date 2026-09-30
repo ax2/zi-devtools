@@ -464,6 +464,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "mcp server agent codex knowledge rag search 本机 知识库 检索".into(),
         },
         ToolEntry {
+            id: "mcp-export".into(),
+            title: "MCP 客户端配置导出".into(),
+            description: "预览并复制 Codex 命令、TOML 与通用 JSON 接入配置".into(),
+            page: Page::KnowledgeMcp,
+            kind: None,
+            category: "MCP 与 Agent".into(),
+            keywords: "mcp client codex configuration toml json export 客户端 配置 接入".into(),
+        },
+        ToolEntry {
             id: "screen-recorder".into(),
             title: "屏幕录制".into(),
             description: "鼠标框选区域，录制屏幕并保存 MP4".into(),
@@ -881,6 +890,10 @@ impl DevToolsApp {
                     .preview_fixture(self.knowledge_sources.sources());
             }
             132 | 133 => {
+                self.page = Page::KnowledgeMcp;
+                self.knowledge_sources.preview_fixture();
+            }
+            134 | 135 => {
                 self.page = Page::KnowledgeMcp;
                 self.knowledge_sources.preview_fixture();
             }
@@ -1691,7 +1704,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 54  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 55  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

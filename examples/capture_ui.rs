@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 134] = [
+const NAMES: [&str; 136] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -144,6 +144,8 @@ const NAMES: [&str; 134] = [
     "knowledge-capture-light",
     "knowledge-mcp-dark",
     "knowledge-mcp-light",
+    "mcp-export-dark",
+    "mcp-export-light",
 ];
 
 struct Capture {
@@ -704,6 +706,8 @@ impl eframe::App for Capture {
                 .preview_scene(ctx, self.scene, self.fixture.clone());
             let size = if (96..=99).contains(&self.scene) {
                 egui::vec2(1280.0, 1180.0)
+            } else if (134..=135).contains(&self.scene) {
+                egui::vec2(1280.0, 1080.0)
             } else if self.scene == 3 || self.scene == 7 || self.scene == 59 {
                 egui::vec2(980.0, 760.0)
             } else {

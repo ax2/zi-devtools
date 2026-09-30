@@ -1,5 +1,5 @@
 {
-  "version": "0.54.0",
+  "version": "0.55.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -637,10 +637,10 @@
     {
       "id": "mcp-export",
       "name": "MCP 客户端配置导出",
-      "status": "planned",
+      "status": "implemented",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "针对选定客户端生成配置预览与差异；不复制明文密钥"
+      "scope": "按同目录实际 MCP 服务 EXE 路径生成 Codex CLI 命令、Codex TOML 和通用 mcpServers JSON；预览后分别复制，不读取或修改其他客户端配置、不包含凭据。Codex CLI 格式经本机隔离配置验证；现有配置差异和其他客户端适配仍待实现"
     },
     {
       "id": "mcp-server",

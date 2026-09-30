@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{knowledge_index, knowledge_search, knowledge_sources};
+use crate::{knowledge_index, knowledge_search, knowledge_sources, mcp_export};
 use eframe::egui;
 
 const PROTOCOL: &str = "2025-06-18";
@@ -50,19 +50,7 @@ pub fn ui(ui: &mut egui::Ui) {
     ui.heading("本机知识库 MCP 服务");
     ui.label("将已扫描并同步的文档，通过独立的只读 stdio 程序提供给 Codex 等 MCP 客户端。客户端启动服务时才运行；不监听端口，不自动读取新目录或调用模型。");
     ui.add_space(8.0);
-    let executable = std::env::current_exe()
-        .map(|path| {
-            let installed = path.with_file_name("ZiDevToolsMcp.exe");
-            if installed.is_file() {
-                installed
-            } else {
-                path.with_file_name(format!(
-                    "ZiDevToolsMcp-{}-windows-x64.exe",
-                    env!("CARGO_PKG_VERSION")
-                ))
-            }
-        })
-        .unwrap_or_else(|_| PathBuf::from("ZiDevToolsMcp.exe"));
+    let executable = mcp_export::sibling_server();
     let config = Config::default();
     ui.group(|ui| {
         ui.strong("接入准备");
@@ -80,7 +68,7 @@ pub fn ui(ui: &mut egui::Ui) {
             Ok(stats) => format!("本机索引：{} 个文件、{} 个片段", stats.files, stats.chunks),
             Err(error) => format!("索引读取失败：{error:#}"),
         });
-        ui.label(if executable.is_file() {
+        ui.label(if executable.is_ok() {
             "MCP 服务程序：已就绪"
         } else {
             "MCP 服务程序：当前目录未找到；请使用完整安装包或便携目录"
@@ -89,12 +77,53 @@ pub fn ui(ui: &mut egui::Ui) {
     ui.add_space(10.0);
     ui.strong("客户端配置");
     ui.label("在可信 MCP 客户端中添加 stdio 服务，命令使用下列 EXE 绝对路径，参数留空。配置完成后可调用 list_knowledge_sources 和 search_knowledge。");
-    ui.monospace(executable.display().to_string());
-    if ui.button("复制服务程序路径").clicked() {
-        ui.ctx().copy_text(executable.display().to_string());
+    if let Ok(path) = &executable {
+        ui.monospace(path.display().to_string());
+        if ui.button("复制服务程序路径").clicked() {
+            ui.ctx().copy_text(path.display().to_string());
+        }
+    } else {
+        ui.label("请先安装包含 MCP 服务 EXE 的完整版本，再生成客户端配置。");
     }
     ui.add_space(8.0);
     ui.small("客户端接入后可查询你已同步的索引内容；只为可信客户端配置。每条检索结果会重新检查知识源快照和原文件 SHA-256，过期内容不返回。返回相对路径与简短片段，不包含文件绝对路径。详情见 docs/knowledge-mcp.md。");
+    ui.add_space(12.0);
+    ui.separator();
+    ui.heading("客户端配置导出");
+    ui.label("先预览，再复制到目标客户端。此页不会读取或改写其他应用的配置，也不包含账号凭据。");
+    if let Ok(path) = &executable {
+        match mcp_export::generate(path) {
+            Ok(exports) => {
+                ui.group(|ui| {
+                    ui.strong("Codex CLI 命令");
+                    ui.code(&exports.codex_command);
+                    if ui.button("复制 Codex 命令").clicked() {
+                        ui.ctx().copy_text(exports.codex_command.clone());
+                    }
+                });
+                ui.add_space(6.0);
+                ui.group(|ui| {
+                    ui.strong("Codex 配置片段（TOML）");
+                    ui.code(&exports.codex_toml);
+                    if ui.button("复制 TOML").clicked() {
+                        ui.ctx().copy_text(exports.codex_toml.clone());
+                    }
+                });
+                ui.add_space(6.0);
+                ui.group(|ui| {
+                    ui.strong("通用 MCP 配置示例（JSON）");
+                    ui.code(&exports.generic_json);
+                    if ui.button("复制 JSON").clicked() {
+                        ui.ctx().copy_text(exports.generic_json.clone());
+                    }
+                });
+                ui.small("JSON 字段名因客户端而异，请按目标应用的 MCP 说明调整。复制不会安装或启动服务。");
+            }
+            Err(error) => {
+                ui.colored_label(egui::Color32::RED, format!("无法生成配置：{error:#}"));
+            }
+        }
+    }
 }
 
 fn tools() -> Value {
