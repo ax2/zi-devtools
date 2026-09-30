@@ -30,6 +30,7 @@ pub mod credentials;
 pub mod chat_attachments;
 pub mod chat_library;
 pub mod chat_stream;
+pub mod checksum_manifest;
 pub mod conversation;
 pub mod mcp;
 pub mod mcp_ui;

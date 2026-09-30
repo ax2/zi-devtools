@@ -115,6 +115,7 @@ enum Page {
     Images,
     Markdown,
     FileEncoding,
+    ChecksumManifest,
     Settings,
     Plugins,
     Mcp,
@@ -177,6 +178,7 @@ fn tool_category(id: &str) -> &'static str {
         | "image-metadata"
         | "image-crop-annotate"
         | "encoding-detect"
+        | "checksum-manifest"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -366,6 +368,15 @@ fn catalog() -> Vec<ToolEntry> {
             category: "文件与系统".into(),
             keywords: "encoding charset utf8 utf16 gb18030 big5 shift-jis 编码 转换 文件 文本"
                 .into(),
+        },
+        ToolEntry {
+            id: "checksum-manifest".into(),
+            title: "SHA256SUMS 校验清单".into(),
+            description: "生成与验证文件摘要清单，定位缺失与不匹配".into(),
+            page: Page::ChecksumManifest,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "checksum sha256 sums manifest verify 文件 校验 清单".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -591,6 +602,7 @@ pub struct DevToolsApp {
     images: crate::image_tools::State,
     markdown: crate::markdown_preview::State,
     file_encoding: crate::file_encoding::State,
+    checksum_manifest: crate::checksum_manifest::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -731,6 +743,10 @@ impl DevToolsApp {
             114 | 115 => {
                 self.page = Page::FileEncoding;
                 self.file_encoding.preview_fixture();
+            }
+            116 | 117 => {
+                self.page = Page::ChecksumManifest;
+                self.checksum_manifest.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1124,6 +1140,7 @@ impl DevToolsApp {
             images: Default::default(),
             markdown: Default::default(),
             file_encoding: Default::default(),
+            checksum_manifest: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1484,6 +1501,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Images, "图片工作台");
                         nav_button(ui, &mut self.page, Page::Markdown, "Markdown 预览");
                         nav_button(ui, &mut self.page, Page::FileEncoding, "文件编码转换");
+                        nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1512,7 +1530,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 45  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 46  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3903,6 +3921,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("file-encoding-page")
                         .show(ui, |ui| self.file_encoding.ui(ui));
+                }
+                Page::ChecksumManifest => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("checksum-manifest-page")
+                        .show(ui, |ui| self.checksum_manifest.ui(ui));
                 }
                 Page::Java | Page::Django => {
                     let category = if self.page == Page::Java {

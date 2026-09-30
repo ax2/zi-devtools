@@ -1,5 +1,5 @@
 {
-  "version": "0.45.0",
+  "version": "0.46.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -253,10 +253,10 @@
     {
       "id": "checksum-manifest",
       "name": "校验清单",
-      "status": "planned",
-      "category": "扩展工具",
+      "status": "implemented",
+      "category": "文件与系统",
       "priority": "P1",
-      "scope": "生成和验证 SHA256SUMS，定位缺失/不匹配文件"
+      "scope": "同目录 1–64 个普通文件生成 SHA256SUMS，后台流式计算、预览并无覆盖另存；导入 ≤32 KiB 清单逐项定位匹配、缺失、摘要不匹配和读取错误，拒绝路径穿越、重复文件名和符号链接"
     },
     {
       "id": "file-compare",
