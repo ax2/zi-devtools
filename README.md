@@ -82,7 +82,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 59 / v0.59.0 开发中：新增可选本机向量索引及语义检索；一次性 HTTP 夹具验证增量、版本变更、取消回滚，本机 `bge-m3:latest` 已对两份合成文档完成真实索引与查询。公开版本与官网待验证，混合检索仍在规划。
+Stage 59 / v0.59.0 已公开发布：新增可选本机向量索引及语义检索；一次性 HTTP 夹具验证增量、版本变更、取消回滚，本机 `bge-m3:latest` 对两份合成文档完成真实索引与查询，公开 CI/Release、四件下载资产及官网桌面/手机验证通过。混合检索仍在规划。
 
 Stage 58 / v0.58.0 已公开发布：新增本机 Embedding 工作台；本机 `bge-m3:latest` 的真实两文本嵌入和数值校验、公开 CI/Release、安装包以及官网桌面/手机验证通过。
 
