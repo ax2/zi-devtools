@@ -1,6 +1,6 @@
 # 本机磁盘维护
 
-项目根目录的 `target/` 是 Rust 构建缓存，可以重新生成。`scripts/maintenance.ps1` 每周清理 `target/debug/incremental` 和 `target/release/incremental`；每月第一个周日清理整个 `target/`，避免旧依赖产物长期累积。不会碰源码、`dist/Stage-*` 完整阶段版本、`release/` 安装包、技术博客档案、用户配置或知识索引。完整清理后第一次构建会更慢。
+项目根目录的 `target/` 是 Rust 构建缓存，可以重新生成。`scripts/maintenance.ps1` 每周清理 `target/debug/incremental` 和 `target/release/incremental`；每月首次成功运行计划任务时清理整个 `target/`，避免旧依赖产物长期累积。即使电脑错过当月第一个周日，下一次成功运行仍会补做月度清理。不会碰源码、`dist/Stage-*` 完整阶段版本、`release/` 安装包、技术博客档案、用户配置或知识索引。完整清理后第一次构建会更慢。
 
 先预览占用：
 
@@ -21,9 +21,14 @@ pwsh -NoProfile -File scripts/maintenance.ps1 -Deep
 pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -Apply
 ```
 
-脚本在删除前检查目标绝对路径仍位于项目目录、目标是普通目录且内部没有链接。检测到 Cargo、rustc、rustdoc 或 WiX 构建进程时跳过定时维护，手动运行则报错，避免和构建同时操作。
+脚本在删除前检查目标绝对路径仍位于项目目录、目标是普通目录且内部没有链接。检测到 Cargo、rustc、rustdoc 或 WiX 构建进程时跳过定时维护，手动运行则报错，避免和构建同时操作。成功运行或因构建占用而跳过后，会将时间、清理模式、释放字节数与最近完成月度清理的月份写到 `%LOCALAPPDATA%\ZiDevTools\maintenance\last-run.json`；预览不写记录。可以用下面的命令检查：
 
-在本机安装每周日 03:00 的当前用户计划任务（每月第一个周日执行完整清理）：
+```powershell
+Get-Content "$env:LOCALAPPDATA\ZiDevTools\maintenance\last-run.json"
+Get-ScheduledTaskInfo -TaskName ZiDevTools-WeeklyMaintenance
+```
+
+在本机安装每周日 03:00 的当前用户计划任务（每月第一次成功运行时执行完整清理）：
 
 ```powershell
 pwsh -NoProfile -File scripts/install-maintenance-task.ps1
