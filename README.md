@@ -82,7 +82,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 62 / v0.62.0 开发中：固定 RAG 样例集可同题比较关键词与混合检索的预期来源名次、独有/共同命中和 MRR；模型/索引错误不计成对结果。单路模型评测也可选混合证据；一次性夹具和真实本机双模型测试通过，公开交付待验证。
+Stage 62 / v0.62.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.62.0)：固定 RAG 样例集可同题比较关键词与混合检索的预期来源名次、独有/共同命中和 MRR；模型/索引错误不计成对结果。单路模型评测也可选混合证据；一次性夹具、真实本机双模型测试、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过。本轮安全清理约 10.57 GiB 构建缓存。
 
 Stage 61 / v0.61.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.61.0)：带引用问答新增关键词/混合证据模式、独立嵌入模型、可取消证据准备与两路贡献说明；一次性 HTTP 夹具和本机 `bge-m3:latest` + `qwen2.5:7b` 合成文档端到端、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过。固定样例评测仍按关键词基线。
 
