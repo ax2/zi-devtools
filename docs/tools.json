@@ -1,6 +1,6 @@
 {
-  "version": "0.55.0",
-  "updated": "2026-09-30",
+  "version": "0.56.0",
+  "updated": "2026-10-01",
   "tools": [
     {
       "id": "json",
@@ -640,7 +640,7 @@
       "status": "implemented",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "按同目录实际 MCP 服务 EXE 路径生成 Codex CLI 命令、Codex TOML 和通用 mcpServers JSON；预览后分别复制，不读取或修改其他客户端配置、不包含凭据。Codex CLI 格式经本机隔离配置验证；现有配置差异和其他客户端适配仍待实现"
+      "scope": "按同目录实际 MCP 服务 EXE 路径生成 Codex CLI 命令、Codex TOML 和通用 mcpServers JSON；TOML 限定两个知识工具并采用 writes 审批模式，本机 Codex CLI 真实会话已调用列表和合成检索。只预览和复制，不读取或修改客户端配置、不包含凭据；其他客户端适配与现有配置差异仍待实现"
     },
     {
       "id": "mcp-server",
@@ -648,7 +648,7 @@
       "status": "implemented",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "独立 Windows 控制台 EXE 提供只读 MCP stdio 服务，向可信客户端列出已扫描知识源、检索已同步索引；逐条复核当前文件 SHA-256，仅返回有界片段、相对路径和引用。不监听网络、不写入或自动扫描；通用工具暴露与调用审计仍待规划"
+      "scope": "独立 Windows 控制台 EXE 提供只读 MCP stdio 服务，向可信客户端列出已扫描知识源、检索已同步索引；两个工具在协议中声明只读，逐条复核当前文件 SHA-256，仅返回有界片段、相对路径和引用。不监听网络、不写入或自动扫描；通用工具暴露与调用审计仍待规划"
     },
     {
       "id": "agent-runner",

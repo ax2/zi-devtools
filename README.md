@@ -80,6 +80,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
+Stage 56 / v0.56.0：知识库 MCP 两个工具增加只读协议注解，Codex TOML 限定工具并采用 writes 审批模式；本机隔离的 Codex CLI 真实会话已成功列出空来源并检索合成文档。
+
 Stage 55 / v0.55.0：新增 MCP 客户端接入向导，按实际程序位置预览 Codex 命令、TOML 和通用 JSON，确认后复制，不自动改写其他应用配置。
 
 Stage 54 / v0.54.0：新增本机知识库 MCP 只读服务，独立控制台 EXE 供可信客户端检索已同步文档，逐条复核当前文件并返回有界引用。

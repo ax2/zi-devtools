@@ -47,7 +47,9 @@ pub fn generate(executable: &Path) -> Result<Exports> {
     } else {
         format!("'{raw}'")
     };
-    let codex_toml = format!("[mcp_servers.zi-knowledge]\ncommand = {toml_path}\n");
+    let codex_toml = format!(
+        "[mcp_servers.zi-knowledge]\ncommand = {toml_path}\nenabled_tools = [\"list_knowledge_sources\", \"search_knowledge\"]\ndefault_tools_approval_mode = \"writes\"\n"
+    );
     let generic_json = serde_json::to_string_pretty(&json!({
         "mcpServers": {"zi-knowledge": {"command": raw, "args": []}}
     }))?;
@@ -74,6 +76,16 @@ mod tests {
             output
                 .codex_toml
                 .starts_with("[mcp_servers.zi-knowledge]\ncommand = \"")
+        );
+        assert!(
+            output
+                .codex_toml
+                .contains("default_tools_approval_mode = \"writes\"")
+        );
+        assert!(
+            output
+                .codex_toml
+                .contains("enabled_tools = [\"list_knowledge_sources\", \"search_knowledge\"]")
         );
         let parsed: serde_json::Value = serde_json::from_str(&output.generic_json).unwrap();
         assert_eq!(
