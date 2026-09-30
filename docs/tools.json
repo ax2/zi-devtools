@@ -1,5 +1,5 @@
 {
-  "version": "0.62.0",
+  "version": "0.63.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -576,15 +576,15 @@
       "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "本机 stdio 短会话已支持初始化、版本校验、tools/resources/prompts 有界分页枚举、schema 与只读声明查看、JSON 参数手动工具调用、调用前工具定义复核、选中资源读取、提示词获取及取消；Streamable HTTP、持久会话、参数表单、协议日志和真实第三方服务器兼容性待补"
+      "scope": "本机 stdio 短会话已支持初始化、版本校验、tools/resources/prompts 有界分页枚举、schema 与只读声明查看、JSON 参数手动工具调用、调用前工具定义及本机权限复核、选中资源读取、提示词获取及取消；Streamable HTTP、持久会话、参数表单、协议日志和真实第三方服务器兼容性待补"
     },
     {
       "id": "mcp-permissions",
       "name": "MCP 工具权限",
-      "status": "planned",
+      "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "按服务器和工具声明访问范围，高影响调用逐次确认，撤销后立即失效"
+      "scope": "本机 stdio 调试台已按 EXE/参数及工具完整定义保存禁止或受限只读直接调用规则，默认逐次确认；高影响工具始终逐次确认，调用前复核文件，撤销时停止当前短会话。未来 Agent/持久连接的统一权限网关和跨进程审计仍待实现"
     },
     {
       "id": "screen-recorder",

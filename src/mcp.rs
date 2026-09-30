@@ -429,6 +429,36 @@ impl Session {
 }
 
 pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result<Report> {
+    run_inner(config, action, cancelled, None)
+}
+
+/// Product UI entry point for tools/call. The permission file is checked both
+/// before starting the server and just before sending the call.
+pub fn run_with_access(
+    config: Config,
+    action: Action,
+    cancelled: Arc<AtomicBool>,
+    access_path: PathBuf,
+    manual_confirmed: bool,
+) -> Result<Report> {
+    ensure!(
+        matches!(action, Action::Call { .. }),
+        "权限入口仅用于 MCP 工具调用"
+    );
+    run_inner(
+        config,
+        action,
+        cancelled,
+        Some((access_path, manual_confirmed)),
+    )
+}
+
+fn run_inner(
+    config: Config,
+    action: Action,
+    cancelled: Arc<AtomicBool>,
+    access: Option<(PathBuf, bool)>,
+) -> Result<Report> {
     match &action {
         Action::Call {
             tool,
@@ -470,6 +500,11 @@ pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result
         }
         Action::Inspect => {}
     }
+    if let (Some((path, manual_confirmed)), Action::Call { expected_tool, .. }) = (&access, &action)
+    {
+        let scope = crate::mcp_access::server_scope(&config)?;
+        crate::mcp_access::authorize(path, &scope, expected_tool, *manual_confirmed)?;
+    }
     let timeout = if matches!(action, Action::Inspect) {
         Duration::from_secs(15)
     } else {
@@ -506,6 +541,10 @@ pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result
                 *listed == expected_tool,
                 "工具定义已变化，调用已拒绝；请重新检查服务能力并确认"
             );
+            if let Some((path, manual_confirmed)) = &access {
+                let scope = crate::mcp_access::server_scope(&config)?;
+                crate::mcp_access::authorize(path, &scope, listed, *manual_confirmed)?;
+            }
             report.call_result =
                 Some(session.request("tools/call", json!({"name":tool,"arguments":arguments}))?);
         }

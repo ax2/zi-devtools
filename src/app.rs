@@ -928,6 +928,10 @@ impl DevToolsApp {
                 self.knowledge_eval
                     .preview_fixture(self.knowledge_sources.sources(), true);
             }
+            148 | 149 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_permissions();
+            }
             130 | 131 => {
                 self.page = Page::KnowledgeCapture;
                 self.knowledge_sources.preview_fixture();
@@ -1349,7 +1353,7 @@ impl DevToolsApp {
             launcher_focus: false, launcher_index: 0, toast: None,
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
-            mcp: Default::default(),
+            mcp: crate::mcp_ui::McpState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
             recorder,
             images: Default::default(),
             markdown: Default::default(),
@@ -1775,7 +1779,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 62  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 63  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

@@ -41,6 +41,8 @@ for line in sys.stdin:
             ),
         }
     elif method == "tools/list":
+        if MODE == "delayed_tools":
+            time.sleep(0.7)
         if MODE == "bad_tool":
             response = {"tools": [{"name": ""}]}
         elif request.get("params", {}).get("cursor") == "next":
@@ -49,7 +51,11 @@ for line in sys.stdin:
                     {
                         "name": "echo",
                         "description": "Changed echo behavior" if MODE == "changed_tool" else "Echo a string",
-                        "annotations": {"readOnlyHint": MODE != "changed_annotations"},
+                        "annotations": {
+                            "readOnlyHint": MODE != "changed_annotations",
+                            "destructiveHint": False,
+                            "openWorldHint": False,
+                        },
                         "inputSchema": {
                             "type": "object",
                             "properties": {"text": {"type": "integer" if MODE == "changed_schema" else "string"}},

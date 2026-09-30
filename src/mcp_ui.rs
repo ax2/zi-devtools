@@ -1,4 +1,7 @@
-use crate::mcp::{self, Action, Config, Report};
+use crate::{
+    mcp::{self, Action, Config, Report},
+    mcp_access::{self, Decision, Rule, Store},
+};
 use eframe::egui;
 use serde_json::Value;
 #[cfg(feature = "ui-preview")]
@@ -48,13 +51,16 @@ pub struct McpState {
     last_called_tool: String,
     prompt_arguments: String,
     call_confirm: bool,
+    access: Store,
+    server_scope: Option<String>,
+    scope_error: Option<String>,
     receiver: Option<Receiver<Result<Report, String>>>,
     cancelled: Arc<AtomicBool>,
     message: String,
 }
 
-impl Default for McpState {
-    fn default() -> Self {
+impl McpState {
+    pub fn new(access_path: PathBuf) -> Self {
         Self {
             executable: String::new(),
             arguments: "[]".into(),
@@ -68,6 +74,9 @@ impl Default for McpState {
             last_called_tool: String::new(),
             prompt_arguments: "{}".into(),
             call_confirm: false,
+            access: Store::load(access_path),
+            server_scope: None,
+            scope_error: None,
             receiver: None,
             cancelled: Arc::new(AtomicBool::new(false)),
             message: String::new(),
@@ -90,7 +99,7 @@ impl McpState {
             server: "示例 MCP 服务".into(),
             protocol: "2025-06-18".into(),
             tools: vec![
-                json!({"name":"search_notes","description":"在已授权的笔记中搜索关键字","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"搜索词"}},"required":["query"]}}),
+                json!({"name":"search_notes","description":"在已授权的笔记中搜索关键字","annotations":{"readOnlyHint":true,"destructiveHint":false,"openWorldHint":false},"inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"搜索词"}},"required":["query"]}}),
                 json!({"name":"read_note","description":"读取单篇笔记","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}}),
             ],
             resources: vec![json!({"name":"说明文档","uri":"demo://guide"})],
@@ -134,6 +143,13 @@ impl McpState {
         self.call_confirm = true;
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_permissions(&mut self) {
+        self.preview_tool_review(false);
+        self.server_scope = Some("a".repeat(64));
+        self.call_confirm = false;
+    }
+
     fn config(&self) -> Result<Config, String> {
         let args: Vec<String> = serde_json::from_str(&self.arguments)
             .map_err(|_| "参数必须是 JSON 字符串数组，例如 [\"server.js\"]".to_owned())?;
@@ -145,7 +161,7 @@ impl McpState {
         Ok(config)
     }
 
-    fn start(&mut self, action: Action) {
+    fn start(&mut self, action: Action, manual_confirmed: bool) {
         let config = match self.config() {
             Ok(config) => config,
             Err(error) => {
@@ -153,6 +169,20 @@ impl McpState {
                 return;
             }
         };
+        match mcp_access::server_scope(&config) {
+            Ok(scope) => {
+                self.server_scope = Some(scope);
+                self.scope_error = None;
+            }
+            Err(error) => {
+                self.server_scope = None;
+                self.scope_error = Some(format!("无法核对 MCP 服务身份：{error:#}"));
+                if matches!(&action, Action::Call { .. }) {
+                    self.message = self.scope_error.clone().unwrap_or_default();
+                    return;
+                }
+            }
+        }
         let (sender, receiver) = mpsc::channel();
         self.last_called_tool = match &action {
             Action::Call { tool, .. } => tool.clone(),
@@ -167,8 +197,14 @@ impl McpState {
         }
         self.cancelled = Arc::new(AtomicBool::new(false));
         let cancelled = Arc::clone(&self.cancelled);
+        let access_path = self.access.path().to_path_buf();
         std::thread::spawn(move || {
-            let result = mcp::run(config, action, cancelled).map_err(|error| error.to_string());
+            let result = if matches!(&action, Action::Call { .. }) {
+                mcp::run_with_access(config, action, cancelled, access_path, manual_confirmed)
+            } else {
+                mcp::run(config, action, cancelled)
+            }
+            .map_err(|error| error.to_string());
             let _ = sender.send(result);
         });
         self.receiver = Some(receiver);
@@ -265,6 +301,8 @@ impl McpState {
                     .changed()
                 {
                     self.report = None;
+                    self.server_scope = None;
+                    self.scope_error = None;
                     self.call_confirm = false;
                     self.confirmation_name.clear();
                 }
@@ -278,6 +316,8 @@ impl McpState {
                 {
                     self.executable = path.to_string_lossy().into_owned();
                     self.report = None;
+                    self.server_scope = None;
+                    self.scope_error = None;
                     self.call_confirm = false;
                     self.confirmation_name.clear();
                 }
@@ -291,6 +331,8 @@ impl McpState {
                 .changed()
             {
                 self.report = None;
+                self.server_scope = None;
+                self.scope_error = None;
                 self.call_confirm = false;
                 self.confirmation_name.clear();
             }
@@ -299,7 +341,7 @@ impl McpState {
                     .add_enabled(!busy, egui::Button::new("检查服务能力"))
                     .clicked()
                 {
-                    self.start(Action::Inspect);
+                    self.start(Action::Inspect, false);
                 }
                 if ui
                     .add_enabled(busy, egui::Button::new("停止并退出进程"))
@@ -316,8 +358,12 @@ impl McpState {
         if !self.message.is_empty() {
             ui.label(&self.message);
         }
+        if let Some(error) = &self.scope_error {
+            ui.colored_label(egui::Color32::from_rgb(210, 145, 60), error);
+        }
         let Some(report) = &self.report else { return };
         let mut requested_action = None;
+        let mut manual_confirmed = false;
         ui.add_space(8.0);
         ui.heading(format!("{} · MCP {}", report.server, report.protocol));
         ui.label(format!(
@@ -371,12 +417,21 @@ impl McpState {
                 .iter()
                 .find(|tool| tool.get("name").and_then(Value::as_str) == Some(&self.selected_tool))
                 .cloned();
+            let mut access_decision = Decision::Confirm;
             if let Some(tool) = &selected_descriptor {
                 if let Some(description) = tool.get("description").and_then(Value::as_str) {
                     ui.label(description.chars().take(500).collect::<String>());
                 }
-                if declared_read_only(tool) {
-                    ui.colored_label(egui::Color32::from_rgb(90, 160, 110), "服务声明：只读工具");
+                if mcp_access::declared_low_impact(tool) {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(90, 160, 110),
+                        "服务声明：本机低影响只读工具",
+                    );
+                } else if declared_read_only(tool) {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(210, 145, 60),
+                        "服务声明只读，但未完整声明不破坏且不访问外部系统",
+                    );
                 } else {
                     ui.colored_label(
                         egui::Color32::from_rgb(210, 145, 60),
@@ -386,10 +441,73 @@ impl McpState {
                 ui.small("工具行为由服务自行声明，不能证明程序安全；仅连接可信服务。");
                 if let Some(schema) = tool.get("inputSchema") {
                     egui::CollapsingHeader::new("输入参数 schema")
-                        .default_open(true)
+                        .default_open(false)
                         .show(ui, |ui| {
                             ui.monospace(display_json(schema, 12_000));
                         });
+                }
+                ui.add_space(4.0);
+                if let Some(error) = &self.access.error {
+                    ui.colored_label(egui::Color32::from_rgb(210, 100, 80), error);
+                    access_decision = Decision::Deny;
+                } else if let Some(scope) = self.server_scope.as_deref() {
+                    match self.access.decision(scope, tool) {
+                        Ok(decision) => access_decision = decision,
+                        Err(error) => {
+                            self.message = error.to_string();
+                            access_decision = Decision::Deny;
+                        }
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        ui.strong("本机调用规则");
+                        ui.label(match access_decision {
+                            Decision::Deny => "已禁止",
+                            Decision::Confirm => "每次确认（默认）",
+                            Decision::Direct => "允许直接调用声明只读工具",
+                        });
+                        if ui.button("每次确认").clicked() {
+                            match self.access.set(scope, tool, None) {
+                                Ok(()) => {
+                                    access_decision = Decision::Confirm;
+                                    self.call_confirm = false;
+                                }
+                                Err(error) => self.message = error.to_string(),
+                            }
+                            if busy && self.last_called_tool == self.selected_tool {
+                                self.cancelled.store(true, Ordering::Relaxed);
+                            }
+                        }
+                        if ui.button("禁止调用").clicked() {
+                            match self.access.set(scope, tool, Some(Rule::Deny)) {
+                                Ok(()) => {
+                                    access_decision = Decision::Deny;
+                                    self.call_confirm = false;
+                                }
+                                Err(error) => self.message = error.to_string(),
+                            }
+                            if busy && self.last_called_tool == self.selected_tool {
+                                self.cancelled.store(true, Ordering::Relaxed);
+                            }
+                        }
+                        if mcp_access::declared_low_impact(tool)
+                            && ui.button("允许只读直接调用").clicked()
+                        {
+                            match self
+                                .access
+                                .set(scope, tool, Some(Rule::AllowDeclaredReadOnly))
+                            {
+                                Ok(()) => {
+                                    access_decision = Decision::Direct;
+                                    self.call_confirm = false;
+                                }
+                                Err(error) => self.message = error.to_string(),
+                            }
+                        }
+                    });
+                    ui.small("规则绑定当前程序、参数和工具定义；服务声明只读不等于安全保证。撤销会停止当前短会话，已发出的动作无法回滚。");
+                } else {
+                    access_decision = Decision::Deny;
+                    ui.small("无法核对服务身份，工具调用不可用；资源和提示词仍可手动查看。");
                 }
             }
             ui.label("调用参数 · JSON 对象");
@@ -406,20 +524,42 @@ impl McpState {
                 self.call_confirm = false;
                 self.confirmation_name.clear();
             }
-            if ui
+            if access_decision == Decision::Deny {
+                ui.add_enabled(false, egui::Button::new("此工具已禁止调用"));
+            } else if access_decision == Decision::Direct {
+                if ui
+                    .add_enabled(!busy, egui::Button::new("调用已允许的只读工具"))
+                    .clicked()
+                {
+                    match serde_json::from_str::<Value>(&self.call_arguments) {
+                        Ok(arguments) if arguments.is_object() => {
+                            if let Some(expected_tool) = &selected_descriptor {
+                                requested_action = Some(Action::Call {
+                                    tool: self.selected_tool.clone(),
+                                    arguments,
+                                    expected_tool: expected_tool.clone(),
+                                });
+                            }
+                        }
+                        _ => self.message = "调用参数必须是 JSON 对象".into(),
+                    }
+                }
+            } else if ui
                 .add_enabled(!busy, egui::Button::new("准备调用选中工具"))
                 .clicked()
             {
                 self.call_confirm = true;
             }
-            if self.call_confirm {
+            if self.call_confirm && access_decision == Decision::Confirm {
                 ui.horizontal_wrapped(|ui| {
                     ui.weak(format!(
                         "将启动 {} 并调用 {}；参数会交给该服务。",
                         self.executable, self.selected_tool
                     ));
-                    let read_only = selected_descriptor.as_ref().is_some_and(declared_read_only);
-                    if !read_only {
+                    let low_impact = selected_descriptor
+                        .as_ref()
+                        .is_some_and(mcp_access::declared_low_impact);
+                    if !low_impact {
                         ui.label("输入工具名再次确认：");
                         ui.add(
                             egui::TextEdit::singleline(&mut self.confirmation_name)
@@ -428,7 +568,7 @@ impl McpState {
                     }
                     if ui
                         .add_enabled(
-                            read_only || self.confirmation_name == self.selected_tool,
+                            low_impact || self.confirmation_name == self.selected_tool,
                             egui::Button::new("确认调用"),
                         )
                         .clicked()
@@ -441,7 +581,8 @@ impl McpState {
                                     tool: self.selected_tool.clone(),
                                     arguments,
                                     expected_tool: selected_descriptor.clone().unwrap(),
-                                })
+                                });
+                                manual_confirmed = true;
                             }
                             _ => self.message = "调用参数必须是 JSON 对象".into(),
                         }
@@ -585,7 +726,7 @@ impl McpState {
                 });
         }
         if let Some(action) = requested_action {
-            self.start(action);
+            self.start(action, manual_confirmed);
         }
     }
 }

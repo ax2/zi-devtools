@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 use zi_devtools::mcp::{self, Action, Config};
+use zi_devtools::mcp_access::{self, Decision, Rule, Store};
 
 fn python() -> PathBuf {
     std::env::var_os("PATH")
@@ -37,6 +38,123 @@ fn config(mode: &str) -> Config {
 
 fn token() -> Arc<AtomicBool> {
     Arc::new(AtomicBool::new(false))
+}
+
+#[test]
+fn durable_tool_permissions_bind_server_and_definition_and_fail_closed() {
+    let root = std::env::temp_dir().join(format!("zi-mcp-access-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("mcp-permissions.json");
+    let server = config("normal");
+    let scope = mcp_access::server_scope(&server).unwrap();
+    let inspected = mcp::run(server.clone(), Action::Inspect, token()).unwrap();
+    let tool = inspected.tools[1].clone();
+    assert!(mcp_access::declared_low_impact(&tool));
+    let call = || Action::Call {
+        tool: "echo".into(),
+        arguments: json!({"text":"permission fixture"}),
+        expected_tool: tool.clone(),
+    };
+    let mut store = Store::load(path.clone());
+    assert_eq!(store.decision(&scope, &tool).unwrap(), Decision::Confirm);
+    assert!(
+        mcp::run_with_access(server.clone(), call(), token(), path.clone(), false)
+            .unwrap_err()
+            .to_string()
+            .contains("人工确认")
+    );
+    assert!(
+        mcp::run_with_access(server.clone(), call(), token(), path.clone(), true)
+            .unwrap()
+            .call_result
+            .is_some()
+    );
+    store
+        .set(&scope, &tool, Some(Rule::AllowDeclaredReadOnly))
+        .unwrap();
+    assert_eq!(
+        Store::load(path.clone()).decision(&scope, &tool).unwrap(),
+        Decision::Direct
+    );
+    assert!(
+        mcp::run_with_access(server.clone(), call(), token(), path.clone(), false)
+            .unwrap()
+            .call_result
+            .is_some()
+    );
+    let mut changed = tool.clone();
+    changed["description"] = json!("changed by server");
+    assert_eq!(store.decision(&scope, &changed).unwrap(), Decision::Confirm);
+    let mut unsafe_tool = tool.clone();
+    unsafe_tool["annotations"]["openWorldHint"] = json!(true);
+    assert!(
+        store
+            .set(&scope, &unsafe_tool, Some(Rule::AllowDeclaredReadOnly))
+            .is_err()
+    );
+    store.set(&scope, &tool, Some(Rule::Deny)).unwrap();
+    assert_eq!(store.decision(&scope, &changed).unwrap(), Decision::Deny);
+    assert!(
+        mcp::run_with_access(server.clone(), call(), token(), path.clone(), true)
+            .unwrap_err()
+            .to_string()
+            .contains("禁止调用")
+    );
+    store.set(&scope, &tool, None).unwrap();
+    assert_eq!(store.decision(&scope, &tool).unwrap(), Decision::Confirm);
+
+    std::fs::write(&path, b"{broken").unwrap();
+    let original = std::fs::read(&path).unwrap();
+    let mut broken = Store::load(path.clone());
+    assert!(broken.error.is_some());
+    assert!(broken.set(&scope, &tool, Some(Rule::Deny)).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert!(
+        mcp::run_with_access(server, call(), token(), path.clone(), true)
+            .unwrap_err()
+            .to_string()
+            .contains("权限文件")
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn revocation_during_listing_prevents_the_tool_call() {
+    let root = std::env::temp_dir().join(format!("zi-mcp-revoke-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("mcp-permissions.json");
+    let server = config("delayed_tools");
+    let scope = mcp_access::server_scope(&server).unwrap();
+    let inspected = mcp::run(server.clone(), Action::Inspect, token()).unwrap();
+    let tool = inspected.tools[1].clone();
+    let mut store = Store::load(path.clone());
+    store
+        .set(&scope, &tool, Some(Rule::AllowDeclaredReadOnly))
+        .unwrap();
+    let call_path = path.clone();
+    let call_tool = tool.clone();
+    let started = Instant::now();
+    let handle = std::thread::spawn(move || {
+        mcp::run_with_access(
+            server,
+            Action::Call {
+                tool: "echo".into(),
+                arguments: json!({"text":"must not run"}),
+                expected_tool: call_tool,
+            },
+            token(),
+            call_path,
+            false,
+        )
+        .unwrap_err()
+        .to_string()
+    });
+    std::thread::sleep(Duration::from_millis(220));
+    store.set(&scope, &tool, None).unwrap();
+    let message = handle.join().unwrap();
+    assert!(message.contains("重新人工确认"), "{message}");
+    assert!(started.elapsed() >= Duration::from_millis(650));
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

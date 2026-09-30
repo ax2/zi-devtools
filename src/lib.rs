@@ -44,6 +44,7 @@ pub mod chat_stream;
 pub mod checksum_manifest;
 pub mod conversation;
 pub mod mcp;
+pub mod mcp_access;
 pub mod mcp_export;
 pub mod mcp_ui;
 pub mod model_discovery;
