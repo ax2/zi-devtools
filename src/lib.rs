@@ -10,6 +10,7 @@ pub mod hotkey;
 pub mod image_tools;
 pub mod intake;
 pub mod integrations;
+pub mod knowledge_answer;
 pub mod knowledge_index;
 pub mod knowledge_search;
 pub mod knowledge_sources;

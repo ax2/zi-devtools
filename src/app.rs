@@ -120,6 +120,7 @@ enum Page {
     DocumentIngestion,
     KnowledgeIndex,
     KnowledgeSearch,
+    KnowledgeAnswer,
     Settings,
     Plugins,
     Mcp,
@@ -196,7 +197,9 @@ fn tool_category(id: &str) -> &'static str {
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" | "markdown" => "扩展与集成",
         "mcp-inspector" => "MCP 与 Agent",
-        "rag-sources" | "rag-ingestion" | "rag-index" | "rag-keyword-search" => "知识与检索",
+        "rag-sources" | "rag-ingestion" | "rag-index" | "rag-keyword-search" | "rag-answer" => {
+            "知识与检索"
+        }
         _ => "文本与编码",
     }
 }
@@ -419,6 +422,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "知识与检索".into(),
             keywords: "rag search fts keyword 文档 全文 搜索 检索 引用".into(),
+        },
+        ToolEntry {
+            id: "rag-answer".into(),
+            title: "带引用的知识问答".into(),
+            description: "先核对本机证据，再调用本地模型并校验引用编号".into(),
+            page: Page::KnowledgeAnswer,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag answer qa ollama citation 证据 问答 引用 本机 模型".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -649,6 +661,7 @@ pub struct DevToolsApp {
     document_ingestion: crate::document_ingestion::State,
     knowledge_index: crate::knowledge_index::State,
     knowledge_search: crate::knowledge_search::State,
+    knowledge_answer: crate::knowledge_answer::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -814,6 +827,12 @@ impl DevToolsApp {
                 self.page = Page::KnowledgeSearch;
                 self.knowledge_sources.preview_fixture();
                 self.knowledge_search
+                    .preview_fixture(self.knowledge_sources.sources());
+            }
+            126 | 127 => {
+                self.page = Page::KnowledgeAnswer;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_answer
                     .preview_fixture(self.knowledge_sources.sources());
             }
             78..=97 => {
@@ -1213,6 +1232,7 @@ impl DevToolsApp {
             document_ingestion: Default::default(),
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
             knowledge_search: crate::knowledge_search::State::new(crate::knowledge_index::default_path()),
+            knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path()),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1583,6 +1603,12 @@ impl DevToolsApp {
                         );
                         nav_button(ui, &mut self.page, Page::KnowledgeIndex, "增量知识索引");
                         nav_button(ui, &mut self.page, Page::KnowledgeSearch, "本机关键词检索");
+                        nav_button(
+                            ui,
+                            &mut self.page,
+                            Page::KnowledgeAnswer,
+                            "带引用的知识问答",
+                        );
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1611,7 +1637,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 50  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 51  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4037,6 +4063,14 @@ impl eframe::App for DevToolsApp {
                         .id_salt("knowledge-search-page")
                         .show(ui, |ui| {
                             self.knowledge_search
+                                .ui(ui, self.knowledge_sources.sources())
+                        });
+                }
+                Page::KnowledgeAnswer => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("knowledge-answer-page")
+                        .show(ui, |ui| {
+                            self.knowledge_answer
                                 .ui(ui, self.knowledge_sources.sources())
                         });
                 }
