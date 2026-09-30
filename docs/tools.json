@@ -1,5 +1,5 @@
 {
-  "version": "0.57.0",
+  "version": "0.58.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -541,10 +541,10 @@
     {
       "id": "embedding-playground",
       "name": "Embedding 工作台",
-      "status": "planned",
+      "status": "implemented",
       "category": "AI 与模型",
       "priority": "P2",
-      "scope": "模型维度探测、向量生成、余弦相似度与距离可视化"
+      "scope": "明确调用本机 Ollama /api/embed 对两段文本生成向量；展示维度、范数、余弦相似度和欧氏距离，可预览或复制完整向量；请求有输入/响应预算、取消与回环地址限制，不保存文本或向量"
     },
     {
       "id": "model-benchmark",

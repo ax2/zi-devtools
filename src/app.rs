@@ -121,6 +121,7 @@ enum Page {
     KnowledgeIndex,
     KnowledgeSearch,
     KnowledgeAnswer,
+    Embedding,
     KnowledgeCapture,
     KnowledgeMcp,
     KnowledgeEval,
@@ -435,6 +436,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "rag answer qa ollama citation 证据 问答 引用 本机 模型".into(),
         },
         ToolEntry {
+            id: "embedding-playground".into(),
+            title: "Embedding 工作台".into(),
+            description: "本机模型生成向量，比较两段文本的相似度与距离".into(),
+            page: Page::Embedding,
+            kind: None,
+            category: "AI 与模型".into(),
+            keywords: "embedding ollama vector cosine euclidean 向量 相似度 距离 模型".into(),
+        },
+        ToolEntry {
             id: "rag-eval".into(),
             title: "本机 RAG 评测".into(),
             description: "固定样例集检查证据召回，可选本机模型与引用回归".into(),
@@ -702,6 +712,7 @@ pub struct DevToolsApp {
     knowledge_index: crate::knowledge_index::State,
     knowledge_search: crate::knowledge_search::State,
     knowledge_answer: crate::knowledge_answer::State,
+    embedding: crate::embedding::State,
     knowledge_capture: crate::knowledge_capture::State,
     knowledge_eval: crate::knowledge_eval::State,
     integrations: crate::integrations::IntegrationState,
@@ -900,6 +911,10 @@ impl DevToolsApp {
             136 | 137 => {
                 self.page = Page::Mcp;
                 self.mcp.preview_tool_review(scene == 137);
+            }
+            138 | 139 => {
+                self.page = Page::Embedding;
+                self.embedding.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1299,6 +1314,7 @@ impl DevToolsApp {
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
             knowledge_search: crate::knowledge_search::State::new(crate::knowledge_index::default_path()),
             knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path()),
+            embedding: Default::default(),
             knowledge_capture: Default::default(),
             knowledge_eval: crate::knowledge_eval::State::new(crate::knowledge_index::default_path()),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
@@ -1678,6 +1694,7 @@ impl DevToolsApp {
                             "带引用的知识问答",
                         );
                         nav_button(ui, &mut self.page, Page::KnowledgeEval, "本机 RAG 评测");
+                        nav_button(ui, &mut self.page, Page::Embedding, "Embedding 工作台");
                         nav_button(ui, &mut self.page, Page::KnowledgeCapture, "网页与对话收集");
                         nav_button(ui, &mut self.page, Page::KnowledgeMcp, "知识库 MCP 服务");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
@@ -1708,7 +1725,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 57  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 58  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4144,6 +4161,11 @@ impl eframe::App for DevToolsApp {
                             self.knowledge_answer
                                 .ui(ui, self.knowledge_sources.sources())
                         });
+                }
+                Page::Embedding => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("embedding-page")
+                        .show(ui, |ui| self.embedding.ui(ui));
                 }
                 Page::KnowledgeEval => {
                     egui::ScrollArea::vertical()
