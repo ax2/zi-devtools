@@ -119,6 +119,7 @@ enum Page {
     KnowledgeSources,
     DocumentIngestion,
     KnowledgeIndex,
+    VectorIndex,
     KnowledgeSearch,
     KnowledgeAnswer,
     Embedding,
@@ -427,6 +428,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "rag search fts keyword 文档 全文 搜索 检索 引用".into(),
         },
         ToolEntry {
+            id: "rag-vectors".into(),
+            title: "本机向量索引".into(),
+            description: "用本机嵌入模型增量同步知识分块，并进行语义检索".into(),
+            page: Page::VectorIndex,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag vectors semantic embedding ollama 向量 索引 语义 检索".into(),
+        },
+        ToolEntry {
             id: "rag-answer".into(),
             title: "带引用的知识问答".into(),
             description: "先核对本机证据，再调用本地模型并校验引用编号".into(),
@@ -710,6 +720,7 @@ pub struct DevToolsApp {
     knowledge_sources: crate::knowledge_sources::State,
     document_ingestion: crate::document_ingestion::State,
     knowledge_index: crate::knowledge_index::State,
+    vector_index: crate::vector_index::State,
     knowledge_search: crate::knowledge_search::State,
     knowledge_answer: crate::knowledge_answer::State,
     embedding: crate::embedding::State,
@@ -915,6 +926,12 @@ impl DevToolsApp {
             138 | 139 => {
                 self.page = Page::Embedding;
                 self.embedding.preview_fixture();
+            }
+            140 | 141 => {
+                self.page = Page::VectorIndex;
+                self.knowledge_sources.preview_fixture();
+                self.vector_index
+                    .preview_fixture(self.knowledge_sources.sources());
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1312,6 +1329,7 @@ impl DevToolsApp {
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
             document_ingestion: Default::default(),
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
+            vector_index: crate::vector_index::State::new(crate::vector_index::default_path(), crate::knowledge_index::default_path()),
             knowledge_search: crate::knowledge_search::State::new(crate::knowledge_index::default_path()),
             knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path()),
             embedding: Default::default(),
@@ -1686,6 +1704,7 @@ impl DevToolsApp {
                             "文档解析与分块",
                         );
                         nav_button(ui, &mut self.page, Page::KnowledgeIndex, "增量知识索引");
+                        nav_button(ui, &mut self.page, Page::VectorIndex, "本机向量索引");
                         nav_button(ui, &mut self.page, Page::KnowledgeSearch, "本机关键词检索");
                         nav_button(
                             ui,
@@ -1725,7 +1744,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 58  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 59  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4140,6 +4159,17 @@ impl eframe::App for DevToolsApp {
                         .id_salt("knowledge-index-page")
                         .show(ui, |ui| {
                             self.knowledge_index.ui(
+                                ui,
+                                self.knowledge_sources.sources(),
+                                self.knowledge_sources.is_locked(),
+                            )
+                        });
+                }
+                Page::VectorIndex => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("vector-index-page")
+                        .show(ui, |ui| {
+                            self.vector_index.ui(
                                 ui,
                                 self.knowledge_sources.sources(),
                                 self.knowledge_sources.is_locked(),

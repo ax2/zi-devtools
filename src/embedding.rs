@@ -39,12 +39,17 @@ fn validate_text(text: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn validate(endpoint: &str, model: &str, a: &str, b: &str) -> Result<reqwest::Url> {
-    let url = endpoint_url(endpoint)?;
+pub fn validate_model(model: &str) -> Result<()> {
     ensure!(
         !model.trim().is_empty() && model.len() <= 256 && !model.chars().any(char::is_control),
         "请填写有效嵌入模型名称"
     );
+    Ok(())
+}
+
+pub fn validate(endpoint: &str, model: &str, a: &str, b: &str) -> Result<reqwest::Url> {
+    let url = endpoint_url(endpoint)?;
+    validate_model(model)?;
     validate_text(a)?;
     validate_text(b)?;
     Ok(url)
@@ -63,35 +68,9 @@ pub struct Comparison {
 }
 
 pub fn parse_response(bytes: &[u8], model: &str) -> Result<Comparison> {
-    ensure!(bytes.len() <= MAX_RESPONSE, "嵌入响应超过 4 MiB");
-    let response: Value = serde_json::from_slice(bytes).context("嵌入响应不是 JSON")?;
-    let embeddings = response
-        .get("embeddings")
-        .and_then(Value::as_array)
-        .context("嵌入响应缺少 embeddings 数组")?;
-    ensure!(embeddings.len() == 2, "嵌入响应必须恰好包含两条向量");
-    let mut vectors = Vec::with_capacity(2);
-    for item in embeddings {
-        let values = item.as_array().context("嵌入向量不是数值数组")?;
-        ensure!(
-            !values.is_empty() && values.len() <= MAX_DIMENSIONS,
-            "嵌入维度必须在 1–8192 之间"
-        );
-        let vector = values
-            .iter()
-            .map(|value| value.as_f64().context("嵌入向量包含非数值"))
-            .collect::<Result<Vec<_>>>()?;
-        ensure!(
-            vector
-                .iter()
-                .all(|value| value.is_finite() && value.abs() <= 1e6),
-            "嵌入向量包含非有限或异常数值"
-        );
-        vectors.push(vector);
-    }
+    let mut vectors = parse_vectors(bytes, 2)?;
     let vector_b = vectors.pop().unwrap();
     let vector_a = vectors.pop().unwrap();
-    ensure!(vector_a.len() == vector_b.len(), "两条嵌入向量维度不同");
     let dot: f64 = vector_a.iter().zip(&vector_b).map(|(a, b)| a * b).sum();
     let norm_a = vector_a.iter().map(|v| v * v).sum::<f64>().sqrt();
     let norm_b = vector_b.iter().map(|v| v * v).sum::<f64>().sqrt();
@@ -118,6 +97,49 @@ pub fn parse_response(bytes: &[u8], model: &str) -> Result<Comparison> {
         vector_a,
         vector_b,
     })
+}
+
+pub fn parse_vectors(bytes: &[u8], expected: usize) -> Result<Vec<Vec<f64>>> {
+    ensure!(bytes.len() <= MAX_RESPONSE, "嵌入响应超过 4 MiB");
+    ensure!((1..=16).contains(&expected), "每批最多 16 条文本");
+    let response: Value = serde_json::from_slice(bytes).context("嵌入响应不是 JSON")?;
+    let embeddings = response
+        .get("embeddings")
+        .and_then(Value::as_array)
+        .context("嵌入响应缺少 embeddings 数组")?;
+    ensure!(embeddings.len() == expected, "嵌入响应向量数量不符合请求");
+    let mut vectors = Vec::with_capacity(expected);
+    for item in embeddings {
+        let values = item.as_array().context("嵌入向量不是数值数组")?;
+        ensure!(
+            !values.is_empty() && values.len() <= MAX_DIMENSIONS,
+            "嵌入维度必须在 1–8192 之间"
+        );
+        let vector = values
+            .iter()
+            .map(|value| value.as_f64().context("嵌入向量包含非数值"))
+            .collect::<Result<Vec<_>>>()?;
+        ensure!(
+            vector
+                .iter()
+                .all(|value| value.is_finite() && value.abs() <= 1e6),
+            "嵌入向量包含非有限或异常数值"
+        );
+        vectors.push(vector);
+    }
+    let dimensions = vectors[0].len();
+    ensure!(
+        vectors.iter().all(|vector| vector.len() == dimensions),
+        "嵌入向量维度不同"
+    );
+    ensure!(
+        vectors.iter().all(|vector| {
+            let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt();
+            norm.is_finite() && norm > 0.0
+        }),
+        "嵌入向量范数无效或为零"
+    );
+    Ok(vectors)
 }
 
 async fn cancellable<T>(future: impl Future<Output = T>, cancel: &AtomicBool) -> Result<T> {
@@ -178,6 +200,61 @@ pub fn compare(
         }
         ensure!(!cancel.load(Ordering::Relaxed), "嵌入请求已取消");
         parse_response(&bytes, model)
+    })
+}
+
+/// Generate one to sixteen vectors for explicitly selected local text. The caller owns persistence.
+pub fn embed_many(
+    endpoint: &str,
+    model: &str,
+    texts: &[String],
+    cancel: &AtomicBool,
+) -> Result<Vec<Vec<f64>>> {
+    let url = endpoint_url(endpoint)?;
+    validate_model(model)?;
+    ensure!((1..=16).contains(&texts.len()), "每批需包含 1–16 条文本");
+    for text in texts {
+        validate_text(text)?;
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("无法创建嵌入请求运行时")?;
+    runtime.block_on(async {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(120))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .context("无法创建本机嵌入连接")?;
+        let payload = serde_json::to_vec(&json!({"model":model,"input":texts}))?;
+        let request = client
+            .post(url)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .body(payload);
+        let mut response = cancellable(request.send(), cancel)
+            .await?
+            .map_err(|_| anyhow::anyhow!("本机嵌入服务连接失败或超时（最长 120 秒）"))?;
+        ensure!(
+            response.status().is_success(),
+            "本机嵌入服务返回 HTTP {}，请检查模型与接口",
+            response.status().as_u16()
+        );
+        let mut bytes = Vec::new();
+        while let Some(chunk) = cancellable(response.chunk(), cancel)
+            .await?
+            .map_err(|_| anyhow::anyhow!("读取嵌入响应失败或超时"))?
+        {
+            ensure!(
+                bytes.len().saturating_add(chunk.len()) <= MAX_RESPONSE,
+                "嵌入响应超过 4 MiB"
+            );
+            bytes.extend_from_slice(&chunk);
+        }
+        ensure!(!cancel.load(Ordering::Relaxed), "嵌入请求已取消");
+        parse_vectors(&bytes, texts.len())
     })
 }
 
