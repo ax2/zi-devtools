@@ -1,5 +1,5 @@
 {
-  "version": "0.43.0",
+  "version": "0.44.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -389,10 +389,10 @@
     {
       "id": "markdown",
       "name": "Markdown 预览",
-      "status": "planned",
-      "category": "扩展工具",
+      "status": "implemented",
+      "category": "扩展与集成",
       "priority": "P2",
-      "scope": "本地安全预览、HTML 导出、禁用脚本"
+      "scope": "选择 ≤2 MiB 的本机 UTF-8 Markdown 或粘贴草稿，应用内按标题、段落、列表、代码、引用和表格结构阅读；原始 HTML 转义、图片不加载、只保留 http/https 与页内链接；生成带 CSP 的自包含 HTML 预览并另存新文件，拒绝覆盖"
     },
     {
       "id": "unicode",

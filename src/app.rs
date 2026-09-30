@@ -113,6 +113,7 @@ enum Page {
     Data,
     Files,
     Images,
+    Markdown,
     Settings,
     Plugins,
     Mcp,
@@ -185,7 +186,7 @@ fn tool_category(id: &str) -> &'static str {
         "timestamp" | "uuid" | "random" | "cron" | "number" | "qr" | "color" => "时间与生成",
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
-        "plugins" | "integrations" => "扩展与集成",
+        "plugins" | "integrations" | "markdown" => "扩展与集成",
         "mcp-inspector" => "MCP 与 Agent",
         _ => "文本与编码",
     }
@@ -344,6 +345,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "image crop redact arrow text 图片 裁剪 遮挡 箭头 文字 标注".into(),
+        },
+        ToolEntry {
+            id: "markdown".into(),
+            title: "Markdown 预览".into(),
+            description: "本地结构化阅读，安全 HTML 另存".into(),
+            page: Page::Markdown,
+            kind: None,
+            category: "扩展与集成".into(),
+            keywords: "markdown md html 文档 预览 导出 安全".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -567,6 +577,7 @@ pub struct DevToolsApp {
     mcp: crate::mcp_ui::McpState,
     recorder: crate::recorder_ui::RecorderState,
     images: crate::image_tools::State,
+    markdown: crate::markdown_preview::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -699,6 +710,10 @@ impl DevToolsApp {
             110 | 111 => {
                 self.page = Page::Images;
                 self.images.preview_editor_fixture(ctx);
+            }
+            112 | 113 => {
+                self.page = Page::Markdown;
+                self.markdown.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1090,6 +1105,7 @@ impl DevToolsApp {
             mcp: Default::default(),
             recorder,
             images: Default::default(),
+            markdown: Default::default(),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1448,6 +1464,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Mcp, "MCP 协议调试台");
                         nav_button(ui, &mut self.page, Page::Recorder, "屏幕录制");
                         nav_button(ui, &mut self.page, Page::Images, "图片工作台");
+                        nav_button(ui, &mut self.page, Page::Markdown, "Markdown 预览");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1476,7 +1493,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 43  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 44  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -3857,6 +3874,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("image-tools-page")
                         .show(ui, |ui| self.images.ui(ui));
+                }
+                Page::Markdown => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("markdown-page")
+                        .show(ui, |ui| self.markdown.ui(ui));
                 }
                 Page::Java | Page::Django => {
                     let category = if self.page == Page::Java {
