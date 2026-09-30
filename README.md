@@ -83,7 +83,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 63 / v0.63.0 开发中：MCP stdio 调试台加入按服务与工具定义绑定的持久规则、调用前二次复核和撤销；一次性协议夹具已覆盖，公开交付待验证。
+Stage 63 / v0.63.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.63.0)：MCP stdio 调试台加入按服务与工具定义绑定的持久规则、调用前二次复核和撤销；一次性协议夹具、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过。本轮安全清理约 13.14 GiB 构建缓存。Agent 自动调用的统一权限网关仍待实现。
 
 Stage 62 / v0.62.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.62.0)：固定 RAG 样例集可同题比较关键词与混合检索的预期来源名次、独有/共同命中和 MRR；模型/索引错误不计成对结果。单路模型评测也可选混合证据；一次性夹具、真实本机双模型测试、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过。本轮安全清理约 10.57 GiB 构建缓存。
 
