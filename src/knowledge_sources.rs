@@ -515,6 +515,39 @@ impl State {
     pub fn is_locked(&self) -> bool {
         self.locked
     }
+
+    pub fn ensure_inbox(&mut self) -> Result<String> {
+        ensure!(
+            !self.locked && self.running.is_none(),
+            "知识源正在使用或配置不可写"
+        );
+        let path = self
+            .path
+            .parent()
+            .context("无法确定知识源配置目录")?
+            .join("knowledge-inbox");
+        fs::create_dir_all(&path).context("无法创建本机收集箱")?;
+        ensure!(
+            fs::symlink_metadata(&path)?.file_type().is_dir(),
+            "收集箱路径必须是普通目录，不能是链接"
+        );
+        let canonical = path.canonicalize()?;
+        if let Some(source) = self.sources.iter().find(|source| source.path == canonical) {
+            ensure!(
+                source.kind == Kind::Directory,
+                "收集箱路径已被文件知识源占用"
+            );
+            return Ok(source.id.clone());
+        }
+        let old_len = self.sources.len();
+        let source = add_source(&mut self.sources, &canonical, "Zi 收集箱", "")?;
+        if let Err(error) = self.persist() {
+            self.sources.truncate(old_len);
+            return Err(error);
+        }
+        self.selected = Some(source.id.clone());
+        Ok(source.id)
+    }
     pub fn new(path: PathBuf) -> Self {
         let (sources, message, locked) = match load(&path) {
             Ok(registry) => (registry.sources, String::new(), false),

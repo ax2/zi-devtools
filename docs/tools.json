@@ -1,5 +1,5 @@
 {
-  "version": "0.52.0",
+  "version": "0.53.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -789,10 +789,10 @@
     {
       "id": "browser-clipper",
       "name": "网页与对话收集",
-      "status": "planned",
+      "status": "implemented",
       "category": "知识与检索",
       "priority": "P2",
-      "scope": "通过扩展或文件导入保留 URL/标题/时间，去重并选择知识库；不抓取登录凭据"
+      "scope": "粘贴文字或 HTML 源码、导入本机 UTF-8 HTML，或明确抓取公开 HTTPS 页面；预览标题、来源、时间和正文，选择目录型知识源或建立 Zi 收集箱后以 Markdown 新文件保存，内容去重、不覆盖。网页请求不带浏览器 Cookie 或认证、不跟随重定向，仅允许公开地址且有时长/体积上限；保存后仍需手动扫描和索引，不含浏览器扩展"
     },
     {
       "id": "plugin-updates",
