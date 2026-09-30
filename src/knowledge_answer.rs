@@ -26,13 +26,13 @@ pub enum Protocol {
     OpenAi,
 }
 impl Protocol {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Ollama => "Ollama",
             Self::OpenAi => "OpenAI 兼容",
         }
     }
-    fn default_endpoint(self) -> &'static str {
+    pub(crate) fn default_endpoint(self) -> &'static str {
         match self {
             Self::Ollama => "http://127.0.0.1:11434/api/chat",
             Self::OpenAi => "http://127.0.0.1:1234/v1/chat/completions",

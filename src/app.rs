@@ -121,6 +121,7 @@ enum Page {
     KnowledgeIndex,
     KnowledgeSearch,
     KnowledgeAnswer,
+    KnowledgeEval,
     Settings,
     Plugins,
     Mcp,
@@ -197,9 +198,8 @@ fn tool_category(id: &str) -> &'static str {
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" | "markdown" => "扩展与集成",
         "mcp-inspector" => "MCP 与 Agent",
-        "rag-sources" | "rag-ingestion" | "rag-index" | "rag-keyword-search" | "rag-answer" => {
-            "知识与检索"
-        }
+        "rag-sources" | "rag-ingestion" | "rag-index" | "rag-keyword-search" | "rag-answer"
+        | "rag-eval" => "知识与检索",
         _ => "文本与编码",
     }
 }
@@ -433,6 +433,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "rag answer qa ollama citation 证据 问答 引用 本机 模型".into(),
         },
         ToolEntry {
+            id: "rag-eval".into(),
+            title: "本机 RAG 评测".into(),
+            description: "固定样例集检查证据召回，可选本机模型与引用回归".into(),
+            page: Page::KnowledgeEval,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag eval evaluation recall citation benchmark 评测 召回 引用 回归".into(),
+        },
+        ToolEntry {
             id: "screen-recorder".into(),
             title: "屏幕录制".into(),
             description: "鼠标框选区域，录制屏幕并保存 MP4".into(),
@@ -662,6 +671,7 @@ pub struct DevToolsApp {
     knowledge_index: crate::knowledge_index::State,
     knowledge_search: crate::knowledge_search::State,
     knowledge_answer: crate::knowledge_answer::State,
+    knowledge_eval: crate::knowledge_eval::State,
     integrations: crate::integrations::IntegrationState,
     frameworks: crate::framework::State,
     home_filter: String,
@@ -833,6 +843,12 @@ impl DevToolsApp {
                 self.page = Page::KnowledgeAnswer;
                 self.knowledge_sources.preview_fixture();
                 self.knowledge_answer
+                    .preview_fixture(self.knowledge_sources.sources());
+            }
+            128 | 129 => {
+                self.page = Page::KnowledgeEval;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_eval
                     .preview_fixture(self.knowledge_sources.sources());
             }
             78..=97 => {
@@ -1233,6 +1249,7 @@ impl DevToolsApp {
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
             knowledge_search: crate::knowledge_search::State::new(crate::knowledge_index::default_path()),
             knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path()),
+            knowledge_eval: crate::knowledge_eval::State::new(crate::knowledge_index::default_path()),
             integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_page_index: 0, home_query_key: Default::default(),
         };
         if restore_services {
@@ -1609,6 +1626,7 @@ impl DevToolsApp {
                             Page::KnowledgeAnswer,
                             "带引用的知识问答",
                         );
+                        nav_button(ui, &mut self.page, Page::KnowledgeEval, "本机 RAG 评测");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1637,7 +1655,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 51  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 52  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4072,6 +4090,13 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| {
                             self.knowledge_answer
                                 .ui(ui, self.knowledge_sources.sources())
+                        });
+                }
+                Page::KnowledgeEval => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("knowledge-eval-page")
+                        .show(ui, |ui| {
+                            self.knowledge_eval.ui(ui, self.knowledge_sources.sources())
                         });
                 }
                 Page::Java | Page::Django => {
