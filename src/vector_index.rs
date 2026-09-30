@@ -395,6 +395,35 @@ pub fn search(
     limit: usize,
     cancel: &AtomicBool,
 ) -> Result<Vec<SemanticHit>> {
+    search_filtered(
+        path,
+        keyword_path,
+        endpoint,
+        model,
+        query,
+        SearchScope {
+            source_id: None,
+            limit,
+        },
+        cancel,
+    )
+}
+
+pub struct SearchScope<'a> {
+    pub source_id: Option<&'a str>,
+    pub limit: usize,
+}
+
+pub fn search_filtered(
+    path: &Path,
+    keyword_path: &Path,
+    endpoint: &str,
+    model: &str,
+    query: &str,
+    scope: SearchScope<'_>,
+    cancel: &AtomicBool,
+) -> Result<Vec<SemanticHit>> {
+    let SearchScope { source_id, limit } = scope;
     ensure!((1..=50).contains(&limit), "结果上限必须在 1–50 条之间");
     ensure!(regular_file(path)?, "向量索引尚未建立，请先同步");
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
@@ -416,12 +445,13 @@ pub fn search(
     ensure!(vector.len() == dimensions, "模型维度与索引不同，请重新同步");
     let current = read_chunks(keyword_path)?
         .into_iter()
+        .filter(|chunk| source_id.is_none_or(|id| chunk.hit.source_id == id))
         .map(|chunk| (key(&chunk.hit), chunk.hit))
         .collect::<HashMap<_, _>>();
     let mut stmt = conn.prepare(
-        "SELECT source_id,relative,ordinal,file_sha256,chunk_sha256,values_blob FROM vectors",
+        "SELECT source_id,relative,ordinal,file_sha256,chunk_sha256,values_blob FROM vectors WHERE (?1 IS NULL OR source_id=?1)",
     )?;
-    let mut rows = stmt.query([])?;
+    let mut rows = stmt.query(params![source_id])?;
     let mut hits = Vec::new();
     while let Some(row) = rows.next()? {
         ensure!(!cancel.load(Ordering::Relaxed), "语义检索已取消");

@@ -1,5 +1,5 @@
 use std::{fs, sync::atomic::AtomicBool};
-use zi_devtools::{knowledge_index, knowledge_sources, vector_index};
+use zi_devtools::{hybrid_search, knowledge_index, knowledge_sources, vector_index};
 
 #[test]
 #[ignore = "requires local Ollama with bge-m3:latest; uses only disposable synthetic documents"]
@@ -56,5 +56,22 @@ fn real_bge_m3_indexes_and_retrieves_disposable_documents() {
     assert_eq!(hits.len(), 2);
     assert_eq!(hits[0].hit.relative, "rust.txt");
     assert!(hits[0].cosine > hits[1].cosine);
+    let hybrid = hybrid_search::search(
+        &keyword,
+        &vectors,
+        endpoint,
+        model,
+        "Rust ownership",
+        hybrid_search::SearchOptions {
+            source_id: None,
+            limit: 10,
+            keyword_weight: 50,
+        },
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!(hybrid.hits[0].hit.relative, "rust.txt");
+    assert!(hybrid.hits[0].keyword_rank.is_some());
+    assert!(hybrid.hits[0].semantic_rank.is_some());
     fs::remove_dir_all(root).unwrap();
 }

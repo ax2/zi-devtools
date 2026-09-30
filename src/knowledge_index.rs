@@ -129,6 +129,37 @@ pub fn search(
     })
 }
 
+/// Recheck bounded candidate identities against the current on-disk index before display.
+pub fn filter_current_hits(path: &Path, hits: &[SearchHit]) -> Result<(Vec<SearchHit>, usize)> {
+    ensure!(hits.len() <= 100, "候选结果超过复核上限");
+    ensure!(checked_file(path)?, "知识索引尚未建立，请先同步知识源");
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    check_version(&conn)?;
+    let mut stmt = conn.prepare(
+        "SELECT f.sha256,c.sha256 FROM chunks c JOIN indexed_files f
+         ON f.source_id=c.source_id AND f.relative=c.relative
+         WHERE c.source_id=?1 AND c.relative=?2 AND c.ordinal=?3 LIMIT 1",
+    )?;
+    let mut kept = Vec::with_capacity(hits.len());
+    let mut stale = 0;
+    for hit in hits {
+        let mut rows = stmt.query(params![hit.source_id, hit.relative, hit.ordinal])?;
+        let current = rows
+            .next()?
+            .map(|row| {
+                Ok::<_, rusqlite::Error>((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .transpose()?;
+        if current.is_some_and(|(file, chunk)| file == hit.file_sha256 && chunk == hit.chunk_sha256)
+        {
+            kept.push(hit.clone());
+        } else {
+            stale += 1;
+        }
+    }
+    Ok((kept, stale))
+}
+
 fn checked_file(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(meta) => {

@@ -121,6 +121,7 @@ enum Page {
     KnowledgeIndex,
     VectorIndex,
     KnowledgeSearch,
+    HybridSearch,
     KnowledgeAnswer,
     Embedding,
     KnowledgeCapture,
@@ -437,6 +438,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords: "rag vectors semantic embedding ollama 向量 索引 语义 检索".into(),
         },
         ToolEntry {
+            id: "rag-search".into(),
+            title: "混合检索工作台".into(),
+            description: "融合关键词与本机语义召回，查看排名贡献和来源".into(),
+            page: Page::HybridSearch,
+            kind: None,
+            category: "知识与检索".into(),
+            keywords: "rag hybrid search rrf keyword semantic 混合 检索 融合 排名 来源".into(),
+        },
+        ToolEntry {
             id: "rag-answer".into(),
             title: "带引用的知识问答".into(),
             description: "先核对本机证据，再调用本地模型并校验引用编号".into(),
@@ -722,6 +732,7 @@ pub struct DevToolsApp {
     knowledge_index: crate::knowledge_index::State,
     vector_index: crate::vector_index::State,
     knowledge_search: crate::knowledge_search::State,
+    hybrid_search: crate::hybrid_search::State,
     knowledge_answer: crate::knowledge_answer::State,
     embedding: crate::embedding::State,
     knowledge_capture: crate::knowledge_capture::State,
@@ -931,6 +942,12 @@ impl DevToolsApp {
                 self.page = Page::VectorIndex;
                 self.knowledge_sources.preview_fixture();
                 self.vector_index
+                    .preview_fixture(self.knowledge_sources.sources());
+            }
+            142 | 143 => {
+                self.page = Page::HybridSearch;
+                self.knowledge_sources.preview_fixture();
+                self.hybrid_search
                     .preview_fixture(self.knowledge_sources.sources());
             }
             78..=97 => {
@@ -1331,6 +1348,7 @@ impl DevToolsApp {
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
             vector_index: crate::vector_index::State::new(crate::vector_index::default_path(), crate::knowledge_index::default_path()),
             knowledge_search: crate::knowledge_search::State::new(crate::knowledge_index::default_path()),
+            hybrid_search: crate::hybrid_search::State::new(crate::knowledge_index::default_path(), crate::vector_index::default_path()),
             knowledge_answer: crate::knowledge_answer::State::new(crate::knowledge_index::default_path()),
             embedding: Default::default(),
             knowledge_capture: Default::default(),
@@ -1706,6 +1724,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::KnowledgeIndex, "增量知识索引");
                         nav_button(ui, &mut self.page, Page::VectorIndex, "本机向量索引");
                         nav_button(ui, &mut self.page, Page::KnowledgeSearch, "本机关键词检索");
+                        nav_button(ui, &mut self.page, Page::HybridSearch, "混合检索工作台");
                         nav_button(
                             ui,
                             &mut self.page,
@@ -1744,7 +1763,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 59  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 60  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4182,6 +4201,17 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| {
                             self.knowledge_search
                                 .ui(ui, self.knowledge_sources.sources())
+                        });
+                }
+                Page::HybridSearch => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("hybrid-search-page")
+                        .show(ui, |ui| {
+                            self.hybrid_search.ui(
+                                ui,
+                                self.knowledge_sources.sources(),
+                                self.knowledge_sources.is_locked(),
+                            )
                         });
                 }
                 Page::KnowledgeAnswer => {

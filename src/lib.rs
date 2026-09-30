@@ -8,6 +8,7 @@ pub mod file_encoding;
 pub mod fixture;
 pub mod framework;
 pub mod hotkey;
+pub mod hybrid_search;
 pub mod image_tools;
 pub mod intake;
 pub mod integrations;
