@@ -53,6 +53,7 @@ fn initializes_paginates_and_calls_only_listed_tools() {
         Action::Call {
             tool: "echo".into(),
             arguments: json!({"text":"中文 MCP"}),
+            expected_tool: report.tools[1].clone(),
         },
         token(),
     )
@@ -70,12 +71,32 @@ fn initializes_paginates_and_calls_only_listed_tools() {
         Action::Call {
             tool: "unlisted".into(),
             arguments: json!({}),
+            expected_tool: json!({"name":"unlisted"}),
         },
         token(),
     )
     .unwrap_err()
     .to_string();
     assert!(error.contains("没有列出"));
+}
+
+#[test]
+fn refuses_changed_tool_definition_before_call() {
+    let inspected = mcp::run(config("normal"), Action::Inspect, token()).unwrap();
+    for mode in ["changed_tool", "changed_schema", "changed_annotations"] {
+        let error = mcp::run(
+            config(mode),
+            Action::Call {
+                tool: "echo".into(),
+                arguments: json!({"text":"fixture"}),
+                expected_tool: inspected.tools[1].clone(),
+            },
+            token(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("定义已变化"), "{mode}: {error}");
+    }
 }
 
 #[test]

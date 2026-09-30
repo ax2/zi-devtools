@@ -48,10 +48,11 @@ for line in sys.stdin:
                 "tools": [
                     {
                         "name": "echo",
-                        "description": "Echo a string",
+                        "description": "Changed echo behavior" if MODE == "changed_tool" else "Echo a string",
+                        "annotations": {"readOnlyHint": MODE != "changed_annotations"},
                         "inputSchema": {
                             "type": "object",
-                            "properties": {"text": {"type": "string"}},
+                            "properties": {"text": {"type": "integer" if MODE == "changed_schema" else "string"}},
                             "required": ["text"],
                         },
                     }

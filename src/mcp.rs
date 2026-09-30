@@ -55,9 +55,18 @@ impl Config {
 #[derive(Clone, Debug)]
 pub enum Action {
     Inspect,
-    Call { tool: String, arguments: Value },
-    ReadResource { uri: String },
-    GetPrompt { name: String, arguments: Value },
+    Call {
+        tool: String,
+        arguments: Value,
+        expected_tool: Value,
+    },
+    ReadResource {
+        uri: String,
+    },
+    GetPrompt {
+        name: String,
+        arguments: Value,
+    },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -421,9 +430,17 @@ impl Session {
 
 pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result<Report> {
     match &action {
-        Action::Call { tool, arguments } => {
+        Action::Call {
+            tool,
+            arguments,
+            expected_tool,
+        } => {
             ensure!(
-                !tool.is_empty() && tool.len() <= 128 && arguments.is_object(),
+                !tool.is_empty()
+                    && tool.len() <= 128
+                    && arguments.is_object()
+                    && expected_tool.is_object()
+                    && expected_tool.get("name").and_then(Value::as_str) == Some(tool),
                 "工具名称或 JSON 参数无效"
             );
             ensure!(
@@ -475,13 +492,19 @@ pub fn run(config: Config, action: Action, cancelled: Arc<AtomicBool>) -> Result
         report.prompts = session.list("prompts/list", "prompts")?;
     }
     match action {
-        Action::Call { tool, arguments } => {
+        Action::Call {
+            tool,
+            arguments,
+            expected_tool,
+        } => {
+            let listed = report
+                .tools
+                .iter()
+                .find(|item| item.get("name").and_then(Value::as_str) == Some(&tool))
+                .context("服务没有列出该工具，调用已拒绝")?;
             ensure!(
-                report
-                    .tools
-                    .iter()
-                    .any(|item| item.get("name").and_then(Value::as_str) == Some(&tool)),
-                "服务没有列出该工具，调用已拒绝"
+                *listed == expected_tool,
+                "工具定义已变化，调用已拒绝；请重新检查服务能力并确认"
             );
             report.call_result =
                 Some(session.request("tools/call", json!({"name":tool,"arguments":arguments}))?);

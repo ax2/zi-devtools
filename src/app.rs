@@ -897,6 +897,10 @@ impl DevToolsApp {
                 self.page = Page::KnowledgeMcp;
                 self.knowledge_sources.preview_fixture();
             }
+            136 | 137 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_tool_review(scene == 137);
+            }
             78..=97 => {
                 self.page = Page::Plugins;
                 if !self
@@ -1704,7 +1708,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 56  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 57  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );

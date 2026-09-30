@@ -24,6 +24,10 @@ fn display_json(value: &Value, limit: usize) -> String {
     }
 }
 
+fn declared_read_only(tool: &Value) -> bool {
+    tool.pointer("/annotations/readOnlyHint") == Some(&Value::Bool(true))
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum McpSection {
     Tools,
@@ -40,6 +44,8 @@ pub struct McpState {
     selected_resource: String,
     selected_prompt: String,
     call_arguments: String,
+    confirmation_name: String,
+    last_called_tool: String,
     prompt_arguments: String,
     call_confirm: bool,
     receiver: Option<Receiver<Result<Report, String>>>,
@@ -58,6 +64,8 @@ impl Default for McpState {
             selected_resource: String::new(),
             selected_prompt: String::new(),
             call_arguments: "{}".into(),
+            confirmation_name: String::new(),
+            last_called_tool: String::new(),
             prompt_arguments: "{}".into(),
             call_confirm: false,
             receiver: None,
@@ -82,7 +90,7 @@ impl McpState {
             server: "示例 MCP 服务".into(),
             protocol: "2025-06-18".into(),
             tools: vec![
-                json!({"name":"search_notes","description":"在已授权的笔记中搜索关键字","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"搜索词"}},"required":["query"]}}),
+                json!({"name":"search_notes","description":"在已授权的笔记中搜索关键字","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"搜索词"}},"required":["query"]}}),
                 json!({"name":"read_note","description":"读取单篇笔记","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}}),
             ],
             resources: vec![json!({"name":"说明文档","uri":"demo://guide"})],
@@ -109,6 +117,23 @@ impl McpState {
         self.message = "合成界面预览 · 未启动外部程序".into();
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_tool_review(&mut self, unknown_behavior: bool) {
+        self.preview_fixture(false);
+        self.section = McpSection::Tools;
+        self.selected_tool = if unknown_behavior {
+            "read_note".into()
+        } else {
+            "search_notes".into()
+        };
+        self.call_arguments = if unknown_behavior {
+            "{\n  \"id\": \"note-1\"\n}".into()
+        } else {
+            "{\n  \"query\": \"Rust 错误处理\"\n}".into()
+        };
+        self.call_confirm = true;
+    }
+
     fn config(&self) -> Result<Config, String> {
         let args: Vec<String> = serde_json::from_str(&self.arguments)
             .map_err(|_| "参数必须是 JSON 字符串数组，例如 [\"server.js\"]".to_owned())?;
@@ -129,6 +154,10 @@ impl McpState {
             }
         };
         let (sender, receiver) = mpsc::channel();
+        self.last_called_tool = match &action {
+            Action::Call { tool, .. } => tool.clone(),
+            _ => String::new(),
+        };
         if matches!(&action, Action::Inspect) {
             self.report = None;
         } else if let Some(report) = &mut self.report {
@@ -145,6 +174,7 @@ impl McpState {
         self.receiver = Some(receiver);
         self.message = "正在与 MCP 服务通信…".into();
         self.call_confirm = false;
+        self.confirmation_name.clear();
     }
 
     fn poll(&mut self, ui: &egui::Ui) {
@@ -236,6 +266,7 @@ impl McpState {
                 {
                     self.report = None;
                     self.call_confirm = false;
+                    self.confirmation_name.clear();
                 }
                 #[cfg(windows)]
                 if ui
@@ -248,6 +279,7 @@ impl McpState {
                     self.executable = path.to_string_lossy().into_owned();
                     self.report = None;
                     self.call_confirm = false;
+                    self.confirmation_name.clear();
                 }
             });
             ui.label("参数 · JSON 字符串数组");
@@ -260,6 +292,7 @@ impl McpState {
             {
                 self.report = None;
                 self.call_confirm = false;
+                self.confirmation_name.clear();
             }
             ui.horizontal(|ui| {
                 if ui
@@ -328,18 +361,29 @@ impl McpState {
                                 .changed()
                         {
                             self.call_confirm = false;
+                            self.confirmation_name.clear();
                             self.call_arguments = "{}".into();
                         }
                     }
                 });
-            if let Some(tool) = report
+            let selected_descriptor = report
                 .tools
                 .iter()
                 .find(|tool| tool.get("name").and_then(Value::as_str) == Some(&self.selected_tool))
-            {
+                .cloned();
+            if let Some(tool) = &selected_descriptor {
                 if let Some(description) = tool.get("description").and_then(Value::as_str) {
                     ui.label(description.chars().take(500).collect::<String>());
                 }
+                if declared_read_only(tool) {
+                    ui.colored_label(egui::Color32::from_rgb(90, 160, 110), "服务声明：只读工具");
+                } else {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(210, 145, 60),
+                        "服务未声明只读；调用可能修改数据或访问外部系统",
+                    );
+                }
+                ui.small("工具行为由服务自行声明，不能证明程序安全；仅连接可信服务。");
                 if let Some(schema) = tool.get("inputSchema") {
                     egui::CollapsingHeader::new("输入参数 schema")
                         .default_open(true)
@@ -360,6 +404,7 @@ impl McpState {
                 .changed()
             {
                 self.call_confirm = false;
+                self.confirmation_name.clear();
             }
             if ui
                 .add_enabled(!busy, egui::Button::new("准备调用选中工具"))
@@ -373,12 +418,29 @@ impl McpState {
                         "将启动 {} 并调用 {}；参数会交给该服务。",
                         self.executable, self.selected_tool
                     ));
-                    if ui.button("确认调用").clicked() {
+                    let read_only = selected_descriptor.as_ref().is_some_and(declared_read_only);
+                    if !read_only {
+                        ui.label("输入工具名再次确认：");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.confirmation_name)
+                                .desired_width(170.0),
+                        );
+                    }
+                    if ui
+                        .add_enabled(
+                            read_only || self.confirmation_name == self.selected_tool,
+                            egui::Button::new("确认调用"),
+                        )
+                        .clicked()
+                    {
                         match serde_json::from_str::<Value>(&self.call_arguments) {
-                            Ok(arguments) if arguments.is_object() => {
+                            Ok(arguments)
+                                if arguments.is_object() && selected_descriptor.is_some() =>
+                            {
                                 requested_action = Some(Action::Call {
                                     tool: self.selected_tool.clone(),
                                     arguments,
+                                    expected_tool: selected_descriptor.clone().unwrap(),
                                 })
                             }
                             _ => self.message = "调用参数必须是 JSON 对象".into(),
@@ -386,6 +448,7 @@ impl McpState {
                     }
                     if ui.button("取消").clicked() {
                         self.call_confirm = false;
+                        self.confirmation_name.clear();
                     }
                 });
             }
@@ -494,6 +557,7 @@ impl McpState {
             }
         }
         if self.section == McpSection::Tools
+            && self.last_called_tool == self.selected_tool
             && let Some(result) = &report.call_result
         {
             ui.separator();
@@ -522,6 +586,26 @@ impl McpState {
         }
         if let Some(action) = requested_action {
             self.start(action);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::declared_read_only;
+    use serde_json::json;
+
+    #[test]
+    fn only_explicit_true_counts_as_read_only() {
+        assert!(declared_read_only(
+            &json!({"annotations":{"readOnlyHint":true}})
+        ));
+        for tool in [
+            json!({"name":"unknown"}),
+            json!({"annotations":{"readOnlyHint":false}}),
+            json!({"annotations":{"readOnlyHint":"true"}}),
+        ] {
+            assert!(!declared_read_only(&tool));
         }
     }
 }

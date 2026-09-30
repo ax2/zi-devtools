@@ -69,6 +69,7 @@ fn stdio_search_verifies_live_source_and_never_returns_absolute_path() {
         mcp::Action::Call {
             tool: "search_knowledge".into(),
             arguments: json!({"query":"RustMcpProbe","limit":1}),
+            expected_tool: inspected.tools[1].clone(),
         },
         Arc::new(AtomicBool::new(false)),
     )
