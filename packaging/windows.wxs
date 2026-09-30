@@ -10,6 +10,9 @@
           <Component Id="Application" Guid="*">
             <File Id="ZiDevToolsExe" Source="target/release/ZiDevTools.exe" KeyPath="yes" />
           </Component>
+          <Component Id="KnowledgeMcp" Guid="*">
+            <File Id="ZiDevToolsMcpExe" Source="target/release/ZiDevToolsMcp.exe" KeyPath="yes" />
+          </Component>
           <Component Id="License" Guid="*">
             <File Source="LICENSE" KeyPath="yes" />
           </Component>
@@ -27,6 +30,7 @@
     </StandardDirectory>
     <Feature Id="Complete" Title="Zi DevTools" Level="1">
       <ComponentRef Id="Application" />
+      <ComponentRef Id="KnowledgeMcp" />
       <ComponentRef Id="License" />
       <ComponentRef Id="StartMenu" />
     </Feature>

@@ -449,6 +449,11 @@ fn load(path: &Path) -> Result<Registry> {
     Ok(registry)
 }
 
+/// Read the validated registry without exposing mutable desktop state.
+pub fn read_sources(path: &Path) -> Result<Vec<Source>> {
+    Ok(load(path)?.sources)
+}
+
 fn save(path: &Path, sources: &[Source]) -> Result<()> {
     ensure!(sources.len() <= MAX_SOURCES, "知识源过多");
     match fs::symlink_metadata(path) {

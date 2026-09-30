@@ -1,5 +1,5 @@
 {
-  "version": "0.53.0",
+  "version": "0.54.0",
   "updated": "2026-09-30",
   "tools": [
     {
@@ -645,10 +645,10 @@
     {
       "id": "mcp-server",
       "name": "Zi DevTools MCP Server",
-      "status": "planned",
+      "status": "implemented",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "将明确授权的本地工具暴露给其他 Agent，限定目录、调用配额和审计"
+      "scope": "独立 Windows 控制台 EXE 提供只读 MCP stdio 服务，向可信客户端列出已扫描知识源、检索已同步索引；逐条复核当前文件 SHA-256，仅返回有界片段、相对路径和引用。不监听网络、不写入或自动扫描；通用工具暴露与调用审计仍待规划"
     },
     {
       "id": "agent-runner",

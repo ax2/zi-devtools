@@ -14,6 +14,7 @@ pub mod knowledge_answer;
 pub mod knowledge_capture;
 pub mod knowledge_eval;
 pub mod knowledge_index;
+pub mod knowledge_mcp;
 pub mod knowledge_search;
 pub mod knowledge_sources;
 pub mod markdown_preview;

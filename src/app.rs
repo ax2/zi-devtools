@@ -122,6 +122,7 @@ enum Page {
     KnowledgeSearch,
     KnowledgeAnswer,
     KnowledgeCapture,
+    KnowledgeMcp,
     KnowledgeEval,
     Settings,
     Plugins,
@@ -452,6 +453,15 @@ fn catalog() -> Vec<ToolEntry> {
             keywords:
                 "web clipper capture browser html agent conversation paste 网页 对话 收集 剪藏"
                     .into(),
+        },
+        ToolEntry {
+            id: "mcp-server".into(),
+            title: "本机知识库 MCP 服务".into(),
+            description: "通过只读 stdio 服务供其他 Agent 检索已同步文档".into(),
+            page: Page::KnowledgeMcp,
+            kind: None,
+            category: "MCP 与 Agent".into(),
+            keywords: "mcp server agent codex knowledge rag search 本机 知识库 检索".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -869,6 +879,10 @@ impl DevToolsApp {
                 self.knowledge_sources.preview_fixture();
                 self.knowledge_capture
                     .preview_fixture(self.knowledge_sources.sources());
+            }
+            132 | 133 => {
+                self.page = Page::KnowledgeMcp;
+                self.knowledge_sources.preview_fixture();
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1648,6 +1662,7 @@ impl DevToolsApp {
                         );
                         nav_button(ui, &mut self.page, Page::KnowledgeEval, "本机 RAG 评测");
                         nav_button(ui, &mut self.page, Page::KnowledgeCapture, "网页与对话收集");
+                        nav_button(ui, &mut self.page, Page::KnowledgeMcp, "知识库 MCP 服务");
                         nav_button(ui, &mut self.page, Page::Integrations, "本机集成发现");
                         nav_button(ui, &mut self.page, Page::Java, "Java 诊断");
                         nav_button(ui, &mut self.page, Page::Django, "Django 诊断");
@@ -1676,7 +1691,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 53  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 54  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4126,6 +4141,11 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| {
                             self.knowledge_capture.ui(ui, &mut self.knowledge_sources)
                         });
+                }
+                Page::KnowledgeMcp => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("knowledge-mcp-page")
+                        .show(ui, crate::knowledge_mcp::ui);
                 }
                 Page::Java | Page::Django => {
                     let category = if self.page == Page::Java {
