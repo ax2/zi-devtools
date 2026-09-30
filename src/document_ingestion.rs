@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{Cursor, Read},
-    path::Path,
+    path::{Path, PathBuf},
     sync::mpsc::{self, Receiver},
 };
 
@@ -219,7 +219,7 @@ fn chunks_from(sections: Vec<(String, String)>) -> Result<Vec<Chunk>> {
     Ok(chunks)
 }
 
-pub fn ingest(source: &Source, file: &FileVersion) -> Result<Preview> {
+fn verified_source(source: &Source, file: &FileVersion) -> Result<(PathBuf, Vec<u8>)> {
     let snapshot = source.snapshot.as_ref().context("知识源尚未扫描")?;
     ensure!(
         snapshot.files.iter().any(|item| item == file),
@@ -260,6 +260,16 @@ pub fn ingest(source: &Source, file: &FileVersion) -> Result<Preview> {
         hash == file.sha256,
         "文件内容与扫描快照不一致，请先刷新知识源"
     );
+    Ok((canonical, bytes))
+}
+
+pub fn verified_source_path(source: &Source, file: &FileVersion) -> Result<PathBuf> {
+    verified_source(source, file).map(|(path, _)| path)
+}
+
+pub fn ingest(source: &Source, file: &FileVersion) -> Result<Preview> {
+    let (_, bytes) = verified_source(source, file)?;
+    let hash = file.sha256.clone();
     let ext = Path::new(&file.relative)
         .extension()
         .and_then(|e| e.to_str())

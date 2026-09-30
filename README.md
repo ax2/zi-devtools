@@ -22,9 +22,9 @@ MIT 开源的 Windows 原生 Rust 桌面开发工具。
 - 屏幕录制支持显示当前屏幕画面的鼠标框选或整屏、H.264 MP4、三档录制质量与文件大小估算、系统声音、麦克风或双声源混音、两路独立录制音量与实时电平、倒计时、暂停/继续、可选录满后自动停止及停止后打开文件；录制中可从托盘、快捷面板或全局热键控制。中断时尽可能保存已录片段；显示器选择已接入，但非主屏仍待实测；见 [录屏说明](docs/recorder.md)。
 - 图片工作台在本机读取 PNG/JPEG/WebP：单张可缩放、转换与预览编码大小；批量可先检查名称冲突、再逐项处理；元数据模式可提示常见 EXIF/GPS、ICC、XMP 等信息并预览清理副本。输出不覆盖原图或已有文件。见 [图片工具说明](docs/image-tools.md)。
 - Java 与 Django 诊断分开导航；左下角主题、托盘、设置为图标按钮，悬停可查看说明。隐藏到托盘时移除主窗口任务栏样式，恢复时还原。
-- [本地知识源](docs/knowledge-sources.md)可明确添加文件或目录、排除不需要的内容并手动扫描版本清单；[文档解析与分块](docs/document-ingestion.md)可从快照选择 Markdown、文本、网页、PDF 或 Word，校验版本后预览带位置与哈希的分块。跨文档检索和问答仍在规划。
+- [本地知识源](docs/knowledge-sources.md)可明确添加文件或目录、排除不需要的内容并手动扫描版本清单；[文档解析与分块](docs/document-ingestion.md)可从快照选择 Markdown、文本、网页、PDF 或 Word，校验版本后预览带位置与哈希的分块。[本机关键词检索](docs/knowledge-search.md)可查询索引、复制引用并核验原文件。向量混合检索和问答仍在规划。
 - [磁盘维护](docs/maintenance.md)提供构建增量缓存的预览、手动清理和每周计划任务；阶段发布包、用户配置与知识数据始终保留。
-- [增量知识索引](docs/knowledge-index.md)在用户手动同步时将已扫描文档写入本机 SQLite 全文索引，支持增量更新、删除同步、回滚与重建；正文可在工具中确认后删除。检索、向量索引和引用问答仍在规划。
+- [增量知识索引](docs/knowledge-index.md)在用户手动同步时将已扫描文档写入本机 SQLite 全文索引，支持增量更新、删除同步、回滚与重建；正文可在工具中确认后删除。
 - 托盘右键“本地服务”子菜单汇总所有服务、状态与批量启停；HTTP 历史可搜索，清空时需要二次确认。
 - HTTP 请求头、请求体和响应只保存在当前进程内存；站点只保存名称与基础地址，历史只保存方法、去掉查询参数的 URL、状态和耗时，存于 `%USERPROFILE%\.zi-devtools\http-workbench.json`。历史重新打开不会恢复认证信息；URL 路径如含敏感值仍应避免使用历史记录。
 
@@ -77,6 +77,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 ![录屏快捷控制](docs/images/quick-recorder-panel.png)
 
 ## 交付状态
+
+Stage 50 / v0.50.0：新增本机关键词检索，提供来源筛选、有限结果、位置片段、引用复制和原文件版本校验；英文使用 FTS5 相关度，中文使用字面包含匹配。向量混合检索和问答仍在规划。
 
 Stage 49 / v0.49.0：新增手动增量知识索引，SQLite FTS5 持久化已扫描文件的分块正文，支持增量更新、删除同步、事务回滚、重建和删除索引；加入安全的每周磁盘维护计划任务。
 
@@ -146,6 +148,8 @@ Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整
 ![文档解析与分块工作台（合成样本）](docs/images/document-ingestion.png)
 
 ![增量知识索引工作台（合成样本）](docs/images/knowledge-index.png)
+
+![本机关键词检索工作台（合成样本）](docs/images/knowledge-search.png)
 
 验证：Rust 单元测试、Windows 生命周期与 MCP 集成测试、fmt、Clippy、界面截图、安装包和发布工作流；具体证据见 [发版说明](docs/release-notes.md)。全局快捷面板已实现；所选本机服务进程不提供沙箱。
 

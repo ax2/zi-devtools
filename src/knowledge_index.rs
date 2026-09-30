@@ -44,6 +44,91 @@ pub struct SyncReport {
     pub stats: IndexStats,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct SearchHit {
+    pub source_id: String,
+    pub relative: String,
+    pub location: String,
+    pub ordinal: u64,
+    pub file_sha256: String,
+    pub chunk_sha256: String,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SearchResults {
+    pub hits: Vec<SearchHit>,
+    pub literal_match: bool,
+}
+
+fn is_cjk(ch: char) -> bool {
+    matches!(ch as u32, 0x3400..=0x9fff | 0xf900..=0xfaff | 0x20000..=0x2fa1f)
+}
+
+pub fn search(
+    path: &Path,
+    query: &str,
+    source_id: Option<&str>,
+    limit: usize,
+) -> Result<SearchResults> {
+    let query = query.trim();
+    ensure!(!query.is_empty(), "请输入关键词");
+    ensure!(
+        query.chars().count() <= 120 && query.len() <= 512,
+        "关键词最多 120 字符、512 字节"
+    );
+    ensure!(
+        !query.chars().any(char::is_control),
+        "关键词不能包含控制字符"
+    );
+    ensure!((1..=50).contains(&limit), "结果上限必须在 1 到 50 之间");
+    ensure!(checked_file(path)?, "知识索引尚未建立，请先同步知识源");
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    check_version(&conn)?;
+    let literal_match = query.chars().any(is_cjk);
+    let fts_query = query
+        .split_whitespace()
+        .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" AND ");
+    let sql = if literal_match {
+        "SELECT c.source_id,c.relative,c.location,c.ordinal,f.sha256,c.sha256,c.text
+         FROM chunks c JOIN indexed_files f ON f.source_id=c.source_id AND f.relative=c.relative
+         WHERE instr(lower(c.text),lower(?1))>0 AND (?2 IS NULL OR c.source_id=?2)
+         ORDER BY c.relative,c.ordinal LIMIT ?3"
+    } else {
+        "SELECT c.source_id,c.relative,c.location,c.ordinal,f.sha256,c.sha256,c.text
+         FROM chunks_fts JOIN chunks c ON c.id=chunks_fts.rowid
+         JOIN indexed_files f ON f.source_id=c.source_id AND f.relative=c.relative
+         WHERE chunks_fts MATCH ?1 AND (?2 IS NULL OR c.source_id=?2)
+         ORDER BY bm25(chunks_fts),c.relative,c.ordinal LIMIT ?3"
+    };
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(
+        params![
+            if literal_match { query } else { &fts_query },
+            source_id,
+            limit as u64
+        ],
+        |row| {
+            Ok(SearchHit {
+                source_id: row.get(0)?,
+                relative: row.get(1)?,
+                location: row.get(2)?,
+                ordinal: row.get(3)?,
+                file_sha256: row.get(4)?,
+                chunk_sha256: row.get(5)?,
+                text: row.get(6)?,
+            })
+        },
+    )?;
+    let hits = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(SearchResults {
+        hits,
+        literal_match,
+    })
+}
+
 fn checked_file(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(meta) => {
@@ -469,7 +554,7 @@ impl State {
                     ui.small(format!("{}：{} 个已索引文件{}", source.name, count, if source.snapshot.is_none() { " · 待扫描" } else { "" }));
                 }
             } else { ui.label("索引状态无法读取，请检查数据库文件。操作不会自动覆盖它。"); }
-            ui.small("预算：最多 2000 个源文件、128 MiB 输入、100000 分块、128 MiB 正文、约 256 MiB 数据库。未扫描的来源不加入索引。关键词检索与引用问答将在后续阶段接入。");
+            ui.small("预算：最多 2000 个源文件、128 MiB 输入、100000 分块、128 MiB 正文、约 256 MiB 数据库。未扫描的来源不加入索引。关键词检索可从左侧进入；带引用问答仍在规划。");
         });
         ui.add_space(8.0);
         ui.horizontal(|ui| {
@@ -569,6 +654,59 @@ mod tests {
             |row| row.get(0),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn keyword_search_is_bounded_filtered_and_tracks_index_changes() {
+        let (root, index, mut source) = fixture();
+        fs::write(
+            root.join("docs/chinese.txt"),
+            "本机知识库支持查找文档片段。另一个知识库示例。",
+        )
+        .unwrap();
+        source.snapshot = Some(scan(&source, &AtomicBool::new(false)).unwrap());
+        sync_all(
+            &index,
+            &[source.clone()],
+            false,
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        let english = search(&index, "alpha", None, 10).unwrap();
+        assert_eq!(english.hits.len(), 1);
+        assert!(!english.literal_match);
+        assert_eq!(english.hits[0].relative, "one.txt");
+        assert_eq!(
+            search(&index, "alpha", Some("missing"), 10)
+                .unwrap()
+                .hits
+                .len(),
+            0
+        );
+        let chinese = search(&index, "知识库", None, 1).unwrap();
+        assert!(chinese.literal_match);
+        assert_eq!(chinese.hits.len(), 1);
+        assert_eq!(chinese.hits[0].relative, "chinese.txt");
+        assert!(
+            search(&index, "alpha\" OR bravo", None, 10)
+                .unwrap()
+                .hits
+                .is_empty()
+        );
+        assert!(search(&index, "alpha", None, 51).is_err());
+        fs::write(root.join("docs/one.txt"), "revised document").unwrap();
+        source.snapshot = Some(scan(&source, &AtomicBool::new(false)).unwrap());
+        sync_all(
+            &index,
+            &[source],
+            false,
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert!(search(&index, "alpha", None, 10).unwrap().hits.is_empty());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
