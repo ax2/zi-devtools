@@ -1,5 +1,6 @@
 //! Bounded, local image inspection and explicit preview-before-save transforms.
 mod batch;
+mod editor;
 mod metadata;
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
@@ -69,6 +70,7 @@ enum Mode {
     Single,
     Batch,
     Metadata,
+    Editor,
 }
 
 #[derive(Default)]
@@ -76,6 +78,7 @@ pub struct State {
     mode: Mode,
     batch: batch::State,
     metadata: metadata::State,
+    editor: editor::State,
     input: String,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -96,6 +99,9 @@ impl State {
     pub fn show_metadata(&mut self) {
         self.mode = Mode::Metadata;
     }
+    pub fn show_editor(&mut self) {
+        self.mode = Mode::Editor;
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_batch_fixture(&mut self) {
         self.mode = Mode::Batch;
@@ -105,6 +111,11 @@ impl State {
     pub fn preview_metadata_fixture(&mut self, ctx: &egui::Context) {
         self.mode = Mode::Metadata;
         self.metadata.preview_fixture(ctx);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_editor_fixture(&mut self, ctx: &egui::Context) {
+        self.mode = Mode::Editor;
+        self.editor.preview_fixture(ctx);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, ctx: &egui::Context) {
@@ -280,11 +291,13 @@ impl State {
             ui.selectable_value(&mut self.mode, Mode::Single, "单张图片");
             ui.selectable_value(&mut self.mode, Mode::Batch, "批量处理");
             ui.selectable_value(&mut self.mode, Mode::Metadata, "元数据检查");
+            ui.selectable_value(&mut self.mode, Mode::Editor, "裁剪与标注");
         });
         ui.add_space(10.0);
         match self.mode {
             Mode::Batch => return self.batch.ui(ui),
             Mode::Metadata => return self.metadata.ui(ui),
+            Mode::Editor => return self.editor.ui(ui),
             Mode::Single => {}
         }
         self.poll(ui.ctx());

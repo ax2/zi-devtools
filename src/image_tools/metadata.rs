@@ -635,6 +635,13 @@ fn inspect_file(path: &Path) -> Result<Job> {
     })
 }
 
+pub(super) fn oriented_static_image(path: &Path) -> Result<Arc<DynamicImage>> {
+    let Job::Inspected { image, .. } = inspect_file(path)? else {
+        bail!("图片读取结果无效")
+    };
+    Ok(image)
+}
+
 fn clean_preview(image: &DynamicImage, source: &Summary, quality: u8) -> Result<Job> {
     let mut encoded = Vec::new();
     match source.format {

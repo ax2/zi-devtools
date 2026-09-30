@@ -173,6 +173,7 @@ fn tool_category(id: &str) -> &'static str {
         | "image-tools"
         | "image-batch"
         | "image-metadata"
+        | "image-crop-annotate"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -334,6 +335,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "image metadata exif gps icc xmp privacy 图片 元数据 隐私 清理".into(),
+        },
+        ToolEntry {
+            id: "image-crop-annotate".into(),
+            title: "图片裁剪与标注".into(),
+            description: "可视化裁剪、敏感区域遮挡、箭头和文字".into(),
+            page: Page::Images,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "image crop redact arrow text 图片 裁剪 遮挡 箭头 文字 标注".into(),
         },
         ToolEntry {
             id: "screen-recorder".into(),
@@ -685,6 +695,10 @@ impl DevToolsApp {
             108 | 109 => {
                 self.page = Page::Images;
                 self.images.preview_metadata_fixture(ctx);
+            }
+            110 | 111 => {
+                self.page = Page::Images;
+                self.images.preview_editor_fixture(ctx);
             }
             78..=97 => {
                 self.page = Page::Plugins;
@@ -1462,7 +1476,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 42  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 43  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -1617,7 +1631,11 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
-        if e.id == "image-metadata" {
+        if e.id == "image-crop-annotate" {
+            self.images.show_editor();
+            self.navigate(Page::Images, None);
+            self.visit(&e.id);
+        } else if e.id == "image-metadata" {
             self.images.show_metadata();
             self.navigate(Page::Images, None);
             self.visit(&e.id);

@@ -4921,8 +4921,9 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.42.0"
+version = "0.43.0"
 dependencies = [
+ "ab_glyph",
  "anyhow",
  "base64",
  "chrono",

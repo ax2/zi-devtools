@@ -1,6 +1,6 @@
 {
-  "version": "0.42.0",
-  "updated": "2026-09-29",
+  "version": "0.43.0",
+  "updated": "2026-09-30",
   "tools": [
     {
       "id": "json",
@@ -373,10 +373,10 @@
     {
       "id": "image-crop-annotate",
       "name": "图片裁剪与标注",
-      "status": "planned",
+      "status": "implemented",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "可视化裁剪、遮挡敏感区域与简单箭头/文字标注，导出前确认"
+      "scope": "本机 PNG/JPEG/WebP 可视化裁剪、黑色遮挡、箭头与文字标注；按原图分辨率编码并预览实际输出及大小，确认后另存新文件，拒绝覆盖；中文文字依赖本机字体，单图 32 MiB/1600 万像素、输出 128 MiB 上限"
     },
     {
       "id": "image-metadata",

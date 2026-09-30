@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.42.0"
+version = "0.43.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -12,6 +12,7 @@ name = "ZiDevTools"
 path = "src/main.rs"
 
 [dependencies]
+ab_glyph = "0.2.32"
 anyhow = "1.0"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock"] }
