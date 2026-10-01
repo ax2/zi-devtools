@@ -971,7 +971,11 @@ impl DevToolsApp {
                 self.duplicate_finder.preview_fixture();
             }
             159 | 160 => self.page = Page::AsciiCodes,
-            161 | 162 => self.page = Page::Symbols,
+            161 | 162 => {
+                self.page = Page::Symbols;
+                self.symbols
+                    .preview_fixture(if scene == 161 { 4 } else { 5 });
+            }
             163 | 164 => {
                 self.page = Page::AsciiArt;
                 self.ascii_art.preview_fixture();
@@ -4527,6 +4531,19 @@ fn configure_ui(ctx: &egui::Context, theme: Theme) {
                 .entry(family)
                 .or_default()
                 .push("windows-cjk".to_owned());
+        }
+    }
+    if let Ok(bytes) = fs::read(r"C:\Windows\Fonts\seguiemj.ttf") {
+        fonts.font_data.insert(
+            "windows-emoji".to_owned(),
+            Arc::new(egui::FontData::from_owned(bytes)),
+        );
+        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+            fonts
+                .families
+                .entry(family)
+                .or_default()
+                .push("windows-emoji".to_owned());
         }
     }
     ctx.set_fonts(fonts);

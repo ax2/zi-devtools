@@ -300,6 +300,11 @@ pub struct SymbolState {
 }
 
 impl SymbolState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_fixture(&mut self, category: usize) {
+        self.category = category;
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.heading("特殊字符、表情与颜文字");
         ui.label("精选常用字符，点击即可复制；实际显示效果取决于目标应用和系统字体。");
