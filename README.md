@@ -85,7 +85,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 70 / v0.70.0 开发中：修正知识 MCP 结果在模型上下文中的重复包装与截断，按实际传入片段给来源编号并校验答案引用；兼容 v1/v2/v3 的私有记录正在验证。
+Stage 70 / [v0.70.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.70.0)：知识 MCP 命中按 3 KiB 模型消息装箱，仅为选入的片段分配 `[K编号]` 并校验完成回答的引用；默认私有记录及 v1/v2/v3 查看器通过测试。完整本地与公开 CI/Release、Windows 安装/卸载、公开资产哈希及官网桌面/手机视口均已核对。失败或取消时最近一步消息可能尚未发送；编号有效不证明答案事实正确。本轮安全清理约 11.45 GiB 构建缓存。
 
 Stage 69 / [v0.69.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.69.0)：Agent 知识检索来源按步骤追踪，默认不含来源路径的 v1 记录与主动包含来源的 v2 记录可在查看器回看；完整本地测试、Windows 安装包、公开 CI/Release 资产哈希及官网桌面/手机视口均已核对。来源是工具声明，不作为答案引用的事实证明。
 
