@@ -50,7 +50,7 @@ else:
 
 roadmap = root/'docs/platform-roadmap.md'
 roadmap_text = roadmap.read_text(encoding='utf-8')
-roadmap_summary = (f'<!-- catalog-summary:start -->\n更新：{data["updated"]} · v{data["version"]} 开发中。'
+roadmap_summary = (f'<!-- catalog-summary:start -->\n更新：{data["updated"]} · 工具目录版本：v{data["version"]}。'
                    f'工具唯一状态源为 [tools.json](tools.json)，当前 {len(items)} 项目录条目：'
                    f'{len(implemented_ids)} 项已实现、{len(items)-len(implemented_ids)} 项规划或开发中；'
                    '另有可选示例插件包。连接器需要用户已有服务和模型，不能把插件数量当作已安装模型数量。\n'

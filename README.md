@@ -89,7 +89,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 74 / v0.74.0 开发中：新增双目录只读内容对比与有界差异 CSV；合成目录测试、完整质量门禁和公开交付仍在验证。
+Stage 74 / [v0.74.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.74.0)：新增双目录只读内容对比与有界差异 CSV；完整测试、Windows 安装/卸载、公开 CI/Release 与资产哈希、官网桌面/手机视口均已核对。部分扫描不误报单侧缺失。
 
 Stage 73 / [v0.73.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.73.0)：新增 ASCII 码表、特殊字符/表情/颜文字库和 ASCII Art；完整测试、Windows 安装/卸载、公开 CI/Release 与资产哈希、官网桌面/手机视口均已核对。两阶段交付后安全清理约 14.92 GiB 可重建构建缓存，阶段完整目录保留。
 
