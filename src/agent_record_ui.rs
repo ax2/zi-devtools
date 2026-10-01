@@ -144,7 +144,7 @@ impl State {
         use serde_json::json;
         let record = json!({
             "schema":"zi-devtools-agent-run",
-            "schema_version":1,
+            "schema_version":2,
             "finished_at_utc":"2026-10-01T01:00:00Z",
             "status":"completed",
             "model":"qwen2.5:7b",
@@ -153,7 +153,8 @@ impl State {
             "max_calls":2,
             "calls_made":1,
             "model_tokens_reported":428,
-            "steps":[{"tool":"search_knowledge","elapsed_ms":138,"content_items":2,"response_bytes":512,"model_excerpt_bytes":246,"is_error":false}],
+            "steps":[{"tool":"search_knowledge","elapsed_ms":138,"content_items":2,"response_bytes":512,"model_excerpt_bytes":246,"is_error":false,
+                "references":[{"source_id":"synthetic-source","source_name":"Rust 笔记","relative_path":"notes/rust-errors.md","location":"第 2 段","file_sha256":"a".repeat(64),"chunk_sha256":"b".repeat(64)}]}],
             "content":{"goal":"查找 Rust 错误处理笔记","plan":"检索已授权知识索引，再总结结果。","answer":"合成记录：先传播错误，再在边界补充上下文。","error":null}
         });
         self.record = Some(agent_record::parse_json(record.to_string().as_bytes()).unwrap());
@@ -401,7 +402,7 @@ impl State {
         }
         let Some(record) = &self.record else {
             ui.add_space(8.0);
-            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，只接受当前支持的 schema v1。");
+            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，支持 schema v1/v2。");
             return;
         };
         ui.add_space(8.0);
@@ -451,6 +452,22 @@ impl State {
                     "{} 个内容项 · 响应 {} 字节 · 送入模型摘录 {} 字节",
                     step.content_items, step.response_bytes, step.model_excerpt_bytes
                 ));
+                if let Some(references) = &step.references {
+                    if self.show_content {
+                        ui.weak("工具返回的来源声明；导入记录不能认证来源，也不证明答案实际引用。");
+                        for reference in references {
+                            ui.label(format!(
+                                "{} · {} · {}",
+                                reference.source_name, reference.relative_path, reference.location
+                            ));
+                            ui.weak(format!("来源 ID：{}", reference.source_id));
+                            ui.monospace(format!("文件 SHA-256：{}", reference.file_sha256));
+                            ui.monospace(format!("片段 SHA-256：{}", reference.chunk_sha256));
+                        }
+                    } else {
+                        ui.weak(format!("{} 条来源声明（默认隐藏路径）", references.len()));
+                    }
+                }
             }
         });
         ui.add_space(8.0);
@@ -460,7 +477,7 @@ impl State {
             if let Some(content) = &record.content {
                 ui.checkbox(
                     &mut self.show_content,
-                    "显示目标、计划、答案与错误文字（可能含本机资料）",
+                    "显示目标、计划、答案、错误文字与来源路径（可能含本机资料）",
                 );
                 if self.show_content {
                     for (label, value) in [

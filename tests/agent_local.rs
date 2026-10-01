@@ -42,6 +42,12 @@ fn server() -> mcp::Config {
     }
 }
 
+fn knowledge_server() -> mcp::Config {
+    let mut config = server();
+    *config.args.last_mut().unwrap() = "knowledge".into();
+    config
+}
+
 fn token() -> Arc<AtomicBool> {
     Arc::new(AtomicBool::new(false))
 }
@@ -172,6 +178,41 @@ fn approved_plan_executes_only_the_selected_read_only_tool() {
         requests[2]["messages"].as_array().unwrap().last().unwrap()["role"],
         "tool"
     );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn knowledge_result_references_survive_the_agent_step_without_excerpt() {
+    let root = std::env::temp_dir().join(format!("zi-agent-evidence-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let access_path = root.join("permissions.json");
+    let server = knowledge_server();
+    let scope = mcp_access::server_scope(&server).unwrap();
+    let tool = mcp::run(server.clone(), Action::Inspect, token())
+        .unwrap()
+        .tools
+        .into_iter()
+        .find(|item| item["name"] == "search_knowledge")
+        .unwrap();
+    Store::load(access_path.clone())
+        .set(&scope, &tool, Some(Rule::AllowDeclaredReadOnly))
+        .unwrap();
+    let (endpoint, fixture) = model_server(vec![
+        plan_reply(),
+        json!({"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"search_knowledge","arguments":{"query":"synthetic"}}}]}}),
+        answer_reply(),
+    ]);
+    let mut config = config(endpoint, access_path, 1);
+    config.server = server;
+    config.selected = vec!["search_knowledge".into()];
+    let plan = agent::prepare(config, token()).unwrap();
+    let outcome = agent::execute(plan, token(), |_| {}).unwrap();
+    assert_eq!(outcome.steps[0].references.len(), 1);
+    let reference = &outcome.steps[0].references[0];
+    assert_eq!(reference.relative_path, "guide.md");
+    assert_eq!(reference.file_sha256, "a".repeat(64));
+    assert!(!format!("{reference:?}").contains("synthetic excerpt"));
+    assert_eq!(fixture.join().unwrap().len(), 3);
     std::fs::remove_dir_all(root).unwrap();
 }
 

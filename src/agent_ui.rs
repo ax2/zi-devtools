@@ -302,6 +302,7 @@ impl State {
         use serde_json::json;
         self.executable = r"C:\Tools\ZiDevToolsMcp.exe".into();
         self.model = "qwen2.5:7b".into();
+        self.max_calls = 2;
         self.goal = "查找本地笔记中有关 Rust 错误处理的资料，并总结要点。".into();
         let tool = json!({"name":"search_knowledge","description":"只读检索本机知识索引","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]},"annotations":{"readOnlyHint":true,"destructiveHint":false,"openWorldHint":false}});
         self.inspection = Some(agent::Inspection {
@@ -341,6 +342,14 @@ impl State {
                 response_bytes: 512,
                 model_excerpt_bytes: 246,
                 is_error: false,
+                references: vec![agent::EvidenceRef {
+                    source_id: "synthetic-source".into(),
+                    source_name: "Rust 笔记".into(),
+                    relative_path: "notes/rust-errors.md".into(),
+                    location: "第 2 段".into(),
+                    file_sha256: "a".repeat(64),
+                    chunk_sha256: "b".repeat(64),
+                }],
             }];
             self.outcome = Some(agent::Outcome { answer:"找到两条相关笔记。建议先用 Result 传播错误，再在边界处补充上下文。此处为合成界面预览。".into(), steps:self.steps.clone(), model_tokens:428 });
             self.approved = true;
@@ -527,18 +536,27 @@ impl State {
                 ui.set_min_width(ui.available_width());
                 ui.strong("04 执行记录");
                 for (index, step) in self.steps.iter().enumerate() {
-                    ui.collapsing(
+                    egui::CollapsingHeader::new(
                         format!(
-                            "{}. {} · {} ms{}",
+                            "{}. {} · {} ms{}{}",
                             index + 1,
                             step.tool,
                             step.elapsed_ms,
-                            if step.is_error { " · 错误" } else { "" }
+                            if step.is_error { " · 错误" } else { "" },
+                            if step.references.is_empty() { String::new() } else { format!(" · 来源 {} 条", step.references.len()) }
                         ),
-                        |ui| {
+                    ).default_open(!step.references.is_empty()).show(ui, |ui| {
                             ui.monospace(&step.result);
-                        },
-                    );
+                            if !step.references.is_empty() {
+                                ui.weak("工具返回的来源声明；不代表最终回答实际引用，第三方服务声明未独立认证。");
+                                for reference in &step.references {
+                                    ui.label(format!("{} · {} · {}", reference.source_name, reference.relative_path, reference.location));
+                                    ui.weak(format!("来源 ID：{}", reference.source_id));
+                                    ui.monospace(format!("文件 SHA-256：{}", reference.file_sha256));
+                                    ui.monospace(format!("片段 SHA-256：{}", reference.chunk_sha256));
+                                }
+                            }
+                        });
                 }
             });
         }
@@ -561,7 +579,7 @@ impl State {
                 ui.set_min_width(ui.available_width());
                 ui.strong("05 运行记录导出");
                 ui.weak("默认只含状态、工具与用量摘要，不含任务目标、计划、答案、服务路径、参数或工具原文。只有主动保存才写入文件。");
-                ui.checkbox(&mut self.include_export_content, "额外包含目标、计划、答案与错误文字（可能含本机资料）");
+                ui.checkbox(&mut self.include_export_content, "额外包含目标、计划、答案、错误文字与来源路径（可能含本机资料）");
                 match self.export_json() {
                     Ok(record) => {
                         let preview = egui::CollapsingHeader::new(format!("预览将保存的 JSON · {} 字节", record.len()));

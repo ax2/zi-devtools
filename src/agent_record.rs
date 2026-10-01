@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, io::Read, path::Path};
 
-use crate::agent::{Outcome, Plan, Step};
+use crate::agent::{EvidenceRef, Outcome, Plan, Step};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -40,23 +40,32 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
         snapshot.status != Status::Completed || snapshot.outcome.is_some(),
         "完成记录缺少最终结果"
     );
+    let has_references = include_content
+        && snapshot
+            .steps
+            .iter()
+            .any(|step| !step.references.is_empty());
     let steps: Vec<Value> = snapshot
         .steps
         .iter()
         .map(|step| {
-            json!({
+            let mut value = json!({
                 "tool": step.tool,
                 "elapsed_ms": step.elapsed_ms,
                 "content_items": step.content_items,
                 "response_bytes": step.response_bytes,
                 "model_excerpt_bytes": step.model_excerpt_bytes,
                 "is_error": step.is_error,
-            })
+            });
+            if has_references && !step.references.is_empty() {
+                value["references"] = json!(step.references);
+            }
+            value
         })
         .collect();
     let mut record = json!({
         "schema": "zi-devtools-agent-run",
-        "schema_version": 1,
+        "schema_version": if has_references { 2 } else { 1 },
         "finished_at_utc": snapshot.finished_at,
         "status": snapshot.status.label(),
         "model": snapshot.plan.config.model,
@@ -90,6 +99,7 @@ pub struct ImportedStep {
     pub response_bytes: usize,
     pub model_excerpt_bytes: usize,
     pub is_error: bool,
+    pub references: Option<Vec<EvidenceRef>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -137,8 +147,18 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
     );
     let record: ImportedRecord = serde_json::from_slice(bytes).context("运行记录 JSON 结构无效")?;
     ensure!(
-        record.schema == "zi-devtools-agent-run" && record.schema_version == 1,
+        record.schema == "zi-devtools-agent-run" && matches!(record.schema_version, 1 | 2),
         "不支持的 Agent 运行记录版本"
+    );
+    ensure!(
+        record.schema_version != 1 || record.steps.iter().all(|step| step.references.is_none()),
+        "v1 记录不支持来源字段"
+    );
+    ensure!(
+        record.schema_version != 2
+            || (record.content.is_some()
+                && record.steps.iter().any(|step| step.references.is_some())),
+        "v2 来源记录缺少可选内容或来源"
     );
     let timestamp = chrono::DateTime::parse_from_rfc3339(&record.finished_at_utc)
         .context("运行记录结束时间无效")?;
@@ -182,6 +202,16 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
                 && step.model_excerpt_bytes <= 4 * 1024,
             "运行步骤数据超出限制"
         );
+        if let Some(references) = &step.references {
+            ensure!(
+                step.tool == "search_knowledge"
+                    && !step.is_error
+                    && !references.is_empty()
+                    && references.len() <= 10
+                    && references.iter().all(EvidenceRef::valid),
+                "运行步骤来源字段无效"
+            );
+        }
     }
     if record.status == "completed" {
         ensure!(
@@ -266,6 +296,7 @@ mod tests {
             response_bytes: 78,
             model_excerpt_bytes: 27,
             is_error: false,
+            references: Vec::new(),
         }];
         let outcome = Outcome {
             answer: "secret answer".into(),
@@ -376,6 +407,59 @@ mod tests {
             assert_eq!(imported.content.is_some(), include_content);
             assert_eq!(imported.model_tokens_reported, Some(42));
         }
+    }
+
+    #[test]
+    fn knowledge_references_require_explicit_content_export_and_v2() {
+        let (mut plan, mut steps, _) = fixture();
+        plan.config.selected = vec!["search_knowledge".into()];
+        steps[0].tool = "search_knowledge".into();
+        steps[0].references = vec![EvidenceRef {
+            source_id: "source-1".into(),
+            source_name: "private source name".into(),
+            relative_path: "private/path.md".into(),
+            location: "paragraph 2".into(),
+            file_sha256: "a".repeat(64),
+            chunk_sha256: "b".repeat(64),
+        }];
+        let outcome = Outcome {
+            answer: "done".into(),
+            steps: steps.clone(),
+            model_tokens: 42,
+        };
+        let snapshot = || Snapshot {
+            plan: &plan,
+            steps: &steps,
+            outcome: Some(&outcome),
+            status: Status::Completed,
+            approved: true,
+            finished_at: "2026-10-01T01:00:00Z",
+            error: None,
+        };
+        let default = export_json(snapshot(), false).unwrap();
+        assert!(!default.contains("private/path.md"));
+        assert!(!default.contains("private source name"));
+        assert_eq!(
+            parse_json(default.as_bytes()).unwrap().steps[0]
+                .references
+                .as_ref()
+                .map(Vec::len),
+            None
+        );
+        let selected = export_json(snapshot(), true).unwrap();
+        let imported = parse_json(selected.as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 2);
+        assert_eq!(
+            imported.steps[0].references.as_ref().unwrap()[0].relative_path,
+            "private/path.md"
+        );
+        assert!(!selected.contains("secret tool response"));
+        let mut malformed: Value = serde_json::from_str(&selected).unwrap();
+        malformed["steps"][0]["references"][0]["file_sha256"] = json!("bad");
+        assert!(parse_json(malformed.to_string().as_bytes()).is_err());
+        let mut disguised: Value = serde_json::from_str(&selected).unwrap();
+        disguised["schema_version"] = json!(1);
+        assert!(parse_json(disguised.to_string().as_bytes()).is_err());
     }
 
     #[test]

@@ -49,7 +49,7 @@ for line in sys.stdin:
             response = {
                 "tools": [
                     {
-                        "name": "echo",
+                        "name": "search_knowledge" if MODE == "knowledge" else "echo",
                         "description": "Changed echo behavior" if MODE == "changed_tool" else "Echo a string",
                         "annotations": {
                             "readOnlyHint": MODE != "changed_annotations",
@@ -58,8 +58,8 @@ for line in sys.stdin:
                         },
                         "inputSchema": {
                             "type": "object",
-                            "properties": {"text": {"type": "integer" if MODE == "changed_schema" else "string"}},
-                            "required": ["text"],
+                            "properties": {"query" if MODE == "knowledge" else "text": {"type": "integer" if MODE == "changed_schema" else "string"}},
+                            "required": ["query" if MODE == "knowledge" else "text"],
                         },
                     }
                 ]
@@ -76,12 +76,24 @@ for line in sys.stdin:
     elif method == "prompts/list":
         response = {"prompts": [{"name": "summary"}]}
     elif method == "tools/call":
-        response = {
-            "content": [
-                {"type": "text", "text": request["params"]["arguments"].get("text", "")}
-            ],
-            "isError": False,
-        }
+        if MODE == "knowledge":
+            response = {
+                "content": [{"type": "text", "text": "synthetic excerpt"}],
+                "structuredContent": {"hits": [{
+                    "source_id": "fixture-source", "source_name": "Fixture notes",
+                    "relative_path": "guide.md", "location": "paragraph 1",
+                    "file_sha256": "a" * 64, "chunk_sha256": "b" * 64,
+                    "excerpt": "synthetic excerpt"
+                }]},
+                "isError": False,
+            }
+        else:
+            response = {
+                "content": [
+                    {"type": "text", "text": request["params"]["arguments"].get("text", "")}
+                ],
+                "isError": False,
+            }
     elif method == "resources/read":
         response = (
             {"wrong": []}

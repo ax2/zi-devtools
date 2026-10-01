@@ -1,5 +1,6 @@
 //! A bounded local Ollama agent using only explicitly granted MCP tools.
 use anyhow::{Context, Result, bail, ensure};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
@@ -56,6 +57,67 @@ pub struct Step {
     pub response_bytes: usize,
     pub model_excerpt_bytes: usize,
     pub is_error: bool,
+    pub references: Vec<EvidenceRef>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct EvidenceRef {
+    pub source_id: String,
+    pub source_name: String,
+    pub relative_path: String,
+    pub location: String,
+    pub file_sha256: String,
+    pub chunk_sha256: String,
+}
+
+impl EvidenceRef {
+    pub fn valid(&self) -> bool {
+        let label = |value: &str, max: usize| {
+            !value.trim().is_empty() && value.len() <= max && !value.chars().any(char::is_control)
+        };
+        let hash =
+            |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
+        label(&self.source_id, 128)
+            && label(&self.source_name, 256)
+            && label(&self.relative_path, 1024)
+            && !self.relative_path.starts_with(['/', '\\'])
+            && !self.relative_path.contains(':')
+            && !self
+                .relative_path
+                .split(['/', '\\'])
+                .any(|part| part == "..")
+            && label(&self.location, 256)
+            && hash(&self.file_sha256)
+            && hash(&self.chunk_sha256)
+    }
+}
+
+fn reported_references(tool: &str, result: &Value) -> Vec<EvidenceRef> {
+    if tool != "search_knowledge" || result.get("isError") != Some(&Value::Bool(false)) {
+        return Vec::new();
+    }
+    let Some(hits) = result
+        .pointer("/structuredContent/hits")
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+    hits.iter()
+        .take(10)
+        .filter_map(|hit| {
+            let field = |name| hit.get(name).and_then(Value::as_str).map(str::to_owned);
+            let reference = EvidenceRef {
+                source_id: field("source_id")?,
+                source_name: field("source_name")?,
+                relative_path: field("relative_path")?,
+                location: field("location")?,
+                file_sha256: field("file_sha256")?,
+                chunk_sha256: field("chunk_sha256")?,
+            };
+            reference.valid().then_some(reference)
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -405,6 +467,7 @@ pub fn execute(
             response_bytes,
             model_excerpt_bytes: result.len(),
             is_error: value.get("isError") == Some(&Value::Bool(true)),
+            references: reported_references(&name, &value),
         };
         on_step(step.clone());
         steps.push(step);
@@ -415,4 +478,33 @@ pub fn execute(
         messages.push(json!({"role":"tool","content":result}));
     }
     bail!("Agent 未在调用预算内给出最终回答")
+}
+
+#[cfg(test)]
+mod evidence_tests {
+    use super::*;
+
+    #[test]
+    fn captures_bounded_structured_knowledge_references_without_excerpt() {
+        let hit = json!({
+            "source_id":"source-1", "source_name":"Synthetic notes",
+            "relative_path":"notes/guide.md", "location":"paragraph 2",
+            "file_sha256":"a".repeat(64), "chunk_sha256":"b".repeat(64),
+            "excerpt":"private document text"
+        });
+        let result = json!({"isError":false,"structuredContent":{"hits":vec![hit; 12]}});
+        let references = reported_references("search_knowledge", &result);
+        assert_eq!(references.len(), 10);
+        let serialized = serde_json::to_string(&references).unwrap();
+        assert!(!serialized.contains("private document text"));
+        assert_eq!(references[0].relative_path, "notes/guide.md");
+        assert!(reported_references("other_tool", &result).is_empty());
+        let mut errored = result.clone();
+        errored["isError"] = json!(true);
+        assert!(reported_references("search_knowledge", &errored).is_empty());
+        let mut malformed = result;
+        malformed["structuredContent"]["hits"][0]["relative_path"] = json!("../outside.md");
+        malformed["structuredContent"]["hits"][1]["file_sha256"] = json!("bad");
+        assert_eq!(reported_references("search_knowledge", &malformed).len(), 8);
+    }
 }
