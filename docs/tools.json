@@ -1,5 +1,5 @@
 {
-  "version": "0.74.0",
+  "version": "0.75.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -349,10 +349,10 @@
     {
       "id": "sqlite",
       "name": "SQLite 浏览器",
-      "status": "planned",
-      "category": "扩展工具",
+      "status": "implemented",
+      "category": "文件与系统",
       "priority": "P2",
-      "scope": "默认只读，表结构、限额查询、CSV 导出；后续写模式显式切换并提供事务回滚（合并原 SQLite 工作台规划）"
+      "scope": "只读选择本机普通数据库文件，列出前 200 个表/视图和列结构，最多 64 列、每页 50 行预览前 10000 行；后台超时/取消、值预算和无覆盖导出当前页 CSV。任意 SQL 与写模式待后续实现"
     },
     {
       "id": "http-collections",

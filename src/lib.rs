@@ -36,6 +36,7 @@ pub mod preferences;
 pub mod prompt_library;
 pub mod prompt_template;
 pub mod service;
+pub mod sqlite_browser;
 pub mod tools;
 pub mod tools_advanced;
 pub mod tools_extra;

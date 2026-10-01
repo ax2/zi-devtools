@@ -119,6 +119,7 @@ enum Page {
     DiskInspector,
     DuplicateFinder,
     DirectoryCompare,
+    SqliteBrowser,
     AsciiCodes,
     Symbols,
     AsciiArt,
@@ -204,6 +205,7 @@ fn tool_category(id: &str) -> &'static str {
         | "services"
         | "global-launcher"
         | "file-intake"
+        | "sqlite"
         | "screen-recorder"
         | "screen-recorder-multimonitor"
         | "screen-recorder-audio-mix"
@@ -447,6 +449,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "folder directory compare diff sha256 csv 目录 对比 差异 文件 摘要".into(),
+        },
+        ToolEntry {
+            id: "sqlite".into(),
+            title: "SQLite 浏览器".into(),
+            description: "只读查看表结构，按页预览并导出当前页 CSV".into(),
+            page: Page::SqliteBrowser,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "sqlite database db table schema rows csv 数据库 表 结构 分页".into(),
         },
         ToolEntry {
             id: "ascii-codes".into(),
@@ -816,6 +827,7 @@ pub struct DevToolsApp {
     disk_inspector: crate::disk_inspector::State,
     duplicate_finder: crate::duplicate_finder::State,
     directory_compare: crate::directory_compare::State,
+    sqlite_browser: crate::sqlite_browser::State,
     ascii_codes: crate::character_tools::AsciiState,
     symbols: crate::character_tools::SymbolState,
     ascii_art: crate::character_tools::ArtState,
@@ -985,6 +997,10 @@ impl DevToolsApp {
             165 | 166 => {
                 self.page = Page::DirectoryCompare;
                 self.directory_compare.preview_fixture();
+            }
+            167 | 168 => {
+                self.page = Page::SqliteBrowser;
+                self.sqlite_browser.preview_fixture();
             }
             159 | 160 => self.page = Page::AsciiCodes,
             161 | 162 => {
@@ -1490,6 +1506,7 @@ impl DevToolsApp {
             disk_inspector: Default::default(),
             duplicate_finder: Default::default(),
             directory_compare: Default::default(),
+            sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
             symbols: Default::default(),
             ascii_art: Default::default(),
@@ -1868,6 +1885,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::DiskInspector, "目录空间分析");
                         nav_button(ui, &mut self.page, Page::DuplicateFinder, "重复文件检查");
                         nav_button(ui, &mut self.page, Page::DirectoryCompare, "目录内容对比");
+                        nav_button(ui, &mut self.page, Page::SqliteBrowser, "SQLite 浏览器");
                         nav_button(ui, &mut self.page, Page::AsciiCodes, "ASCII 码表");
                         nav_button(ui, &mut self.page, Page::Symbols, "特殊字符与表情");
                         nav_button(ui, &mut self.page, Page::AsciiArt, "ASCII Art 字符画");
@@ -1920,7 +1938,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 74  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 75  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4348,6 +4366,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("directory-compare-page")
                         .show(ui, |ui| self.directory_compare.ui(ui));
+                }
+                Page::SqliteBrowser => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("sqlite-browser-page")
+                        .show(ui, |ui| self.sqlite_browser.ui(ui));
                 }
                 Page::AsciiCodes => {
                     egui::ScrollArea::vertical()
