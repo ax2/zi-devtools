@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, io::Read, path::Path};
 
-use crate::agent::{EvidenceRef, Outcome, Plan, Step};
+use crate::agent::{self, EvidenceRef, Outcome, Plan, Step};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -45,6 +45,34 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
             .steps
             .iter()
             .any(|step| !step.references.is_empty());
+    let has_citation_ids = has_references
+        && snapshot
+            .steps
+            .iter()
+            .flat_map(|step| &step.references)
+            .any(|reference| reference.citation_id.is_some());
+    if has_citation_ids {
+        ensure!(
+            snapshot
+                .steps
+                .iter()
+                .flat_map(|step| &step.references)
+                .all(|reference| reference.citation_id.is_some()),
+            "来源编号不完整"
+        );
+        let available: BTreeSet<usize> = snapshot
+            .steps
+            .iter()
+            .flat_map(|step| &step.references)
+            .filter_map(|reference| reference.citation_id)
+            .collect();
+        if let Some(outcome) = snapshot.outcome {
+            ensure!(
+                outcome.citations == agent::validated_citations(&outcome.answer, &available)?,
+                "答案引用与来源编号不一致"
+            );
+        }
+    }
     let steps: Vec<Value> = snapshot
         .steps
         .iter()
@@ -65,7 +93,7 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
         .collect();
     let mut record = json!({
         "schema": "zi-devtools-agent-run",
-        "schema_version": if has_references { 2 } else { 1 },
+        "schema_version": if has_citation_ids { 3 } else if has_references { 2 } else { 1 },
         "finished_at_utc": snapshot.finished_at,
         "status": snapshot.status.label(),
         "model": snapshot.plan.config.model,
@@ -83,6 +111,13 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
             "answer": snapshot.outcome.map(|outcome| outcome.answer.as_str()),
             "error": snapshot.error,
         });
+        if has_citation_ids {
+            record["content"]["citations"] = json!(
+                snapshot
+                    .outcome
+                    .map_or(&[][..], |outcome| outcome.citations.as_slice())
+            );
+        }
     }
     Ok(serde_json::to_string_pretty(&record)?)
 }
@@ -109,13 +144,14 @@ pub struct ImportedContent {
     pub plan: String,
     pub answer: Option<String>,
     pub error: Option<String>,
+    pub citations: Option<Vec<usize>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImportedRecord {
     schema: String,
-    schema_version: u32,
+    pub schema_version: u32,
     pub finished_at_utc: String,
     pub status: String,
     pub model: String,
@@ -147,7 +183,7 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
     );
     let record: ImportedRecord = serde_json::from_slice(bytes).context("运行记录 JSON 结构无效")?;
     ensure!(
-        record.schema == "zi-devtools-agent-run" && matches!(record.schema_version, 1 | 2),
+        record.schema == "zi-devtools-agent-run" && matches!(record.schema_version, 1..=3),
         "不支持的 Agent 运行记录版本"
     );
     ensure!(
@@ -157,8 +193,25 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
     ensure!(
         record.schema_version != 2
             || (record.content.is_some()
-                && record.steps.iter().any(|step| step.references.is_some())),
+                && record.steps.iter().any(|step| step.references.is_some())
+                && record
+                    .steps
+                    .iter()
+                    .flat_map(|step| step.references.iter().flatten())
+                    .all(|reference| reference.citation_id.is_none())
+                && record
+                    .content
+                    .as_ref()
+                    .is_some_and(|content| content.citations.is_none())),
         "v2 来源记录缺少可选内容或来源"
+    );
+    ensure!(
+        record.schema_version != 1
+            || record
+                .content
+                .as_ref()
+                .is_none_or(|content| content.citations.is_none()),
+        "v1 记录不支持引用编号"
     );
     let timestamp = chrono::DateTime::parse_from_rfc3339(&record.finished_at_utc)
         .context("运行记录结束时间无效")?;
@@ -212,6 +265,35 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
                 "运行步骤来源字段无效"
             );
         }
+    }
+    if record.schema_version == 3 {
+        let references: Vec<&EvidenceRef> = record
+            .steps
+            .iter()
+            .flat_map(|step| step.references.iter().flatten())
+            .collect();
+        let ids: BTreeSet<usize> = references
+            .iter()
+            .filter_map(|reference| reference.citation_id)
+            .collect();
+        ensure!(
+            record.content.is_some()
+                && !references.is_empty()
+                && references
+                    .iter()
+                    .all(|reference| reference.citation_id.is_some())
+                && ids.len() == references.len()
+                && ids.iter().copied().eq(1..=ids.len()),
+            "v3 来源编号无效"
+        );
+        let content = record.content.as_ref().unwrap();
+        let reported = content.citations.as_ref().context("v3 记录缺少引用列表")?;
+        let expected = if let Some(answer) = &content.answer {
+            agent::validated_citations(answer, &ids)?
+        } else {
+            Vec::new()
+        };
+        ensure!(*reported == expected, "v3 答案引用与来源不一致");
     }
     if record.status == "completed" {
         ensure!(
@@ -302,6 +384,7 @@ mod tests {
             answer: "secret answer".into(),
             steps: steps.clone(),
             model_tokens: 42,
+            citations: Vec::new(),
         };
         (plan, steps, outcome)
     }
@@ -415,6 +498,7 @@ mod tests {
         plan.config.selected = vec!["search_knowledge".into()];
         steps[0].tool = "search_knowledge".into();
         steps[0].references = vec![EvidenceRef {
+            citation_id: None,
             source_id: "source-1".into(),
             source_name: "private source name".into(),
             relative_path: "private/path.md".into(),
@@ -426,6 +510,7 @@ mod tests {
             answer: "done".into(),
             steps: steps.clone(),
             model_tokens: 42,
+            citations: Vec::new(),
         };
         let snapshot = || Snapshot {
             plan: &plan,
@@ -459,6 +544,57 @@ mod tests {
         assert!(parse_json(malformed.to_string().as_bytes()).is_err());
         let mut disguised: Value = serde_json::from_str(&selected).unwrap();
         disguised["schema_version"] = json!(1);
+        assert!(parse_json(disguised.to_string().as_bytes()).is_err());
+    }
+
+    #[test]
+    fn numbered_sources_roundtrip_as_v3_and_reject_forged_citations() {
+        let (mut plan, mut steps, _) = fixture();
+        plan.config.selected = vec!["search_knowledge".into()];
+        steps[0].tool = "search_knowledge".into();
+        steps[0].references = vec![EvidenceRef {
+            citation_id: Some(1),
+            source_id: "source-1".into(),
+            source_name: "private source".into(),
+            relative_path: "private/guide.md".into(),
+            location: "paragraph 1".into(),
+            file_sha256: "a".repeat(64),
+            chunk_sha256: "b".repeat(64),
+        }];
+        let outcome = Outcome {
+            answer: "Synthesized statement [K1]".into(),
+            steps: steps.clone(),
+            model_tokens: 42,
+            citations: vec![1],
+        };
+        let snapshot = || Snapshot {
+            plan: &plan,
+            steps: &steps,
+            outcome: Some(&outcome),
+            status: Status::Completed,
+            approved: true,
+            finished_at: "2026-10-01T01:00:00Z",
+            error: None,
+        };
+        let default = export_json(snapshot(), false).unwrap();
+        assert!(!default.contains("private/guide.md"));
+        assert_eq!(parse_json(default.as_bytes()).unwrap().schema_version, 1);
+        let selected = export_json(snapshot(), true).unwrap();
+        let imported = parse_json(selected.as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 3);
+        assert_eq!(
+            imported.steps[0].references.as_ref().unwrap()[0].citation_id,
+            Some(1)
+        );
+        assert_eq!(imported.content.unwrap().citations, Some(vec![1]));
+        let mut forged: Value = serde_json::from_str(&selected).unwrap();
+        forged["content"]["answer"] = json!("Fabricated [K2]");
+        assert!(parse_json(forged.to_string().as_bytes()).is_err());
+        let mut bad_list: Value = serde_json::from_str(&selected).unwrap();
+        bad_list["content"]["citations"] = json!([2]);
+        assert!(parse_json(bad_list.to_string().as_bytes()).is_err());
+        let mut disguised: Value = serde_json::from_str(&selected).unwrap();
+        disguised["schema_version"] = json!(2);
         assert!(parse_json(disguised.to_string().as_bytes()).is_err());
     }
 

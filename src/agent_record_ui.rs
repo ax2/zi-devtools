@@ -144,7 +144,7 @@ impl State {
         use serde_json::json;
         let record = json!({
             "schema":"zi-devtools-agent-run",
-            "schema_version":2,
+            "schema_version":3,
             "finished_at_utc":"2026-10-01T01:00:00Z",
             "status":"completed",
             "model":"qwen2.5:7b",
@@ -154,8 +154,8 @@ impl State {
             "calls_made":1,
             "model_tokens_reported":428,
             "steps":[{"tool":"search_knowledge","elapsed_ms":138,"content_items":2,"response_bytes":512,"model_excerpt_bytes":246,"is_error":false,
-                "references":[{"source_id":"synthetic-source","source_name":"Rust 笔记","relative_path":"notes/rust-errors.md","location":"第 2 段","file_sha256":"a".repeat(64),"chunk_sha256":"b".repeat(64)}]}],
-            "content":{"goal":"查找 Rust 错误处理笔记","plan":"检索已授权知识索引，再总结结果。","answer":"合成记录：先传播错误，再在边界补充上下文。","error":null}
+                "references":[{"citation_id":1,"source_id":"synthetic-source","source_name":"Rust 笔记","relative_path":"notes/rust-errors.md","location":"第 2 段","file_sha256":"a".repeat(64),"chunk_sha256":"b".repeat(64)}]}],
+            "content":{"goal":"查找 Rust 错误处理笔记","plan":"检索已授权知识索引，再总结结果。","answer":"合成记录：先传播错误，再在边界补充上下文。[K1]","error":null,"citations":[1]}
         });
         self.record = Some(agent_record::parse_json(record.to_string().as_bytes()).unwrap());
         self.file_name = "zi-agent-run-example.json".into();
@@ -402,7 +402,7 @@ impl State {
         }
         let Some(record) = &self.record else {
             ui.add_space(8.0);
-            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，支持 schema v1/v2。");
+            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，支持 schema v1/v2/v3。");
             return;
         };
         ui.add_space(8.0);
@@ -449,15 +449,20 @@ impl State {
                     }
                 ));
                 ui.weak(format!(
-                    "{} 个内容项 · 响应 {} 字节 · 送入模型摘录 {} 字节",
+                    "{} 个内容项 · 响应 {} 字节 · 下轮模型消息 {} 字节",
                     step.content_items, step.response_bytes, step.model_excerpt_bytes
                 ));
                 if let Some(references) = &step.references {
                     if self.show_content {
-                        ui.weak("工具返回的来源声明；导入记录不能认证来源，也不证明答案实际引用。");
+                        if record.schema_version == 3 {
+                            ui.weak("记录声明这些来源已选入模型消息；失败或取消时可能尚未发送。导入文件不能认证来源或证明答案事实正确。");
+                        } else {
+                            ui.weak("旧版记录只保存工具返回的来源，无法确认每条是否送入模型。");
+                        }
                         for reference in references {
                             ui.label(format!(
-                                "{} · {} · {}",
+                                "{}{} · {} · {}",
+                                reference.citation_id.map_or(String::new(), |id| format!("[K{id}] ")),
                                 reference.source_name, reference.relative_path, reference.location
                             ));
                             ui.weak(format!("来源 ID：{}", reference.source_id));
@@ -480,6 +485,20 @@ impl State {
                     "显示目标、计划、答案、错误文字与来源路径（可能含本机资料）",
                 );
                 if self.show_content {
+                    if let Some(citations) = &content.citations {
+                        if citations.is_empty() {
+                            ui.weak("本次回答未提供可核对的知识引用。");
+                        } else {
+                            ui.weak(format!(
+                                "记录中的引用编号：{}。编号有效不证明陈述正确。",
+                                citations
+                                    .iter()
+                                    .map(|id| format!("[K{id}]"))
+                                    .collect::<Vec<_>>()
+                                    .join("、")
+                            ));
+                        }
+                    }
                     for (label, value) in [
                         ("任务目标", Some(content.goal.as_str())),
                         ("批准计划", Some(content.plan.as_str())),

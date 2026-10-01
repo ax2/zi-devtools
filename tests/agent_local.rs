@@ -200,7 +200,7 @@ fn knowledge_result_references_survive_the_agent_step_without_excerpt() {
     let (endpoint, fixture) = model_server(vec![
         plan_reply(),
         json!({"message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"search_knowledge","arguments":{"query":"synthetic"}}}]}}),
-        answer_reply(),
+        json!({"message":{"role":"assistant","content":"The fixture returned synthetic evidence. [K1]"},"eval_count":30}),
     ]);
     let mut config = config(endpoint, access_path, 1);
     config.server = server;
@@ -211,8 +211,16 @@ fn knowledge_result_references_survive_the_agent_step_without_excerpt() {
     let reference = &outcome.steps[0].references[0];
     assert_eq!(reference.relative_path, "guide.md");
     assert_eq!(reference.file_sha256, "a".repeat(64));
+    assert_eq!(reference.citation_id, Some(1));
+    assert_eq!(outcome.citations, vec![1]);
     assert!(!format!("{reference:?}").contains("synthetic excerpt"));
-    assert_eq!(fixture.join().unwrap().len(), 3);
+    let requests = fixture.join().unwrap();
+    let delivered = requests[2]["messages"].as_array().unwrap().last().unwrap()["content"]
+        .as_str()
+        .unwrap();
+    let parsed: Value = serde_json::from_str(delivered).unwrap();
+    assert_eq!(parsed["hits"][0]["citation"], "[K1]");
+    assert_eq!(requests.len(), 3);
     std::fs::remove_dir_all(root).unwrap();
 }
 

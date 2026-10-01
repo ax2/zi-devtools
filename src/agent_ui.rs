@@ -343,6 +343,7 @@ impl State {
                 model_excerpt_bytes: 246,
                 is_error: false,
                 references: vec![agent::EvidenceRef {
+                    citation_id: Some(1),
                     source_id: "synthetic-source".into(),
                     source_name: "Rust 笔记".into(),
                     relative_path: "notes/rust-errors.md".into(),
@@ -351,7 +352,7 @@ impl State {
                     chunk_sha256: "b".repeat(64),
                 }],
             }];
-            self.outcome = Some(agent::Outcome { answer:"找到两条相关笔记。建议先用 Result 传播错误，再在边界处补充上下文。此处为合成界面预览。".into(), steps:self.steps.clone(), model_tokens:428 });
+            self.outcome = Some(agent::Outcome { answer:"找到两条相关笔记。建议先用 Result 传播错误，再在边界处补充上下文。[K1] 此处为合成界面预览。".into(), steps:self.steps.clone(), model_tokens:428, citations: vec![1] });
             self.approved = true;
             self.finished_at = Some("2026-10-01T01:00:00Z".into());
         }
@@ -543,14 +544,14 @@ impl State {
                             step.tool,
                             step.elapsed_ms,
                             if step.is_error { " · 错误" } else { "" },
-                            if step.references.is_empty() { String::new() } else { format!(" · 来源 {} 条", step.references.len()) }
+                            if step.references.is_empty() { String::new() } else { format!(" · 模型消息来源 {} 条", step.references.len()) }
                         ),
                     ).default_open(!step.references.is_empty()).show(ui, |ui| {
                             ui.monospace(&step.result);
                             if !step.references.is_empty() {
-                                ui.weak("工具返回的来源声明；不代表最终回答实际引用，第三方服务声明未独立认证。");
+                                ui.weak("以下来源与片段已选入下一轮模型消息；失败或取消时可能尚未发送。第三方服务的来源声明未独立认证。");
                                 for reference in &step.references {
-                                    ui.label(format!("{} · {} · {}", reference.source_name, reference.relative_path, reference.location));
+                                    ui.label(format!("{}{} · {} · {}", reference.citation_id.map_or(String::new(), |id| format!("[K{id}] ")), reference.source_name, reference.relative_path, reference.location));
                                     ui.weak(format!("来源 ID：{}", reference.source_id));
                                     ui.monospace(format!("文件 SHA-256：{}", reference.file_sha256));
                                     ui.monospace(format!("片段 SHA-256：{}", reference.chunk_sha256));
@@ -566,6 +567,22 @@ impl State {
                 ui.set_min_width(ui.available_width());
                 ui.strong("最终回答");
                 ui.label(&outcome.answer);
+                let has_references = outcome.steps.iter().any(|step| !step.references.is_empty());
+                if has_references {
+                    if outcome.citations.is_empty() {
+                        ui.weak("回答未提供可核对的 [K编号] 引用；请结合检索片段自行核查。");
+                    } else {
+                        ui.weak(format!(
+                            "本次回答引用编号已核对：{}。编号有效不证明陈述正确。",
+                            outcome
+                                .citations
+                                .iter()
+                                .map(|id| format!("[K{id}]"))
+                                .collect::<Vec<_>>()
+                                .join("、")
+                        ));
+                    }
+                }
                 ui.weak(format!(
                     "{} 次工具调用 · 模型报告 {} tokens",
                     outcome.steps.len(),
