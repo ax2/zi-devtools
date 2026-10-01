@@ -85,7 +85,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 69 / v0.69.0 开发中：Agent 检索来源按步骤追踪、默认私有的 v1/v2 记录兼容与查看器回看正在验证。来源是工具声明，不作为答案引用的事实证明。
+Stage 69 / [v0.69.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.69.0)：Agent 知识检索来源按步骤追踪，默认不含来源路径的 v1 记录与主动包含来源的 v2 记录可在查看器回看；完整本地测试、Windows 安装包、公开 CI/Release 资产哈希及官网桌面/手机视口均已核对。来源是工具声明，不作为答案引用的事实证明。
 
 Stage 68 / [v0.68.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.68.0)：Agent 记录目录可选择基线和候选进行元数据对比；工具并集、未知用量、摘要隐私、异常数值、完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
