@@ -22,7 +22,7 @@ MIT 开源的 Windows 原生 Rust 桌面开发工具。
 - MCP 调试台展示服务的只读及外部访问声明；未完整声明低影响的工具需输入完整名称再次确认。实际调用前复核工具完整定义，若描述、schema 或注解变化即拒绝并要求重新检查。
 - MCP 工具规则可按本机服务与工具保存“禁止”或“允许声明低影响的只读工具直接调用”；默认仍逐次确认，高影响工具每次输入完整名称。撤销会停止当前短会话，调用前重新核对权限；服务程序仍须可信。
 - [本机 Agent 任务工作台](docs/agent-workbench.md)可检查已单独授权的只读 MCP 工具，选择本次白名单，让本机 Ollama 拟定计划；用户批准后最多调用四次工具并显示执行结果。模型请求、工具调用与计划可取消；执行终态可预览并主动保存默认不含任务内容的 JSON 记录。当前不运行写操作。
-- [Agent 记录查看器](docs/agent-record-viewer.md)可导入上述 JSON，也可明确选择目录，在后台有界读取并按时间、状态、模型和工具跨记录搜索；任务正文搜索需主动开启，打开记录仍默认隐藏可选内容。不连接模型或 MCP，不重新执行工具调用。
+- [Agent 记录查看器](docs/agent-record-viewer.md)可导入上述 JSON，也可明确选择目录，在后台有界读取并按时间、状态、模型和工具跨记录搜索；可选两份记录比较工具调用与已报告用量，并主动复制不含正文的摘要。任务正文搜索需主动开启，打开记录仍默认隐藏可选内容。不连接模型或 MCP，不重新执行工具调用。
 - [本机知识库 MCP 服务](docs/knowledge-mcp.md)提供独立只读 stdio EXE，让可信 Agent 列出已扫描知识源、检索手动同步的索引；返回前核验原文件哈希，只给有界片段与相对路径。
 - [Embedding 工作台](docs/embedding.md)可明确调用本机 Ollama 对两段文本生成向量，查看维度、范数、余弦相似度和欧氏距离，并复制完整向量；结果只在内存中。[本机向量索引](docs/knowledge-vectors.md)则从已手动同步的知识分块增量生成向量，支持版本校验、取消回滚、语义检索和确认删除；[混合检索工作台](docs/hybrid-search.md)可将两路结果融合并解释排序。
 - MCP 接入页可按本机 EXE 路径预览并复制 Codex CLI 命令、Codex TOML 和通用 JSON；不会读取或修改其他客户端配置。
@@ -84,6 +84,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 ![录屏快捷控制](docs/images/quick-recorder-panel.png)
 
 ## 交付状态
+
+Stage 68 / v0.68.0 开发中：Agent 记录元数据对比已接入目录查看器，已覆盖工具并集、未知用量、摘要隐私和异常耗时的定向测试；完整测试、Windows 安装包、公开 CI/Release 和官网待本阶段核对。
 
 Stage 67 / [v0.67.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.67.0)：Agent 记录查看器可明确选择目录并跨记录检索；单份与目录边界、后台读取、搜索隐私开关、完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 

@@ -79,6 +79,7 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
 }
 
 pub const MAX_IMPORT_BYTES: usize = 1024 * 1024;
+pub const MAX_STEP_ELAPSED_MS: u128 = 24 * 60 * 60 * 1_000;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -175,7 +176,8 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
             "运行步骤包含白名单之外的工具"
         );
         ensure!(
-            step.content_items <= 10_000
+            step.elapsed_ms <= MAX_STEP_ELAPSED_MS
+                && step.content_items <= 10_000
                 && step.response_bytes <= 4 * 1024 * 1024
                 && step.model_excerpt_bytes <= 4 * 1024,
             "运行步骤数据超出限制"
@@ -185,6 +187,10 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
         ensure!(
             record.model_tokens_reported.is_some(),
             "完成记录缺少模型用量"
+        );
+        ensure!(
+            !record.steps.iter().any(|step| step.is_error),
+            "完成记录不应包含工具错误"
         );
     } else {
         ensure!(

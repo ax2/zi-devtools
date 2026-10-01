@@ -1,6 +1,7 @@
 //! A read-only viewer for explicitly exported Agent run records.
 use crate::{
     agent_record::{self, ImportedRecord},
+    agent_record_compare,
     agent_record_library::{self, Entry, ScanResult},
 };
 use crossbeam_channel::{Receiver, bounded};
@@ -37,6 +38,8 @@ pub struct State {
     search: String,
     search_content: bool,
     folder_task: Option<FolderTask>,
+    compare_baseline: Option<usize>,
+    compare_candidate: Option<usize>,
 }
 
 impl State {
@@ -45,6 +48,8 @@ impl State {
         match agent_record::load_file(path) {
             Ok(record) => {
                 self.library.clear();
+                self.compare_baseline = None;
+                self.compare_candidate = None;
                 self.folder_name.clear();
                 self.search.clear();
                 self.search_content = false;
@@ -69,6 +74,8 @@ impl State {
         self.record = None;
         self.file_name.clear();
         self.library.clear();
+        self.compare_baseline = None;
+        self.compare_candidate = None;
         self.rejected = 0;
         self.show_content = false;
         self.search_content = false;
@@ -172,6 +179,8 @@ impl State {
             },
         ];
         self.folder_name = "合成记录目录".into();
+        self.compare_baseline = Some(1);
+        self.compare_candidate = Some(0);
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -220,6 +229,8 @@ impl State {
             {
                 self.cancel_folder();
                 self.library.clear();
+                self.compare_baseline = None;
+                self.compare_candidate = None;
                 self.folder_name.clear();
                 self.search.clear();
                 self.search_content = false;
@@ -266,18 +277,38 @@ impl State {
                                 continue;
                             }
                             shown += 1;
-                            if ui
-                                .button(format!(
-                                    "{}  ·  {}  ·  {}  ·  {}",
-                                    entry.record.finished_at_utc,
-                                    agent_record_library::status_label(&entry.record.status),
-                                    entry.record.model,
-                                    entry.file_name
-                                ))
-                                .clicked()
-                            {
-                                chosen = Some(index);
-                            }
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .button(format!(
+                                        "{}  ·  {}  ·  {}  ·  {}",
+                                        entry.record.finished_at_utc,
+                                        agent_record_library::status_label(&entry.record.status),
+                                        entry.record.model,
+                                        entry.file_name
+                                    ))
+                                    .clicked()
+                                {
+                                    chosen = Some(index);
+                                }
+                                if ui
+                                    .selectable_label(self.compare_baseline == Some(index), "基线")
+                                    .clicked()
+                                {
+                                    self.compare_baseline = Some(index);
+                                    if self.compare_candidate == Some(index) {
+                                        self.compare_candidate = None;
+                                    }
+                                }
+                                if ui
+                                    .selectable_label(self.compare_candidate == Some(index), "候选")
+                                    .clicked()
+                                {
+                                    self.compare_candidate = Some(index);
+                                    if self.compare_baseline == Some(index) {
+                                        self.compare_baseline = None;
+                                    }
+                                }
+                            });
                         }
                     });
                 ui.weak(format!(
@@ -288,6 +319,83 @@ impl State {
                     self.record = Some(self.library[index].record.clone());
                     self.file_name = self.library[index].file_name.clone();
                     self.show_content = false;
+                }
+            });
+        }
+        if self.library.len() >= 2 {
+            ui.add_space(8.0);
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.strong("元数据对比 · 基线 → 候选");
+                    if ui
+                        .add_enabled(
+                            self.compare_baseline.is_some() || self.compare_candidate.is_some(),
+                            egui::Button::new("清除对比选择"),
+                        )
+                        .clicked()
+                    {
+                        self.compare_baseline = None;
+                        self.compare_candidate = None;
+                    }
+                });
+                if let (Some(baseline), Some(candidate)) =
+                    (self.compare_baseline, self.compare_candidate)
+                    && baseline != candidate
+                {
+                    let comparison = agent_record_compare::compare(
+                        &self.library[baseline].record,
+                        &self.library[candidate].record,
+                    );
+                    ui.weak(format!(
+                        "基线：{}  ·  候选：{}",
+                        self.library[baseline].file_name, self.library[candidate].file_name
+                    ));
+                    ui.label(format!(
+                        "状态：{} → {}  ·  模型：{} → {}",
+                        agent_record_library::status_label(&comparison.baseline_status),
+                        agent_record_library::status_label(&comparison.candidate_status),
+                        comparison.baseline_model,
+                        comparison.candidate_model
+                    ));
+                    ui.label(format!(
+                        "工具调用：{} → {}  ·  模型报告 token：{}",
+                        comparison.baseline_calls,
+                        comparison.candidate_calls,
+                        agent_record_compare::token_change(
+                            comparison.baseline_tokens,
+                            comparison.candidate_tokens
+                        )
+                    ));
+                    if !comparison.allowed_added.is_empty() || !comparison.allowed_removed.is_empty() {
+                        ui.label(format!(
+                            "白名单新增：{}  ·  移除：{}",
+                            if comparison.allowed_added.is_empty() { "无".into() } else { comparison.allowed_added.join("、") },
+                            if comparison.allowed_removed.is_empty() { "无".into() } else { comparison.allowed_removed.join("、") },
+                        ));
+                    }
+                    for tool in &comparison.tools {
+                        ui.label(format!(
+                            "{}  ·  调用 {}→{}  ·  耗时 {}→{} ms  ·  响应 {}→{} 字节  ·  错误 {}→{}",
+                            tool.name,
+                            tool.baseline.calls,
+                            tool.candidate.calls,
+                            tool.baseline.elapsed_ms,
+                            tool.candidate.elapsed_ms,
+                            tool.baseline.response_bytes,
+                            tool.candidate.response_bytes,
+                            tool.baseline.errors,
+                            tool.candidate.errors,
+                        ));
+                    }
+                    if ui.button("复制元数据对比摘要").clicked() {
+                        ui.ctx().copy_text(comparison.metadata_summary());
+                        self.message = "已复制不含任务正文的对比摘要".into();
+                        self.message_error = false;
+                    }
+                    ui.weak("仅比较记录声明的元数据，不判断答案质量、真实性或费用。复制内容不含目标、计划、答案与错误正文。");
+                } else {
+                    ui.weak("在目录列表中分别选择一份基线和一份候选记录。两份记录不能相同。");
                 }
             });
         }
