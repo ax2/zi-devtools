@@ -88,7 +88,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 73 / v0.73.0 开发中：新增 ASCII 码表、特殊字符/表情/颜文字库和 ASCII Art；本地定向测试、严格 Clippy、亮暗主题及官网本地视口已验证，公开交付待完成。
+Stage 73 / [v0.73.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.73.0)：新增 ASCII 码表、特殊字符/表情/颜文字库和 ASCII Art；完整测试、Windows 安装/卸载、公开 CI/Release 与资产哈希、官网桌面/手机视口均已核对。两阶段交付后安全清理约 14.92 GiB 可重建构建缓存，阶段完整目录保留。
 
 Stage 72 / [v0.72.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.72.0)：新增有界只读重复文件检查，公开 CI/Release、Windows 安装/卸载、资产哈希和官网桌面/手机视口已验证。工具不自动删除，理论重复逻辑大小不等于实际可释放空间。
 
