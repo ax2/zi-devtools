@@ -2,6 +2,7 @@ use std::{
     fs,
     net::{TcpListener, TcpStream},
     process::{Child, Command, Stdio},
+    sync::{Mutex, MutexGuard},
     thread,
     time::Duration,
 };
@@ -11,8 +12,16 @@ use zi_devtools::{
     service::{ServiceManager, ServiceState},
 };
 
+// Each fixture reserves an ephemeral port only until its child binds it. Running
+// these tests in parallel can hand the same released port to another fixture.
+fn network_fixture_guard() -> MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
 #[test]
 fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
+    let _guard = network_fixture_guard();
     let root = std::env::temp_dir().join(format!("zi-lifecycle-{}", uuid::Uuid::new_v4()));
     let repo = root.join("repo");
     let state = root.join("state");
@@ -73,6 +82,7 @@ fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
 
 #[test]
 fn does_not_kill_external_port_owner_or_reused_pid() {
+    let _guard = network_fixture_guard();
     let root = std::env::temp_dir().join(format!("zi-external-{}", uuid::Uuid::new_v4()));
     let repo = root.join("repo");
     let state = root.join("state");
@@ -164,6 +174,7 @@ fn stop_command_timeout_forces_only_the_managed_tree() {
 }
 
 fn run_stop_scenario(graceful: bool) {
+    let _guard = network_fixture_guard();
     let root = std::env::temp_dir().join(format!("zi-stop-{}", uuid::Uuid::new_v4()));
     let repo = root.join("repo");
     let state = root.join("state");
