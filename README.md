@@ -90,7 +90,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 75 / v0.75.0 开发中：新增只读 SQLite 浏览器；已通过定向测试与真实 eframe 亮/暗预览，完整质量门禁和公开交付仍待核验。
+Stage 75 / [v0.75.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.75.0)：新增只读 SQLite 浏览器；本地完整测试、Windows 安装/卸载、公开 CI/Release、资产摘要与官网桌面/手机视口均已核对。服务测试的并行端口竞态已修复。
 
 Stage 74 / [v0.74.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.74.0)：新增双目录只读内容对比与有界差异 CSV；完整测试、Windows 安装/卸载、公开 CI/Release 与资产哈希、官网桌面/手机视口均已核对。部分扫描不误报单侧缺失。
 
