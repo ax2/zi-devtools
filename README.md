@@ -85,7 +85,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 66 / v0.66.0 本地验证完成，公开发布中：Agent 记录查看器支持有界导入和只读回看，已接入工具搜索入口；完整测试、Windows 安装包及静默安装/卸载已通过。公开 CI/Release 和官网线上验收待完成。
+Stage 66 / [v0.66.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.66.0)：Agent 记录查看器支持有界导入和只读回看，已接入工具搜索入口；完整本地测试、Windows 安装包及静默安装/卸载、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
 Stage 65 / [v0.65.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.65.0)：Agent 单次运行记录增加默认不含目标、计划、答案及服务路径的 JSON 预览与显式保存；额外内容须单独勾选。完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
