@@ -84,7 +84,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 64 / v0.64.0 发版验证中：本机 Agent 任务工作台可在人工批准后调用本次白名单中已直接授权的低影响只读 MCP 工具；一次性模型/MCP 夹具和真实 `qwen2.5:7b` 合成资料通过。完整本地测试、格式、Clippy、release 构建、静默安装/卸载、桌面与手机预览已通过；公开 CI、Release 与官网仍待核对。详见 [使用说明](docs/agent-workbench.md)。
+Stage 64 / [v0.64.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.64.0)：本机 Agent 任务工作台可在人工批准后调用本次白名单中已直接授权的低影响只读 MCP 工具；一次性模型/MCP 夹具和真实 `qwen2.5:7b` 合成资料通过。完整本地测试、格式、Clippy、release 构建、静默安装/卸载、公开 CI 与 Release 资产哈希，以及官网桌面与手机视口均已核对。详见 [使用说明](docs/agent-workbench.md)。
 
 Stage 63 / v0.63.0 [已公开发布](https://github.com/ax2/zi-devtools/releases/tag/v0.63.0)：MCP stdio 调试台加入按服务与工具定义绑定的持久规则、调用前二次复核和撤销；一次性协议夹具、公开 CI/Release、四件下载资产哈希及官网桌面/手机验证通过。本轮安全清理约 13.14 GiB 构建缓存。当时尚未接入 Agent 自动调用。
 
