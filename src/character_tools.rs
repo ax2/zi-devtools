@@ -49,7 +49,9 @@ pub fn ascii_name(code: u8) -> String {
 }
 
 fn ascii_matches(code: u8, name: &str, query: &str) -> bool {
-    if let Some(hex) = query.strip_prefix("0x")
+    if let Some(hex) = query
+        .strip_prefix("0x")
+        .or_else(|| query.strip_prefix("0X"))
         && let Ok(value) = u8::from_str_radix(hex, 16)
     {
         return code == value;
@@ -75,11 +77,11 @@ impl AsciiState {
         ui.add_space(10.0);
         ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("例如 65、0x41、A、LF、换行"));
         ui.separator();
-        let query = self.query.trim().to_lowercase();
+        let query = self.query.trim();
         let mut count = 0;
         for code in 0u8..=127 {
             let name = ascii_name(code);
-            if !query.is_empty() && !ascii_matches(code, &name, &query) {
+            if !query.is_empty() && !ascii_matches(code, &name, query) {
                 continue;
             }
             count += 1;
@@ -706,6 +708,8 @@ mod tests {
         assert_eq!(ascii_name(65), "A");
         assert!(ascii_name(127).contains("DEL"));
         assert!(ascii_matches(65, "A", "0x41"));
+        assert!(ascii_matches(65, "A", "A"));
+        assert!(!ascii_matches(97, "a", "A"));
         assert!(!ascii_matches(101, "e", "65"));
         assert!(ascii_matches(10, "LF 换行", "LF"));
     }
