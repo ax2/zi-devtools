@@ -68,13 +68,13 @@ pub struct ScanResult {
 }
 
 #[cfg(windows)]
-fn is_link(metadata: &Metadata) -> bool {
+pub(crate) fn is_link(metadata: &Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
     metadata.file_type().is_symlink() || metadata.file_attributes() & 0x400 != 0
 }
 
 #[cfg(not(windows))]
-fn is_link(metadata: &Metadata) -> bool {
+pub(crate) fn is_link(metadata: &Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 

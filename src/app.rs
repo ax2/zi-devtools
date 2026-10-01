@@ -117,6 +117,7 @@ enum Page {
     FileEncoding,
     ChecksumManifest,
     DiskInspector,
+    DuplicateFinder,
     KnowledgeSources,
     DocumentIngestion,
     KnowledgeIndex,
@@ -194,6 +195,7 @@ fn tool_category(id: &str) -> &'static str {
         | "encoding-detect"
         | "checksum-manifest"
         | "disk-inspector"
+        | "duplicate-files"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -421,6 +423,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "disk storage size folder files cache 磁盘 空间 目录 占用 大文件 清理".into(),
+        },
+        ToolEntry {
+            id: "duplicate-files".into(),
+            title: "重复文件检查".into(),
+            description: "按大小筛选后计算 SHA-256，手动核对重复内容".into(),
+            page: Page::DuplicateFinder,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "duplicate sha256 hash identical files 重复 文件 内容 查找 磁盘 清理".into(),
         },
         ToolEntry {
             id: "rag-sources".into(),
@@ -761,6 +772,7 @@ pub struct DevToolsApp {
     file_encoding: crate::file_encoding::State,
     checksum_manifest: crate::checksum_manifest::State,
     disk_inspector: crate::disk_inspector::State,
+    duplicate_finder: crate::duplicate_finder::State,
     knowledge_sources: crate::knowledge_sources::State,
     document_ingestion: crate::document_ingestion::State,
     knowledge_index: crate::knowledge_index::State,
@@ -919,6 +931,10 @@ impl DevToolsApp {
             155 | 156 => {
                 self.page = Page::DiskInspector;
                 self.disk_inspector.preview_fixture();
+            }
+            157 | 158 => {
+                self.page = Page::DuplicateFinder;
+                self.duplicate_finder.preview_fixture();
             }
             118 | 119 => {
                 self.page = Page::KnowledgeSources;
@@ -1412,6 +1428,7 @@ impl DevToolsApp {
             file_encoding: Default::default(),
             checksum_manifest: Default::default(),
             disk_inspector: Default::default(),
+            duplicate_finder: Default::default(),
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
             document_ingestion: Default::default(),
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
@@ -1785,6 +1802,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::FileEncoding, "文件编码转换");
                         nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
                         nav_button(ui, &mut self.page, Page::DiskInspector, "目录空间分析");
+                        nav_button(ui, &mut self.page, Page::DuplicateFinder, "重复文件检查");
                         nav_button(ui, &mut self.page, Page::KnowledgeSources, "本地知识源");
                         nav_button(
                             ui,
@@ -1834,7 +1852,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 71  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 72  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4252,6 +4270,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("disk-inspector-page")
                         .show(ui, |ui| self.disk_inspector.ui(ui));
+                }
+                Page::DuplicateFinder => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("duplicate-finder-page")
+                        .show(ui, |ui| self.duplicate_finder.ui(ui));
                 }
                 Page::KnowledgeSources => {
                     egui::ScrollArea::vertical()

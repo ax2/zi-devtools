@@ -47,3 +47,18 @@ if args.check:
     assert text == updated, 'README tool summary is stale; regenerate it'
 else:
     readme.write_text(updated, encoding='utf-8')
+
+roadmap = root/'docs/platform-roadmap.md'
+roadmap_text = roadmap.read_text(encoding='utf-8')
+roadmap_summary = (f'<!-- catalog-summary:start -->\n更新：{data["updated"]} · v{data["version"]} 开发中。'
+                   f'工具唯一状态源为 [tools.json](tools.json)，当前 {len(items)} 项目录条目：'
+                   f'{len(implemented_ids)} 项已实现、{len(items)-len(implemented_ids)} 项规划或开发中；'
+                   '另有可选示例插件包。连接器需要用户已有服务和模型，不能把插件数量当作已安装模型数量。\n'
+                   '<!-- catalog-summary:end -->')
+roadmap_updated, roadmap_count = re.subn(r'<!-- catalog-summary:start -->.*?<!-- catalog-summary:end -->',
+                                          lambda _: roadmap_summary, roadmap_text, flags=re.S)
+assert roadmap_count == 1, 'platform-roadmap needs one catalog-summary block'
+if args.check:
+    assert roadmap_text == roadmap_updated, 'Platform roadmap catalog summary is stale; regenerate it'
+else:
+    roadmap.write_text(roadmap_updated, encoding='utf-8')

@@ -10,6 +10,7 @@ pub mod dev_tools;
 pub mod diagnostics;
 pub mod disk_inspector;
 pub mod document_ingestion;
+pub mod duplicate_finder;
 pub mod embedding;
 pub mod file_encoding;
 pub mod fixture;
