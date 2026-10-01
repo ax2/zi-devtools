@@ -130,6 +130,7 @@ enum Page {
     Settings,
     Plugins,
     Mcp,
+    Agent,
     Recorder,
     Integrations,
     Java,
@@ -202,7 +203,7 @@ fn tool_category(id: &str) -> &'static str {
         "java-trace" => "Java 与 JVM",
         "django-trace" => "Python 与 Django",
         "plugins" | "integrations" | "markdown" => "扩展与集成",
-        "mcp-inspector" => "MCP 与 Agent",
+        "mcp-inspector" | "agent-runner" => "MCP 与 Agent",
         "rag-sources" | "rag-ingestion" | "rag-index" | "rag-keyword-search" | "rag-answer"
         | "rag-eval" | "browser-clipper" => "知识与检索",
         _ => "文本与编码",
@@ -326,6 +327,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: String::new(),
             keywords: "mcp stdio jsonrpc tool inspector agent 协议 连接 调试".into(),
+        },
+        ToolEntry {
+            id: "agent-runner".into(),
+            title: "本机 Agent 任务工作台".into(),
+            description: "本机模型制定计划，批准后调用已授权只读 MCP 工具".into(),
+            page: Page::Agent,
+            kind: None,
+            category: "MCP 与 Agent".into(),
+            keywords: "agent ollama mcp 只读 白名单 计划 批准".into(),
         },
         ToolEntry {
             id: "image-tools".into(),
@@ -722,6 +732,7 @@ pub struct DevToolsApp {
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
     mcp: crate::mcp_ui::McpState,
+    agent: crate::agent_ui::State,
     recorder: crate::recorder_ui::RecorderState,
     images: crate::image_tools::State,
     markdown: crate::markdown_preview::State,
@@ -931,6 +942,10 @@ impl DevToolsApp {
             148 | 149 => {
                 self.page = Page::Mcp;
                 self.mcp.preview_permissions();
+            }
+            150 | 151 => {
+                self.page = Page::Agent;
+                self.agent.preview_fixture(scene == 151);
             }
             130 | 131 => {
                 self.page = Page::KnowledgeCapture;
@@ -1354,6 +1369,7 @@ impl DevToolsApp {
             data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: crate::mcp_ui::McpState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
+            agent: crate::agent_ui::State::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
             recorder,
             images: Default::default(),
             markdown: Default::default(),
@@ -1725,6 +1741,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Tasks, "后台任务中心");
                         nav_button(ui, &mut self.page, Page::Plugins, "插件与连接器");
                         nav_button(ui, &mut self.page, Page::Mcp, "MCP 协议调试台");
+                        nav_button(ui, &mut self.page, Page::Agent, "本机 Agent 任务");
                         nav_button(ui, &mut self.page, Page::Recorder, "屏幕录制");
                         nav_button(ui, &mut self.page, Page::Images, "图片工作台");
                         nav_button(ui, &mut self.page, Page::Markdown, "Markdown 预览");
@@ -1779,7 +1796,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 63  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 64  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4135,6 +4152,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("mcp-page")
                         .show(ui, |ui| self.mcp.ui(ui));
+                }
+                Page::Agent => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("agent-page")
+                        .show(ui, |ui| self.agent.ui(ui));
                 }
                 Page::Recorder => {
                     let previous_auto_minimize = self.recorder.auto_minimize();

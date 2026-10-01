@@ -1,3 +1,5 @@
+pub mod agent;
+pub mod agent_ui;
 pub mod app;
 pub mod config;
 pub mod dev_tools;
