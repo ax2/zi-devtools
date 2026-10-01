@@ -1,5 +1,5 @@
 {
-  "version": "0.66.0",
+  "version": "0.67.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -680,7 +680,7 @@
       "status": "implemented",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "读取本机导出的 Agent schema v1 JSON，按步骤只读回看状态、白名单、耗时、响应大小和模型用量；最多读取 1 MiB，严格检查字段与预算，默认隐藏可选任务内容。不执行模型或 MCP 工具；跨任务检索、来源关联及可执行恢复仍待规划"
+      "scope": "读取本机导出的 Agent schema v1 JSON，按步骤只读回看状态、白名单、耗时、响应大小和模型用量；可明确选择目录，在后台有界读取顶层最多 64 份、累计 16 MiB 的 JSON 并按元数据跨记录搜索，任务正文搜索须另行开启。单份最多 1 MiB，默认隐藏可选任务内容，不执行模型或 MCP 工具；来源关联及可执行恢复仍待规划"
     },
     {
       "id": "workflow-builder",

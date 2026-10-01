@@ -1,7 +1,28 @@
 //! A read-only viewer for explicitly exported Agent run records.
-use crate::agent_record::{self, ImportedRecord};
+use crate::{
+    agent_record::{self, ImportedRecord},
+    agent_record_library::{self, Entry, ScanResult},
+};
+use crossbeam_channel::{Receiver, bounded};
 use eframe::egui;
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+
+struct FolderTask {
+    receiver: Receiver<anyhow::Result<ScanResult>>,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl Drop for FolderTask {
+    fn drop(&mut self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+}
 
 #[derive(Default)]
 pub struct State {
@@ -10,12 +31,23 @@ pub struct State {
     show_content: bool,
     message: String,
     message_error: bool,
+    folder_name: String,
+    library: Vec<Entry>,
+    rejected: usize,
+    search: String,
+    search_content: bool,
+    folder_task: Option<FolderTask>,
 }
 
 impl State {
     fn load(&mut self, path: &Path) {
+        self.cancel_folder();
         match agent_record::load_file(path) {
             Ok(record) => {
+                self.library.clear();
+                self.folder_name.clear();
+                self.search.clear();
+                self.search_content = false;
                 self.file_name = path
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned())
@@ -27,6 +59,74 @@ impl State {
             }
             Err(error) => {
                 self.message = format!("无法读取记录：{error}");
+                self.message_error = true;
+            }
+        }
+    }
+
+    fn start_folder(&mut self, path: &Path) {
+        self.cancel_folder();
+        self.record = None;
+        self.file_name.clear();
+        self.library.clear();
+        self.rejected = 0;
+        self.show_content = false;
+        self.search_content = false;
+        self.search.clear();
+        self.folder_name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "所选目录".into());
+        self.message = "正在读取目录中的 JSON 记录…".into();
+        self.message_error = false;
+        let (sender, receiver) = bounded(1);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let worker_cancelled = Arc::clone(&cancelled);
+        let folder = path.to_path_buf();
+        std::thread::spawn(move || {
+            let result = agent_record_library::scan_folder(&folder, &worker_cancelled);
+            let _ = sender.send(result);
+        });
+        self.folder_task = Some(FolderTask {
+            receiver,
+            cancelled,
+        });
+    }
+
+    fn cancel_folder(&mut self) {
+        if let Some(task) = self.folder_task.take() {
+            task.cancelled.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn poll_folder(&mut self, ui: &egui::Ui) {
+        let Some(task) = &self.folder_task else {
+            return;
+        };
+        match task.receiver.try_recv() {
+            Ok(Ok(scan)) => {
+                self.folder_task = None;
+                self.rejected = scan.rejected;
+                self.library = scan.entries;
+                self.message = format!(
+                    "已读取 {} 份记录；跳过 {} 份无效或超限 JSON。只在当前窗口保留。",
+                    self.library.len(),
+                    self.rejected
+                );
+                self.message_error = false;
+            }
+            Ok(Err(error)) => {
+                self.folder_task = None;
+                self.message = format!("无法读取目录：{error}");
+                self.message_error = true;
+            }
+            Err(crossbeam_channel::TryRecvError::Empty) => {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(100));
+            }
+            Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                self.folder_task = None;
+                self.message = "目录读取线程意外结束".into();
                 self.message_error = true;
             }
         }
@@ -54,11 +154,30 @@ impl State {
         self.message = "合成记录预览；未读取本机文件".into();
         self.message_error = false;
         self.show_content = show_content;
+        let earlier = serde_json::json!({
+            "schema":"zi-devtools-agent-run","schema_version":1,
+            "finished_at_utc":"2026-09-30T01:00:00Z","status":"failed",
+            "model":"qwen2.5:7b","approved":true,
+            "allowed_tools":["search_knowledge"],"max_calls":2,"calls_made":0,
+            "model_tokens_reported":null,"steps":[]
+        });
+        self.library = vec![
+            Entry {
+                file_name: "zi-agent-run-example.json".into(),
+                record: self.record.as_ref().unwrap().clone(),
+            },
+            Entry {
+                file_name: "zi-agent-run-earlier.json".into(),
+                record: agent_record::parse_json(earlier.to_string().as_bytes()).unwrap(),
+            },
+        ];
+        self.folder_name = "合成记录目录".into();
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        self.poll_folder(ui);
         ui.heading("Agent 运行记录查看器");
-        ui.label("打开 Zi DevTools 导出的 JSON，按时间线只读回看。不会连接模型或 MCP 服务，也不会重新执行工具调用。");
+        ui.label("打开单份 JSON 或明确选择一个目录，按时间线只读回看并检索记录。不会连接模型或 MCP 服务，也不会重新执行工具调用。");
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             #[cfg(windows)]
@@ -68,6 +187,19 @@ impl State {
                     .pick_file()
             {
                 self.load(&path);
+            }
+            #[cfg(windows)]
+            if ui.button("读取记录目录…").clicked()
+                && let Some(path) = rfd::FileDialog::new().pick_folder()
+            {
+                self.start_folder(&path);
+            }
+            if ui
+                .add_enabled(self.folder_task.is_some(), egui::Button::new("停止读取"))
+                .clicked()
+            {
+                self.cancel_folder();
+                self.message = "已停止目录读取".into();
             }
             if ui
                 .add_enabled(self.record.is_some(), egui::Button::new("清空当前记录"))
@@ -79,6 +211,25 @@ impl State {
                 self.message = "已从当前窗口移除记录".into();
                 self.message_error = false;
             }
+            if ui
+                .add_enabled(
+                    !self.library.is_empty() || self.folder_task.is_some(),
+                    egui::Button::new("清空目录结果"),
+                )
+                .clicked()
+            {
+                self.cancel_folder();
+                self.library.clear();
+                self.folder_name.clear();
+                self.search.clear();
+                self.search_content = false;
+                self.rejected = 0;
+                self.record = None;
+                self.file_name.clear();
+                self.show_content = false;
+                self.message = "已从当前窗口移除目录结果".into();
+                self.message_error = false;
+            }
         });
         if !self.message.is_empty() {
             if self.message_error {
@@ -87,9 +238,62 @@ impl State {
                 ui.weak(&self.message);
             }
         }
+        if !self.library.is_empty() {
+            ui.add_space(8.0);
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.strong(format!("目录记录 · {}", self.folder_name));
+                ui.horizontal(|ui| {
+                    ui.label("搜索");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.search)
+                            .hint_text("文件名、时间、状态、模型、工具"),
+                    );
+                    ui.checkbox(&mut self.search_content, "同时搜索任务内容");
+                });
+                let mut chosen = None;
+                let mut shown = 0;
+                egui::ScrollArea::vertical()
+                    .id_salt("agent-record-library")
+                    .max_height(240.0)
+                    .show(ui, |ui| {
+                        for (index, entry) in self.library.iter().enumerate() {
+                            if !agent_record_library::matches(
+                                entry,
+                                &self.search,
+                                self.search_content,
+                            ) {
+                                continue;
+                            }
+                            shown += 1;
+                            if ui
+                                .button(format!(
+                                    "{}  ·  {}  ·  {}  ·  {}",
+                                    entry.record.finished_at_utc,
+                                    agent_record_library::status_label(&entry.record.status),
+                                    entry.record.model,
+                                    entry.file_name
+                                ))
+                                .clicked()
+                            {
+                                chosen = Some(index);
+                            }
+                        }
+                    });
+                ui.weak(format!(
+                    "匹配 {shown} / {} 份记录；可选正文默认不参与搜索。",
+                    self.library.len()
+                ));
+                if let Some(index) = chosen {
+                    self.record = Some(self.library[index].record.clone());
+                    self.file_name = self.library[index].file_name.clone();
+                    self.show_content = false;
+                }
+            });
+        }
         let Some(record) = &self.record else {
             ui.add_space(8.0);
-            ui.weak("尚未打开记录。文件最多 1 MiB；只接受当前支持的 schema v1。");
+            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，只接受当前支持的 schema v1。");
             return;
         };
         ui.add_space(8.0);
@@ -97,12 +301,7 @@ impl State {
             ui.set_min_width(ui.available_width());
             ui.strong("01 执行概览");
             ui.label(format!("文件：{}", self.file_name));
-            let status = match record.status.as_str() {
-                "completed" => "已完成",
-                "failed" => "失败",
-                "cancelled" => "已取消",
-                _ => "未知",
-            };
+            let status = agent_record_library::status_label(&record.status);
             ui.label(format!(
                 "状态：{status}  ·  完成时间（UTC）：{}",
                 record.finished_at_utc
