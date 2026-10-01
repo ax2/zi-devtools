@@ -85,7 +85,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 68 / v0.68.0 开发中：Agent 记录元数据对比已接入目录查看器，已覆盖工具并集、未知用量、摘要隐私和异常耗时的定向测试；完整测试、Windows 安装包、公开 CI/Release 和官网待本阶段核对。
+Stage 68 / [v0.68.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.68.0)：Agent 记录目录可选择基线和候选进行元数据对比；工具并集、未知用量、摘要隐私、异常数值、完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
 Stage 67 / [v0.67.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.67.0)：Agent 记录查看器可明确选择目录并跨记录检索；单份与目录边界、后台读取、搜索隐私开关、完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
