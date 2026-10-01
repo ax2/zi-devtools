@@ -52,6 +52,9 @@ pub struct Step {
     pub tool: String,
     pub elapsed_ms: u128,
     pub result: String,
+    pub content_items: usize,
+    pub response_bytes: usize,
+    pub model_excerpt_bytes: usize,
     pub is_error: bool,
 }
 
@@ -389,14 +392,18 @@ pub fn execute(
             .get("content")
             .and_then(Value::as_array)
             .map_or(0, Vec::len);
+        let response_bytes = serde_json::to_vec(&value)?.len();
         let step = Step {
             tool: name.clone(),
             elapsed_ms: started.elapsed().as_millis(),
             result: format!(
                 "收到 {content_items} 个内容项；{} 字节结果中最多 {} 字节交给本次模型",
-                serde_json::to_vec(&value)?.len(),
+                response_bytes,
                 result.len()
             ),
+            content_items,
+            response_bytes,
+            model_excerpt_bytes: result.len(),
             is_error: value.get("isError") == Some(&Value::Bool(true)),
         };
         on_step(step.clone());

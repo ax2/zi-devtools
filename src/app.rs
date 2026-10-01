@@ -947,6 +947,10 @@ impl DevToolsApp {
                 self.page = Page::Agent;
                 self.agent.preview_fixture(scene == 151);
             }
+            152 => {
+                self.page = Page::Agent;
+                self.agent.preview_record_export();
+            }
             130 | 131 => {
                 self.page = Page::KnowledgeCapture;
                 self.knowledge_sources.preview_fixture();
@@ -1796,7 +1800,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 64  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 65  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4154,9 +4158,10 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.mcp.ui(ui));
                 }
                 Page::Agent => {
-                    egui::ScrollArea::vertical()
-                        .id_salt("agent-page")
-                        .show(ui, |ui| self.agent.ui(ui));
+                    let scroll = egui::ScrollArea::vertical().id_salt("agent-page");
+                    #[cfg(feature = "ui-preview")]
+                    let scroll = scroll.stick_to_bottom(self.agent.preview_scroll_bottom());
+                    scroll.show(ui, |ui| self.agent.ui(ui));
                 }
                 Page::Recorder => {
                     let previous_auto_minimize = self.recorder.auto_minimize();

@@ -1,4 +1,4 @@
-use crate::{agent, mcp};
+use crate::{agent, agent_record, mcp};
 use eframe::egui;
 use serde_json::Value;
 use std::{
@@ -61,6 +61,12 @@ pub struct State {
     plan: Option<agent::Plan>,
     outcome: Option<agent::Outcome>,
     steps: Vec<agent::Step>,
+    approved: bool,
+    finished_at: Option<String>,
+    execution_error: Option<String>,
+    include_export_content: bool,
+    #[cfg(feature = "ui-preview")]
+    preview_scroll_bottom: bool,
     phase: Phase,
     message: String,
     receiver: Option<Receiver<Event>>,
@@ -82,6 +88,12 @@ impl State {
             plan: None,
             outcome: None,
             steps: Vec::new(),
+            approved: false,
+            finished_at: None,
+            execution_error: None,
+            include_export_content: false,
+            #[cfg(feature = "ui-preview")]
+            preview_scroll_bottom: false,
             phase: Phase::Draft,
             message: String::new(),
             receiver: None,
@@ -108,6 +120,10 @@ impl State {
         self.plan = None;
         self.outcome = None;
         self.steps.clear();
+        self.approved = false;
+        self.finished_at = None;
+        self.execution_error = None;
+        self.include_export_content = false;
         self.phase = if self.inspection.is_some() {
             Phase::Ready
         } else {
@@ -172,6 +188,9 @@ impl State {
             return;
         };
         self.cancelled = Arc::new(AtomicBool::new(false));
+        self.approved = true;
+        self.finished_at = None;
+        self.execution_error = None;
         let cancelled = Arc::clone(&self.cancelled);
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
@@ -199,6 +218,10 @@ impl State {
                     if !done {
                         self.phase = Phase::Failed;
                         self.message = "Agent 后台任务意外结束".into();
+                        if self.approved {
+                            self.execution_error = Some(self.message.clone());
+                            self.finished_at = Some(chrono::Utc::now().to_rfc3339());
+                        }
                         done = true;
                     }
                     break;
@@ -224,6 +247,7 @@ impl State {
                 Event::Finished(Ok(outcome)) => {
                     self.outcome = Some(outcome);
                     self.phase = Phase::Complete;
+                    self.finished_at = Some(chrono::Utc::now().to_rfc3339());
                     done = true;
                 }
                 Event::Inspected(Err(error))
@@ -235,6 +259,10 @@ impl State {
                     } else {
                         Phase::Failed
                     };
+                    if self.approved {
+                        self.execution_error = Some(self.message.clone());
+                        self.finished_at = Some(chrono::Utc::now().to_rfc3339());
+                    }
                     done = true;
                 }
             }
@@ -244,6 +272,29 @@ impl State {
         } else {
             ui.ctx().request_repaint_after(Duration::from_millis(80));
         }
+    }
+
+    fn export_json(&self) -> Result<String, String> {
+        let plan = self.plan.as_ref().ok_or("没有可导出的执行计划")?;
+        let status = match self.phase {
+            Phase::Complete => agent_record::Status::Completed,
+            Phase::Failed => agent_record::Status::Failed,
+            Phase::Cancelled => agent_record::Status::Cancelled,
+            _ => return Err("执行尚未结束".into()),
+        };
+        agent_record::export_json(
+            agent_record::Snapshot {
+                plan,
+                steps: &self.steps,
+                outcome: self.outcome.as_ref(),
+                status,
+                approved: self.approved,
+                finished_at: self.finished_at.as_deref().unwrap_or(""),
+                error: self.execution_error.as_deref(),
+            },
+            self.include_export_content,
+        )
+        .map_err(|error| error.to_string())
     }
 
     #[cfg(feature = "ui-preview")]
@@ -286,10 +337,26 @@ impl State {
                 tool: "search_knowledge".into(),
                 elapsed_ms: 138,
                 result: "检索到 2 条本机片段（合成预览）".into(),
+                content_items: 2,
+                response_bytes: 512,
+                model_excerpt_bytes: 246,
                 is_error: false,
             }];
             self.outcome = Some(agent::Outcome { answer:"找到两条相关笔记。建议先用 Result 传播错误，再在边界处补充上下文。此处为合成界面预览。".into(), steps:self.steps.clone(), model_tokens:428 });
+            self.approved = true;
+            self.finished_at = Some("2026-10-01T01:00:00Z".into());
         }
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_record_export(&mut self) {
+        self.preview_fixture(true);
+        self.preview_scroll_bottom = true;
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_scroll_bottom(&self) -> bool {
+        self.preview_scroll_bottom
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -486,6 +553,40 @@ impl State {
                     outcome.steps.len(),
                     outcome.model_tokens
                 ));
+            });
+        }
+        if self.approved && self.finished_at.is_some() && !busy {
+            ui.add_space(8.0);
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.strong("05 运行记录导出");
+                ui.weak("默认只含状态、工具与用量摘要，不含任务目标、计划、答案、服务路径、参数或工具原文。只有主动保存才写入文件。");
+                ui.checkbox(&mut self.include_export_content, "额外包含目标、计划、答案与错误文字（可能含本机资料）");
+                match self.export_json() {
+                    Ok(record) => {
+                        let preview = egui::CollapsingHeader::new(format!("预览将保存的 JSON · {} 字节", record.len()));
+                        #[cfg(feature = "ui-preview")]
+                        let preview = preview.default_open(self.preview_scroll_bottom);
+                        preview.show(ui, |ui| {
+                            egui::ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
+                                ui.monospace(&record);
+                            });
+                        });
+                        #[cfg(windows)]
+                        if ui.button("保存运行记录 JSON…").clicked()
+                            && let Some(path) = rfd::FileDialog::new()
+                                .add_filter("JSON", &["json"])
+                                .set_file_name("zi-agent-run.json")
+                                .save_file()
+                        {
+                            match std::fs::write(&path, &record) {
+                                Ok(()) => self.message = format!("运行记录已保存：{}", path.display()),
+                                Err(error) => self.message = format!("保存运行记录失败：{error}"),
+                            }
+                        }
+                    }
+                    Err(error) => { ui.colored_label(egui::Color32::from_rgb(216, 156, 70), error); }
+                }
             });
         }
     }
