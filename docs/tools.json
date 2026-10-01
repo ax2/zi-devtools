@@ -1,5 +1,5 @@
 {
-  "version": "0.72.0",
+  "version": "0.73.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -73,6 +73,30 @@
       "category": "小工具",
       "priority": "—",
       "scope": "二、八、十、十六进制互转"
+    },
+    {
+      "id": "ascii-codes",
+      "name": "ASCII 码表",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "0–127 十进制、十六进制、可显示字符与控制符名称查询；可复制可显示字符"
+    },
+    {
+      "id": "symbol-library",
+      "name": "特殊字符与表情",
+      "status": "implemented",
+      "category": "小工具",
+      "priority": "—",
+      "scope": "按分类或名称搜索常用符号、Emoji 和颜文字，一键复制；精选库不等于完整 Unicode"
+    },
+    {
+      "id": "ascii-art",
+      "name": "ASCII Art 字符画",
+      "status": "implemented",
+      "category": "工作台",
+      "priority": "—",
+      "scope": "内置 5×7 英文与数字横幅、本机 PNG/JPEG/WebP 按亮度转换字符画，宽度控制、复制和不覆盖另存 TXT"
     },
     {
       "id": "qr",

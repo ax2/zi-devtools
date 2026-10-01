@@ -118,6 +118,9 @@ enum Page {
     ChecksumManifest,
     DiskInspector,
     DuplicateFinder,
+    AsciiCodes,
+    Symbols,
+    AsciiArt,
     KnowledgeSources,
     DocumentIngestion,
     KnowledgeIndex,
@@ -211,6 +214,7 @@ fn tool_category(id: &str) -> &'static str {
         "mcp-inspector" | "agent-runner" | "agent-replay" => "MCP 与 Agent",
         "rag-sources" | "rag-ingestion" | "rag-index" | "rag-keyword-search" | "rag-answer"
         | "rag-eval" | "browser-clipper" => "知识与检索",
+        "ascii-codes" | "symbol-library" | "ascii-art" => "文本与编码",
         _ => "文本与编码",
     }
 }
@@ -432,6 +436,33 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "duplicate sha256 hash identical files 重复 文件 内容 查找 磁盘 清理".into(),
+        },
+        ToolEntry {
+            id: "ascii-codes".into(),
+            title: "ASCII 码表".into(),
+            description: "0–127 十进制、十六进制和控制符名称查询".into(),
+            page: Page::AsciiCodes,
+            kind: None,
+            category: "文本与编码".into(),
+            keywords: "ascii code decimal hex character control 码表 字符 编码".into(),
+        },
+        ToolEntry {
+            id: "symbol-library".into(),
+            title: "特殊字符与表情".into(),
+            description: "分类查找并复制符号、Emoji 和颜文字".into(),
+            page: Page::Symbols,
+            kind: None,
+            category: "文本与编码".into(),
+            keywords: "symbols emoji kaomoji unicode 特殊字符 表情 颜文字 符号".into(),
+        },
+        ToolEntry {
+            id: "ascii-art".into(),
+            title: "ASCII Art 字符画".into(),
+            description: "文字横幅与本机图片字符画生成".into(),
+            page: Page::AsciiArt,
+            kind: None,
+            category: "文本与编码".into(),
+            keywords: "ascii art banner image text 字符画 图片 文字 横幅".into(),
         },
         ToolEntry {
             id: "rag-sources".into(),
@@ -773,6 +804,9 @@ pub struct DevToolsApp {
     checksum_manifest: crate::checksum_manifest::State,
     disk_inspector: crate::disk_inspector::State,
     duplicate_finder: crate::duplicate_finder::State,
+    ascii_codes: crate::character_tools::AsciiState,
+    symbols: crate::character_tools::SymbolState,
+    ascii_art: crate::character_tools::ArtState,
     knowledge_sources: crate::knowledge_sources::State,
     document_ingestion: crate::document_ingestion::State,
     knowledge_index: crate::knowledge_index::State,
@@ -935,6 +969,12 @@ impl DevToolsApp {
             157 | 158 => {
                 self.page = Page::DuplicateFinder;
                 self.duplicate_finder.preview_fixture();
+            }
+            159 | 160 => self.page = Page::AsciiCodes,
+            161 | 162 => self.page = Page::Symbols,
+            163 | 164 => {
+                self.page = Page::AsciiArt;
+                self.ascii_art.preview_fixture();
             }
             118 | 119 => {
                 self.page = Page::KnowledgeSources;
@@ -1429,6 +1469,9 @@ impl DevToolsApp {
             checksum_manifest: Default::default(),
             disk_inspector: Default::default(),
             duplicate_finder: Default::default(),
+            ascii_codes: Default::default(),
+            symbols: Default::default(),
+            ascii_art: Default::default(),
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
             document_ingestion: Default::default(),
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
@@ -1803,6 +1846,9 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
                         nav_button(ui, &mut self.page, Page::DiskInspector, "目录空间分析");
                         nav_button(ui, &mut self.page, Page::DuplicateFinder, "重复文件检查");
+                        nav_button(ui, &mut self.page, Page::AsciiCodes, "ASCII 码表");
+                        nav_button(ui, &mut self.page, Page::Symbols, "特殊字符与表情");
+                        nav_button(ui, &mut self.page, Page::AsciiArt, "ASCII Art 字符画");
                         nav_button(ui, &mut self.page, Page::KnowledgeSources, "本地知识源");
                         nav_button(
                             ui,
@@ -1852,7 +1898,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 72  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 73  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4275,6 +4321,21 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("duplicate-finder-page")
                         .show(ui, |ui| self.duplicate_finder.ui(ui));
+                }
+                Page::AsciiCodes => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("ascii-codes-page")
+                        .show(ui, |ui| self.ascii_codes.ui(ui));
+                }
+                Page::Symbols => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("symbols-page")
+                        .show(ui, |ui| self.symbols.ui(ui));
+                }
+                Page::AsciiArt => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("ascii-art-page")
+                        .show(ui, |ui| self.ascii_art.ui(ui));
                 }
                 Page::KnowledgeSources => {
                     egui::ScrollArea::vertical()

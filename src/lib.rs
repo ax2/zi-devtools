@@ -46,6 +46,7 @@ pub mod tasks;
 
 pub mod credentials;
 
+pub mod character_tools;
 pub mod chat_attachments;
 pub mod chat_library;
 pub mod chat_stream;
