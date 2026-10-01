@@ -1,5 +1,5 @@
 {
-  "version": "0.65.0",
+  "version": "0.66.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -676,11 +676,11 @@
     },
     {
       "id": "agent-replay",
-      "name": "Agent 运行记录与回放",
-      "status": "planned",
+      "name": "Agent 记录查看器",
+      "status": "implemented",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "已有单次执行的默认不含内容 JSON 导出；后续支持记录导入与只读回放、输入输出来源引用、跨任务检索和审计关联，不能自动重放工具调用"
+      "scope": "读取本机导出的 Agent schema v1 JSON，按步骤只读回看状态、白名单、耗时、响应大小和模型用量；最多读取 1 MiB，严格检查字段与预算，默认隐藏可选任务内容。不执行模型或 MCP 工具；跨任务检索、来源关联及可执行恢复仍待规划"
     },
     {
       "id": "workflow-builder",

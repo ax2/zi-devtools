@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod agent_record;
+pub mod agent_record_ui;
 pub mod agent_ui;
 pub mod app;
 pub mod config;
