@@ -85,7 +85,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 67 / v0.67.0 开发中：Agent 记录目录检索已接入查看器，单份与目录边界、后台读取、搜索隐私开关及 UI 正在验证；Windows 安装包、公开 CI/Release 和官网待本阶段核对。
+Stage 67 / [v0.67.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.67.0)：Agent 记录查看器可明确选择目录并跨记录检索；单份与目录边界、后台读取、搜索隐私开关、完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
 Stage 66 / [v0.66.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.66.0)：Agent 记录查看器支持有界导入和只读回看，已接入工具搜索入口；完整本地测试、Windows 安装包及静默安装/卸载、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
