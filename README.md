@@ -84,7 +84,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 65 / v0.65.0 开发中：Agent 单次运行记录增加默认不含目标、计划、答案及服务路径的 JSON 预览与显式保存；额外内容须单独勾选。完整测试、Windows 安装包、公开 CI/Release 和官网仍待本阶段验证。
+Stage 65 / [v0.65.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.65.0)：Agent 单次运行记录增加默认不含目标、计划、答案及服务路径的 JSON 预览与显式保存；额外内容须单独勾选。完整测试、Windows 安装包、公开 CI/Release 资产哈希和官网桌面/手机视口均已核对。
 
 Stage 64 / [v0.64.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.64.0)：本机 Agent 任务工作台可在人工批准后调用本次白名单中已直接授权的低影响只读 MCP 工具；一次性模型/MCP 夹具和真实 `qwen2.5:7b` 合成资料通过。完整本地测试、格式、Clippy、release 构建、静默安装/卸载、公开 CI 与 Release 资产哈希，以及官网桌面与手机视口均已核对。详见 [使用说明](docs/agent-workbench.md)。
 
