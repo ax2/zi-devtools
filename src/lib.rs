@@ -8,6 +8,7 @@ pub mod app;
 pub mod config;
 pub mod dev_tools;
 pub mod diagnostics;
+pub mod directory_compare;
 pub mod disk_inspector;
 pub mod document_ingestion;
 pub mod duplicate_finder;

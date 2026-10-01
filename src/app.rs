@@ -118,6 +118,7 @@ enum Page {
     ChecksumManifest,
     DiskInspector,
     DuplicateFinder,
+    DirectoryCompare,
     AsciiCodes,
     Symbols,
     AsciiArt,
@@ -199,6 +200,7 @@ fn tool_category(id: &str) -> &'static str {
         | "checksum-manifest"
         | "disk-inspector"
         | "duplicate-files"
+        | "file-compare"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -436,6 +438,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "duplicate sha256 hash identical files 重复 文件 内容 查找 磁盘 清理".into(),
+        },
+        ToolEntry {
+            id: "file-compare".into(),
+            title: "目录内容对比".into(),
+            description: "只读对照相对路径、文件大小和 SHA-256，导出差异 CSV".into(),
+            page: Page::DirectoryCompare,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "folder directory compare diff sha256 csv 目录 对比 差异 文件 摘要".into(),
         },
         ToolEntry {
             id: "ascii-codes".into(),
@@ -804,6 +815,7 @@ pub struct DevToolsApp {
     checksum_manifest: crate::checksum_manifest::State,
     disk_inspector: crate::disk_inspector::State,
     duplicate_finder: crate::duplicate_finder::State,
+    directory_compare: crate::directory_compare::State,
     ascii_codes: crate::character_tools::AsciiState,
     symbols: crate::character_tools::SymbolState,
     ascii_art: crate::character_tools::ArtState,
@@ -969,6 +981,10 @@ impl DevToolsApp {
             157 | 158 => {
                 self.page = Page::DuplicateFinder;
                 self.duplicate_finder.preview_fixture();
+            }
+            165 | 166 => {
+                self.page = Page::DirectoryCompare;
+                self.directory_compare.preview_fixture();
             }
             159 | 160 => self.page = Page::AsciiCodes,
             161 | 162 => {
@@ -1473,6 +1489,7 @@ impl DevToolsApp {
             checksum_manifest: Default::default(),
             disk_inspector: Default::default(),
             duplicate_finder: Default::default(),
+            directory_compare: Default::default(),
             ascii_codes: Default::default(),
             symbols: Default::default(),
             ascii_art: Default::default(),
@@ -1850,6 +1867,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
                         nav_button(ui, &mut self.page, Page::DiskInspector, "目录空间分析");
                         nav_button(ui, &mut self.page, Page::DuplicateFinder, "重复文件检查");
+                        nav_button(ui, &mut self.page, Page::DirectoryCompare, "目录内容对比");
                         nav_button(ui, &mut self.page, Page::AsciiCodes, "ASCII 码表");
                         nav_button(ui, &mut self.page, Page::Symbols, "特殊字符与表情");
                         nav_button(ui, &mut self.page, Page::AsciiArt, "ASCII Art 字符画");
@@ -1902,7 +1920,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 73  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 74  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4325,6 +4343,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("duplicate-finder-page")
                         .show(ui, |ui| self.duplicate_finder.ui(ui));
+                }
+                Page::DirectoryCompare => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("directory-compare-page")
+                        .show(ui, |ui| self.directory_compare.ui(ui));
                 }
                 Page::AsciiCodes => {
                     egui::ScrollArea::vertical()

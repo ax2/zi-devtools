@@ -1,5 +1,5 @@
 {
-  "version": "0.73.0",
+  "version": "0.74.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -301,10 +301,10 @@
     {
       "id": "file-compare",
       "name": "目录内容对比",
-      "status": "planned",
-      "category": "扩展工具",
+      "status": "implemented",
+      "category": "文件与系统",
       "priority": "P1",
-      "scope": "只读扫描、大小与摘要对比、导出差异清单"
+      "scope": "选择两个本机目录，按相对路径和类型对照；文件先比大小，同大小再流式计算 SHA-256；有界后台扫描、取消、部分结果说明、筛选和无覆盖 CSV 导出，不同步或删除"
     },
     {
       "id": "cron",
