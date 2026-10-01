@@ -1,5 +1,5 @@
 {
-  "version": "0.75.0",
+  "version": "0.76.0",
   "updated": "2026-10-01",
   "tools": [
     {
@@ -605,10 +605,10 @@
     {
       "id": "mcp-connections",
       "name": "MCP 连接管理",
-      "status": "planned",
+      "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "stdio 与 Streamable HTTP 初始化、版本协商、会话/心跳/超时和进程退出"
+      "scope": "本机 stdio 可显式保持同一进程、连续操作、手动断开和闲置超时，操作逐次限制时长与输出；Streamable HTTP、心跳及第三方兼容性待实现"
     },
     {
       "id": "mcp-inspector",
@@ -616,7 +616,7 @@
       "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "本机 stdio 短会话已支持初始化、版本校验、tools/resources/prompts 有界分页枚举、schema 与只读声明查看、JSON 参数手动工具调用、调用前工具定义及本机权限复核、选中资源读取、提示词获取及取消；Streamable HTTP、持久会话、参数表单、协议日志和真实第三方服务器兼容性待补"
+      "scope": "本机 stdio 短会话及显式持续连接支持初始化、版本校验、tools/resources/prompts 有界分页枚举、schema 与只读声明查看、JSON 参数手动工具调用、调用前工具定义及本机权限复核、选中资源读取、提示词获取及取消；Streamable HTTP、参数表单、协议日志和真实第三方服务器兼容性待补"
     },
     {
       "id": "mcp-permissions",
@@ -624,7 +624,7 @@
       "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "本机 stdio 调试台按 EXE/参数及工具完整定义保存禁止或受限只读直接调用规则，默认逐次确认；本机 Agent 自动调用只接受已直接许可且完整声明低影响只读的工具，每次调用前复核身份、定义和权限。高影响工具仍需调试台逐次手动确认；持久连接与跨客户端审计待实现"
+      "scope": "本机 stdio 调试台短会话与持续连接按 EXE/参数及工具完整定义保存禁止或受限只读直接调用规则，默认逐次确认；本机 Agent 自动调用只接受已直接许可且完整声明低影响只读的工具，每次调用前复核身份、定义和权限。高影响工具仍需调试台逐次手动确认；跨客户端审计待实现"
     },
     {
       "id": "screen-recorder",

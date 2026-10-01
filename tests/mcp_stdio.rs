@@ -4,6 +4,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
+        mpsc,
     },
     time::{Duration, Instant},
 };
@@ -38,6 +39,118 @@ fn config(mode: &str) -> Config {
 
 fn token() -> Arc<AtomicBool> {
     Arc::new(AtomicBool::new(false))
+}
+
+#[test]
+fn connected_stdio_reuses_process_and_rechecks_permissions() {
+    let root = std::env::temp_dir().join(format!("zi-mcp-connected-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let access_path = root.join("mcp-permissions.json");
+    let config = config("identity");
+    let scope = mcp_access::server_scope(&config).unwrap();
+    let cancelled = token();
+    let (sender, requests) = mpsc::channel();
+    let worker = std::thread::spawn({
+        let cancelled = Arc::clone(&cancelled);
+        let access_path = access_path.clone();
+        let config = config.clone();
+        move || mcp::serve_connected(config, cancelled, access_path, requests).unwrap()
+    });
+    let run = |action, manual_confirmed| {
+        let (response, received) = mpsc::channel();
+        sender
+            .send(mcp::ConnectedRequest {
+                action,
+                manual_confirmed,
+                response,
+            })
+            .unwrap();
+        received.recv_timeout(Duration::from_secs(10)).unwrap()
+    };
+    let first = run(Action::Inspect, false).unwrap();
+    let resource = || Action::ReadResource {
+        uri: "fixture://guide".into(),
+    };
+    let pid = |report: mcp::Report| {
+        report.resource_result.unwrap().1["contents"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(
+        pid(run(resource(), false).unwrap()),
+        pid(run(resource(), false).unwrap())
+    );
+    let tool = first.tools[1].clone();
+    let call = || Action::Call {
+        tool: "echo".into(),
+        arguments: json!({"text":"same process"}),
+        expected_tool: tool.clone(),
+    };
+    assert!(run(call(), true).unwrap().call_result.is_some());
+    Store::load(access_path.clone())
+        .set(&scope, &tool, Some(Rule::Deny))
+        .unwrap();
+    assert!(run(call(), true).unwrap_err().contains("禁止"));
+    worker.join().unwrap();
+    assert!(
+        sender
+            .send(mcp::ConnectedRequest {
+                action: Action::Inspect,
+                manual_confirmed: false,
+                response: mpsc::channel().0,
+            })
+            .is_err()
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn connected_stdio_cancel_stops_an_in_flight_request() {
+    let config = config("hang_resource");
+    let cancelled = token();
+    let (sender, requests) = mpsc::channel();
+    let worker = std::thread::spawn({
+        let cancelled = Arc::clone(&cancelled);
+        move || {
+            mcp::serve_connected(
+                config,
+                cancelled,
+                std::env::temp_dir().join("unused-mcp-permissions.json"),
+                requests,
+            )
+            .unwrap()
+        }
+    });
+    let ask = |action| {
+        let (response, received) = mpsc::channel();
+        sender
+            .send(mcp::ConnectedRequest {
+                action,
+                manual_confirmed: false,
+                response,
+            })
+            .unwrap();
+        received
+    };
+    ask(Action::Inspect)
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap()
+        .unwrap();
+    let started = Instant::now();
+    let response = ask(Action::ReadResource {
+        uri: "fixture://guide".into(),
+    });
+    std::thread::sleep(Duration::from_millis(100));
+    cancelled.store(true, Ordering::Relaxed);
+    assert!(
+        response
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+            .is_err()
+    );
+    worker.join().unwrap();
+    assert!(started.elapsed() < Duration::from_secs(3));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 """Disposable, credential-free MCP stdio fixture for Rust integration tests."""
 import json
+import os
 import sys
 import time
 
@@ -103,7 +104,7 @@ for line in sys.stdin:
                     {
                         "uri": request["params"]["uri"],
                         "mimeType": "text/plain",
-                        "text": "本地测试指南",
+                        "text": str(os.getpid()) if MODE == "identity" else "本地测试指南",
                     }
                 ]
             }

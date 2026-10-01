@@ -1,5 +1,5 @@
 use crate::{
-    mcp::{self, Action, Config, Report},
+    mcp::{self, Action, Config, ConnectedRequest, Report},
     mcp_access::{self, Decision, Rule, Store},
 };
 use eframe::egui;
@@ -11,7 +11,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc::{self, Receiver},
+        mpsc::{self, Receiver, Sender},
     },
     time::Duration,
 };
@@ -55,6 +55,8 @@ pub struct McpState {
     server_scope: Option<String>,
     scope_error: Option<String>,
     receiver: Option<Receiver<Result<Report, String>>>,
+    connection: Option<Sender<ConnectedRequest>>,
+    connection_alive: Arc<AtomicBool>,
     cancelled: Arc<AtomicBool>,
     message: String,
 }
@@ -78,6 +80,8 @@ impl McpState {
             server_scope: None,
             scope_error: None,
             receiver: None,
+            connection: None,
+            connection_alive: Arc::new(AtomicBool::new(false)),
             cancelled: Arc::new(AtomicBool::new(false)),
             message: String::new(),
         }
@@ -150,6 +154,15 @@ impl McpState {
         self.call_confirm = false;
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_connected(&mut self) {
+        self.preview_fixture(false);
+        let (sender, _receiver) = mpsc::channel();
+        self.connection = Some(sender);
+        self.connection_alive.store(true, Ordering::Relaxed);
+        self.message = "合成界面预览 · 持续连接状态，无外部进程".into();
+    }
+
     fn config(&self) -> Result<Config, String> {
         let args: Vec<String> = serde_json::from_str(&self.arguments)
             .map_err(|_| "参数必须是 JSON 字符串数组，例如 [\"server.js\"]".to_owned())?;
@@ -195,40 +208,91 @@ impl McpState {
             report.resource_result = None;
             report.prompt_result = None;
         }
-        self.cancelled = Arc::new(AtomicBool::new(false));
-        let cancelled = Arc::clone(&self.cancelled);
-        let access_path = self.access.path().to_path_buf();
-        std::thread::spawn(move || {
-            let result = if matches!(&action, Action::Call { .. }) {
-                mcp::run_with_access(config, action, cancelled, access_path, manual_confirmed)
-            } else {
-                mcp::run(config, action, cancelled)
+        if let Some(connection) = &self.connection {
+            if connection
+                .send(ConnectedRequest {
+                    action,
+                    manual_confirmed,
+                    response: sender,
+                })
+                .is_err()
+            {
+                self.connection = None;
+                self.message = "MCP 连接已退出；请重新连接".into();
+                return;
             }
-            .map_err(|error| error.to_string());
-            let _ = sender.send(result);
-        });
+        } else {
+            self.cancelled = Arc::new(AtomicBool::new(false));
+            let cancelled = Arc::clone(&self.cancelled);
+            let access_path = self.access.path().to_path_buf();
+            std::thread::spawn(move || {
+                let result = if matches!(&action, Action::Call { .. }) {
+                    mcp::run_with_access(config, action, cancelled, access_path, manual_confirmed)
+                } else {
+                    mcp::run(config, action, cancelled)
+                }
+                .map_err(|error| error.to_string());
+                let _ = sender.send(result);
+            });
+        }
         self.receiver = Some(receiver);
         self.message = "正在与 MCP 服务通信…".into();
         self.call_confirm = false;
         self.confirmation_name.clear();
     }
 
+    fn connect(&mut self) {
+        let config = match self.config() {
+            Ok(config) => config,
+            Err(error) => {
+                self.message = error;
+                return;
+            }
+        };
+        self.cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled = Arc::clone(&self.cancelled);
+        self.connection_alive = Arc::new(AtomicBool::new(true));
+        let alive = Arc::clone(&self.connection_alive);
+        let access_path = self.access.path().to_path_buf();
+        let (sender, requests) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = mcp::serve_connected(config, cancelled, access_path, requests);
+            alive.store(false, Ordering::Relaxed);
+        });
+        self.connection = Some(sender);
+        self.start(Action::Inspect, false);
+    }
+
     fn poll(&mut self, ui: &egui::Ui) {
+        if self.connection.is_some() && !self.connection_alive.load(Ordering::Relaxed) {
+            self.connection = None;
+            if self.receiver.is_none() {
+                self.message = "MCP 连接已断开".into();
+            }
+        } else if self.connection.is_some() {
+            ui.ctx().request_repaint_after(Duration::from_millis(500));
+        }
         let Some(receiver) = &self.receiver else {
             return;
         };
         match receiver.try_recv() {
             Ok(Ok(report)) => {
-                self.message = if report.call_result.is_some() {
-                    "工具响应已收到；本次会话已退出"
-                } else if report.resource_result.is_some() {
-                    "资源内容已收到；本次会话已退出"
-                } else if report.prompt_result.is_some() {
-                    "提示词内容已收到；本次会话已退出"
+                let suffix = if self.connection.is_some() {
+                    "；连接保持中"
                 } else {
-                    "能力清单已读取；本次会话已退出"
+                    "；本次会话已退出"
+                };
+                self.message = if report.call_result.is_some() {
+                    "工具响应已收到"
+                } else if report.resource_result.is_some() {
+                    "资源内容已收到"
+                } else if report.prompt_result.is_some() {
+                    "提示词内容已收到"
+                } else {
+                    "能力清单已读取"
                 }
-                .into();
+                .to_owned()
+                    + suffix;
                 if !report.tools.iter().any(|tool| {
                     tool.get("name").and_then(Value::as_str) == Some(&self.selected_tool)
                 }) {
@@ -268,6 +332,7 @@ impl McpState {
             Ok(Err(error)) => {
                 self.message = error;
                 self.receiver = None;
+                self.connection = None;
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 self.message = "MCP 后台任务意外结束".into();
@@ -283,7 +348,13 @@ impl McpState {
         self.poll(ui);
         let busy = self.receiver.is_some();
         ui.heading("MCP 协议调试台");
-        ui.label("明确启动本机 stdio 服务，查看能力并手动调用工具、读取资源或获取提示词。每次操作建立短会话；不会保存路径、参数或结果。");
+        ui.label("明确启动本机 stdio 服务，查看能力并手动调用工具、读取资源或获取提示词。可使用短会话或显式持续连接；不会保存路径、参数或结果。");
+        if self.connection.is_some() {
+            ui.colored_label(
+                egui::Color32::from_rgb(86, 163, 118),
+                "● 持续连接中 · 闲置 2 分钟自动断开",
+            );
+        }
         ui.add_space(8.0);
         ui.group(|ui| {
             ui.strong("连接目标");
@@ -294,7 +365,7 @@ impl McpState {
                 ui.label("可执行程序");
                 if ui
                     .add_enabled(
-                        !busy,
+                        !busy && self.connection.is_none(),
                         egui::TextEdit::singleline(&mut self.executable)
                             .desired_width((ui.available_width() - 100.0).max(280.0)),
                     )
@@ -308,7 +379,10 @@ impl McpState {
                 }
                 #[cfg(windows)]
                 if ui
-                    .add_enabled(!busy, egui::Button::new("选择 EXE"))
+                    .add_enabled(
+                        !busy && self.connection.is_none(),
+                        egui::Button::new("选择 EXE"),
+                    )
                     .clicked()
                     && let Some(path) = rfd::FileDialog::new()
                         .add_filter("Executable", &["exe"])
@@ -325,7 +399,7 @@ impl McpState {
             ui.label("参数 · JSON 字符串数组");
             if ui
                 .add_enabled(
-                    !busy,
+                    !busy && self.connection.is_none(),
                     egui::TextEdit::singleline(&mut self.arguments).desired_width(f32::INFINITY),
                 )
                 .changed()
@@ -343,11 +417,22 @@ impl McpState {
                 {
                     self.start(Action::Inspect, false);
                 }
+                if self.connection.is_none()
+                    && ui
+                        .add_enabled(!busy, egui::Button::new("连接并保持"))
+                        .clicked()
+                {
+                    self.connect();
+                }
                 if ui
-                    .add_enabled(busy, egui::Button::new("停止并退出进程"))
+                    .add_enabled(
+                        busy || self.connection.is_some(),
+                        egui::Button::new("断开并退出进程"),
+                    )
                     .clicked()
                 {
                     self.cancelled.store(true, Ordering::Relaxed);
+                    self.connection = None;
                     self.message = "正在停止 MCP 进程…".into();
                 }
                 if busy {
@@ -504,7 +589,7 @@ impl McpState {
                             }
                         }
                     });
-                    ui.small("规则绑定当前程序、参数和工具定义；服务声明只读不等于安全保证。撤销会停止当前短会话，已发出的动作无法回滚。");
+                    ui.small("规则绑定当前程序、参数和工具定义；服务声明只读不等于安全保证。撤销会停止当前会话，已发出的动作无法回滚。");
                 } else {
                     access_decision = Decision::Deny;
                     ui.small("无法核对服务身份，工具调用不可用；资源和提示词仍可手动查看。");

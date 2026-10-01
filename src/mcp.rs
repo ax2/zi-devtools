@@ -1,4 +1,4 @@
-//! A bounded, explicit MCP stdio inspector. Each operation owns one short-lived session.
+//! A bounded MCP stdio inspector with optional explicit connection reuse.
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
 use std::{
@@ -374,6 +374,11 @@ impl Session {
         Ok((name, version.to_owned(), capabilities))
     }
 
+    fn reset_limits(&mut self, timeout: Duration) {
+        self.deadline = Instant::now() + timeout;
+        self.received_bytes = 0;
+    }
+
     fn list(&mut self, method: &str, field: &str) -> Result<Vec<Value>> {
         let mut items = Vec::new();
         let mut cursor: Option<String> = None;
@@ -453,12 +458,150 @@ pub fn run_with_access(
     )
 }
 
+pub struct ConnectedRequest {
+    pub action: Action,
+    pub manual_confirmed: bool,
+    pub response: mpsc::Sender<Result<Report, String>>,
+}
+
+/// Owns a single stdio process on the calling worker thread. Any protocol or
+/// operation error ends the connection so a later response cannot be mistaken
+/// for a different request. Idle connections close after two minutes.
+pub fn serve_connected(
+    config: Config,
+    cancelled: Arc<AtomicBool>,
+    access_path: PathBuf,
+    requests: Receiver<ConnectedRequest>,
+) -> Result<()> {
+    let first = requests.recv().context("MCP 连接尚未收到操作")?;
+    if let Err(error) = validate_action(&first.action) {
+        let _ = first.response.send(Err(error.to_string()));
+        return Ok(());
+    }
+    let mut session = match Session::new(&config, Duration::from_secs(15), Arc::clone(&cancelled)) {
+        Ok(session) => session,
+        Err(error) => {
+            let _ = first.response.send(Err(error.to_string()));
+            return Ok(());
+        }
+    };
+    let (server, protocol, capabilities) = match session.initialize() {
+        Ok(info) => info,
+        Err(error) => {
+            let _ = first.response.send(Err(error.to_string()));
+            return Ok(());
+        }
+    };
+    let mut pending = Some(first);
+    let mut idle_since = Instant::now();
+    loop {
+        if cancelled.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        let request = match pending
+            .take()
+            .map(Ok)
+            .unwrap_or_else(|| requests.recv_timeout(Duration::from_millis(100)))
+        {
+            Ok(request) => request,
+            Err(RecvTimeoutError::Disconnected) => return Ok(()),
+            Err(RecvTimeoutError::Timeout) => {
+                // recv_timeout is deliberately short so explicit disconnect is prompt.
+                if idle_since.elapsed() >= Duration::from_secs(120) {
+                    return Ok(());
+                }
+                continue;
+            }
+        };
+        session.reset_limits(if matches!(request.action, Action::Inspect) {
+            Duration::from_secs(15)
+        } else {
+            Duration::from_secs(30)
+        });
+        let access = Some((access_path.clone(), request.manual_confirmed));
+        let result = perform_on_session(
+            &config,
+            request.action,
+            &mut session,
+            &server,
+            &protocol,
+            &capabilities,
+            access,
+        );
+        let failed = result.is_err();
+        let _ = request
+            .response
+            .send(result.map_err(|error| error.to_string()));
+        if failed {
+            return Ok(());
+        }
+        idle_since = Instant::now();
+    }
+}
+
 fn run_inner(
     config: Config,
     action: Action,
     cancelled: Arc<AtomicBool>,
     access: Option<(PathBuf, bool)>,
 ) -> Result<Report> {
+    validate_action(&action)?;
+    if let (Some((path, manual_confirmed)), Action::Call { expected_tool, .. }) = (&access, &action)
+    {
+        let scope = crate::mcp_access::server_scope(&config)?;
+        crate::mcp_access::authorize(path, &scope, expected_tool, *manual_confirmed)?;
+    }
+    let timeout = if matches!(action, Action::Inspect) {
+        Duration::from_secs(15)
+    } else {
+        Duration::from_secs(30)
+    };
+    let mut session = Session::new(&config, timeout, cancelled)?;
+    let (server, protocol, capabilities) = session.initialize()?;
+    perform_on_session(
+        &config,
+        action,
+        &mut session,
+        &server,
+        &protocol,
+        &capabilities,
+        access,
+    )
+}
+
+fn perform_on_session(
+    config: &Config,
+    action: Action,
+    session: &mut Session,
+    server: &str,
+    protocol: &str,
+    capabilities: &Value,
+    access: Option<(PathBuf, bool)>,
+) -> Result<Report> {
+    validate_action(&action)?;
+    if let (Some((path, manual_confirmed)), Action::Call { expected_tool, .. }) = (&access, &action)
+    {
+        let scope = crate::mcp_access::server_scope(config)?;
+        crate::mcp_access::authorize(path, &scope, expected_tool, *manual_confirmed)?;
+    }
+    let mut report = Report {
+        server: server.to_owned(),
+        protocol: protocol.to_owned(),
+        ..Default::default()
+    };
+    if capabilities.get("tools").is_some() {
+        report.tools = session.list("tools/list", "tools")?;
+    }
+    if capabilities.get("resources").is_some() {
+        report.resources = session.list("resources/list", "resources")?;
+    }
+    if capabilities.get("prompts").is_some() {
+        report.prompts = session.list("prompts/list", "prompts")?;
+    }
+    perform_listed_action(config, action, session, report, access)
+}
+
+fn validate_action(action: &Action) -> Result<()> {
     match &action {
         Action::Call {
             tool,
@@ -500,32 +643,16 @@ fn run_inner(
         }
         Action::Inspect => {}
     }
-    if let (Some((path, manual_confirmed)), Action::Call { expected_tool, .. }) = (&access, &action)
-    {
-        let scope = crate::mcp_access::server_scope(&config)?;
-        crate::mcp_access::authorize(path, &scope, expected_tool, *manual_confirmed)?;
-    }
-    let timeout = if matches!(action, Action::Inspect) {
-        Duration::from_secs(15)
-    } else {
-        Duration::from_secs(30)
-    };
-    let mut session = Session::new(&config, timeout, cancelled)?;
-    let (server, protocol, capabilities) = session.initialize()?;
-    let mut report = Report {
-        server,
-        protocol,
-        ..Default::default()
-    };
-    if capabilities.get("tools").is_some() {
-        report.tools = session.list("tools/list", "tools")?;
-    }
-    if capabilities.get("resources").is_some() {
-        report.resources = session.list("resources/list", "resources")?;
-    }
-    if capabilities.get("prompts").is_some() {
-        report.prompts = session.list("prompts/list", "prompts")?;
-    }
+    Ok(())
+}
+
+fn perform_listed_action(
+    config: &Config,
+    action: Action,
+    session: &mut Session,
+    mut report: Report,
+    access: Option<(PathBuf, bool)>,
+) -> Result<Report> {
     match action {
         Action::Call {
             tool,
@@ -542,7 +669,7 @@ fn run_inner(
                 "工具定义已变化，调用已拒绝；请重新检查服务能力并确认"
             );
             if let Some((path, manual_confirmed)) = &access {
-                let scope = crate::mcp_access::server_scope(&config)?;
+                let scope = crate::mcp_access::server_scope(config)?;
                 crate::mcp_access::authorize(path, &scope, listed, *manual_confirmed)?;
             }
             report.call_result =
