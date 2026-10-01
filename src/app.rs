@@ -116,6 +116,7 @@ enum Page {
     Markdown,
     FileEncoding,
     ChecksumManifest,
+    DiskInspector,
     KnowledgeSources,
     DocumentIngestion,
     KnowledgeIndex,
@@ -192,6 +193,7 @@ fn tool_category(id: &str) -> &'static str {
         | "image-crop-annotate"
         | "encoding-detect"
         | "checksum-manifest"
+        | "disk-inspector"
         | "services"
         | "global-launcher"
         | "file-intake"
@@ -410,6 +412,15 @@ fn catalog() -> Vec<ToolEntry> {
             kind: None,
             category: "文件与系统".into(),
             keywords: "checksum sha256 sums manifest verify 文件 校验 清单".into(),
+        },
+        ToolEntry {
+            id: "disk-inspector".into(),
+            title: "目录空间分析".into(),
+            description: "只读统计大目录与大文件，明确部分结果".into(),
+            page: Page::DiskInspector,
+            kind: None,
+            category: "文件与系统".into(),
+            keywords: "disk storage size folder files cache 磁盘 空间 目录 占用 大文件 清理".into(),
         },
         ToolEntry {
             id: "rag-sources".into(),
@@ -749,6 +760,7 @@ pub struct DevToolsApp {
     markdown: crate::markdown_preview::State,
     file_encoding: crate::file_encoding::State,
     checksum_manifest: crate::checksum_manifest::State,
+    disk_inspector: crate::disk_inspector::State,
     knowledge_sources: crate::knowledge_sources::State,
     document_ingestion: crate::document_ingestion::State,
     knowledge_index: crate::knowledge_index::State,
@@ -903,6 +915,10 @@ impl DevToolsApp {
             116 | 117 => {
                 self.page = Page::ChecksumManifest;
                 self.checksum_manifest.preview_fixture();
+            }
+            155 | 156 => {
+                self.page = Page::DiskInspector;
+                self.disk_inspector.preview_fixture();
             }
             118 | 119 => {
                 self.page = Page::KnowledgeSources;
@@ -1395,6 +1411,7 @@ impl DevToolsApp {
             markdown: Default::default(),
             file_encoding: Default::default(),
             checksum_manifest: Default::default(),
+            disk_inspector: Default::default(),
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
             document_ingestion: Default::default(),
             knowledge_index: crate::knowledge_index::State::new(crate::knowledge_index::default_path()),
@@ -1767,6 +1784,7 @@ impl DevToolsApp {
                         nav_button(ui, &mut self.page, Page::Markdown, "Markdown 预览");
                         nav_button(ui, &mut self.page, Page::FileEncoding, "文件编码转换");
                         nav_button(ui, &mut self.page, Page::ChecksumManifest, "校验清单");
+                        nav_button(ui, &mut self.page, Page::DiskInspector, "目录空间分析");
                         nav_button(ui, &mut self.page, Page::KnowledgeSources, "本地知识源");
                         nav_button(
                             ui,
@@ -1816,7 +1834,7 @@ impl DevToolsApp {
                     });
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.label(
-                        RichText::new(format!("Stage 70  ·  v{}", env!("CARGO_PKG_VERSION")))
+                        RichText::new(format!("Stage 71  ·  v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)
                             .color(p.muted),
                     );
@@ -4229,6 +4247,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("checksum-manifest-page")
                         .show(ui, |ui| self.checksum_manifest.ui(ui));
+                }
+                Page::DiskInspector => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("disk-inspector-page")
+                        .show(ui, |ui| self.disk_inspector.ui(ui));
                 }
                 Page::KnowledgeSources => {
                     egui::ScrollArea::vertical()

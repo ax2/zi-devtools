@@ -31,6 +31,7 @@ MIT 开源的 Windows 原生 Rust 桌面开发工具。
 - Java 与 Django 诊断分开导航；左下角主题、托盘、设置为图标按钮，悬停可查看说明。隐藏到托盘时移除主窗口任务栏样式，恢复时还原。
 - [网页与对话收集](docs/knowledge-capture.md)可粘贴 Agent 结果、导入 HTML 或抓取公开 HTTPS 网页，预览后保存到本机目录知识源或 Zi 收集箱。[本地知识源](docs/knowledge-sources.md)可明确添加文件或目录、排除不需要的内容并手动扫描版本清单；[文档解析与分块](docs/document-ingestion.md)可从快照选择 Markdown、文本、网页、PDF 或 Word，校验版本后预览带位置与哈希的分块。[本机关键词检索](docs/knowledge-search.md)可查询索引、复制引用并核验原文件；[混合检索工作台](docs/hybrid-search.md)可将关键词与本机向量结果按可解释权重融合。[带引用的知识问答](docs/knowledge-answer.md)可明确选择关键词或混合证据，预览有限证据后调用本机模型，并拒绝虚构引用编号；[本机 RAG 评测](docs/knowledge-eval.md)可用固定样例集对照两种检索的 Top K 命中与名次，或评测所选证据的引用和答案字面片段。
 - [磁盘维护](docs/maintenance.md)提供构建增量缓存的预览、手动清理和每周计划任务；每月首次成功运行时清理完整构建缓存，错过首周也会补做，并记录最近一次结果。阶段发布包、用户配置与知识数据始终保留。
+- [目录空间分析](docs/disk-inspector.md)在用户选择目录后后台只读统计大目录与大文件，支持取消，并将链接、权限错误或扫描上限导致的不完整结果明确标出；不自动删除文件。
 - [增量知识索引](docs/knowledge-index.md)在用户手动同步时将已扫描文档写入本机 SQLite 全文索引，支持增量更新、删除同步、回滚与重建；正文可在工具中确认后删除。
 - 托盘右键“本地服务”子菜单汇总所有服务、状态与批量启停；HTTP 历史可搜索，清空时需要二次确认。
 - HTTP 请求头、请求体和响应只保存在当前进程内存；站点只保存名称与基础地址，历史只保存方法、去掉查询参数的 URL、状态和耗时，存于 `%USERPROFILE%\.zi-devtools\http-workbench.json`。历史重新打开不会恢复认证信息；URL 路径如含敏感值仍应避免使用历史记录。
@@ -84,6 +85,8 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 ![录屏快捷控制](docs/images/quick-recorder-panel.png)
 
 ## 交付状态
+
+Stage 71 / v0.71.0 开发中：新增只读目录空间分析，按直属子目录与最大文件展示已统计逻辑大小，明确链接、权限、扫描上限与取消造成的部分结果；完整交付验证进行中。
 
 Stage 70 / [v0.70.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.70.0)：知识 MCP 命中按 3 KiB 模型消息装箱，仅为选入的片段分配 `[K编号]` 并校验完成回答的引用；默认私有记录及 v1/v2/v3 查看器通过测试。完整本地与公开 CI/Release、Windows 安装/卸载、公开资产哈希及官网桌面/手机视口均已核对。失败或取消时最近一步消息可能尚未发送；编号有效不证明答案事实正确。本轮安全清理约 11.45 GiB 构建缓存。
 
