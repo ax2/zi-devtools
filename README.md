@@ -86,7 +86,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 71 / v0.71.0 开发中：新增只读目录空间分析，按直属子目录与最大文件展示已统计逻辑大小，明确链接、权限、扫描上限与取消造成的部分结果；完整交付验证进行中。
+Stage 71 / [v0.71.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.71.0)：新增只读目录空间分析，按直属子目录与最大文件展示已统计逻辑大小，明确链接、权限、扫描上限与取消造成的部分结果。完整本地测试、Windows 安装/卸载、公开 CI/Release 与资产哈希、官网桌面/手机视口均已核对。本轮安全清理约 10.08 GiB 构建缓存。
 
 Stage 70 / [v0.70.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.70.0)：知识 MCP 命中按 3 KiB 模型消息装箱，仅为选入的片段分配 `[K编号]` 并校验完成回答的引用；默认私有记录及 v1/v2/v3 查看器通过测试。完整本地与公开 CI/Release、Windows 安装/卸载、公开资产哈希及官网桌面/手机视口均已核对。失败或取消时最近一步消息可能尚未发送；编号有效不证明答案事实正确。本轮安全清理约 11.45 GiB 构建缓存。
 
