@@ -481,3 +481,148 @@ fn purge_failure_retains_selection_and_database_without_partial_deletion() {
     std::fs::remove_file(&path).unwrap();
     std::fs::remove_dir(path.parent().unwrap()).unwrap();
 }
+
+#[test]
+fn text_file_import_preserves_markdown_unicode_and_line_endings() {
+    let path = fixture();
+    let root = path.parent().unwrap();
+    std::fs::create_dir_all(root).unwrap();
+    let source = root.join("项目计划.MD");
+    let body =
+        "---\r\ntags: [one]\r\n---\r\n# 标题\r\n\r\n<script>do not execute</script>\r\n中文 😀\n";
+    let bytes = [vec![0xef, 0xbb, 0xbf], body.as_bytes().to_vec()].concat();
+    std::fs::write(&source, &bytes).unwrap();
+    let item = files::read_note(&source).unwrap();
+    assert_eq!(item.title, "项目计划");
+    assert_eq!(item.body, body);
+    assert_eq!(item.revision, 0);
+    assert!(item.schedule.is_none() && !item.trash);
+    assert_eq!(std::fs::read(&source).unwrap(), bytes);
+    std::fs::write(&source, []).unwrap();
+    assert!(files::read_note(&source).unwrap().body.is_empty());
+    let max = [vec![0xef, 0xbb, 0xbf], vec![b'x'; MAX_BODY]].concat();
+    std::fs::write(&source, &max).unwrap();
+    assert_eq!(files::read_note(&source).unwrap().body.len(), MAX_BODY);
+    std::fs::write(&source, vec![b'x'; MAX_BODY + 1]).unwrap();
+    assert!(files::read_note(&source).is_err());
+    std::fs::write(&source, [0xff, 0xfe, 0x41, 0]).unwrap();
+    assert!(files::read_note(&source).is_err());
+    std::fs::write(&source, b"text\0binary").unwrap();
+    assert!(files::read_note(&source).is_err());
+    assert!(files::read_note(root).is_err());
+    let unsupported = root.join("document.pdf");
+    std::fs::write(&unsupported, b"not markdown").unwrap();
+    assert!(files::read_note(&unsupported).is_err());
+    std::fs::remove_file(source).unwrap();
+    std::fs::remove_file(unsupported).unwrap();
+    std::fs::remove_dir(root).unwrap();
+}
+
+#[test]
+fn text_file_export_is_exact_and_never_overwrites() {
+    let path = fixture();
+    let root = path.parent().unwrap();
+    std::fs::create_dir_all(root).unwrap();
+    let target = root.join("正文.md");
+    let body = "# UTF-8 😀\r\n原文\n";
+    assert_eq!(files::write_note(&target, body).unwrap(), body.len());
+    assert_eq!(std::fs::read(&target).unwrap(), body.as_bytes());
+    assert!(files::write_note(&target, "replace").is_err());
+    assert_eq!(std::fs::read(&target).unwrap(), body.as_bytes());
+    let oversized = root.join("large.txt");
+    assert!(files::write_note(&oversized, &"x".repeat(MAX_BODY + 1)).is_err());
+    assert!(!oversized.exists());
+    let invalid = root.join("bad.exe");
+    assert!(files::write_note(&invalid, body).is_err());
+    assert!(!invalid.exists());
+    let empty = root.join("empty.markdown");
+    assert_eq!(files::write_note(&empty, "").unwrap(), 0);
+    assert_eq!(std::fs::metadata(&empty).unwrap().len(), 0);
+    assert!(files::write_note(&root.join("missing/child.md"), body).is_err());
+    std::fs::remove_file(target).unwrap();
+    std::fs::remove_file(empty).unwrap();
+    std::fs::remove_dir(root).unwrap();
+}
+
+#[test]
+fn import_file_is_a_guarded_unsaved_draft_and_failure_keeps_current_note() {
+    let path = fixture();
+    let root = path.parent().unwrap();
+    std::fs::create_dir_all(root).unwrap();
+    let source = root.join("导入.txt");
+    std::fs::write(&source, "正文\r\n").unwrap();
+    let mut state = State::new(path.clone());
+    assert!(state.import_file(source.clone()).is_err());
+    wait_state(&mut state);
+    state.calendar = true;
+    state.trash = true;
+    state.query = "old filter".into();
+    state.import_file(source.clone()).unwrap();
+    assert!(state.saving() && state.has_unsaved());
+    assert!(state.receive_text("tool", "do not overwrite").is_err());
+    wait_state(&mut state);
+    assert!(!state.error && state.has_unsaved() && !state.saving());
+    assert!(!state.calendar && !state.trash && state.query.is_empty());
+    assert!(!path.exists());
+    assert_eq!(state.draft.as_ref().unwrap().title, "导入");
+    assert_eq!(state.draft.as_ref().unwrap().body, "正文\r\n");
+    assert!(state.import_file(source.clone()).is_err());
+    state.save_draft();
+    wait_state(&mut state);
+    let saved = state.draft.clone();
+    state.import_file(root.join("missing.md")).unwrap();
+    wait_state(&mut state);
+    assert!(state.error && !state.saving());
+    assert_eq!(state.draft, saved);
+    assert_eq!(std::fs::read_to_string(&source).unwrap(), "正文\r\n");
+    std::fs::remove_file(source).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(root).unwrap();
+}
+
+#[test]
+fn export_snapshots_current_unsaved_body_without_saving_or_event_metadata() {
+    let path = fixture();
+    let root = path.parent().unwrap();
+    std::fs::create_dir_all(root).unwrap();
+    let target = root.join("export.md");
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    assert!(state.export_file(target.clone()).is_err());
+    let mut item = event();
+    item.title = "CON: test / title?".into();
+    item.body = "未保存的正文\r\n".into();
+    state.edit(item);
+    state.review_export().unwrap();
+    assert_eq!(
+        state.export_review.as_ref().unwrap().filename,
+        "CON_ test _ title_-正文.md"
+    );
+    assert!(!target.exists());
+    state.export_review = None;
+    assert!(!target.exists()); // Cancel preview.
+    state.review_export().unwrap();
+    state.draft.as_mut().unwrap().body = "changed after preview".into();
+    state.export_file(target.clone()).unwrap();
+    assert!(state.saving());
+    wait_state(&mut state);
+    assert!(!state.error && state.has_unsaved());
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "未保存的正文\r\n"
+    );
+    assert_eq!(state.draft.as_ref().unwrap().body, "changed after preview");
+    assert!(!path.exists());
+    state.review_export().unwrap();
+    state.export_file(target.clone()).unwrap();
+    wait_state(&mut state);
+    assert!(state.error && state.has_unsaved());
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "未保存的正文\r\n"
+    );
+    state.draft.as_mut().unwrap().trash = true;
+    assert!(state.review_export().is_err());
+    std::fs::remove_file(target).unwrap();
+    std::fs::remove_dir(root).unwrap();
+}

@@ -99,6 +99,7 @@ impl State {
                 self.new_draft(self.calendar.then_some(self.selected));
             }
         });
+        self.file_toolbar(ui);
         if self.trash {
             let count = self.items.iter().filter(|i| i.trash).count();
             ui.horizontal_wrapped(|ui| {
@@ -168,6 +169,7 @@ impl State {
             ui.label(self.path.display().to_string());
         });
         self.purge_ui(ui.ctx());
+        self.export_ui(ui.ctx());
     }
 
     fn purge_ui(&mut self, ctx: &egui::Context) {
@@ -461,6 +463,7 @@ impl State {
         let mut convert = false;
         let mut trash = false;
         let mut purge = false;
+        let mut export = false;
         ui.heading(if item.schedule.is_some() {
             "编辑日程"
         } else {
@@ -564,6 +567,9 @@ impl State {
                     ui.ctx()
                         .copy_text(format!("{}\n\n{}", item.title, item.body));
                 }
+                export = ui
+                    .add_enabled(!item.trash, egui::Button::new("导出正文…"))
+                    .clicked();
                 if item.schedule.is_none() {
                     convert = ui
                         .add_enabled(
@@ -605,6 +611,11 @@ impl State {
             self.launch(Some(item));
         } else if purge {
             if let Err(error) = self.request_purge(false) {
+                self.message = error.to_string();
+                self.error = true;
+            }
+        } else if export {
+            if let Err(error) = self.review_export() {
                 self.message = error.to_string();
                 self.error = true;
             }
@@ -772,6 +783,8 @@ impl State {
         self.saving = None;
         self.deleting = None;
         self.purge_review = None;
+        self.file_operation = false;
+        self.export_review = None;
         self.trash = false;
         self.loaded = true;
         self.items.clear();

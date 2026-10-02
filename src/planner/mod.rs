@@ -1,4 +1,5 @@
 //! Local, explicitly saved notes and calendar events. No network or OS scheduler.
+mod files;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -208,7 +209,12 @@ fn lunar_day(date: NaiveDate) -> LunarDay {
     }
 }
 
-type LoadResult = std::result::Result<Vec<Item>, String>;
+enum Reply {
+    Loaded(Vec<Item>),
+    Imported(Item),
+    Exported(PathBuf, usize),
+}
+type LoadResult = std::result::Result<Reply, String>;
 pub struct State {
     path: PathBuf,
     items: Vec<Item>,
@@ -216,6 +222,8 @@ pub struct State {
     saving: Option<String>,
     deleting: Option<Vec<String>>,
     purge_review: Option<Vec<Item>>,
+    file_operation: bool,
+    export_review: Option<files::Export>,
     loaded: bool,
     draft: Option<Item>,
     original: Option<Item>,
@@ -241,6 +249,8 @@ pub struct State {
     pub preview_open_reminder_rect: Option<egui::Rect>,
     #[cfg(feature = "ui-preview")]
     pub preview_purge_rects: Option<[egui::Rect; 2]>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_export_cancel_rect: Option<egui::Rect>,
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -313,7 +323,8 @@ impl State {
         Ok(())
     }
     pub fn saving(&self) -> bool {
-        self.pending.is_some() && (self.saving.is_some() || self.deleting.is_some())
+        self.pending.is_some()
+            && (self.saving.is_some() || self.deleting.is_some() || self.file_operation)
     }
     pub fn needs_clock(&self) -> bool {
         self.pending.is_some()
@@ -334,6 +345,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_purge_rects: None,
             #[cfg(feature = "ui-preview")]
+            preview_export_cancel_rect: None,
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -341,6 +354,8 @@ impl State {
             saving: None,
             deleting: None,
             purge_review: None,
+            file_operation: false,
+            export_review: None,
             loaded: false,
             draft: None,
             original: None,
@@ -377,7 +392,7 @@ impl State {
                 if let Some(item) = item {
                     store::save(&path, item)?;
                 }
-                store::load(&path)
+                store::load(&path).map(Reply::Loaded)
             })()
             .map_err(|e| e.to_string());
             let _ = tx.send(result);
@@ -417,7 +432,11 @@ impl State {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         std::thread::spawn(move || {
-            let _ = tx.send(store::purge(&path, &reviewed).map_err(|e| e.to_string()));
+            let _ = tx.send(
+                store::purge(&path, &reviewed)
+                    .map(Reply::Loaded)
+                    .map_err(|e| e.to_string()),
+            );
         });
         Ok(())
     }
@@ -532,8 +551,19 @@ impl State {
             };
             if let Some(reply) = reply {
                 self.pending = None;
+                self.file_operation = false;
                 match reply {
-                    Ok(items) => {
+                    Ok(Reply::Imported(item)) => {
+                        self.finish_import(item);
+                    }
+                    Ok(Reply::Exported(path, bytes)) => {
+                        self.message = format!(
+                            "已导出正文 · {bytes} 字节 · {}；不改变当前编辑的保存状态。",
+                            path.display()
+                        );
+                        self.error = false;
+                    }
+                    Ok(Reply::Loaded(items)) => {
                         self.items = items;
                         self.loaded = true;
                         self.error = false;
