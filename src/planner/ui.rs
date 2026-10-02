@@ -440,7 +440,7 @@ impl State {
                         format!(
                             "{}  ·  {}{}",
                             occurrence.format("%m-%d %H:%M"),
-                            s.repeat.label(),
+                            s.rule_label(),
                             if s.done { " · 已完成" } else { "" }
                         )
                     } else {
@@ -523,7 +523,7 @@ impl State {
                     egui::ComboBox::from_id_salt("planner-repeat")
                         .selected_text(s.repeat.label())
                         .show_ui(ui, |ui| {
-                            for repeat in [Repeat::Once, Repeat::Daily, Repeat::Weekly] {
+                            for repeat in [Repeat::Once, Repeat::Daily, Repeat::Weekly, Repeat::Monthly, Repeat::Yearly] {
                                 ui.selectable_value(&mut s.repeat, repeat, repeat.label());
                             }
                         });
@@ -536,6 +536,21 @@ impl State {
                         },
                     );
                 });
+                if matches!(s.repeat, Repeat::Monthly | Repeat::Yearly) {
+                    let policy = ui.checkbox(&mut s.clamp_missing_day, "没有对应日期时，改用当月最后一天");
+                    #[cfg(feature = "ui-preview")]
+                    { self.preview_recurrence_rects[0] = Some((policy.rect, ui.clip_rect())); }
+                    #[cfg(not(feature = "ui-preview"))]
+                    let _ = policy;
+                    ui.small(if s.clamp_missing_day {
+                        "从原始日号计算：1 月 31 日 → 2 月末 → 3 月 31 日；闰日遇平年用 2 月 28 日。"
+                    } else {
+                        "没有对应日期则跳过：31 日跳过短月；2 月 29 日仅在闰年安排。"
+                    });
+                    ui.small("公历规则；不等于农历生日。更改规则后提醒处理状态会重置，需保存才生效。");
+                } else {
+                    s.clamp_missing_day = false;
+                }
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut s.remind, "弹出提醒");
                     ui.add_enabled(
@@ -584,7 +599,10 @@ impl State {
             });
             ui.add_space(10.0);
             ui.horizontal_wrapped(|ui| {
-                save = ui.button("保存到本机").clicked();
+                let save_button = ui.button("保存到本机");
+                #[cfg(feature = "ui-preview")]
+                { self.preview_recurrence_rects[1] = Some((save_button.rect, ui.clip_rect())); }
+                save = save_button.clicked();
                 discard = ui.button("放弃编辑").clicked();
                 if ui.button("复制全文").clicked() {
                     ui.ctx()

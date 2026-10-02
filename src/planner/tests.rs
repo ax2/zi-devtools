@@ -22,6 +22,208 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn monthly_repeat_skips_or_clamps_without_losing_original_day() {
+    let mut s = event().schedule.unwrap();
+    s.start = date("2027-01-31 09:00");
+    s.repeat = Repeat::Monthly;
+    s.minutes = 0;
+    assert!(!s.on_day(date("2027-02-28 00:00").date()));
+    assert_eq!(s.latest(date("2027-03-01 00:00")), Some(s.start));
+    assert_eq!(s.latest(date("2027-03-31 08:59")), Some(s.start));
+    assert_eq!(
+        s.latest(date("2027-03-31 09:00")),
+        Some(date("2027-03-31 09:00"))
+    );
+    s.clamp_missing_day = true;
+    assert!(s.on_day(date("2027-02-28 00:00").date()));
+    assert_eq!(
+        s.latest(date("2027-03-30 23:59")),
+        Some(date("2027-02-28 09:00"))
+    );
+    assert!(s.on_day(date("2027-03-31 00:00").date()));
+    assert!(!s.on_day(date("2027-03-28 00:00").date()));
+    assert!(s.on_day(date("2028-02-29 00:00").date()));
+    assert!(!s.on_day(date("2026-12-31 00:00").date()));
+    assert!(!s.on_day(date("2100-01-31 00:00").date()));
+    assert_eq!(
+        s.latest(date("2100-01-31 09:00")),
+        Some(date("2099-12-31 09:00"))
+    );
+}
+
+#[test]
+fn yearly_leap_day_policy_survives_years_and_does_not_drift() {
+    let mut s = event().schedule.unwrap();
+    s.start = date("2024-02-29 10:00");
+    s.repeat = Repeat::Yearly;
+    s.minutes = 0;
+    assert!(!s.on_day(date("2025-02-28 00:00").date()));
+    assert_eq!(s.latest(date("2028-02-29 09:59")), Some(s.start));
+    assert_eq!(
+        s.latest(date("2028-02-29 10:00")),
+        Some(date("2028-02-29 10:00"))
+    );
+    s.clamp_missing_day = true;
+    assert!(s.on_day(date("2025-02-28 00:00").date()));
+    assert!(!s.on_day(date("2028-02-28 00:00").date()));
+    assert_eq!(
+        s.latest(date("2028-02-29 09:59")),
+        Some(date("2027-02-28 10:00"))
+    );
+    assert_eq!(
+        s.latest(date("2028-02-29 10:00")),
+        Some(date("2028-02-29 10:00"))
+    );
+    s.start = date("1996-02-29 10:00");
+    s.clamp_missing_day = false;
+    assert!(s.on_day(date("2000-02-29 00:00").date()));
+    assert_eq!(
+        s.latest(date("2000-03-01 10:00")),
+        Some(date("2000-02-29 10:00"))
+    );
+}
+
+#[test]
+fn calendar_repeat_reminders_cross_periods_and_preserve_ack_and_snooze() {
+    let mut s = event().schedule.unwrap();
+    s.start = date("2026-12-01 09:00");
+    s.repeat = Repeat::Monthly;
+    s.minutes = 7 * 1440;
+    s.handled = Some(s.start);
+    assert_eq!(s.due(now("2026-12-25 08:59")), None);
+    let next = date("2027-01-01 09:00");
+    assert_eq!(s.due(now("2026-12-25 09:00")), Some(next));
+    s.snooze = Some((next, now("2026-12-25 09:10").timestamp()));
+    assert_eq!(s.due(now("2026-12-25 09:09")), None);
+    assert_eq!(s.due(now("2026-12-25 09:10")), Some(next));
+    s.handled = Some(next);
+    assert_eq!(s.due(now("2027-01-02 09:00")), None);
+    s.repeat = Repeat::Yearly;
+    s.start = date("2024-01-01 09:00");
+    s.handled = Some(date("2026-01-01 09:00"));
+    s.snooze = None;
+    assert_eq!(s.due(now("2026-12-25 09:00")), Some(next));
+    let tz = chrono_tz::America::New_York;
+    s.start = date("2026-02-08 02:30");
+    s.repeat = Repeat::Monthly;
+    s.minutes = 0;
+    s.handled = None;
+    assert_eq!(
+        s.due(tz.with_ymd_and_hms(2026, 3, 8, 10, 0, 0).unwrap()),
+        None
+    );
+    assert_eq!(
+        s.due(tz.with_ymd_and_hms(2026, 4, 8, 10, 0, 0).unwrap()),
+        Some(date("2026-04-08 02:30"))
+    );
+}
+
+#[test]
+fn recurrence_latest_agrees_with_calendar_for_every_day_in_four_years() {
+    let mut s = event().schedule.unwrap();
+    s.start = date("2024-02-29 09:00");
+    for repeat in [Repeat::Monthly, Repeat::Yearly] {
+        for clamp in [false, true] {
+            s.repeat = repeat;
+            s.clamp_missing_day = clamp;
+            let mut last = None;
+            for offset in 0..1462 {
+                let day = s.start.date().checked_add_days(Days::new(offset)).unwrap();
+                if s.on_day(day) {
+                    last = Some(day.and_hms_opt(9, 0, 0).unwrap());
+                }
+                assert_eq!(
+                    s.latest(day.and_hms_opt(10, 0, 0).unwrap()),
+                    last,
+                    "{repeat:?} {clamp} {day}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn monthly_rules_persist_backup_restore_and_keep_legacy_json_compatible() {
+    let path = fixture();
+    let mut item = event();
+    let legacy = serde_json::to_string(&item).unwrap();
+    assert!(!legacy.contains("clamp_missing_day"));
+    assert!(
+        !serde_json::from_str::<Item>(&legacy)
+            .unwrap()
+            .schedule
+            .unwrap()
+            .clamp_missing_day
+    );
+    let s = item.schedule.as_mut().unwrap();
+    s.start = date("2026-01-31 09:00");
+    s.repeat = Repeat::Monthly;
+    s.clamp_missing_day = true;
+    store::save(&path, item).unwrap();
+    let saved = store::load(&path).unwrap();
+    let backup_path = path.with_extension("json");
+    backup::write(&backup_path, &backup::Document::new(saved.clone()).unwrap()).unwrap();
+    let doc = backup::read(&backup_path).unwrap();
+    assert_eq!(doc.records, saved);
+    let plan = backup::plan(&[], &doc, backup::Mode::ReplaceAll, true).unwrap();
+    let restored_path = path.with_file_name("restored.sqlite3");
+    let restored = store::restore(&restored_path, &[], &plan.records).unwrap();
+    let rows = agenda::rows(&restored, date("2026-02-01 00:00").date(), 30, "", false);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].at, date("2026-02-28 09:00"));
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state.edit(saved[0].clone());
+    state
+        .draft
+        .as_mut()
+        .unwrap()
+        .schedule
+        .as_mut()
+        .unwrap()
+        .clamp_missing_day = false;
+    assert!(state.has_unsaved());
+    state.discard();
+    assert!(!state.has_unsaved());
+    state
+        .draft
+        .as_mut()
+        .unwrap()
+        .schedule
+        .as_mut()
+        .unwrap()
+        .handled = Some(date("2026-02-28 09:00"));
+    state.save_draft();
+    wait_state(&mut state);
+    state
+        .draft
+        .as_mut()
+        .unwrap()
+        .schedule
+        .as_mut()
+        .unwrap()
+        .clamp_missing_day = false;
+    state.save_draft();
+    wait_state(&mut state);
+    assert!(!state.error);
+    assert!(
+        state
+            .draft
+            .as_ref()
+            .unwrap()
+            .schedule
+            .as_ref()
+            .unwrap()
+            .handled
+            .is_none()
+    );
+    for file in [path.clone(), restored_path, backup_path] {
+        std::fs::remove_file(file).unwrap();
+    }
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn agenda_expands_actual_occurrences_across_leap_day_and_year() {
     let mut daily = event();
     let s = daily.schedule.as_mut().unwrap();

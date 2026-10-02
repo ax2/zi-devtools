@@ -274,6 +274,18 @@ impl DevToolsApp {
         self.planner.preview_agenda_assert();
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_recurrence_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) =
+            self.planner.preview_recurrence_rects[index].expect("recurrence control rendered");
+        assert!(clip.contains_rect(rect), "recurrence control clipped");
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_recurrence_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Calendar;
+        self.planner.preview_recurrence_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_files_smoke(&mut self, phase: u8) -> bool {
         self.page = Page::Notes;
         self.planner.preview_files_smoke(phase)
@@ -411,6 +423,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            234..=237 => {
+                self.page = Page::Calendar;
+                self.planner.preview_recurrence(scene >= 236);
+            }
             230..=233 => {
                 self.page = Page::Calendar;
                 self.planner.preview_agenda(false);

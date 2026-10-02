@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 234] = [
+const NAMES: [&str; 238] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -244,6 +244,10 @@ const NAMES: [&str; 234] = [
     "sidebar-minimum-light",
     "sidebar-long-title-dark",
     "sidebar-long-title-light",
+    "planner-monthly-dark",
+    "planner-monthly-light",
+    "planner-yearly-dark",
+    "planner-yearly-light",
 ];
 
 struct Capture {
@@ -265,6 +269,20 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("recurrence-smoke")
+            && matches!(self.frames, 25 | 26 | 35 | 36)
+        {
+            let pos = self
+                .app
+                .preview_recurrence_position(usize::from(self.frames >= 35));
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 25 | 35),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if std::env::args().nth(3).as_deref() == Some("sidebar-smoke") {
             let step = self.frames.saturating_sub(20);
             let control = match step {
@@ -422,6 +440,24 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("recurrence-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 234, self.fixture.clone());
+                self.app.preview_recurrence_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 1180.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 30 {
+                self.app.preview_recurrence_smoke(1);
+            }
+            if self.frames >= 48 && self.app.preview_recurrence_smoke(2) {
+                std::process::exit(0);
+            }
+            assert!(self.frames < 200, "recurrence save timed out");
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("sidebar-smoke") {
             let step = self.frames.saturating_sub(20);
             if matches!(step, 0 | 16 | 27 | 37 | 56) {
@@ -1056,6 +1092,7 @@ impl eframe::App for Capture {
             let size = if (230..=231).contains(&self.scene) {
                 egui::vec2(980.0, 640.0)
             } else if (96..=99).contains(&self.scene)
+                || (234..=237).contains(&self.scene)
                 || (136..=137).contains(&self.scene)
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)

@@ -20,7 +20,7 @@ fn item_details(ui: &mut egui::Ui, item: &Item) {
         ui.label(format!(
             "{} · {} · {} · 提前 {} 分钟",
             s.start.format("%Y-%m-%d %H:%M"),
-            s.repeat.label(),
+            s.rule_label(),
             if s.remind {
                 "提醒开启"
             } else {

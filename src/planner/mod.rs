@@ -3,6 +3,7 @@ mod agenda;
 mod backup;
 mod backup_ui;
 mod files;
+mod recurrence;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -33,6 +34,8 @@ enum Repeat {
     Once,
     Daily,
     Weekly,
+    Monthly,
+    Yearly,
 }
 impl Repeat {
     fn label(self) -> &'static str {
@@ -40,11 +43,13 @@ impl Repeat {
             Self::Once => "不重复",
             Self::Daily => "每天",
             Self::Weekly => "每周",
+            Self::Monthly => "每月",
+            Self::Yearly => "每年",
         }
     }
     fn days(self) -> Option<i64> {
         match self {
-            Self::Once => None,
+            Self::Once | Self::Monthly | Self::Yearly => None,
             Self::Daily => Some(1),
             Self::Weekly => Some(7),
         }
@@ -58,60 +63,14 @@ struct Schedule {
     minutes: u32,
     remind: bool,
     repeat: Repeat,
+    #[serde(default, skip_serializing_if = "is_false")]
+    clamp_missing_day: bool,
     done: bool,
     handled: Option<NaiveDateTime>,
     snooze: Option<(NaiveDateTime, i64)>,
 }
-impl Schedule {
-    fn on_day(&self, date: NaiveDate) -> bool {
-        let delta = date.signed_duration_since(self.start.date()).num_days();
-        delta >= 0 && self.repeat.days().map_or(delta == 0, |n| delta % n == 0)
-    }
-
-    // Missed repetitions coalesce to the latest occurrence, rather than a flood.
-    fn due<T: TimeZone>(&self, now: DateTime<T>) -> Option<NaiveDateTime> {
-        if !self.remind || self.done {
-            return None;
-        }
-        let limit = now
-            .naive_local()
-            .checked_add_signed(Duration::minutes(i64::from(self.minutes)))?;
-        if limit < self.start {
-            return None;
-        }
-        let occurrence = if let Some(days) = self.repeat.days() {
-            let mut cycles = limit
-                .date()
-                .signed_duration_since(self.start.date())
-                .num_days()
-                / days;
-            let candidate = self
-                .start
-                .checked_add_days(Days::new((cycles * days) as u64))?;
-            if candidate > limit {
-                cycles -= 1;
-            }
-            if cycles < 0 {
-                return None;
-            }
-            self.start
-                .checked_add_days(Days::new((cycles * days) as u64))?
-        } else {
-            self.start
-        };
-        if self.handled.is_some_and(|handled| handled >= occurrence) {
-            return None;
-        }
-        if self
-            .snooze
-            .is_some_and(|(at, until)| at == occurrence && now.timestamp() < until)
-        {
-            return None;
-        }
-        // A DST gap is not silently shifted; an ambiguous time uses its first occurrence.
-        let at = now.timezone().from_local_datetime(&occurrence).earliest()?;
-        (now.timestamp() >= at.timestamp() - i64::from(self.minutes) * 60).then_some(occurrence)
-    }
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,6 +100,7 @@ impl Item {
                 minutes: 10,
                 remind: true,
                 repeat: Repeat::Once,
+                clamp_missing_day: false,
                 done: false,
                 handled: None,
                 snooze: None,
@@ -162,6 +122,10 @@ impl Item {
         );
         ensure!(self.body.len() <= MAX_BODY, "正文最多 128 KiB");
         if let Some(s) = &self.schedule {
+            ensure!(
+                !s.clamp_missing_day || matches!(s.repeat, Repeat::Monthly | Repeat::Yearly),
+                "仅每月 / 每年重复可设置月底替代"
+            );
             ensure!(
                 s.snooze.is_none_or(|(_, until)| valid_timestamp(until)),
                 "稍后提醒时间无效"
@@ -276,6 +240,8 @@ pub struct State {
     pub preview_backup_rects: [Option<egui::Rect>; 4],
     #[cfg(feature = "ui-preview")]
     pub preview_agenda_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_recurrence_rects: [Option<(egui::Rect, egui::Rect)>; 2],
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -376,6 +342,8 @@ impl State {
             preview_backup_rects: [None; 4],
             #[cfg(feature = "ui-preview")]
             preview_agenda_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_recurrence_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
@@ -553,6 +521,7 @@ impl State {
                     .is_some_and(|old| {
                         old.start != s.start
                             || old.repeat != s.repeat
+                            || old.clamp_missing_day != s.clamp_missing_day
                             || old.minutes != s.minutes
                             || old.remind != s.remind
                     })

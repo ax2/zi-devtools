@@ -162,7 +162,7 @@ impl State {
                                 ""
                             },
                             row.at.format("%Y-%m-%d %H:%M"),
-                            schedule.repeat.label(),
+                            schedule.rule_label(),
                             if schedule.remind {
                                 "提醒开启"
                             } else {
