@@ -148,7 +148,7 @@ impl HttpSession {
             header.set_sensitive(true);
             headers.insert(AUTHORIZATION, header);
         }
-        let client = Client::builder()
+        let client = crate::mcp_oauth::http_builder()
             .default_headers(headers)
             .no_proxy()
             .redirect(Policy::none())

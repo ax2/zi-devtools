@@ -165,7 +165,7 @@ pub(crate) fn fixture_register(
     register_at(endpoint, redirect, scopes, cancel)
 }
 async fn request(endpoint: Url, redirect: &str, scopes: &[String]) -> Result<RegisteredClient> {
-    let client = reqwest::Client::builder()
+    let client = mcp_oauth::http_builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .retry(reqwest::retry::never())

@@ -34,6 +34,14 @@ Stage 78 增加 SDK 自带 `requireBearerAuth` 中间件校验。分别启动 `n
 
 联合夹具只在 `cfg(test)` 编译：逻辑资源和授权地址仍按 HTTPS 校验，测试网络请求显式映射到 127.0.0.1 HTTP。该映射不会进入桌面程序。测试直接组合后端，未运行 OAuthPanel 浏览器按钮、HTTPS/TLS、401 元数据发现或真实授权服务器；合成控制入口仅识别固定测试令牌，不作为生产授权服务器接口；撤销后拒绝的证据仅覆盖该合成服务，真实授权服务器、刷新令牌撤销后的续期拒绝和 grant 连带失效策略仍待验收。这些验收项仍保持未完成，不据此声明完整 OAuth 支持。
 
+### HTTPS 与发现联合复核
+
+另有 `src/mcp_oauth_tls_tests.rs`，使用公开生产入口完成 HTTPS 401 发现、资源/授权元数据获取、注册、模拟浏览器导航、本机回调、交换、刷新、SDK 连接更新和撤销。HTTPS 模式不使用上述网络映射函数；测试 CA 的额外信任仅在 `cfg(test)` 的当前线程作用域内有效，退出作用域清除，不导入系统证书或读取其他应用凭据。未设置测试根证书时连接必须失败；设置后访问证书没有覆盖的 localhost 名称也必须失败，证书与主机名校验保持开启。普通发布构建只创建原有 reqwest builder，不包含信任注入入口。
+
+准备固定 SDK 1.31.0 夹具和带 cryptography 的 Python 环境（本轮为 50.0.1）。启动 `node fixture.mjs json auth lifecycle tls`，再在源码目录运行 `python tests/fixtures/mcp_oauth_tls.py <SDK打印的回环地址>`。Python 创建一次性 CA/服务器证书、HTTPS 授权服务与 SDK 反向代理，打印公开端点和证书文件路径，不打印私钥或请求。将两项分别赋给测试进程环境变量 `ZIDEVTOOLS_MCP_TLS_ENDPOINT` 和 `ZIDEVTOOLS_MCP_TLS_CERTIFICATE`，运行 `cargo test --lib mcp_oauth_tls_tests::https_discovery_registration_login_refresh_and_revocation -- --ignored --exact`。完成后重新启动独立服务，用 `sse auth lifecycle tls` 复核 SSE。lifecycle SDK 期限 120 秒，普通夹具仍为 60 秒；TLS 夹具期限 90 秒，完成或结束时清理临时证书目录。
+
+JSON/SSE HTTPS 链路分别 0.86/0.75 秒通过，服务均正常退出。撤销后访问令牌重新初始化得到 401，刷新令牌请求得到 `invalid_grant`；SDK 结束检查还要求最初发现与撤销后各拒绝一次、两次撤销和零残留会话。TLS 在本机客户端至代理段验证，SDK 位于其后受限 loopback HTTP；OAuth 授权服务为合成夹具，浏览器仍为模拟导航。真实 OAuthPanel/系统浏览器交互、独立真实授权服务策略及托盘隐藏/休眠恢复仍待验证，不能据此声称 Stage 78 整体完成。普通 CI 默认忽略这项环境测试。
+
 
 ## 临时 Bearer（Stage 78 开发中，未发布）
 

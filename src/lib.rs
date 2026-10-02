@@ -75,4 +75,6 @@ pub mod mcp_oauth_callback;
 mod mcp_oauth_flow_tests;
 pub mod mcp_oauth_login;
 pub mod mcp_oauth_registration;
+#[cfg(test)]
+mod mcp_oauth_tls_tests;
 pub mod mcp_oauth_token;

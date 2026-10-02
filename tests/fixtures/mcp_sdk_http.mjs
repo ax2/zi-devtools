@@ -11,6 +11,7 @@ const sessions = new Map();
 const jsonResponse = process.argv[2] === 'json';
 const authenticated = process.argv[3] === 'auth';
 const lifecycle = authenticated && process.argv[4] === 'lifecycle';
+const tlsDiscovery = lifecycle && process.argv[5] === 'tls';
 const revoked = new Set();
 let revocationRequests = 0;
 let deniedRequests = 0;
@@ -64,7 +65,7 @@ const listener = http.createServer(async (req, res) => {
       res.writeHead(200).end(); return;
     }
     if (lifecycle && req.url === '/fixture/finish' && req.method === 'POST') {
-      const success = revocationRequests === 2 && revoked.has('zi-sdk-synthetic-new') && deniedRequests === 1 && sessions.size === 0;
+      const success = revocationRequests === 2 && revoked.has('zi-sdk-synthetic-new') && deniedRequests === (tlsDiscovery ? 2 : 1) && sessions.size === 0;
       res.writeHead(success ? 200 : 409).end();
       listener.close(); return;
     }
@@ -100,5 +101,5 @@ const listener = http.createServer(async (req, res) => {
   }
 });
 listener.listen(0, '127.0.0.1', () => console.log(`http://127.0.0.1:${listener.address().port}/mcp`));
-const deadline = setTimeout(() => { listener.close(); process.exitCode = 1; }, 60000);
+const deadline = setTimeout(() => { listener.close(); process.exitCode = 1; }, lifecycle ? 120000 : 60000);
 deadline.unref();

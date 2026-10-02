@@ -149,13 +149,22 @@ fn parse_authorization(bytes: &[u8], expected: &str) -> Result<AuthorizationMeta
 }
 
 fn metadata_client() -> Result<reqwest::blocking::Client> {
-    reqwest::blocking::Client::builder()
+    let builder = reqwest::blocking::Client::builder();
+    #[cfg(test)]
+    let builder = crate::mcp_oauth_tls_tests::trust_blocking(builder);
+    builder
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(10))
         .build()
         .context("无法创建 OAuth 元数据客户端")
+}
+pub(crate) fn http_builder() -> reqwest::ClientBuilder {
+    let builder = reqwest::Client::builder();
+    #[cfg(test)]
+    let builder = crate::mcp_oauth_tls_tests::trust_async(builder);
+    builder
 }
 
 fn fetch_json(url: Url) -> Result<Vec<u8>> {

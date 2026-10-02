@@ -306,7 +306,7 @@ fn revoke_at_bounded(
     runtime.block_on(async {
         tokio::select! {
             result = tokio::time::timeout(timeout, async {
-                let client = reqwest::Client::builder().no_proxy().redirect(Policy::none()).retry(reqwest::retry::never())
+                let client = mcp_oauth::http_builder().no_proxy().redirect(Policy::none()).retry(reqwest::retry::never())
                     .connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(15)).build().map_err(|_| anyhow::anyhow!("无法创建撤销请求"))?;
                 let refresh_result = if let Some(refresh) = &old.refresh {
                     revoke_request(&client, &endpoint, refresh.expose(), "refresh_token", &old.client_id).await
@@ -369,7 +369,7 @@ async fn request(grant: &CodeGrant, endpoint: Url) -> Result<TokenSet> {
 }
 
 async fn post(endpoint: Url, fields: &[(&str, &str)]) -> Result<(Vec<u8>, Instant)> {
-    let client = reqwest::Client::builder()
+    let client = mcp_oauth::http_builder()
         .no_proxy()
         .redirect(Policy::none())
         .retry(reqwest::retry::never())
