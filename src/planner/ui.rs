@@ -320,7 +320,7 @@ impl State {
                             !i.trash
                                 && i.schedule
                                     .as_ref()
-                                    .is_some_and(|s| !s.done && s.on_day(date))
+                                    .is_some_and(|s| !s.done && s.covering(date).is_some())
                         })
                         .count();
                     let today = date == Local::now().date_naive();
@@ -393,7 +393,9 @@ impl State {
                     && (!self.calendar
                         || self.trash
                         || !query.is_empty()
-                        || i.schedule.as_ref().is_some_and(|s| s.on_day(self.selected)))
+                        || i.schedule
+                            .as_ref()
+                            .is_some_and(|s| s.covering(self.selected).is_some()))
             })
             .map(|i| {
                 (
@@ -433,13 +435,13 @@ impl State {
                 for (id, title, pin, updated, schedule) in matches {
                     let detail = if let Some(s) = schedule {
                         let occurrence = if query.is_empty() && !self.trash {
-                            self.selected.and_time(s.start.time())
+                            s.covering(self.selected).unwrap_or(s.start)
                         } else {
                             s.start
                         };
                         format!(
                             "{}  ·  {}{}",
-                            occurrence.format("%m-%d %H:%M"),
+                            s.range_label(occurrence),
                             s.rule_label(),
                             if s.done { " · 已完成" } else { "" }
                         )
@@ -513,12 +515,52 @@ impl State {
             );
             ui.add_space(8.0);
             if let Some(s) = &mut item.schedule {
+                let was_all_day = s.all_day;
+                let all_day_control = ui.checkbox(&mut s.all_day, "全天事件");
+                #[cfg(feature = "ui-preview")]
+                { self.preview_interval_rect = Some((all_day_control.rect, ui.clip_rect())); }
+                let _ = all_day_control;
+                if s.all_day != was_all_day {
+                    if s.all_day {
+                        if s.end.is_none() {
+                            self.end_date_text = self.date_text.clone();
+                        } else if self.end_time_text == "00:00" {
+                            if let Ok(day) = NaiveDate::parse_from_str(&self.end_date_text, "%Y-%m-%d") {
+                                self.end_date_text = day.pred_opt().unwrap_or(day).to_string();
+                            }
+                        }
+                        s.end = Some(s.start);
+                    } else {
+                        self.end_time_text = "23:59".into();
+                    }
+                }
                 ui.horizontal(|ui| {
-                    ui.label("日期");
+                    ui.label("开始日期");
                     ui.add(egui::TextEdit::singleline(&mut self.date_text).desired_width(106.0));
-                    ui.label("时间");
-                    ui.add(egui::TextEdit::singleline(&mut self.time_text).desired_width(52.0));
+                    if !s.all_day {
+                        ui.label("时间");
+                        ui.add(egui::TextEdit::singleline(&mut self.time_text).desired_width(52.0));
+                    }
                 });
+                if !s.all_day {
+                    let mut has_end = s.end.is_some();
+                    if !has_end && let Ok(start) = NaiveDateTime::parse_from_str(&format!("{} {}", self.date_text.trim(), self.time_text.trim()), "%Y-%m-%d %H:%M") {
+                        let end = start + Duration::hours(1);
+                        self.end_date_text = end.date().to_string();
+                        self.end_time_text = end.format("%H:%M").to_string();
+                    }
+                    if ui.checkbox(&mut has_end, "设置结束时间").changed() {
+                        s.end = has_end.then_some(s.start);
+                    }
+                }
+                if s.end.is_some() || s.all_day {
+                    ui.horizontal(|ui| {
+                        ui.label(if s.all_day { "结束日期" } else { "结束日期 / 时间" });
+                        ui.add(egui::TextEdit::singleline(&mut self.end_date_text).desired_width(106.0));
+                        if s.all_day { ui.small("包含当天"); }
+                        else { ui.add(egui::TextEdit::singleline(&mut self.end_time_text).desired_width(52.0)); }
+                    });
+                }
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("planner-repeat")
                         .selected_text(s.repeat.label())
@@ -566,6 +608,13 @@ impl State {
                         .small()
                         .weak(),
                 );
+                if s.all_day {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("提醒钟点");
+                        ui.add_enabled(s.remind, egui::TextEdit::singleline(&mut self.time_text).desired_width(52.0));
+                        ui.small("以开始当天为准，再减去提前分钟");
+                    });
+                }
                 ui.add_space(8.0);
             }
             ui.label(if item.schedule.is_some() {
@@ -701,7 +750,15 @@ impl State {
                             ui.push_id(id, |ui| {
                                 ui.separator();
                                 ui.strong(&item.title);
-                                ui.label(at.format("%Y-%m-%d %H:%M · 本机时间").to_string());
+                                if let Some(s) = &item.schedule {
+                                    ui.label(s.range_label(*at));
+                                    if s.all_day {
+                                        ui.small(format!(
+                                            "提醒基准：{} · 本机时间",
+                                            s.reminder_at(*at).format("%Y-%m-%d %H:%M")
+                                        ));
+                                    }
+                                }
                                 let open_response = ui.add_enabled(
                                     self.pending.is_none(),
                                     egui::Button::new("打开日程 →"),

@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 238] = [
+const NAMES: [&str; 246] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -248,6 +248,14 @@ const NAMES: [&str; 238] = [
     "planner-monthly-light",
     "planner-yearly-dark",
     "planner-yearly-light",
+    "planner-interval-dark",
+    "planner-interval-light",
+    "planner-allday-dark",
+    "planner-allday-light",
+    "planner-interval-agenda-dark",
+    "planner-interval-agenda-light",
+    "planner-interval-compact-dark",
+    "planner-interval-compact-light",
 ];
 
 struct Capture {
@@ -269,6 +277,37 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        let interval_mode = std::env::args().nth(3);
+        let compact_interval = interval_mode.as_deref() == Some("interval-compact-smoke");
+        let interval_smoke = compact_interval || interval_mode.as_deref() == Some("interval-smoke");
+        if interval_smoke && !compact_interval && self.frames == 31 {
+            input
+                .events
+                .push(egui::Event::PointerMoved(if compact_interval {
+                    egui::pos2(850.0, 180.0)
+                } else {
+                    egui::pos2(1100.0, 390.0)
+                }));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -430.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if interval_smoke && matches!(self.frames, 25 | 26 | 35 | 36) {
+            println!(
+                "interval click: frame={}, compact={compact_interval}",
+                self.frames
+            );
+            let pos = self.app.preview_interval_position(self.frames >= 35);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 25 | 35),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if std::env::args().nth(3).as_deref() == Some("recurrence-smoke")
             && matches!(self.frames, 25 | 26 | 35 | 36)
         {
@@ -440,6 +479,40 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("interval-smoke" | "interval-compact-smoke")
+        ) {
+            let compact = smoke_mode.as_deref() == Some("interval-compact-smoke");
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 238, self.fixture.clone());
+                self.app.preview_interval_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(if compact {
+                    egui::vec2(980.0, 760.0)
+                } else {
+                    egui::vec2(1280.0, 900.0)
+                }));
+            }
+            if compact && self.frames == 6 {
+                self.app.preview_planner_editor();
+            }
+            self.app.update(ctx, frame);
+            // A frame count alone can elapse before smooth scrolling settles.
+            if compact && self.frames == 7 && self.started.elapsed() < Duration::from_secs(3) {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames == 30 {
+                self.app.preview_interval_smoke(1);
+            }
+            if self.frames >= 48 && self.app.preview_interval_smoke(2) {
+                std::process::exit(0);
+            }
+            assert!(self.frames < 200, "interval save timed out");
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("recurrence-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 234, self.fixture.clone());
@@ -1089,7 +1162,9 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (230..=231).contains(&self.scene) {
+            let size = if (244..=245).contains(&self.scene) {
+                egui::vec2(980.0, 760.0)
+            } else if (230..=231).contains(&self.scene) {
                 egui::vec2(980.0, 640.0)
             } else if (96..=99).contains(&self.scene)
                 || (234..=237).contains(&self.scene)
@@ -1113,13 +1188,16 @@ impl eframe::App for Capture {
             };
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
         }
-        if (206..=207).contains(&self.scene) && self.frames == 6 {
+        if ((206..=207).contains(&self.scene) || (244..=245).contains(&self.scene))
+            && self.frames == 6
+        {
             self.app.preview_planner_editor();
             self.auto_minimize_smoke_at = Some(Instant::now());
         }
         self.app.update(ctx, frame);
         self.frames += 1;
-        let scroll_settled = !(206..=207).contains(&self.scene)
+        let scroll_settled = !((206..=207).contains(&self.scene)
+            || (244..=245).contains(&self.scene))
             || self
                 .auto_minimize_smoke_at
                 .is_some_and(|at| at.elapsed() >= Duration::from_secs(1));

@@ -1,21 +1,21 @@
 use super::*;
 use chrono::{FixedOffset, Timelike};
 
-fn date(s: &str) -> NaiveDateTime {
+pub(super) fn date(s: &str) -> NaiveDateTime {
     NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap()
 }
-fn now(s: &str) -> DateTime<FixedOffset> {
+pub(super) fn now(s: &str) -> DateTime<FixedOffset> {
     FixedOffset::east_opt(8 * 3600)
         .unwrap()
         .from_local_datetime(&date(s))
         .unwrap()
 }
-fn event() -> Item {
+pub(super) fn event() -> Item {
     let mut item = Item::new(Some(NaiveDate::from_ymd_opt(2026, 10, 2).unwrap()));
     item.title = "合成日程".into();
     item
 }
-fn fixture() -> PathBuf {
+pub(super) fn fixture() -> PathBuf {
     std::env::temp_dir()
         .join(format!("zi-planner-{}", uuid::Uuid::new_v4()))
         .join("planner.sqlite3")
@@ -513,7 +513,7 @@ fn lunar_new_year_leap_month_terms_and_boundaries() {
     }
 }
 
-fn wait_state(state: &mut State) {
+pub(super) fn wait_state(state: &mut State) {
     let ctx = egui::Context::default();
     let start = Instant::now();
     while state.pending.is_some() {

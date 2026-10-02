@@ -19,7 +19,7 @@ fn item_details(ui: &mut egui::Ui, item: &Item) {
     if let Some(s) = &item.schedule {
         ui.label(format!(
             "{} · {} · {} · 提前 {} 分钟",
-            s.start.format("%Y-%m-%d %H:%M"),
+            s.range_label(s.start),
             s.rule_label(),
             if s.remind {
                 "提醒开启"
@@ -28,6 +28,12 @@ fn item_details(ui: &mut egui::Ui, item: &Item) {
             },
             s.minutes
         ));
+        if let Some(clock) = s.reminder_time {
+            ui.label(format!(
+                "全天提醒基准钟点：{}（再减去提前分钟）",
+                clock.format("%H:%M")
+            ));
+        }
         ui.label(if s.done {
             "日程已完成 / 结束"
         } else {

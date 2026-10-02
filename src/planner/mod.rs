@@ -3,6 +3,9 @@ mod agenda;
 mod backup;
 mod backup_ui;
 mod files;
+mod interval;
+#[cfg(test)]
+mod interval_tests;
 mod recurrence;
 mod store;
 #[cfg(test)]
@@ -10,7 +13,9 @@ mod tests;
 mod ui;
 
 use anyhow::{Result, ensure};
-use chrono::{DateTime, Datelike, Days, Duration, Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{
+    DateTime, Datelike, Days, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
+};
 use eframe::egui;
 use lunar_rust::{
     lunar::LunarRefHelper,
@@ -60,6 +65,12 @@ impl Repeat {
 #[serde(deny_unknown_fields)]
 struct Schedule {
     start: NaiveDateTime,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    end: Option<NaiveDateTime>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    all_day: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reminder_time: Option<NaiveTime>,
     minutes: u32,
     remind: bool,
     repeat: Repeat,
@@ -97,6 +108,9 @@ impl Item {
             updated: 0,
             schedule: date.map(|date| Schedule {
                 start: date.and_hms_opt(9, 0, 0).unwrap(),
+                end: None,
+                all_day: false,
+                reminder_time: None,
                 minutes: 10,
                 remind: true,
                 repeat: Repeat::Once,
@@ -122,6 +136,7 @@ impl Item {
         );
         ensure!(self.body.len() <= MAX_BODY, "正文最多 128 KiB");
         if let Some(s) = &self.schedule {
+            s.validate_interval()?;
             ensure!(
                 !s.clamp_missing_day || matches!(s.repeat, Repeat::Monthly | Repeat::Yearly),
                 "仅每月 / 每年重复可设置月底替代"
@@ -211,6 +226,8 @@ pub struct State {
     original: Option<Item>,
     date_text: String,
     time_text: String,
+    end_date_text: String,
+    end_time_text: String,
     query: String,
     trash: bool,
     pub calendar: bool,
@@ -242,6 +259,8 @@ pub struct State {
     pub preview_agenda_rect: Option<egui::Rect>,
     #[cfg(feature = "ui-preview")]
     pub preview_recurrence_rects: [Option<(egui::Rect, egui::Rect)>; 2],
+    #[cfg(feature = "ui-preview")]
+    pub preview_interval_rect: Option<(egui::Rect, egui::Rect)>,
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -345,6 +364,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_recurrence_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
+            preview_interval_rect: None,
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -360,6 +381,8 @@ impl State {
             original: None,
             date_text: String::new(),
             time_text: String::new(),
+            end_date_text: String::new(),
+            end_time_text: String::new(),
             query: String::new(),
             trash: false,
             calendar: false,
@@ -455,7 +478,12 @@ impl State {
                 .and_then(|i| i.schedule.as_ref())
                 .is_some_and(|s| {
                     self.date_text != s.start.date().to_string()
-                        || self.time_text != s.start.format("%H:%M").to_string()
+                        || self.time_text != s.reminder_at(s.start).format("%H:%M").to_string()
+                        || s.display_end().is_some_and(|end| {
+                            self.end_date_text != end.date().to_string()
+                                || (!s.all_day
+                                    && self.end_time_text != end.format("%H:%M").to_string())
+                        })
                 })
     }
     fn edit(&mut self, item: Item) {
@@ -468,7 +496,15 @@ impl State {
         self.time_text = item
             .schedule
             .as_ref()
-            .map(|s| s.start.format("%H:%M").to_string())
+            .map(|s| s.reminder_at(s.start).format("%H:%M").to_string())
+            .unwrap_or_default();
+        let end = item.schedule.as_ref().and_then(|s| {
+            s.display_end()
+                .or_else(|| s.start.checked_add_signed(Duration::hours(1)))
+        });
+        self.end_date_text = end.map(|end| end.date().to_string()).unwrap_or_default();
+        self.end_time_text = end
+            .map(|end| end.format("%H:%M").to_string())
             .unwrap_or_default();
         self.original = Some(item.clone());
         self.draft = Some(item);
@@ -506,20 +542,67 @@ impl State {
         let result = (|| -> Result<()> {
             if let Some(s) = &mut item.schedule {
                 let start = NaiveDateTime::parse_from_str(
-                    &format!("{} {}", self.date_text.trim(), self.time_text.trim()),
+                    &format!(
+                        "{} {}",
+                        self.date_text.trim(),
+                        if s.all_day {
+                            "00:00"
+                        } else {
+                            self.time_text.trim()
+                        }
+                    ),
                     "%Y-%m-%d %H:%M",
                 )?;
                 ensure!(
-                    Local.from_local_datetime(&start).single().is_some(),
+                    s.all_day || Local.from_local_datetime(&start).single().is_some(),
                     "该本地时间不存在或存在夏令时歧义，请选择其他时间"
                 );
                 s.start = start;
+                s.reminder_time = if s.all_day {
+                    Some(NaiveTime::parse_from_str(self.time_text.trim(), "%H:%M")?)
+                } else {
+                    None
+                };
+                if s.end.is_some() || s.all_day {
+                    let end = NaiveDateTime::parse_from_str(
+                        &format!(
+                            "{} {}",
+                            self.end_date_text.trim(),
+                            if s.all_day {
+                                "00:00"
+                            } else {
+                                self.end_time_text.trim()
+                            }
+                        ),
+                        "%Y-%m-%d %H:%M",
+                    )?;
+                    s.end = Some(if s.all_day {
+                        end.checked_add_signed(Duration::days(1))
+                            .ok_or_else(|| anyhow::anyhow!("结束日期无效"))?
+                    } else {
+                        end
+                    });
+                    ensure!(
+                        s.all_day || Local.from_local_datetime(&end).single().is_some(),
+                        "结束时间不存在或存在夏令时歧义，请选择其他时间"
+                    );
+                }
+                ensure!(
+                    !s.remind
+                        || Local
+                            .from_local_datetime(&s.reminder_at(start))
+                            .single()
+                            .is_some(),
+                    "提醒时间不存在或存在夏令时歧义，请选择其他时间"
+                );
                 if self
                     .original
                     .as_ref()
                     .and_then(|i| i.schedule.as_ref())
                     .is_some_and(|old| {
                         old.start != s.start
+                            || old.all_day != s.all_day
+                            || old.reminder_time != s.reminder_time
                             || old.repeat != s.repeat
                             || old.clamp_missing_day != s.clamp_missing_day
                             || old.minutes != s.minutes

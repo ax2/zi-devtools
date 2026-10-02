@@ -91,9 +91,12 @@ impl Schedule {
         if !self.remind || self.done {
             return None;
         }
-        let limit = now
+        let mut limit = now
             .naive_local()
             .checked_add_signed(Duration::minutes(i64::from(self.minutes)))?;
+        if let Some(clock) = self.reminder_time {
+            limit = limit.checked_sub_signed(clock.signed_duration_since(NaiveTime::MIN))?;
+        }
         let occurrence = self.latest(limit)?;
         if self.handled.is_some_and(|handled| handled >= occurrence)
             || self
@@ -103,7 +106,10 @@ impl Schedule {
             return None;
         }
         // A DST gap is not shifted; an ambiguous time uses its first occurrence.
-        let at = now.timezone().from_local_datetime(&occurrence).earliest()?;
+        let at = now
+            .timezone()
+            .from_local_datetime(&self.reminder_at(occurrence))
+            .earliest()?;
         (now.timestamp() >= at.timestamp() - i64::from(self.minutes) * 60).then_some(occurrence)
     }
 }

@@ -28,6 +28,17 @@ pub(super) fn rows(
         {
             continue;
         }
+        // Include a carry-in once, even when it began before the visible range.
+        let midnight = start.and_time(NaiveTime::MIN);
+        if days > 0
+            && (MIN_YEAR..=MAX_YEAR).contains(&start.year())
+            && let Some(at) = midnight
+                .checked_sub_signed(Duration::nanoseconds(1))
+                .and_then(|before| schedule.latest(before))
+            && schedule.end_at(at).is_some_and(|end| end > midnight)
+        {
+            rows.push(Row { index, at });
+        }
         for offset in 0..days.min(30) {
             let Some(day) = start.checked_add_days(Days::new(u64::from(offset))) else {
                 break;
@@ -128,7 +139,7 @@ impl State {
             end,
             self.agenda_cache.rows.len()
         ));
-        ui.small("按计划时间排序；重复日程逐次展开。搜索只筛选此范围，点击进入对应日期。编辑重复日程会影响整个系列。");
+        ui.small("包含范围前开始但尚未结束的安排，每次只列一次。按开始时间排序，搜索筛选此范围；点击进入开始日，编辑重复日程影响整个系列。");
         ui.add_space(6.0);
         if self.agenda_cache.rows.is_empty() {
             ui.label("此范围没有符合条件的日程。可更换日期、关键词或包含已完成记录。");
@@ -161,7 +172,7 @@ impl State {
                             } else {
                                 ""
                             },
-                            row.at.format("%Y-%m-%d %H:%M"),
+                            schedule.range_label(row.at),
                             schedule.rule_label(),
                             if schedule.remind {
                                 "提醒开启"
@@ -174,7 +185,9 @@ impl State {
                     )
                     .on_hover_text(format!(
                         "{}\n{}\n系列起点：{}",
-                        item.title, row.at, schedule.start
+                        item.title,
+                        schedule.range_label(row.at),
+                        schedule.start
                     ));
                 #[cfg(feature = "ui-preview")]
                 if row_index == 0 {

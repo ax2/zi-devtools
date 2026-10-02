@@ -286,6 +286,22 @@ impl DevToolsApp {
         self.planner.preview_recurrence_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_interval_position(&self, save: bool) -> egui::Pos2 {
+        let (rect, clip) = if save {
+            self.planner.preview_recurrence_rects[1]
+        } else {
+            self.planner.preview_interval_rect
+        }
+        .expect("interval control rendered");
+        assert!(clip.contains_rect(rect), "interval control clipped");
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_interval_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Calendar;
+        self.planner.preview_interval_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_files_smoke(&mut self, phase: u8) -> bool {
         self.page = Page::Notes;
         self.planner.preview_files_smoke(phase)
@@ -423,6 +439,16 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            238..=245 => {
+                self.page = Page::Calendar;
+                self.planner.preview_interval(scene >= 240);
+                if (242..=243).contains(&scene) {
+                    self.planner.preview_interval_agenda();
+                }
+                if scene >= 244 {
+                    self.planner.preview_interval_focus();
+                }
+            }
             234..=237 => {
                 self.page = Page::Calendar;
                 self.planner.preview_recurrence(scene >= 236);

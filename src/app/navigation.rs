@@ -118,7 +118,7 @@ impl DevToolsApp {
                 }
             });
             ui.label(
-                RichText::new(format!("Stage 78  ·  v{}", env!("CARGO_PKG_VERSION")))
+                RichText::new(format!("Stage 79  ·  v{}", env!("CARGO_PKG_VERSION")))
                     .size(11.0)
                     .color(p.muted),
             );
