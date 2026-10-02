@@ -90,7 +90,7 @@ ZiDevTools.exe --import-config C:\path\to\existing-services.yml
 
 ## 交付状态
 
-Stage 76 / v0.76.0 开发中：MCP 协议调试台增加可显式保持的本机 stdio 连接，在同一进程内连续操作，逐次复核工具定义和权限，支持手动断开与闲置退出。Streamable HTTP、心跳和真实第三方服务兼容性仍在规划。详见 [使用说明](docs/mcp-inspector.md)。
+Stage 76 / [v0.76.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.76.0)：MCP 协议调试台增加可显式保持的本机 stdio 连接，在同一进程内连续操作，逐次复核工具定义和权限，支持手动断开与闲置退出。本地完整测试、Windows 安装/卸载、公开 CI/Release 与下载资产哈希已核对；官网四个线上文件与源码快照哈希一致。Streamable HTTP、心跳和真实第三方服务兼容性仍在规划。详见 [使用说明](docs/mcp-inspector.md)。
 
 Stage 75 / [v0.75.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.75.0)：新增只读 SQLite 浏览器；本地完整测试、Windows 安装/卸载、公开 CI/Release、资产摘要与官网桌面/手机视口均已核对。服务测试的并行端口竞态已修复。
 
