@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 198] = [
+const NAMES: [&str; 208] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -208,6 +208,16 @@ const NAMES: [&str; 198] = [
     "workspace-save-light",
     "workspace-tasks-dark",
     "workspace-tasks-light",
+    "memos-dark",
+    "memos-light",
+    "calendar-dark",
+    "calendar-light",
+    "reminder-dark",
+    "reminder-light",
+    "calendar-compact-dark",
+    "calendar-compact-light",
+    "calendar-editor-compact-dark",
+    "calendar-editor-compact-light",
 ];
 
 struct Capture {
@@ -265,6 +275,20 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("planner-tray-smoke" | "planner-minimize-smoke")
+        ) {
+            if self.frames == 0 {
+                self.app.preview_planner_timer(
+                    ctx,
+                    smoke_mode.as_deref() == Some("planner-minimize-smoke"),
+                );
+            }
+            self.frames += 1;
+            self.app.update(ctx, frame);
+            return;
+        }
         if smoke_mode.as_deref() == Some("taskbar-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 0, self.fixture.clone());
@@ -783,6 +807,7 @@ impl eframe::App for Capture {
                 || self.scene == 7
                 || self.scene == 59
                 || (188..=189).contains(&self.scene)
+                || (204..=207).contains(&self.scene)
             {
                 egui::vec2(980.0, 760.0)
             } else {
@@ -790,9 +815,17 @@ impl eframe::App for Capture {
             };
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
         }
+        if (206..=207).contains(&self.scene) && self.frames == 6 {
+            self.app.preview_planner_editor();
+            self.auto_minimize_smoke_at = Some(Instant::now());
+        }
         self.app.update(ctx, frame);
         self.frames += 1;
-        if self.frames >= 18 && !self.pending {
+        let scroll_settled = !(206..=207).contains(&self.scene)
+            || self
+                .auto_minimize_smoke_at
+                .is_some_and(|at| at.elapsed() >= Duration::from_secs(1));
+        if self.frames >= 18 && !self.pending && scroll_settled {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
             self.pending = true;
         }

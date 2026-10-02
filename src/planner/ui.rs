@@ -1,0 +1,639 @@
+use super::*;
+use egui::{RichText, vec2};
+
+impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_focus_editor(&mut self) {
+        self.focus_editor = true;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_timer(&mut self) {
+        self.pending = None;
+        self.saving = None;
+        self.loaded = true;
+        let mut item = Item::new(Some(Local::now().date_naive()));
+        item.title = "原生托盘计时提醒验收".into();
+        let s = item.schedule.as_mut().unwrap();
+        s.start = Local::now().naive_local() + Duration::seconds(3);
+        s.minutes = 0;
+        self.items = vec![item];
+        self.shown.clear();
+        self.alarms.clear();
+        self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
+        self.preview_delivered
+            .store(false, std::sync::atomic::Ordering::Release);
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.heading(if self.calendar {
+                "万年历与日程"
+            } else {
+                "备忘录"
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .button(format!("待处理提醒 · {}", self.alarms.len()))
+                    .clicked()
+                {
+                    self.alarm_open = true;
+                }
+                if ui
+                    .add_enabled(
+                        self.pending.is_none() && !self.has_unsaved(),
+                        egui::Button::new("重新加载"),
+                    )
+                    .clicked()
+                {
+                    self.draft = None;
+                    self.original = None;
+                    self.reload();
+                }
+            });
+        });
+        ui.label(
+            RichText::new("记录留在本机 · 点击保存后持久保留 · 支持搜索、置顶与回收站恢复").weak(),
+        );
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            if ui.selectable_label(!self.calendar, "备忘录").clicked() {
+                self.calendar = false;
+                self.query.clear();
+                self.trash = false;
+            }
+            if ui
+                .selectable_label(self.calendar, "万年历 / 日程")
+                .clicked()
+            {
+                self.calendar = true;
+                self.query.clear();
+                self.trash = false;
+            }
+            ui.separator();
+            ui.add(
+                egui::TextEdit::singleline(&mut self.query)
+                    .hint_text("搜索标题与正文…")
+                    .desired_width(220.0),
+            );
+            ui.checkbox(&mut self.trash, "回收站");
+            if ui
+                .add_enabled(
+                    self.pending.is_none() && self.loaded,
+                    egui::Button::new(if self.calendar {
+                        "+ 新建日程"
+                    } else {
+                        "+ 新建备忘"
+                    }),
+                )
+                .clicked()
+            {
+                self.new_draft(self.calendar.then_some(self.selected));
+            }
+        });
+        if self.pending.is_some() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("正在读写本地记录…");
+            });
+        }
+        if !self.message.is_empty() {
+            let color = if self.error {
+                ui.visuals().error_fg_color
+            } else {
+                ui.visuals().weak_text_color()
+            };
+            ui.colored_label(color, &self.message);
+        }
+        ui.add_space(10.0);
+        if self.calendar {
+            ui.label(RichText::new("按本机时区安排。运行或缩到托盘时弹出提醒；完全退出不提醒，重启后补显示。休眠期间不唤醒。重复日程合并显示最近一次错过的提醒。").small().weak());
+            ui.add_space(8.0);
+        }
+        let width = ui.available_width();
+        if width < 860.0 && self.calendar {
+            self.calendar_ui(ui);
+            self.list_ui(ui);
+            ui.add_space(12.0);
+            let editor = egui::Frame::group(ui.style())
+                .inner_margin(16.0)
+                .show(ui, |ui| self.editor_ui(ui));
+            if self.focus_editor {
+                editor.response.scroll_to_me(Some(egui::Align::Min));
+            }
+        } else {
+            ui.columns(2, |cols| {
+                cols[0].set_width((width - 12.0) * 0.5);
+                cols[1].set_width((width - 12.0) * 0.5);
+                if self.calendar {
+                    self.calendar_ui(&mut cols[0]);
+                }
+                self.list_ui(&mut cols[0]);
+                egui::Frame::group(cols[1].style())
+                    .inner_margin(16.0)
+                    .show(&mut cols[1], |ui| self.editor_ui(ui));
+            });
+        }
+        self.focus_editor = false;
+        ui.add_space(12.0);
+        ui.collapsing("本地保存与容量", |ui| {
+            ui.label(format!("{} 条 / 2000 条（含回收站）；正文每条 128 KiB，总内容 32 MiB。", self.items.len()));
+            ui.label("内容未加密，不会自动上传。备份前请退出程序，再复制数据库文件。回收站保留内容，当前版本不提供永久清空。");
+            ui.label(self.path.display().to_string());
+        });
+    }
+
+    fn calendar_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(
+                    self.month.year() > MIN_YEAR || self.month.month() > 1,
+                    egui::Button::new("‹"),
+                )
+                .on_hover_text("上个月")
+                .clicked()
+            {
+                self.month = self.month.pred_opt().unwrap().with_day(1).unwrap();
+                self.lunar.clear();
+            }
+            ui.strong(format!(
+                "{} 年 {} 月",
+                self.month.year(),
+                self.month.month()
+            ));
+            if ui
+                .add_enabled(
+                    self.month.year() < MAX_YEAR || self.month.month() < 12,
+                    egui::Button::new("›"),
+                )
+                .on_hover_text("下个月")
+                .clicked()
+            {
+                self.month = self
+                    .month
+                    .checked_add_months(chrono::Months::new(1))
+                    .unwrap();
+                self.lunar.clear();
+            }
+            if ui.button("今天").clicked() {
+                self.select_date(Local::now().date_naive());
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.jump)
+                    .hint_text("YYYY-MM-DD")
+                    .desired_width(120.0),
+            );
+            if ui.button("跳转").clicked() {
+                match NaiveDate::parse_from_str(self.jump.trim(), "%Y-%m-%d") {
+                    Ok(date) if (MIN_YEAR..=MAX_YEAR).contains(&date.year()) => {
+                        self.select_date(date)
+                    }
+                    _ => {
+                        self.message = "请输入 1901–2099 年的有效日期，例如 2026-10-02".into();
+                        self.error = true;
+                    }
+                }
+            }
+        });
+        ui.add_space(8.0);
+        let first =
+            self.month - Duration::days(i64::from(self.month.weekday().num_days_from_monday()));
+        let cell = ((ui.available_width() - 24.0) / 7.0).max(40.0);
+        egui::Grid::new("planner-month")
+            .spacing(vec2(4.0, 4.0))
+            .show(ui, |ui| {
+                for label in ["一", "二", "三", "四", "五", "六", "日"] {
+                    ui.add_sized([cell, 20.0], egui::Label::new(RichText::new(label).weak()));
+                }
+                ui.end_row();
+                for n in 0..42 {
+                    let date = first + Duration::days(n);
+                    let valid = (MIN_YEAR..=MAX_YEAR).contains(&date.year());
+                    let lunar = if valid {
+                        self.lunar
+                            .entry(date)
+                            .or_insert_with(|| lunar_day(date))
+                            .clone()
+                    } else {
+                        LunarDay {
+                            short: String::new(),
+                            full: String::new(),
+                        }
+                    };
+                    let count = self
+                        .items
+                        .iter()
+                        .filter(|i| {
+                            !i.trash
+                                && i.schedule
+                                    .as_ref()
+                                    .is_some_and(|s| !s.done && s.on_day(date))
+                        })
+                        .count();
+                    let today = date == Local::now().date_naive();
+                    let marker = if count > 0 {
+                        " •"
+                    } else if today {
+                        " 今"
+                    } else {
+                        ""
+                    };
+                    let text = RichText::new(format!("{}{marker}\n{}", date.day(), lunar.short))
+                        .size(12.0);
+                    let text = if date.month() != self.month.month() {
+                        text.weak()
+                    } else {
+                        text
+                    };
+                    let response = ui.add_enabled(
+                        valid,
+                        egui::Button::new(text)
+                            .selected(date == self.selected)
+                            .min_size(vec2(cell, 49.0)),
+                    );
+                    if response
+                        .on_hover_text(format!("{date}\n{}\n{count} 条未完成日程", lunar.full))
+                        .clicked()
+                    {
+                        self.selected = date;
+                        self.jump = date.to_string();
+                    }
+                    if n % 7 == 6 {
+                        ui.end_row();
+                    }
+                }
+            });
+        ui.add_space(8.0);
+        let day = self
+            .lunar
+            .entry(self.selected)
+            .or_insert_with(|| lunar_day(self.selected));
+        ui.strong(self.selected.to_string());
+        ui.label(&day.full);
+        ui.label(
+            RichText::new("1901–2099 · 节日为传统日历信息，不代表官方放假/调休")
+                .small()
+                .weak(),
+        );
+        ui.separator();
+    }
+
+    fn select_date(&mut self, date: NaiveDate) {
+        self.selected = date;
+        self.month = date.with_day(1).unwrap();
+        self.jump = date.to_string();
+        self.lunar.clear();
+    }
+
+    fn list_ui(&mut self, ui: &mut egui::Ui) {
+        let query = self.query.trim().to_lowercase();
+        let matches: Vec<_> = self
+            .items
+            .iter()
+            .filter(|i| {
+                i.trash == self.trash
+                    && i.schedule.is_some() == self.calendar
+                    && (query.is_empty()
+                        || format!("{} {}", i.title, i.body)
+                            .to_lowercase()
+                            .contains(&query))
+                    && (!self.calendar
+                        || self.trash
+                        || !query.is_empty()
+                        || i.schedule.as_ref().is_some_and(|s| s.on_day(self.selected)))
+            })
+            .map(|i| {
+                (
+                    i.id.clone(),
+                    i.title.clone(),
+                    i.pinned,
+                    i.updated,
+                    i.schedule.clone(),
+                )
+            })
+            .collect();
+        ui.strong(format!(
+            "{} · {} 条",
+            if self.trash {
+                "回收站"
+            } else if self.calendar && !query.is_empty() {
+                "所有日期的搜索结果"
+            } else if self.calendar {
+                "当日日程"
+            } else {
+                "全部备忘"
+            },
+            matches.len()
+        ));
+        egui::ScrollArea::vertical()
+            .id_salt("planner-list")
+            .max_height(if self.calendar { 240.0 } else { 530.0 })
+            .show(ui, |ui| {
+                if matches.is_empty() {
+                    ui.add_space(18.0);
+                    ui.label(RichText::new("这里还没有记录。新建一条，或更换搜索条件。").weak());
+                }
+                for (id, title, pin, updated, schedule) in matches {
+                    let detail = if let Some(s) = schedule {
+                        format!(
+                            "{}  ·  {}{}",
+                            s.start.format("%m-%d %H:%M"),
+                            s.repeat.label(),
+                            if s.done { " · 已完成" } else { "" }
+                        )
+                    } else {
+                        Local
+                            .timestamp_opt(updated, 0)
+                            .single()
+                            .map(|d| d.format("更新于 %m-%d %H:%M").to_string())
+                            .unwrap_or_default()
+                    };
+                    let selected = self.draft.as_ref().is_some_and(|i| i.id == id);
+                    if ui
+                        .add_sized(
+                            [ui.available_width(), 54.0],
+                            egui::Button::new(format!(
+                                "{}{title}\n{detail}",
+                                if pin { "★ " } else { "" }
+                            ))
+                            .selected(selected),
+                        )
+                        .clicked()
+                        && self.pending.is_none()
+                        && self.may_leave()
+                        && let Some(item) = self.items.iter().find(|i| i.id == id).cloned()
+                    {
+                        self.edit(item);
+                    }
+                    ui.add_space(4.0);
+                }
+            });
+    }
+
+    fn editor_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(mut item) = self.draft.clone() else {
+            ui.add_space(35.0);
+            ui.heading("留住想法，安排下一步");
+            ui.label("从左侧打开记录，或新建一条。备忘录可以直接转成日程，填写提醒时间后保存。");
+            ui.add_space(35.0);
+            return;
+        };
+        let dirty = self.has_unsaved();
+        let mut save = false;
+        let mut discard = false;
+        let mut convert = false;
+        let mut trash = false;
+        ui.heading(if item.schedule.is_some() {
+            "编辑日程"
+        } else {
+            "编辑备忘录"
+        });
+        ui.label(
+            RichText::new(if item.revision == 0 {
+                "新记录 · 尚未保存"
+            } else if dirty {
+                "有未保存的修改"
+            } else {
+                "已保存"
+            })
+            .weak(),
+        );
+        ui.add_space(10.0);
+        ui.add_enabled_ui(self.pending.is_none() && self.loaded, |ui| {
+            ui.label("标题");
+            ui.add(
+                egui::TextEdit::singleline(&mut item.title)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("写下一个清晰的标题")
+                    .char_limit(120),
+            );
+            ui.add_space(8.0);
+            if let Some(s) = &mut item.schedule {
+                ui.horizontal(|ui| {
+                    ui.label("日期");
+                    ui.add(egui::TextEdit::singleline(&mut self.date_text).desired_width(106.0));
+                    ui.label("时间");
+                    ui.add(egui::TextEdit::singleline(&mut self.time_text).desired_width(52.0));
+                });
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("planner-repeat")
+                        .selected_text(s.repeat.label())
+                        .show_ui(ui, |ui| {
+                            for repeat in [Repeat::Once, Repeat::Daily, Repeat::Weekly] {
+                                ui.selectable_value(&mut s.repeat, repeat, repeat.label());
+                            }
+                        });
+                    ui.checkbox(
+                        &mut s.done,
+                        if s.repeat == Repeat::Once {
+                            "已完成"
+                        } else {
+                            "结束整个重复日程"
+                        },
+                    );
+                });
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut s.remind, "弹出提醒");
+                    ui.add_enabled(
+                        s.remind,
+                        egui::DragValue::new(&mut s.minutes)
+                            .range(0..=10080)
+                            .prefix("提前 ")
+                            .suffix(" 分钟"),
+                    );
+                });
+                ui.label(
+                    RichText::new("0 分钟表示准时提醒；不重复日程也可设为一次性闹钟。")
+                        .small()
+                        .weak(),
+                );
+                ui.add_space(8.0);
+            }
+            ui.label(if item.schedule.is_some() {
+                "详情 / 地点 / 准备事项"
+            } else {
+                "正文"
+            });
+            egui::ScrollArea::vertical()
+                .id_salt("planner-body")
+                .max_height(if item.schedule.is_some() {
+                    215.0
+                } else {
+                    340.0
+                })
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut item.body)
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(12)
+                            .char_limit(MAX_BODY)
+                            .hint_text("支持多行文字；保存前可随时修改…"),
+                    );
+                });
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut item.pinned, "置顶");
+                ui.label(
+                    RichText::new(format!("{} 字符", item.body.chars().count()))
+                        .small()
+                        .weak(),
+                );
+            });
+            ui.add_space(10.0);
+            ui.horizontal_wrapped(|ui| {
+                save = ui.button("保存到本机").clicked();
+                discard = ui.button("放弃编辑").clicked();
+                if ui.button("复制全文").clicked() {
+                    ui.ctx()
+                        .copy_text(format!("{}\n\n{}", item.title, item.body));
+                }
+                if item.schedule.is_none() {
+                    convert = ui
+                        .add_enabled(
+                            !dirty && item.revision > 0 && !item.trash,
+                            egui::Button::new("转为日程 →"),
+                        )
+                        .clicked();
+                }
+            });
+            ui.add_space(10.0);
+            trash = ui
+                .add_enabled(
+                    item.revision > 0 && !dirty,
+                    egui::Button::new(if item.trash {
+                        "从回收站恢复"
+                    } else {
+                        "移入回收站"
+                    }),
+                )
+                .clicked();
+            if item.trash {
+                ui.label("回收站中的日程不会提醒。恢复后，未处理的过期提醒会再次显示。");
+            }
+        });
+        self.draft = Some(item.clone());
+        if discard {
+            // Explicit discard also discards unsaved date/time fields.
+            if let Some(original) = self.original.clone() {
+                self.edit(original);
+            }
+        } else if save {
+            self.save_draft();
+        } else if trash {
+            item.trash = !item.trash;
+            self.launch(Some(item));
+        } else if convert {
+            let mut event = Item::new(Some(self.selected));
+            event.title = item.title;
+            event.body = item.body;
+            self.calendar = true;
+            self.edit(event);
+            self.message = "已复制成日程草稿，原备忘保留；设置时间后保存即可。".into();
+            self.error = false;
+        }
+    }
+
+    pub fn reminder_ui(&mut self, ctx: &egui::Context) {
+        if !self.alarm_open {
+            return;
+        }
+        let mut open = true;
+        let mut action = None;
+        egui::Window::new("日程提醒")
+            .id(egui::Id::new("planner-alarms"))
+            .open(&mut open)
+            .collapsible(false)
+            .default_width(440.0)
+            .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label("提醒会保留到你处理。关闭此窗口可稍后从日程页继续查看。");
+                egui::ScrollArea::vertical()
+                    .max_height(380.0)
+                    .show(ui, |ui| {
+                        if self.alarms.is_empty() {
+                            ui.label("没有待处理提醒。");
+                        }
+                        for (id, at) in &self.alarms {
+                            let Some(item) = self.items.iter().find(|i| &i.id == id) else {
+                                continue;
+                            };
+                            ui.push_id(id, |ui| {
+                                ui.separator();
+                                ui.strong(&item.title);
+                                ui.label(at.format("%Y-%m-%d %H:%M · 本机时间").to_string());
+                                let editing = self.draft.as_ref().is_some_and(|i| &i.id == id)
+                                    && self.has_unsaved();
+                                ui.add_enabled_ui(self.pending.is_none() && !editing, |ui| {
+                                    ui.horizontal(|ui| {
+                                        if ui.button("已知晓").clicked() {
+                                            action = Some((id.clone(), *at, 0));
+                                        }
+                                        if ui.button("10 分钟后提醒").clicked() {
+                                            action = Some((id.clone(), *at, 10));
+                                        }
+                                    });
+                                });
+                                if editing {
+                                    ui.label("此日程正在编辑，请先保存或放弃编辑。");
+                                }
+                            });
+                        }
+                    });
+                if self.error {
+                    ui.colored_label(ui.visuals().error_fg_color, &self.message);
+                }
+            });
+        self.alarm_open = open;
+        if let Some((id, at, minutes)) = action
+            && let Some(mut item) = self.items.iter().find(|i| i.id == id).cloned()
+        {
+            if let Some(s) = &mut item.schedule {
+                if minutes == 0 {
+                    s.handled = Some(at);
+                    s.snooze = None;
+                } else {
+                    s.snooze = Some((at, Local::now().timestamp() + minutes * 60));
+                }
+            }
+            self.launch(Some(item));
+        }
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview(&mut self, calendar: bool, alarm: bool) {
+        // The capture app uses an isolated config directory; never writes user records.
+        self.pending = None;
+        self.saving = None;
+        self.loaded = true;
+        self.items.clear();
+        self.calendar = calendar;
+        self.select_date(NaiveDate::from_ymd_opt(2026, 10, 2).unwrap());
+        let mut memo = Item::new(None);
+        memo.title = "网站图片优化清单".into();
+        memo.body = "所有落地页图片统一使用 WebP。\n\n□ 检查手机与桌面两种尺寸\n□ 兼顾文字清晰度与图片体积\n□ 发布前核对首页返回链接\n\n完成检查后，把这条备忘转成下次复查的日程。".into();
+        memo.pinned = true;
+        memo.revision = 1;
+        memo.updated = Local::now().timestamp();
+        self.items.push(memo.clone());
+        let mut another = memo.clone();
+        another.id = uuid::Uuid::new_v4().to_string();
+        another.title = "下周工具开发想法".into();
+        another.pinned = false;
+        another.body = "备忘、日历、文件互通的下一步。".into();
+        self.items.push(another);
+        let mut event = Item::new(Some(self.selected));
+        event.title = "整理本周项目与备忘".into();
+        event.body = "检查未完成事项，整理本周笔记。\n准备下周开发安排。".into();
+        event.revision = 1;
+        event.schedule.as_mut().unwrap().repeat = Repeat::Weekly;
+        self.items.push(event.clone());
+        self.edit(if calendar { event.clone() } else { memo });
+        self.message.clear();
+        self.alarms.clear();
+        self.alarm_open = alarm;
+        if alarm {
+            self.alarms.push((event.id, event.schedule.unwrap().start));
+        }
+        self.last_tick = Instant::now() + std::time::Duration::from_secs(120);
+        self.focus_editor = false;
+    }
+}

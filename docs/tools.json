@@ -1856,6 +1856,66 @@
       "category": "效率与系统",
       "priority": "P1",
       "scope": "用户可按本次/项目/配方授权文件及数据库操作；预览目标/差异/冲突，提交前复核版本，适用时备份/事务/回收站，外部程序隔离按实测说明"
+    },
+    {
+      "id": "memos",
+      "name": "备忘录",
+      "status": "implemented",
+      "category": "日常工具",
+      "priority": "—",
+      "scope": "本地备忘录保存、全文搜索、置顶、回收站恢复与转为日程",
+      "discovery": {
+        "label": "备忘录",
+        "summary": "本地备忘录保存、全文搜索、置顶、回收站恢复与转为日程",
+        "category": "时间与生成",
+        "keywords": "本地 保存 搜索 备忘 日程 提醒 农历 节气",
+        "aliases": [
+          "便签",
+          "笔记",
+          "memo",
+          "note"
+        ]
+      }
+    },
+    {
+      "id": "calendar-planner",
+      "name": "万年历与日程",
+      "status": "implemented",
+      "category": "日常工具",
+      "priority": "—",
+      "scope": "1901–2099 公历、农历、节气；日程保存、每天/每周重复、提前提醒、延后与重启补提醒；退出程序不提醒",
+      "discovery": {
+        "label": "万年历与日程",
+        "summary": "1901–2099 公历、农历、节气；日程保存、每天/每周重复、提前提醒、延后与重启补提醒；退出程序不提醒",
+        "category": "时间与生成",
+        "keywords": "本地 保存 搜索 备忘 日程 提醒 农历 节气",
+        "aliases": [
+          "万年历",
+          "日历",
+          "提醒",
+          "闹钟",
+          "日程",
+          "calendar",
+          "schedule",
+          "reminder"
+        ]
+      }
+    },
+    {
+      "id": "planner-interop",
+      "name": "日程进阶与互通",
+      "status": "planned",
+      "category": "日常工具",
+      "priority": "P2",
+      "scope": "月/年及农历生日重复、全天与结束时间、周视图、ICS 导入导出、系统通知与退出后的系统任务提醒"
+    },
+    {
+      "id": "memo-library",
+      "name": "备忘资料库互通",
+      "status": "planned",
+      "category": "日常工具",
+      "priority": "P2",
+      "scope": "标签、Markdown 文件导入导出、永久清理回收站，以及主动将备忘送往知识库与其他工具"
     }
   ],
   "plugin_examples": [

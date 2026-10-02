@@ -30,6 +30,7 @@ pub mod knowledge_search;
 pub mod knowledge_sources;
 pub mod markdown_preview;
 pub mod network_tools;
+pub mod planner;
 pub mod plugin_ui;
 pub mod plugins;
 pub mod preferences;

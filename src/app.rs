@@ -212,6 +212,8 @@ pub struct DevToolsApp {
     launcher_index: usize,
     toast: Option<(String, Instant)>,
     data_state: crate::workbench::sessions::Workspace,
+    planner: crate::planner::State,
+    planner_active: Arc<AtomicBool>,
     file_state: FileState,
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
@@ -248,6 +250,56 @@ pub struct DevToolsApp {
 }
 
 impl DevToolsApp {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_planner_editor(&mut self) {
+        self.planner.preview_focus_editor();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_planner_timer(&mut self, ctx: &egui::Context, minimize: bool) {
+        self.planner.preview_timer();
+        self.page = Page::Home;
+        self.quick_open = false;
+        if minimize {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        } else {
+            self.hide_to_tray(ctx);
+        }
+        let handle = self.window_handle;
+        let delivered = self.planner.preview_delivered.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(700));
+            #[cfg(windows)]
+            {
+                let hidden = if minimize {
+                    handle.is_some_and(|h| unsafe {
+                        windows_sys::Win32::UI::WindowsAndMessaging::IsIconic(h as _) != 0
+                    })
+                } else {
+                    main_window_cloaked(handle)
+                };
+                if !hidden {
+                    eprintln!("FAIL planner initial hidden/minimized state");
+                    std::process::exit(1);
+                }
+            }
+            std::thread::sleep(Duration::from_secs(6));
+            #[cfg(windows)]
+            let visible = !main_window_cloaked(handle)
+                && handle.is_some_and(|h| unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::IsIconic(h as _) == 0
+                });
+            #[cfg(not(windows))]
+            let visible = true;
+            if visible && delivered.load(Ordering::Acquire) {
+                println!(
+                    "PASS planner real timed alarm: in-memory fixture, minimized={minimize}, delivered and restored without harness repaint"
+                );
+                std::process::exit(0);
+            }
+            eprintln!("FAIL planner alarm did not restore hidden/minimized window");
+            std::process::exit(1);
+        });
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_begin_recorder_selection(&mut self, ctx: &egui::Context) {
         self.recorder.preview_begin_selection(ctx);
@@ -301,6 +353,18 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            198..=207 => {
+                self.page = if scene >= 200 {
+                    Page::Calendar
+                } else {
+                    Page::Notes
+                };
+                self.planner
+                    .preview(scene >= 200, (202..=203).contains(&scene));
+                if scene >= 206 {
+                    self.planner.preview_focus_editor();
+                }
+            }
             0 | 1 => self.page = Page::Home,
             190..=197 => {
                 self.page = if scene >= 196 {
@@ -990,6 +1054,20 @@ impl DevToolsApp {
         let tray_bridge_stop = Arc::new(AtomicBool::new(false));
         let tray_exit_requested = Arc::new(AtomicBool::new(false));
         let window_handle = main_window_handle(cc);
+        let planner_active = Arc::new(AtomicBool::new(true));
+        {
+            let stop = Arc::clone(&tray_bridge_stop);
+            let active = Arc::clone(&planner_active);
+            let ctx = cc.egui_ctx.clone();
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) {
+                    if active.load(Ordering::Acquire) {
+                        wake_main_window(window_handle, &ctx);
+                    }
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+            });
+        }
         let quick_active = Arc::new(AtomicBool::new(false));
         start_tray_bridge(
             Arc::clone(&manager),
@@ -1056,6 +1134,8 @@ impl DevToolsApp {
             config_error,
             quit_requested: false,
             workspace_exit_confirm: false,
+            planner: crate::planner::State::new(preferences_path.with_file_name("planner.sqlite3")),
+            planner_active,
             tray_bridge_stop,
             tray_exit_requested,
             window_handle,
@@ -1409,6 +1489,9 @@ impl DevToolsApp {
     }
     fn navigate(&mut self, page: Page, kind: Option<ToolKind>) {
         self.page = page;
+        if matches!(page, Page::Notes | Page::Calendar) {
+            self.planner.calendar = page == Page::Calendar;
+        }
         self.tool_search.clear();
         if let Some(kind) = kind {
             self.tool_state.select(kind);
@@ -1460,6 +1543,9 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
+        if matches!(e.page, Page::Notes | Page::Calendar) {
+            self.planner.calendar = e.page == Page::Calendar;
+        }
         if e.id == "image-crop-annotate" {
             self.images.show_editor();
         } else if e.id == "image-metadata" {
@@ -3254,6 +3340,12 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.planner.poll(ctx) {
+            self.quick_open = false;
+            restore_main_window(self.window_handle, ctx);
+        }
+        self.planner_active
+            .store(self.planner.needs_clock(), Ordering::Release);
         self.mcp.tick(ctx);
         if self.recorder.poll() {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -3355,7 +3447,7 @@ impl eframe::App for DevToolsApp {
         }
 
         if self.tray_exit_requested.swap(false, Ordering::AcqRel) {
-            if self.data_state.has_work() {
+            if self.data_state.has_work() || self.planner.has_unsaved() {
                 self.workspace_exit_confirm = true;
                 restore_main_window(self.window_handle, ctx);
             } else {
@@ -3377,7 +3469,7 @@ impl eframe::App for DevToolsApp {
         if ctx.input(|input| input.viewport().close_requested())
             && !self.quit_requested
             && self.tray.is_none()
-            && self.data_state.has_work()
+            && (self.data_state.has_work() || self.planner.has_unsaved())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.workspace_exit_confirm = true;
@@ -3385,14 +3477,15 @@ impl eframe::App for DevToolsApp {
         if self.workspace_exit_confirm {
             egui::Modal::new(egui::Id::new("workspace-exit-confirm")).show(ctx, |ui| {
                 ui.heading("退出前保留工作");
-                ui.label("数据工作实例的修改不会自动保存。已保存快照会保留，未保存内容及运行中的结果会丢失。");
+                ui.label("数据工作实例、备忘录和日程的编辑需要手动保存。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
                 ui.horizontal(|ui| {
-                    if ui.button("返回工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
-                    if ui.add_enabled(!self.data_state.operation_pending(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
+                    if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
+                    if ui.add_enabled(!self.data_state.operation_pending() && !self.planner.saving(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-                if self.data_state.operation_pending() { ui.label("正在保存或恢复，请等待完成后退出。"); }
+                if self.data_state.operation_pending() || self.planner.saving() { ui.label("正在保存或恢复，请等待完成后退出。"); }
             });
         }
 
@@ -3441,6 +3534,24 @@ impl eframe::App for DevToolsApp {
             .show(ctx, |ui| match self.page {
                 Page::Tasks => {
                     self.tasks_page(ui);
+                }
+                Page::Notes | Page::Calendar => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("planner-page")
+                        .show(ui, |ui| self.planner.ui(ui));
+                    let page = if self.planner.calendar {
+                        Page::Calendar
+                    } else {
+                        Page::Notes
+                    };
+                    if self.page != page {
+                        self.visit(if self.planner.calendar {
+                            "calendar-planner"
+                        } else {
+                            "memos"
+                        });
+                    }
+                    self.page = page;
                 }
                 Page::Intake => {
                     egui::ScrollArea::vertical().show(ui, |ui| self.intake.ui(ui));
@@ -3728,6 +3839,7 @@ impl eframe::App for DevToolsApp {
         self.handoff_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
+        self.planner.reminder_ui(ctx);
         self.recorder.selection_overlay(ctx);
         if self.recorder.take_restore_request() {
             restore_main_window(self.window_handle, ctx);

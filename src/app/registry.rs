@@ -295,6 +295,8 @@ pub(super) enum Page {
     Library,
     Intake,
     Tasks,
+    Notes,
+    Calendar,
     Services,
     SmallTools,
     EncodingTools,
@@ -360,6 +362,8 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
     Some((
         match id {
             "task-center" => Page::Tasks,
+            "memos" => Page::Notes,
+            "calendar-planner" => Page::Calendar,
             "global-launcher" => Page::Settings,
             "file-intake" => Page::Intake,
             "data" => Page::Data,
