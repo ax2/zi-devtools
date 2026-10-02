@@ -1,4 +1,4 @@
-//! PKCE transaction and callback validation; browser/login UI is not wired yet.
+//! PKCE transaction and callback validation for the explicit browser login workflow.
 use crate::{
     credentials::Secret,
     mcp_oauth::{self, AuthorizationMetadata},

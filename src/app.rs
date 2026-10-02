@@ -966,6 +966,10 @@ impl DevToolsApp {
                 self.page = Page::Mcp;
                 self.mcp.preview_oauth_metadata();
             }
+            180 | 181 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_oauth_registration();
+            }
             178 | 179 => {
                 self.page = Page::Mcp;
                 self.mcp.preview_oauth_auto();

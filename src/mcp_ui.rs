@@ -249,6 +249,11 @@ impl McpState {
         self.oauth.preview(&self.http_endpoint);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_oauth_registration(&mut self) {
+        self.preview_oauth_metadata();
+        self.oauth.preview_registration();
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_oauth_auto(&mut self) {
         self.preview_oauth_refresh();
         self.oauth.preview_auto();

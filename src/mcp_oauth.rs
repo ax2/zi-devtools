@@ -1,4 +1,4 @@
-//! Explicit OAuth metadata reads. No login, token request, credential or redirects.
+//! Explicit OAuth metadata reads; browser login and token operations live in separate modules.
 use anyhow::{Context, Result, ensure};
 use reqwest::Url;
 use serde::Deserialize;

@@ -16,6 +16,7 @@ enum Reply {
 }
 
 enum LoginReply {
+    Registered(String, Vec<String>),
     Waiting,
     Exchanging,
     Finished(Result<Box<crate::mcp_oauth_token::TokenSet>, String>),
@@ -38,6 +39,7 @@ pub struct OAuthPanel {
     login_cancel: Option<Arc<AtomicBool>>,
     token: Option<crate::mcp_oauth_token::TokenSet>,
     auto_refresh: bool,
+    registered_client: bool,
     revision: u64,
     refresh_deadline: Option<Instant>,
 }
@@ -95,6 +97,12 @@ impl OAuthPanel {
         self.refresh_deadline = Some(Instant::now() - Duration::from_secs(1));
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_registration(&mut self) {
+        self.client_id.clear();
+        self.authorization.as_mut().unwrap().registration_endpoint =
+            Some("https://auth.example.test/register".into());
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_auto(&mut self) {
         self.auto_refresh = true;
     }
@@ -106,6 +114,10 @@ impl OAuthPanel {
         self.token = None;
         self.enabled = false;
         self.auto_refresh = false;
+        if self.registered_client {
+            self.client_id.clear();
+        }
+        self.registered_client = false;
         self.refresh_deadline = None;
     }
     pub fn enabled(&self) -> bool {
@@ -153,17 +165,37 @@ impl OAuthPanel {
         crate::credentials::Secret::new(token.access_for(endpoint)?.expose().to_owned())
     }
     fn start_login(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.registered_client,
+            "临时注册结果只用于本次回调，请重新注册并登录"
+        );
+        self.start_login_mode(false)
+    }
+    fn start_login_mode(&mut self, dynamic: bool) -> anyhow::Result<()> {
         let auth = self
             .authorization
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("请先读取授权服务器信息"))?;
+        let auth = auth.clone();
+        if dynamic {
+            anyhow::ensure!(
+                auth.registration_endpoint.is_some(),
+                "服务未声明开放注册地址"
+            );
+        }
+        let resource = self.endpoint.clone();
+        let scopes = self.scopes.iter().cloned().collect::<Vec<_>>();
         let callback = crate::mcp_oauth_callback::CallbackReceiver::bind()?;
         let tx = crate::mcp_oauth_login::Transaction::prepare(
-            auth,
-            &self.endpoint,
-            self.client_id.trim(),
+            &auth,
+            &resource,
+            if dynamic {
+                "registration-validation"
+            } else {
+                self.client_id.trim()
+            },
             callback.redirect_uri(),
-            &self.scopes.iter().cloned().collect::<Vec<_>>(),
+            &scopes,
         )?;
         self.clear();
         self.enabled = true;
@@ -172,10 +204,38 @@ impl OAuthPanel {
         let (sender, receiver) = mpsc::channel();
         self.login_receiver = Some(receiver);
         self.login_cancel = Some(cancel);
-        self.message = "正在打开系统浏览器…".into();
+        self.message = if dynamic {
+            "正在注册本次公共客户端…最长 15 秒"
+        } else {
+            "正在打开系统浏览器…"
+        }
+        .into();
         std::thread::spawn(move || {
             let result = (|| -> anyhow::Result<_> {
                 anyhow::ensure!(!worker_cancel.load(Ordering::Relaxed), "已取消登录");
+                let tx = if dynamic {
+                    let client = crate::mcp_oauth_registration::register(
+                        &auth,
+                        &resource,
+                        callback.redirect_uri(),
+                        &scopes,
+                        &worker_cancel,
+                    )?;
+                    let tx = crate::mcp_oauth_login::Transaction::prepare(
+                        &auth,
+                        &resource,
+                        &client.client_id,
+                        callback.redirect_uri(),
+                        &client.scopes,
+                    )?;
+                    sender
+                        .send(LoginReply::Registered(client.client_id, client.scopes))
+                        .map_err(|_| anyhow::anyhow!("注册任务已取消"))?;
+                    tx
+                } else {
+                    tx
+                };
+                anyhow::ensure!(!worker_cancel.load(Ordering::Relaxed), "已取消授权任务");
                 open::that_detached(tx.authorization_url().as_str())
                     .map_err(|_| anyhow::anyhow!("无法打开系统浏览器，请检查默认浏览器设置"))?;
                 let _ = sender.send(LoginReply::Waiting);
@@ -191,6 +251,12 @@ impl OAuthPanel {
     pub fn tick(&mut self, ctx: &egui::Context) {
         let reply = self.login_receiver.as_ref().map(Receiver::try_recv);
         match reply {
+            Some(Ok(LoginReply::Registered(client_id, scopes))) => {
+                self.client_id = client_id;
+                self.registered_client = true;
+                self.scopes = scopes.into_iter().collect();
+                self.message = "本次客户端注册已验证，正在打开浏览器…".into();
+            }
             Some(Ok(LoginReply::Waiting)) => {
                 self.message = "请在浏览器完成登录 · 最长等待 5 分钟".into()
             }
@@ -337,7 +403,7 @@ impl OAuthPanel {
             }
         }
         egui::CollapsingHeader::new("OAuth 浏览器登录").id_salt("mcp-oauth-discovery").default_open(self.expanded).show(ui, |ui| {
-            ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；客户端注册仍在开发；可选择自动续期，或先断开并刷新授权。");
+            ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；可使用预注册客户端或主动开放注册；可选择自动续期。");
             if let Ok(resource) = mcp_oauth::canonical_resource(endpoint) { ui.label(format!("目标资源：{resource}")); }
             egui::CollapsingHeader::new("服务发现与授权配置").id_salt("oauth-config-steps").default_open(self.authorization.is_none()).show(ui, |ui| {
             let active = allowed && self.receiver.is_none() && self.login_receiver.is_none();
@@ -419,14 +485,14 @@ impl OAuthPanel {
                     ui.label(format!("登录地址：{}", auth.authorization_endpoint));
                     ui.label(format!("令牌地址：{}", auth.token_endpoint));
                     ui.label(if auth.code_challenge_methods_supported.iter().any(|v| v == "S256") { "支持 PKCE S256" } else { "未声明 PKCE S256，无法登录" });
-                    if let Some(url) = &auth.registration_endpoint { ui.label(format!("客户端注册地址：{url} · 尚未自动注册")); }
+                    if let Some(url) = &auth.registration_endpoint { ui.label(format!("开放注册地址：{url} · 注册并登录时将主动请求")); }
                 });
                 let active = allowed && self.receiver.is_none() && self.login_receiver.is_none();
                 ui.add_enabled_ui(active, |ui| {
                     if ui.checkbox(&mut self.enabled, "本次连接使用 OAuth 登录").changed() && !self.enabled { self.token = None; }
-                    ui.label("公共客户端 ID · 按服务说明预先注册，认证方式须为 none");
+                    ui.label("公共客户端 ID · 预注册时填写，开放注册可留空；认证方式须为 none");
                     ui.small("回调路径：/oauth/callback/zi-devtools；服务须允许 127.0.0.1 的动态端口");
-                    if ui.add(egui::TextEdit::singleline(&mut self.client_id).char_limit(512).desired_width(f32::INFINITY)).changed() { self.token = None; }
+                    if ui.add(egui::TextEdit::singleline(&mut self.client_id).char_limit(512).desired_width(f32::INFINITY)).changed() { self.token = None; self.registered_client = false; }
                     if let Some(resource) = &self.resource {
                         ui.label(format!("申请权限 · 已选 {} 项，最多 16 项", self.scopes.len()));
                         for scope in &resource.scopes_supported {
@@ -439,9 +505,17 @@ impl OAuthPanel {
                         if resource.scopes_supported.is_empty() { ui.weak("服务未声明可选权限，请在浏览器确认实际授权范围。"); }
                     }
                 });
+                let can_register = auth.registration_endpoint.is_some();
+                if let Some(url) = &auth.registration_endpoint {
+                    ui.small(format!("开放注册目标：{url}"));
+                    ui.small("注册将创建服务端客户端记录；本机不保存，失败或取消不自动删除。每次注册并登录创建新客户端。");
+                }
                 ui.horizontal_wrapped(|ui| {
-                    if ui.add_enabled(active && self.enabled && !self.client_id.trim().is_empty() && self.scopes.len() <= 16, egui::Button::new("在浏览器登录")).clicked() {
+                    if ui.add_enabled(active && self.enabled && !self.registered_client && !self.client_id.trim().is_empty() && self.scopes.len() <= 16, egui::Button::new("在浏览器登录")).clicked() {
                         if let Err(error) = self.start_login() { self.message = error.to_string(); }
+                    }
+                    if ui.add_enabled(active && self.enabled && can_register && self.scopes.len() <= 16, egui::Button::new("注册并登录")).clicked() {
+                        if let Err(error) = self.start_login_mode(true) { self.message = error.to_string(); }
                     }
                     if ui.add_enabled(active && self.enabled && self.token.as_ref().is_some_and(|token| token.has_refresh()), egui::Button::new("刷新本次授权")).clicked() {
                         if let Err(error) = self.start_refresh() { self.message = error.to_string(); }
@@ -451,6 +525,7 @@ impl OAuthPanel {
                         self.message = "本次授权已清除；已打开的浏览器页面可手动关闭".into();
                     }
                 });
+                if self.registered_client { ui.small("临时注册 ID 仅用于本次回调；再次登录需重新注册。服务端记录可能保留，取消不会自动删除。"); }
                 if let Some(token) = &self.token {
                     ui.label(match token.remaining() { Some(duration) if duration.is_zero() => "访问令牌已过期，请重新登录".into(), Some(duration) => format!("已登录 · 剩余有效期约 {} 分钟", duration.as_secs().div_ceil(60)), None => "已登录 · 服务未提供有效期".into() });
                     ui.small("只用于当前服务；刷新失败或取消须重新登录。授权不会持久保存。");
@@ -492,6 +567,7 @@ mod tests {
             login_cancel: None,
             token: None,
             auto_refresh: false,
+            registered_client: false,
             revision: 0,
             refresh_deadline: None,
         }
@@ -501,6 +577,28 @@ mod tests {
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| panel.tick(ui.ctx()));
         });
+    }
+    #[test]
+    fn registration_result_narrows_scopes_and_cannot_be_reused_after_clear() {
+        let mut panel = panel();
+        panel.scopes.insert("tools:read".into());
+        panel.scopes.insert("tools:write".into());
+        let (sender, receiver) = mpsc::channel();
+        panel.login_receiver = Some(receiver);
+        sender
+            .send(LoginReply::Registered(
+                "synthetic-dynamic-id".into(),
+                vec!["tools:read".into()],
+            ))
+            .unwrap();
+        poll(&mut panel);
+        assert!(panel.registered_client);
+        assert_eq!(panel.scopes.len(), 1);
+        assert_eq!(panel.client_id, "synthetic-dynamic-id");
+        assert!(panel.start_login().is_err());
+        panel.clear();
+        assert!(panel.client_id.is_empty());
+        assert!(sender.send(LoginReply::Waiting).is_err());
     }
     #[test]
     fn cancelled_old_login_cannot_deliver_into_new_login() {

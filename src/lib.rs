@@ -72,4 +72,5 @@ pub mod mcp_oauth_ui;
 
 pub mod mcp_oauth_callback;
 pub mod mcp_oauth_login;
+pub mod mcp_oauth_registration;
 pub mod mcp_oauth_token;
