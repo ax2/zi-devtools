@@ -30,9 +30,9 @@ Stage 78 增加 SDK 自带 `requireBearerAuth` 中间件校验。分别启动 `n
 
 ### 合成授权与 SDK 联合链路
 
-`src/mcp_oauth_flow_tests.rs` 提供另一项默认忽略的联合测试。为每次测试分别启动 `node fixture.mjs json auth` 或 `node fixture.mjs sse auth`，设置其回环地址后运行 `cargo test --lib mcp_oauth_flow_tests::registration_callback_exchange_refresh_sdk_rotation_and_revoke -- --ignored --exact`。测试自建一次性本机授权服务，真实发送注册、模拟浏览器导航、接收本机回调、交换授权码、刷新和两次撤销请求；服务核对 PKCE S256、client/resource/redirect 绑定与轮换后的令牌。交换与刷新结果送入实际 SDK 会话，等待连接凭据更新确认后继续调用，最终断开并撤销。JSON/SSE 联合链路均已显式运行通过。
+`src/mcp_oauth_flow_tests.rs` 提供另一项默认忽略的联合测试。为每次测试分别启动 `node fixture.mjs json auth lifecycle` 或 `node fixture.mjs sse auth lifecycle`，设置其回环地址后运行 `cargo test --lib mcp_oauth_flow_tests::registration_callback_exchange_refresh_sdk_rotation_and_revoke -- --ignored --exact`。测试自建一次性本机授权服务，真实发送注册、模拟浏览器导航、接收本机回调、交换授权码、刷新和两次撤销请求；服务核对 PKCE S256、client/resource/redirect 绑定与轮换后的令牌。交换与刷新结果送入实际 SDK 会话，等待连接凭据更新确认后继续调用，最终断开并撤销，随后使用相同访问令牌重新初始化，SDK 返回 401。授权夹具通过仅在 lifecycle 模式启用的本机合成控制入口同步撤销状态；结束检查要求两次撤销、一次拒绝（不重放）和零残留会话，成功后关闭服务。JSON/SSE 联合链路均已显式运行通过。
 
-联合夹具只在 `cfg(test)` 编译：逻辑资源和授权地址仍按 HTTPS 校验，测试网络请求显式映射到 127.0.0.1 HTTP。该映射不会进入桌面程序。测试直接组合后端，未运行 OAuthPanel 浏览器按钮、HTTPS/TLS、401 元数据发现或真实授权服务器；SDK 资源服务与合成授权服务也没有共享撤销状态，成功撤销请求不证明后续资源访问已失效。这些验收项仍保持未完成，不据此声明完整 OAuth 支持。
+联合夹具只在 `cfg(test)` 编译：逻辑资源和授权地址仍按 HTTPS 校验，测试网络请求显式映射到 127.0.0.1 HTTP。该映射不会进入桌面程序。测试直接组合后端，未运行 OAuthPanel 浏览器按钮、HTTPS/TLS、401 元数据发现或真实授权服务器；合成控制入口仅识别固定测试令牌，不作为生产授权服务器接口；撤销后拒绝的证据仅覆盖该合成服务，真实授权服务器、刷新令牌撤销后的续期拒绝和 grant 连带失效策略仍待验收。这些验收项仍保持未完成，不据此声明完整 OAuth 支持。
 
 
 ## 临时 Bearer（Stage 78 开发中，未发布）

@@ -10,10 +10,15 @@ import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.
 const sessions = new Map();
 const jsonResponse = process.argv[2] === 'json';
 const authenticated = process.argv[3] === 'auth';
+const lifecycle = authenticated && process.argv[4] === 'lifecycle';
+const revoked = new Set();
+let revocationRequests = 0;
+let deniedRequests = 0;
 let rotated = false;
 const auth = requireBearerAuth({
   requiredScopes: ['fixture:read'],
   verifier: { async verifyAccessToken(token) {
+    if (revoked.has(token)) throw new InvalidTokenError('Synthetic token revoked');
     if (token === 'zi-sdk-synthetic-restricted')
       return { token, clientId: 'synthetic-client', scopes: [], expiresAt: Date.now() / 1000 + 120 };
     if (token === 'zi-sdk-synthetic-expired')
@@ -42,8 +47,29 @@ function createServer() {
 }
 const listener = http.createServer(async (req, res) => {
   try {
+    // Explicit synthetic-only lifecycle control, bound to this loopback listener.
+    if (lifecycle && req.url === '/fixture/revoke' && req.method === 'POST') {
+      const chunks = []; let size = 0;
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 1024) { res.writeHead(413).end(); return; }
+        chunks.push(chunk);
+      }
+      const { token } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (!['synthetic-refresh-new', 'zi-sdk-synthetic-new'].includes(token)) {
+        res.writeHead(400).end(); return;
+      }
+      revocationRequests++;
+      if (token === 'zi-sdk-synthetic-new') revoked.add(token);
+      res.writeHead(200).end(); return;
+    }
+    if (lifecycle && req.url === '/fixture/finish' && req.method === 'POST') {
+      const success = revocationRequests === 2 && revoked.has('zi-sdk-synthetic-new') && deniedRequests === 1 && sessions.size === 0;
+      res.writeHead(success ? 200 : 409).end();
+      listener.close(); return;
+    }
     if (req.url !== '/mcp') { res.writeHead(404).end(); return; }
-    if (authenticated && !await authorize(req, res)) return;
+    if (authenticated && !await authorize(req, res)) { deniedRequests++; return; }
     const id = req.headers['mcp-session-id'];
     let transport = sessions.get(id);
     let body;
@@ -67,7 +93,7 @@ const listener = http.createServer(async (req, res) => {
       }
     }
     if (!transport) { res.writeHead(404).end(); return; }
-    if (req.method === 'DELETE') res.on('finish', () => listener.close());
+    if (req.method === 'DELETE' && !lifecycle) res.on('finish', () => listener.close());
     await transport.handleRequest(req, res, body);
   } catch {
     if (!res.headersSent) res.writeHead(500).end();

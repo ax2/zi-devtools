@@ -30,6 +30,8 @@ fn fields(body: &[u8]) -> BTreeMap<String, String> {
     url.query_pairs().into_owned().collect()
 }
 fn request(socket: &mut TcpStream) -> (String, Vec<u8>) {
+    // Windows accepted sockets inherit the listener's nonblocking mode.
+    socket.set_nonblocking(false).unwrap();
     socket
         .set_read_timeout(Some(Duration::from_secs(3)))
         .unwrap();
@@ -59,7 +61,7 @@ fn request(socket: &mut TcpStream) -> (String, Vec<u8>) {
         }
     }
 }
-fn fixture() -> (Url, thread::JoinHandle<()>) {
+fn fixture(sdk_endpoint: Url) -> (Url, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let url = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
@@ -162,6 +164,23 @@ fn fixture() -> (Url, thread::JoinHandle<()>) {
                             "access_token"
                         }
                     );
+                    let bridge = reqwest::blocking::Client::builder()
+                        .no_proxy()
+                        .redirect(reqwest::redirect::Policy::none())
+                        .timeout(Duration::from_secs(3))
+                        .build()
+                        .unwrap();
+                    assert_eq!(
+                        bridge
+                            .post(sdk_endpoint.join("/fixture/revoke").unwrap())
+                            .header("Content-Type", "application/json")
+                            .body(json!({"token": f["token"]}).to_string())
+                            .send()
+                            .unwrap()
+                            .status()
+                            .as_u16(),
+                        200
+                    );
                     ("200 OK", String::new(), String::new())
                 }
                 _ => unreachable!(),
@@ -187,12 +206,13 @@ fn ask(sender: &mpsc::Sender<ConnectedRequest>, action: Action, confirmed: bool)
 }
 
 #[test]
-#[ignore = "requires official SDK fixture json/sse auth mode and ZIDEVTOOLS_MCP_SDK_ENDPOINT"]
+#[ignore = "requires official SDK fixture json/sse auth lifecycle mode and ZIDEVTOOLS_MCP_SDK_ENDPOINT"]
 fn registration_callback_exchange_refresh_sdk_rotation_and_revoke() {
     let endpoint = std::env::var("ZIDEVTOOLS_MCP_SDK_ENDPOINT").unwrap();
     assert!(endpoint.starts_with("http://127.0.0.1:"));
     let cancel = AtomicBool::new(false);
-    let (base, server) = fixture();
+    let sdk_endpoint = Url::parse(&endpoint).unwrap();
+    let (base, server) = fixture(sdk_endpoint.clone());
     let callback = CallbackReceiver::bind().unwrap();
     let metadata: AuthorizationMetadata = serde_json::from_value(json!({
         "issuer":ISSUER, "authorization_endpoint":format!("{ISSUER}/authorize"), "token_endpoint":format!("{ISSUER}/token"),
@@ -263,7 +283,7 @@ fn registration_callback_exchange_refresh_sdk_rotation_and_revoke() {
     let (response, receiver) = mpsc::channel();
     updates
         .send(CredentialUpdate {
-            endpoint,
+            endpoint: endpoint.clone(),
             credential: Secret::new(token.access_for(RESOURCE).unwrap().expose().into()).unwrap(),
             response,
         })
@@ -290,4 +310,46 @@ fn registration_callback_exchange_refresh_sdk_rotation_and_revoke() {
     worker.join().unwrap();
     mcp_oauth_token::fixture_revoke(token, base.join("revoke").unwrap(), &cancel).unwrap();
     server.join().unwrap();
+    // Use the real MCP client again: SDK middleware must now deny initialization.
+    let (sender, requests) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        mcp_http::serve_http_authenticated(
+            HttpConfig { endpoint },
+            Some(Secret::new("zi-sdk-synthetic-new".into()).unwrap()),
+            Arc::new(AtomicBool::new(false)),
+            requests,
+        )
+        .unwrap()
+    });
+    let (response, receiver) = mpsc::channel();
+    sender
+        .send(ConnectedRequest {
+            action: Action::Inspect,
+            manual_confirmed: false,
+            response,
+        })
+        .unwrap();
+    let error = receiver
+        .recv_timeout(Duration::from_secs(20))
+        .unwrap()
+        .unwrap_err();
+    assert!(error.contains("401"));
+    assert!(!error.contains("zi-sdk-synthetic-new"));
+    drop(sender);
+    worker.join().unwrap();
+    let client = reqwest::blocking::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(3))
+        .build()
+        .unwrap();
+    assert_eq!(
+        client
+            .post(sdk_endpoint.join("/fixture/finish").unwrap())
+            .send()
+            .unwrap()
+            .status()
+            .as_u16(),
+        200
+    );
 }
