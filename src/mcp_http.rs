@@ -84,6 +84,7 @@ struct HttpSession {
     next_id: u64,
     active_id: Option<u64>,
     credential: Option<Arc<crate::credentials::Secret>>,
+    redaction_credentials: Vec<Arc<crate::credentials::Secret>>,
 }
 
 async fn cancelled(token: &AtomicBool) {
@@ -163,12 +164,13 @@ impl HttpSession {
             capabilities: Value::Null,
             next_id: 1,
             active_id: None,
+            redaction_credentials: credential.iter().cloned().collect(),
             credential,
         })
     }
 
     fn sanitize(&self, mut value: Value) -> Result<Value> {
-        if let Some(secret) = &self.credential {
+        for secret in &self.redaction_credentials {
             if let Some(tools) = value.pointer("/result/tools").and_then(Value::as_array) {
                 ensure!(
                     !tools
@@ -568,8 +570,10 @@ fn open_bounded(
     token: Arc<AtomicBool>,
     config: &HttpConfig,
     credential: Option<Arc<crate::credentials::Secret>>,
+    redaction_credentials: &[Arc<crate::credentials::Secret>],
 ) -> Result<HttpSession> {
     let mut session = HttpSession::create(config, credential)?;
+    session.redaction_credentials = redaction_credentials.to_vec();
     if let Err(error) = bounded(
         runtime,
         token,
@@ -598,7 +602,27 @@ pub fn serve_http_authenticated(
     cancelled_flag: Arc<AtomicBool>,
     requests: Receiver<ConnectedRequest>,
 ) -> Result<()> {
-    let credential = credential.map(Arc::new);
+    let (_sender, updates) = std::sync::mpsc::channel();
+    serve_http_with_updates(config, credential, cancelled_flag, requests, updates)
+}
+
+/// Acknowledged, endpoint-bound credential replacement between operations. No Debug/Clone.
+pub struct CredentialUpdate {
+    pub endpoint: String,
+    pub credential: crate::credentials::Secret,
+    pub response: std::sync::mpsc::Sender<Result<(), String>>,
+}
+
+pub fn serve_http_with_updates(
+    config: HttpConfig,
+    credential: Option<crate::credentials::Secret>,
+    cancelled_flag: Arc<AtomicBool>,
+    requests: Receiver<ConnectedRequest>,
+    updates: Receiver<CredentialUpdate>,
+) -> Result<()> {
+    let mut credential = credential.map(Arc::new);
+    // Bound retained secrets to this worker's lifetime and a fixed rotation count.
+    let mut redaction_credentials: Vec<_> = credential.iter().cloned().collect();
     let first = requests.recv().context("MCP HTTP 连接尚未收到操作")?;
     if let Err(error) = config
         .validate()
@@ -616,6 +640,7 @@ pub fn serve_http_authenticated(
         Arc::clone(&cancelled_flag),
         &config,
         credential.clone(),
+        &redaction_credentials,
     ) {
         Ok(session) => session,
         Err(error) => {
@@ -628,6 +653,39 @@ pub fn serve_http_authenticated(
     loop {
         if cancelled_flag.load(Ordering::Relaxed) {
             break;
+        }
+        if let Ok(update) = updates.try_recv() {
+            let result = (|| -> Result<_> {
+                ensure!(
+                    HttpConfig {
+                        endpoint: update.endpoint
+                    }
+                    .validate()?
+                        == session.endpoint,
+                    "更新凭据目标与当前会话不一致"
+                );
+                ensure!(
+                    redaction_credentials.len() < 32,
+                    "凭据更新次数已达上限，请重新连接"
+                );
+                let next = Arc::new(update.credential);
+                let replacement = HttpSession::create(&config, Some(next.clone()))?;
+                redaction_credentials.push(next.clone());
+                session.redaction_credentials = redaction_credentials.clone();
+                session.client = replacement.client;
+                session.credential = Some(next.clone());
+                // The owner must change too, so a future 404 initialization never uses the old token.
+                credential = Some(next);
+                Ok(())
+            })();
+            let failed = result.is_err();
+            let _ = update
+                .response
+                .send(result.map_err(|error| error.to_string()));
+            if failed {
+                break;
+            }
+            continue;
         }
         let request = match pending
             .take()
@@ -665,6 +723,7 @@ pub fn serve_http_authenticated(
                 Arc::clone(&cancelled_flag),
                 &config,
                 credential.clone(),
+                &redaction_credentials,
             ) {
                 Ok(fresh) => {
                     session = fresh;

@@ -32,6 +32,7 @@ enum Mode {
     BadInitialized,
     RecoveryFailure,
     Authenticated,
+    RotatingAuth,
     AuthError,
     AuthSchemaLeak,
     Unauthorized,
@@ -43,7 +44,7 @@ fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<St
         mode,
         matches!(
             mode,
-            Mode::Authenticated | Mode::AuthError | Mode::AuthSchemaLeak
+            Mode::Authenticated | Mode::RotatingAuth | Mode::AuthError | Mode::AuthSchemaLeak
         ),
     )
 }
@@ -59,6 +60,7 @@ fn fixture_with_auth(
     let trace = Arc::clone(&methods);
     let worker = thread::spawn(move || {
         let deadline = Instant::now() + Duration::from_secs(15);
+        let mut rotated = false;
         while Instant::now() < deadline {
             let (mut socket, _) = match listener.accept() {
                 Ok(value) => value,
@@ -113,7 +115,12 @@ fn fixture_with_auth(
             };
             trace.lock().unwrap().push(rpc.into());
             if authenticated {
-                assert!(headers.contains("authorization: bearer zi-synthetic-test-token"));
+                let token = if matches!(mode, Mode::RotatingAuth) && rotated {
+                    "zi-synthetic-rotated-token"
+                } else {
+                    "zi-synthetic-test-token"
+                };
+                assert!(headers.contains(&format!("authorization: bearer {token}")));
             } else {
                 assert!(!headers.contains("authorization:"));
             }
@@ -135,7 +142,7 @@ fn fixture_with_auth(
                 "initialize" if matches!(mode, Mode::RecoveryFailure) && trace.lock().unwrap().iter().filter(|m| *m == "initialize").count() > 1 => ("503 Service Unavailable", "application/json", String::new(), ""),
                 "initialize" => {
                     assert!(!headers.contains("mcp-session-id:"));
-                    let name = if matches!(mode, Mode::Authenticated) { "HTTP fixture zi-synthetic-test-token" } else { "HTTP fixture" };
+                    let name = if matches!(mode, Mode::Authenticated | Mode::RotatingAuth) { "HTTP fixture zi-synthetic-test-token" } else { "HTTP fixture" };
                     let result = json!({"protocolVersion":"2025-06-18","serverInfo":{"name":name},"capabilities":{"tools":{},"resources":{},"prompts":{}}});
                     ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":result}).to_string(), "Mcp-Session-Id: fixture-session\r\n")
                 }
@@ -147,7 +154,7 @@ fn fixture_with_auth(
                 "resources/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"resources":[{"name":"Guide","uri":"fixture://guide"}]}}).to_string(), ""),
                 "prompts/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"prompts":[{"name":"summary"}]}}).to_string(), ""),
                 "tools/call" if matches!(mode, Mode::AuthError) => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"error":{"code":-32000,"message":format!("{}zi-synthetic-test-token", "x".repeat(290))}}).to_string(), ""),
-                "tools/call" if matches!(mode, Mode::ExpiredCall) => ("404 Not Found", "application/json", String::new(), ""),
+                "tools/call" if matches!(mode, Mode::ExpiredCall | Mode::RotatingAuth) => ("404 Not Found", "application/json", String::new(), ""),
                 "tools/call" => {
                     let progress = json!({"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}});
                     let text = if matches!(mode, Mode::Authenticated) { "echoed zi-synthetic-test-token" } else { "fixture result" };
@@ -160,7 +167,7 @@ fn fixture_with_auth(
                 "resources/read" if matches!(mode, Mode::OversizeSse) => ("200 OK", "text/event-stream", format!("data: {}\n\n", "x".repeat(1024 * 1024 + 1)), ""),
                 "resources/read" if matches!(mode, Mode::Redirect) => ("307 Temporary Redirect", "application/json", String::new(), "Location: http://127.0.0.1:1/unreachable\r\n"),
                 "resources/read" if matches!(mode, Mode::Expired | Mode::RecoveryFailure) => ("404 Not Found", "application/json", String::new(), ""),
-                "resources/read" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"contents":[{"uri":"fixture://guide","text": if matches!(mode, Mode::Authenticated) {"zi-synthetic-test-token"} else {"safe"}}]}}).to_string(), ""),
+                "resources/read" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"contents":[{"uri":"fixture://guide","text": if matches!(mode, Mode::RotatingAuth) {"zi-synthetic-test-token zi-synthetic-rotated-token"} else if matches!(mode, Mode::Authenticated) {"zi-synthetic-test-token"} else {"safe"}}]}}).to_string(), ""),
                 "prompts/get" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"messages":[]}}).to_string(), ""),
                 "DELETE" => ("200 OK", "application/json", String::new(), ""),
                 _ => panic!("unexpected RPC: {rpc}"),
@@ -175,6 +182,9 @@ fn fixture_with_auth(
             socket.write_all(header.as_bytes()).unwrap();
             let _ = socket.write_all(response.2.as_bytes());
             let _ = socket.flush();
+            if matches!(mode, Mode::RotatingAuth) && rpc == "prompts/list" {
+                rotated = true;
+            }
             if rpc == "DELETE" {
                 return;
             }
@@ -654,4 +664,130 @@ fn authentication_failures_and_redirect_do_not_replay_or_show_response_body() {
         assert_eq!(trace.iter().filter(|m| *m == "resources/read").count(), 1);
         assert_eq!(trace.last().unwrap(), "DELETE");
     }
+}
+
+#[test]
+fn credential_rotation_survives_session_recovery_and_hides_previous_tokens() {
+    let (endpoint, server, methods) = fixture_mode(Mode::RotatingAuth);
+    let (sender, requests) = mpsc::channel();
+    let (updates, update_rx) = mpsc::channel();
+    let target = endpoint.clone();
+    let worker = thread::spawn(move || {
+        mcp_http::serve_http_with_updates(
+            HttpConfig { endpoint },
+            test_credential(true),
+            Arc::new(AtomicBool::new(false)),
+            requests,
+            update_rx,
+        )
+        .unwrap()
+    });
+    let report = ask(&sender, Action::Inspect, false).unwrap();
+    let (response, ack) = mpsc::channel();
+    updates
+        .send(mcp_http::CredentialUpdate {
+            endpoint: target,
+            credential: zi_devtools::credentials::Secret::new("zi-synthetic-rotated-token".into())
+                .unwrap(),
+            response,
+        })
+        .unwrap();
+    ack.recv_timeout(Duration::from_secs(3)).unwrap().unwrap();
+    let read = ask(
+        &sender,
+        Action::ReadResource {
+            uri: "fixture://guide".into(),
+        },
+        false,
+    )
+    .unwrap();
+    let display = format!("{read:?}");
+    assert!(!display.contains("zi-synthetic-test-token"));
+    assert!(!display.contains("zi-synthetic-rotated-token"));
+    let error = ask(
+        &sender,
+        Action::Call {
+            tool: "echo".into(),
+            arguments: json!({}),
+            expected_tool: report.tools[0].clone(),
+        },
+        true,
+    )
+    .unwrap_err();
+    assert!(error.contains("未重试"));
+    let fresh = ask(&sender, Action::Inspect, false).unwrap();
+    assert!(!format!("{fresh:?}").contains("zi-synthetic-test-token"));
+    drop(sender);
+    worker.join().unwrap();
+    server.join().unwrap();
+    let trace = methods.lock().unwrap();
+    assert_eq!(trace.iter().filter(|m| *m == "initialize").count(), 2);
+    assert_eq!(trace.iter().filter(|m| *m == "tools/call").count(), 1);
+    assert_eq!(trace.last().unwrap(), "DELETE");
+}
+
+#[test]
+fn rejected_credential_update_closes_session_without_using_invalid_credentials() {
+    for wrong_target in [true, false] {
+        let (endpoint, server, methods) = fixture_mode(Mode::Authenticated);
+        let (sender, requests) = mpsc::channel();
+        let (updates, update_rx) = mpsc::channel();
+        let target = if wrong_target {
+            format!("{endpoint}/other")
+        } else {
+            endpoint.clone()
+        };
+        let worker = thread::spawn(move || {
+            mcp_http::serve_http_with_updates(
+                HttpConfig { endpoint },
+                test_credential(true),
+                Arc::new(AtomicBool::new(false)),
+                requests,
+                update_rx,
+            )
+            .unwrap()
+        });
+        ask(&sender, Action::Inspect, false).unwrap();
+        let (response, ack) = mpsc::channel();
+        let value = if wrong_target {
+            "zi-synthetic-rotated-token"
+        } else {
+            "synthetic-invalid bearer"
+        };
+        updates
+            .send(mcp_http::CredentialUpdate {
+                endpoint: target,
+                credential: zi_devtools::credentials::Secret::new(value.into()).unwrap(),
+                response,
+            })
+            .unwrap();
+        let error = ack
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+            .unwrap_err();
+        assert!(!error.contains(value));
+        assert!(error.contains(if wrong_target {
+            "不一致"
+        } else {
+            "格式无效"
+        }));
+        worker.join().unwrap();
+        server.join().unwrap();
+        let trace = methods.lock().unwrap();
+        assert_eq!(trace.iter().filter(|m| *m == "initialize").count(), 1);
+        assert_eq!(trace.iter().filter(|m| *m == "tools/list").count(), 1);
+        assert_eq!(trace.last().unwrap(), "DELETE");
+        assert!(ask_if_connected(&sender).is_err());
+    }
+}
+
+fn ask_if_connected(sender: &mpsc::Sender<ConnectedRequest>) -> Result<(), ()> {
+    let (response, _) = mpsc::channel();
+    sender
+        .send(ConnectedRequest {
+            action: Action::Inspect,
+            manual_confirmed: false,
+            response,
+        })
+        .map_err(|_| ())
 }
