@@ -302,6 +302,26 @@ impl DevToolsApp {
         self.planner.preview_interval_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_cutoff_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) = if index == 2 {
+            self.planner.preview_recurrence_rects[1]
+        } else {
+            self.planner.preview_cutoff_rects[index]
+        }
+        .expect("cutoff control rendered");
+        assert!(clip.contains_rect(rect), "cutoff control clipped");
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_cutoff_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Calendar;
+        self.planner.preview_cutoff_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_cutoff_interop(&self, folder: &Path) {
+        self.planner.preview_cutoff_interop(folder);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_ics_position(&self, index: usize) -> egui::Pos2 {
         self.planner.preview_ics_rects[index]
             .expect("ICS control rendered")
@@ -454,6 +474,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            252..=255 => {
+                self.page = Page::Calendar;
+                self.planner.preview_cutoff();
+            }
             246..=251 => {
                 self.page = Page::Calendar;
                 self.planner.preview_ics(scene >= 248);

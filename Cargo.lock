@@ -5532,7 +5532,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.79.0-dev.2"
+version = "0.79.0-dev.3"
 dependencies = [
  "ab_glyph",
  "anyhow",

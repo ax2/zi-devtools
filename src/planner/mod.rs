@@ -2,6 +2,10 @@
 mod agenda;
 mod backup;
 mod backup_ui;
+#[cfg(feature = "ui-preview")]
+mod cutoff_preview;
+#[cfg(test)]
+mod cutoff_tests;
 mod files;
 mod ics;
 #[cfg(feature = "ui-preview")]
@@ -82,6 +86,8 @@ struct Schedule {
     repeat: Repeat,
     #[serde(default, skip_serializing_if = "is_false")]
     clamp_missing_day: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    repeat_until: Option<NaiveDate>,
     done: bool,
     handled: Option<NaiveDateTime>,
     snooze: Option<(NaiveDateTime, i64)>,
@@ -124,6 +130,7 @@ impl Item {
                 remind: true,
                 repeat: Repeat::Once,
                 clamp_missing_day: false,
+                repeat_until: None,
                 done: false,
                 handled: None,
                 snooze: None,
@@ -155,6 +162,12 @@ impl Item {
         ensure!(self.body.len() <= MAX_BODY, "正文最多 128 KiB");
         if let Some(s) = &self.schedule {
             s.validate_interval()?;
+            ensure!(
+                s.repeat_until.is_none_or(|day| s.repeat != Repeat::Once
+                    && day >= s.start.date()
+                    && (MIN_YEAR..=MAX_YEAR).contains(&day.year())),
+                "重复截止日期需不早于开始日期，且在 1901–2099 年内；单次日程不能设置重复截止"
+            );
             ensure!(
                 !s.clamp_missing_day || matches!(s.repeat, Repeat::Monthly | Repeat::Yearly),
                 "仅每月 / 每年重复可设置月底替代"
@@ -250,6 +263,7 @@ pub struct State {
     time_text: String,
     end_date_text: String,
     end_time_text: String,
+    repeat_until_text: String,
     query: String,
     trash: bool,
     pub calendar: bool,
@@ -285,6 +299,8 @@ pub struct State {
     pub preview_interval_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
     pub preview_ics_rects: [Option<egui::Rect>; 4],
+    #[cfg(feature = "ui-preview")]
+    pub preview_cutoff_rects: [Option<(egui::Rect, egui::Rect)>; 2],
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -392,6 +408,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_ics_rects: [None; 4],
             #[cfg(feature = "ui-preview")]
+            preview_cutoff_rects: [None; 2],
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -410,6 +428,7 @@ impl State {
             time_text: String::new(),
             end_date_text: String::new(),
             end_time_text: String::new(),
+            repeat_until_text: String::new(),
             query: String::new(),
             trash: false,
             calendar: false,
@@ -506,6 +525,8 @@ impl State {
                 .is_some_and(|s| {
                     self.date_text != s.start.date().to_string()
                         || self.time_text != s.reminder_at(s.start).format("%H:%M").to_string()
+                        || s.repeat_until
+                            .is_some_and(|day| self.repeat_until_text != day.to_string())
                         || s.display_end().is_some_and(|end| {
                             self.end_date_text != end.date().to_string()
                                 || (!s.all_day
@@ -532,6 +553,12 @@ impl State {
         self.end_date_text = end.map(|end| end.date().to_string()).unwrap_or_default();
         self.end_time_text = end
             .map(|end| end.format("%H:%M").to_string())
+            .unwrap_or_default();
+        self.repeat_until_text = item
+            .schedule
+            .as_ref()
+            .and_then(|s| s.repeat_until)
+            .map(|day| day.to_string())
             .unwrap_or_default();
         self.original = Some(item.clone());
         self.draft = Some(item);
@@ -585,6 +612,14 @@ impl State {
                     "该本地时间不存在或存在夏令时歧义，请选择其他时间"
                 );
                 s.start = start;
+                s.repeat_until = if s.repeat == Repeat::Once || s.repeat_until.is_none() {
+                    None
+                } else {
+                    Some(
+                        NaiveDate::parse_from_str(self.repeat_until_text.trim(), "%Y-%m-%d")
+                            .map_err(|_| anyhow::anyhow!("重复截止日期格式应为 YYYY-MM-DD"))?,
+                    )
+                };
                 s.reminder_time = if s.all_day {
                     Some(NaiveTime::parse_from_str(self.time_text.trim(), "%H:%M")?)
                 } else {

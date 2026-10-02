@@ -141,7 +141,7 @@ fn ics_repeat_export_round_trips_dates_for_supported_rules() {
 fn ics_rejects_unsupported_or_incomplete_semantics_without_partial_import() {
     for extra in [
         "RRULE:FREQ=DAILY;COUNT=3",
-        "RRULE:FREQ=DAILY;UNTIL=20261009T090000",
+        "RRULE:FREQ=DAILY;UNTIL=20261001T090000",
         "RRULE:FREQ=WEEKLY;BYDAY=MO,WE",
         "RRULE:FREQ=MONTHLY;BYDAY=1MO",
         "EXDATE:20261009T090000",

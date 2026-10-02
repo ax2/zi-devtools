@@ -42,6 +42,7 @@ fn same_event(a: &Item, b: &Item) -> bool {
         && a_s.all_day == b_s.all_day
         && a_s.repeat == b_s.repeat
         && a_s.clamp_missing_day == b_s.clamp_missing_day
+        && a_s.last_repeat_day() == b_s.last_repeat_day()
 }
 pub(super) fn plan(current: &[Item], incoming: &[Item], update: bool) -> Result<Plan> {
     backup::validate_records(incoming)?;
@@ -306,7 +307,7 @@ impl State {
                     ui.checkbox(&mut review.completed,"包含已完成日程");
                     ui.checkbox(&mut review.reminders,"同时导出已开启的弹出提醒（目标日历可能弹出）");
                     if previous!=(review.selected_only,review.completed,review.reminders) {review.rebuild();}
-                    ui.label("日期、时间、标题、详情与重复规则会写入文件。时间不附时区，按目标日历的当地钟表解释；全天事件保持日期。重复最多至 2099 年末。");
+                    ui.label("日期、时间、标题、详情与重复规则会写入文件。时间不附时区，按目标日历的当地钟表解释；全天事件保持日期。重复遵守各条目的截止日期，最多至 2099 年末。");
                     ui.small("不导出回收站；完成、置顶、知晓 / 延后状态不在 ICS 中，需完整保留时使用 JSON 备份。地点 / 链接已作为详情文本保留。");
                     match &review.text {
                         Ok(text)=>{

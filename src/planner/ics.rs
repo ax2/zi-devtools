@@ -399,6 +399,11 @@ fn parse_event(props: &[Property], notices: &mut HashSet<String>) -> Result<Item
             "UTC 重复日程暂不导入：转换为本机钟表重复会改变夏令时后的安排"
         );
         parse_rule(s, rule)?;
+        if s.repeat_until.is_some() {
+            notices.insert(
+                "重复截止已按当前开始钟点换算为包含的日期；限制最后起点，不裁剪事件时长。".into(),
+            );
+        }
     }
     if utc {
         notices.insert("单次 UTC 时间已换算为本机时区；导入后按本机钟表安排。".into());
@@ -449,15 +454,35 @@ fn parse_rule(s: &mut Schedule, rule: &str) -> Result<()> {
         "暂不支持间隔大于 1 的重复规则"
     );
     if let Some(until) = parts.remove("UNTIL") {
+        let day = if s.all_day {
+            ensure!(
+                until.len() == 8 && until.bytes().all(|b| b.is_ascii_digit()),
+                "全天重复的 UNTIL 必须是 YYYYMMDD 日期"
+            );
+            NaiveDate::parse_from_str(&until, "%Y%m%d")?
+        } else {
+            ensure!(
+                until.len() == 15 && until.as_bytes()[8] == b'T',
+                "浮动时间的 UNTIL 必须是本地 YYYYMMDDTHHMMSS，不附 Z 或时区"
+            );
+            let at = NaiveDateTime::parse_from_str(&until, "%Y%m%dT%H%M%S")?;
+            ensure!(
+                at.nanosecond() == 0 && at >= s.start,
+                "重复截止不能早于开始，且不能含闰秒"
+            );
+            // Each supported rule keeps DTSTART's clock time. A cutoff before
+            // that clock excludes its date; retain the same occurrence set.
+            if at.time() < s.start.time() {
+                at.date().pred_opt().context("截止日期无效")?
+            } else {
+                at.date()
+            }
+        };
         ensure!(
-            until
-                == if s.all_day {
-                    "20991231"
-                } else {
-                    "20991231T235959"
-                },
-            "暂不支持自定义截止时间 / 次数，不会改为无限重复"
+            day >= s.start.date() && (MIN_YEAR..=MAX_YEAR).contains(&day.year()),
+            "重复截止日期超出范围或早于开始"
         );
+        s.repeat_until = (day != NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap()).then_some(day);
     }
     s.repeat = match parts.remove("FREQ").as_deref() {
         Some("DAILY") => Repeat::Daily,
@@ -566,9 +591,9 @@ pub(super) fn export(items: &[Item], reminders: bool) -> Result<String> {
             let mut rule = format!(
                 "RRULE:FREQ={freq};UNTIL={}",
                 if s.all_day {
-                    "20991231"
+                    s.last_repeat_day().format("%Y%m%d").to_string()
                 } else {
-                    "20991231T235959"
+                    format!("{}T235959", s.last_repeat_day().format("%Y%m%d"))
                 }
             );
             if s.clamp_missing_day && s.start.day() > 28 {

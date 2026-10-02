@@ -594,6 +594,31 @@ impl State {
                 } else {
                     s.clamp_missing_day = false;
                 }
+                if s.repeat != Repeat::Once {
+                    let mut limited = s.repeat_until.is_some();
+                    let control = ui.checkbox(&mut limited, "设置重复截止日期");
+                    #[cfg(feature = "ui-preview")]
+                    { self.preview_cutoff_rects[0] = Some((control.rect, ui.clip_rect())); }
+                    if control.changed() {
+                        if limited {
+                            let start = NaiveDate::parse_from_str(self.date_text.trim(), "%Y-%m-%d").unwrap_or(s.start.date());
+                            let day = start.checked_add_signed(Duration::days(30)).unwrap_or(start).min(NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap());
+                            s.repeat_until = Some(day);
+                            self.repeat_until_text = day.to_string();
+                        } else { s.repeat_until = None; }
+                    }
+                    if limited {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("重复至");
+                            let input = ui.add(egui::TextEdit::singleline(&mut self.repeat_until_text).desired_width(106.0).hint_text("YYYY-MM-DD"));
+                            #[cfg(feature = "ui-preview")]
+                            { self.preview_cutoff_rects[1] = Some((input.rect, ui.clip_rect())); }
+                            let _ = input;
+                            ui.small("包含当天开始的安排");
+                        });
+                        ui.small("只限制开始日期，最后一次可跨过截止日。修改截止不会重置已知晓提醒。");
+                    }
+                } else { s.repeat_until = None; }
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut s.remind, "弹出提醒");
                     ui.add_enabled(

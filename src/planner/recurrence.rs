@@ -16,17 +16,26 @@ impl Schedule {
                 .flatten()
         })
     }
-    pub(super) fn rule_label(&self) -> &'static str {
-        match (self.repeat, self.clamp_missing_day) {
+    pub(super) fn rule_label(&self) -> String {
+        let rule = match (self.repeat, self.clamp_missing_day) {
             (Repeat::Monthly, false) => "每月 · 缺日跳过",
             (Repeat::Monthly, true) => "每月 · 缺日用月底",
             (Repeat::Yearly, false) => "每年 · 缺日跳过",
             (Repeat::Yearly, true) => "每年 · 缺日用月底",
             _ => self.repeat.label(),
-        }
+        };
+        self.repeat_until
+            .map_or_else(|| rule.to_owned(), |day| format!("{rule} · 截至 {day}"))
+    }
+    pub(super) fn last_repeat_day(&self) -> NaiveDate {
+        self.repeat_until
+            .unwrap_or_else(|| NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap())
     }
     pub(super) fn on_day(&self, date: NaiveDate) -> bool {
-        if date < self.start.date() || !(MIN_YEAR..=MAX_YEAR).contains(&date.year()) {
+        if date < self.start.date()
+            || date > self.last_repeat_day()
+            || !(MIN_YEAR..=MAX_YEAR).contains(&date.year())
+        {
             return false;
         }
         match self.repeat {
@@ -42,7 +51,7 @@ impl Schedule {
         }
     }
     pub(super) fn latest(&self, limit: NaiveDateTime) -> Option<NaiveDateTime> {
-        let limit = limit.min(NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31)?.and_hms_opt(23, 59, 59)?);
+        let limit = limit.min(self.last_repeat_day().and_hms_opt(23, 59, 59)?);
         if limit < self.start {
             return None;
         }
