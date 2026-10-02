@@ -1,4 +1,5 @@
 //! Local, explicitly saved notes and calendar events. No network or OS scheduler.
+mod agenda;
 mod backup;
 mod backup_ui;
 mod files;
@@ -249,6 +250,9 @@ pub struct State {
     query: String,
     trash: bool,
     pub calendar: bool,
+    agenda_days: u32,
+    agenda_done: bool,
+    agenda_cache: agenda::Cache,
     selected: NaiveDate,
     month: NaiveDate,
     jump: String,
@@ -270,6 +274,8 @@ pub struct State {
     pub preview_export_cancel_rect: Option<egui::Rect>,
     #[cfg(feature = "ui-preview")]
     pub preview_backup_rects: [Option<egui::Rect>; 4],
+    #[cfg(feature = "ui-preview")]
+    pub preview_agenda_rect: Option<egui::Rect>,
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -329,11 +335,12 @@ impl State {
         if self.draft.as_ref().is_none_or(|draft| draft.id != id) {
             ensure!(
                 !self.has_unsaved(),
-                "请先保存或放弃当前备忘 / 日程编辑，再打开提醒对应的日程"
+                "请先保存或放弃当前备忘 / 日程编辑，再打开其他日程"
             );
             self.edit(item);
         }
         self.calendar = true;
+        self.agenda_days = 1;
         self.trash = false;
         self.query.clear();
         self.select_date(at.date());
@@ -368,6 +375,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_backup_rects: [None; 4],
             #[cfg(feature = "ui-preview")]
+            preview_agenda_rect: None,
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -386,6 +395,9 @@ impl State {
             query: String::new(),
             trash: false,
             calendar: false,
+            agenda_days: 1,
+            agenda_done: false,
+            agenda_cache: Default::default(),
             selected: today,
             month: today.with_day(1).unwrap(),
             jump: today.to_string(),

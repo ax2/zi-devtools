@@ -264,6 +264,14 @@ impl DevToolsApp {
         self.planner.preview_export_cancel_rect.map(|r| r.center())
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_agenda_click_position(&self) -> Option<egui::Pos2> {
+        self.planner.preview_agenda_rect.map(|r| r.center())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_agenda_assert(&self) {
+        self.planner.preview_agenda_assert();
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_files_smoke(&mut self, phase: u8) -> bool {
         self.page = Page::Notes;
         self.planner.preview_files_smoke(phase)
@@ -401,6 +409,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            226..=229 => {
+                self.page = Page::Calendar;
+                self.planner.preview_agenda(scene >= 228);
+            }
             220..=225 => {
                 self.page = Page::Notes;
                 self.planner.preview_backup(scene);

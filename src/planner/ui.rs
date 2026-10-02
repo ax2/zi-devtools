@@ -135,12 +135,19 @@ impl State {
         ui.add_space(10.0);
         if self.calendar {
             ui.label(RichText::new("按本机时区安排。运行或缩到托盘时弹出提醒；完全退出不提醒，重启后补显示。休眠期间不唤醒。重复日程合并显示最近一次错过的提醒。").small().weak());
+            if !self.trash {
+                ui.horizontal_wrapped(|ui| {
+                    ui.selectable_value(&mut self.agenda_days, 1, "月历 / 单日");
+                    ui.selectable_value(&mut self.agenda_days, 7, "7 天日程");
+                    ui.selectable_value(&mut self.agenda_days, 30, "30 天日程");
+                    ui.small("以所选日期为起点");
+                });
+            }
             ui.add_space(8.0);
         }
         let width = ui.available_width();
         if width < 860.0 && self.calendar {
-            self.calendar_ui(ui);
-            self.list_ui(ui);
+            self.calendar_list_ui(ui);
             ui.add_space(12.0);
             let editor = egui::Frame::group(ui.style())
                 .inner_margin(16.0)
@@ -153,9 +160,10 @@ impl State {
                 cols[0].set_width((width - 12.0) * 0.5);
                 cols[1].set_width((width - 12.0) * 0.5);
                 if self.calendar {
-                    self.calendar_ui(&mut cols[0]);
+                    self.calendar_list_ui(&mut cols[0]);
+                } else {
+                    self.list_ui(&mut cols[0]);
                 }
-                self.list_ui(&mut cols[0]);
                 egui::Frame::group(cols[1].style())
                     .inner_margin(16.0)
                     .show(&mut cols[1], |ui| self.editor_ui(ui));
@@ -171,6 +179,15 @@ impl State {
         self.purge_ui(ui.ctx());
         self.export_ui(ui.ctx());
         self.backup_ui(ui.ctx());
+    }
+
+    fn calendar_list_ui(&mut self, ui: &mut egui::Ui) {
+        if self.agenda_days > 1 && !self.trash {
+            self.agenda_ui(ui);
+        } else {
+            self.calendar_ui(ui);
+            self.list_ui(ui);
+        }
     }
 
     fn purge_ui(&mut self, ctx: &egui::Context) {
@@ -415,9 +432,14 @@ impl State {
                 }
                 for (id, title, pin, updated, schedule) in matches {
                     let detail = if let Some(s) = schedule {
+                        let occurrence = if query.is_empty() && !self.trash {
+                            self.selected.and_time(s.start.time())
+                        } else {
+                            s.start
+                        };
                         format!(
                             "{}  ·  {}{}",
-                            s.start.format("%m-%d %H:%M"),
+                            occurrence.format("%m-%d %H:%M"),
                             s.repeat.label(),
                             if s.done { " · 已完成" } else { "" }
                         )
@@ -787,6 +809,9 @@ impl State {
         self.file_operation = false;
         self.export_review = None;
         self.backup_review = None;
+        self.agenda_days = 1;
+        self.agenda_done = false;
+        self.agenda_cache = Default::default();
         self.trash = false;
         self.loaded = true;
         self.items.clear();

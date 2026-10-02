@@ -22,6 +22,127 @@ fn fixture() -> PathBuf {
 }
 
 #[test]
+fn agenda_expands_actual_occurrences_across_leap_day_and_year() {
+    let mut daily = event();
+    let s = daily.schedule.as_mut().unwrap();
+    s.start = date("2028-02-28 09:00");
+    s.repeat = Repeat::Daily;
+    let mut weekly = daily.clone();
+    weekly.id = uuid::Uuid::new_v4().to_string();
+    weekly.schedule.as_mut().unwrap().repeat = Repeat::Weekly;
+    let items = vec![weekly, daily];
+    let rows = agenda::rows(&items, date("2028-02-29 00:00").date(), 7, "", false);
+    assert_eq!(rows.len(), 8);
+    assert_eq!(rows[0].at, date("2028-02-29 09:00"));
+    assert_eq!(rows.last().unwrap().at, date("2028-03-06 09:00"));
+    assert_eq!(rows.iter().filter(|r| r.index == 0).count(), 1);
+    let rows = agenda::rows(&items, date("2028-12-30 00:00").date(), 7, "", false);
+    assert!(rows.iter().any(|r| r.at == date("2029-01-01 09:00")));
+    let rows = agenda::rows(&items, date("2099-12-31 00:00").date(), 30, "", false);
+    assert_eq!(rows.len(), 1);
+    assert!(agenda::rows(&items, date("2028-02-20 00:00").date(), 7, "", false).is_empty());
+}
+
+#[test]
+fn agenda_filters_saved_series_without_treating_ack_as_completion() {
+    let mut active = event();
+    active.body = "Project ALPHA".into();
+    active.schedule.as_mut().unwrap().handled = Some(active.schedule.as_ref().unwrap().start);
+    let mut completed = active.clone();
+    completed.id = uuid::Uuid::new_v4().to_string();
+    completed.schedule.as_mut().unwrap().done = true;
+    let mut trashed = active.clone();
+    trashed.id = uuid::Uuid::new_v4().to_string();
+    trashed.trash = true;
+    let items = vec![active, completed, trashed, Item::new(None)];
+    let day = date("2026-10-02 00:00").date();
+    assert_eq!(agenda::rows(&items, day, 7, " alpha ", false).len(), 1);
+    assert_eq!(agenda::rows(&items, day, 30, "alpha", true).len(), 2);
+    assert!(agenda::rows(&items, day, 7, "absent", true).is_empty());
+    assert!(agenda::rows(&items, day.succ_opt().unwrap(), 7, "", true).is_empty());
+}
+
+#[test]
+fn agenda_cache_invalidates_for_revision_order_range_and_filters() {
+    let mut a = event();
+    a.revision = 1;
+    let mut b = a.clone();
+    b.id = uuid::Uuid::new_v4().to_string();
+    b.title = "Earlier".into();
+    b.schedule.as_mut().unwrap().start = date("2026-10-02 08:00");
+    let mut items = vec![a, b];
+    let day = date("2026-10-02 00:00").date();
+    let mut cache = agenda::Cache::default();
+    assert!(cache.refresh(&items, day, 7, "", false));
+    assert_eq!(cache.rows[0].index, 1);
+    assert!(!cache.refresh(&items, day, 7, "  ", false));
+    items.swap(0, 1);
+    assert!(cache.refresh(&items, day, 7, "", false));
+    assert_eq!(cache.rows[0].index, 0);
+    items[0].trash = true;
+    items[0].revision += 1;
+    assert!(cache.refresh(&items, day, 7, "", false));
+    assert_eq!(cache.rows.len(), 1);
+    assert!(cache.refresh(&items, day, 30, "", false));
+    assert!(cache.refresh(&items, day, 30, "", true));
+    assert!(cache.refresh(&items, day, 30, "not found", true));
+    assert!(cache.rows.is_empty());
+    assert!(cache.refresh(&items, day.succ_opt().unwrap(), 30, "", false));
+    assert!(cache.rows.is_empty());
+}
+
+#[test]
+fn agenda_large_collection_is_bounded_and_opening_preserves_dirty_editor() {
+    let mut item = event();
+    item.revision = 1;
+    item.schedule.as_mut().unwrap().repeat = Repeat::Daily;
+    let mut items = Vec::new();
+    for _ in 0..MAX_ITEMS {
+        let mut copy = item.clone();
+        copy.id = uuid::Uuid::new_v4().to_string();
+        items.push(copy);
+    }
+    let day = item.schedule.as_ref().unwrap().start.date();
+    let rows = agenda::rows(&items, day, 365, "", false);
+    assert_eq!(rows.len(), MAX_ITEMS * 30);
+    assert!(rows.windows(2).all(|r| r[0].at <= r[1].at));
+    let mut state = State::new(fixture());
+    wait_state(&mut state);
+    state.items = items;
+    let first = state.items[0].clone();
+    state.edit(first.clone());
+    state.draft.as_mut().unwrap().body = "unsaved".into();
+    state.agenda_days = 30;
+    assert!(
+        state
+            .open_event(
+                &state.items[1].id.clone(),
+                day.and_hms_opt(9, 0, 0).unwrap()
+            )
+            .is_err()
+    );
+    assert_eq!(state.agenda_days, 30);
+    assert_eq!(state.draft.as_ref().unwrap().body, "unsaved");
+    let later = day.succ_opt().unwrap().and_hms_opt(9, 0, 0).unwrap();
+    state.open_event(&first.id, later).unwrap();
+    assert_eq!(state.selected, later.date());
+    assert_eq!(state.agenda_days, 1);
+    assert_eq!(state.draft.as_ref().unwrap().body, "unsaved");
+    assert_eq!(
+        state
+            .draft
+            .as_ref()
+            .unwrap()
+            .schedule
+            .as_ref()
+            .unwrap()
+            .start
+            .date(),
+        day
+    );
+}
+
+#[test]
 fn reminder_lead_ack_snooze_restart_and_disabled() {
     let mut s = event().schedule.unwrap();
     assert_eq!(s.due(now("2026-10-02 08:49")), None);
