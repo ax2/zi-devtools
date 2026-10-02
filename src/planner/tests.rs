@@ -225,6 +225,29 @@ fn editor_retains_draft_on_error_and_detects_unsaved_date() {
 }
 
 #[test]
+fn copied_memo_event_is_unsaved_until_saved_or_explicitly_discarded() {
+    let path = fixture();
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    let mut copied = event();
+    copied.body = "来自已保存备忘的内容".into();
+    state.edit(copied.clone());
+    assert!(state.has_unsaved());
+    assert!(!state.may_leave());
+    state.discard();
+    assert!(!state.has_unsaved());
+    assert!(state.draft.is_none());
+    assert!(state.may_leave());
+    state.edit(copied);
+    state.save_draft();
+    wait_state(&mut state);
+    assert!(!state.has_unsaved());
+    assert_eq!(store::load(&path).unwrap().len(), 1);
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn global_poll_delivers_once_suppresses_trash_and_recovers_after_restart() {
     let path = fixture();
     let mut item = event();

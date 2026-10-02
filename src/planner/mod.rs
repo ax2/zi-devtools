@@ -309,7 +309,9 @@ impl State {
         if self.pending.is_some() && self.saving.is_some() {
             return true;
         }
-        self.draft != self.original
+        self.draft.as_ref().is_some_and(|item| {
+            item.revision == 0 && (!item.title.is_empty() || !item.body.is_empty())
+        }) || self.draft != self.original
             || self
                 .draft
                 .as_ref()
@@ -333,6 +335,18 @@ impl State {
             .unwrap_or_default();
         self.original = Some(item.clone());
         self.draft = Some(item);
+    }
+    fn discard(&mut self) {
+        if let Some(original) = self.original.clone() {
+            if original.revision == 0 {
+                self.draft = None;
+                self.original = None;
+                self.date_text.clear();
+                self.time_text.clear();
+            } else {
+                self.edit(original);
+            }
+        }
     }
     fn may_leave(&mut self) -> bool {
         if self.has_unsaved() {

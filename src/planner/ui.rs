@@ -513,9 +513,7 @@ impl State {
         self.draft = Some(item.clone());
         if discard {
             // Explicit discard also discards unsaved date/time fields.
-            if let Some(original) = self.original.clone() {
-                self.edit(original);
-            }
+            self.discard();
         } else if save {
             self.save_draft();
         } else if trash {
