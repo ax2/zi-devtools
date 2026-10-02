@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 208] = [
+const NAMES: [&str; 212] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -218,6 +218,10 @@ const NAMES: [&str; 208] = [
     "calendar-compact-light",
     "calendar-editor-compact-dark",
     "calendar-editor-compact-light",
+    "memo-handoff-dark",
+    "memo-handoff-light",
+    "memo-received-dark",
+    "memo-received-light",
 ];
 
 struct Capture {
@@ -239,6 +243,21 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("reminder-open-smoke")
+            && matches!(self.frames, 5 | 6)
+        {
+            let pos = self
+                .app
+                .preview_reminder_click_position()
+                .expect("reminder button rendered");
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frames == 5,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if self.scene == 64 && self.frames == 2 {
             input.dropped_files.push(egui::DroppedFile {
                 path: Some(self.fixture.with_file_name("订单数据.csv")),
@@ -275,6 +294,19 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("reminder-open-smoke") {
+            if self.frames == 0 {
+                self.app.preview_reminder_click_start(ctx);
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 14 {
+                self.app.preview_reminder_click_assert();
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some("planner-tray-smoke" | "planner-minimize-smoke")
@@ -758,6 +790,7 @@ impl eframe::App for Capture {
                     "PASS keyboard: diagnostic search, navigation, Ctrl Enter background completion"
                 );
                 self.app.preview_catalog_routes();
+                self.app.preview_memo_roundtrip();
                 self.app.preview_import_routes();
                 self.app.preview_instance_start();
                 self.app.preview_hidden_panel(ctx, false);

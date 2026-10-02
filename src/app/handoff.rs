@@ -8,6 +8,7 @@ enum Target {
     JsonData,
     Before,
     After,
+    Memo,
 }
 impl Target {
     fn label(self) -> &'static str {
@@ -18,6 +19,7 @@ impl Target {
             Self::JsonData => "数据工作台 · JSON 对象数组",
             Self::Before => "文本对比 · 左侧原文",
             Self::After => "文本对比 · 右侧新文",
+            Self::Memo => "备忘录 · 新建草稿",
         }
     }
     fn all() -> Vec<Self> {
@@ -31,6 +33,7 @@ impl Target {
                 Self::JsonData,
                 Self::Before,
                 Self::After,
+                Self::Memo,
             ])
             .collect()
     }
@@ -69,6 +72,7 @@ impl Transfer {
         diff: &mut DiffState,
     ) -> anyhow::Result<(Page, Option<ToolKind>)> {
         match self.target {
+            Target::Memo => anyhow::bail!("备忘草稿需通过资料入口接收"),
             Target::Tool(kind) => {
                 tools.select(kind);
                 tools.input.clone_from(&self.text);
@@ -118,6 +122,7 @@ impl DevToolsApp {
                 &self.tool_state.output,
             )),
             Page::Data => Some(("数据工作台导出".into(), &self.data_state.output)),
+            Page::Notes | Page::Calendar => self.planner.transfer_text(),
             Page::Diff => Some(("文本差异报告".into(), &self.diff_state.diff_output)),
             Page::Network => Some(("网络诊断报告".into(), &self.network_state.output)),
             Page::Java | Page::Django => Some((
@@ -142,12 +147,17 @@ impl DevToolsApp {
             return;
         };
         let mut clicked = false;
+        let body_source = matches!(self.page, Page::Notes | Page::Calendar);
         egui::TopBottomPanel::top("result-handoff").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 clicked = ui
                     .add_enabled(
                         !text.is_empty() && self.handoff.is_none(),
-                        egui::Button::new("发送结果到工具…"),
+                        egui::Button::new(if body_source {
+                            "发送正文到工具…"
+                        } else {
+                            "发送结果到工具…"
+                        }),
                     )
                     .clicked();
                 ui.small(if text.is_empty() {
@@ -179,7 +189,7 @@ impl DevToolsApp {
                 ui.monospace(&transfer.preview);
             });
             ui.separator();
-            ui.add(egui::TextEdit::singleline(&mut transfer.query).hint_text("搜索目标工具，例如 JSON、Base64、对比"));
+            ui.add(egui::TextEdit::singleline(&mut transfer.query).hint_text("搜索目标，例如 JSON、Base64、对比、备忘录"));
             egui::ScrollArea::vertical().id_salt("handoff-targets").max_height(160.0).show(ui, |ui| {
                 let query = transfer.query.trim().to_lowercase();
                 let mut count = 0;
@@ -193,11 +203,11 @@ impl DevToolsApp {
             ui.label(format!("目标：{}", transfer.target.label()));
             let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
             if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
-            ui.small(if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
+            ui.small(if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
             if !transfer.error.is_empty() { ui.colored_label(self.colors.red, &transfer.error); }
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
-                apply = ui.button(if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}).clicked();
+                apply = ui.button(if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}).clicked();
             });
         });
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
@@ -206,12 +216,21 @@ impl DevToolsApp {
         if cancel {
             self.handoff = None;
         } else if apply {
-            let transfer = self.handoff.as_ref().unwrap();
-            let result = if transfer.new_data_instance
+            self.apply_handoff();
+        }
+    }
+    fn apply_handoff(&mut self) {
+        if let Some(transfer) = self.handoff.as_ref() {
+            let result = if transfer.target == Target::Memo {
+                self.planner
+                    .receive_text(&transfer.source, &transfer.text)
+                    .map(|_| (Page::Notes, None))
+            } else if transfer.new_data_instance
                 && matches!(
                     transfer.target,
                     Target::Csv | Target::Tsv | Target::JsonData
-                ) {
+                )
+            {
                 self.data_state
                     .import_new(
                         transfer.text.clone(),
@@ -241,6 +260,53 @@ impl DevToolsApp {
                 Err(error) => self.handoff.as_mut().unwrap().error = error.to_string(),
             }
         }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_memo_handoff(&mut self, receive: bool) {
+        self.planner.preview(false, false);
+        let mut transfer = Transfer::new(
+            "JSON 格式化结果".into(),
+            "{\n  \"project\": \"Zi DevTools\",\n  \"status\": \"ready\"\n}",
+        )
+        .unwrap();
+        transfer.target = Target::Memo;
+        transfer.query = "备忘录".into();
+        self.handoff = Some(transfer);
+        self.page = Page::EncodingTools;
+        self.tool_state.select(ToolKind::Json);
+        self.tool_state.output = self.handoff.as_ref().unwrap().text.clone();
+        if receive {
+            self.apply_handoff();
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_memo_roundtrip(&mut self) {
+        self.preview_memo_handoff(true);
+        assert_eq!(self.page, Page::Notes);
+        assert!(self.planner.has_unsaved());
+        let source = self.tool_state.output.clone();
+        let (title, text) = self.handoff_source().unwrap();
+        assert_eq!(text, source);
+        let mut transfer = Transfer::new(title, text).unwrap();
+        transfer.target = Target::Tool(ToolKind::Base64);
+        self.handoff = Some(transfer);
+        self.apply_handoff();
+        assert_eq!(self.tool_state.selected, ToolKind::Base64);
+        assert_eq!(self.tool_state.input, source);
+        assert!(self.tool_state.output.is_empty());
+        self.tool_state.select(ToolKind::Json);
+        assert_eq!(self.tool_state.output, source);
+        let mut transfer = Transfer::new("新结果".into(), "replacement").unwrap();
+        transfer.target = Target::Memo;
+        self.handoff = Some(transfer);
+        self.apply_handoff();
+        assert!(self.handoff.as_ref().is_some_and(|t| !t.error.is_empty()));
+        assert_eq!(self.planner.transfer_text().unwrap().1, source);
+        self.handoff = None;
+        self.planner.preview(false, false);
+        println!(
+            "PASS memo handoff: actual app routes, source preserved, unsaved draft guarded, outbound input without execution"
+        );
     }
 }
 

@@ -3,6 +3,16 @@ use egui::{RichText, vec2};
 
 impl State {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_reminder_opened(&self) -> bool {
+        !self.alarm_open
+            && self.calendar
+            && self.alarms.first().is_some_and(|(id, at)| {
+                self.draft.as_ref().is_some_and(|draft| {
+                    &draft.id == id && draft.schedule.as_ref().unwrap().handled.is_none()
+                }) && self.selected == at.date()
+            })
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_focus_editor(&mut self) {
         self.focus_editor = true;
     }
@@ -278,7 +288,7 @@ impl State {
         ui.separator();
     }
 
-    fn select_date(&mut self, date: NaiveDate) {
+    pub(super) fn select_date(&mut self, date: NaiveDate) {
         self.selected = date;
         self.month = date.with_day(1).unwrap();
         self.jump = date.to_string();
@@ -530,12 +540,15 @@ impl State {
         }
     }
 
-    pub fn reminder_ui(&mut self, ctx: &egui::Context) {
+    pub fn reminder_ui(&mut self, ctx: &egui::Context) -> bool {
         if !self.alarm_open {
-            return;
+            return false;
         }
         let mut open = true;
         let mut action = None;
+        let mut selected = None;
+        #[cfg(feature = "ui-preview")]
+        let mut open_rect = None;
         egui::Window::new("日程提醒")
             .id(egui::Id::new("planner-alarms"))
             .open(&mut open)
@@ -558,6 +571,17 @@ impl State {
                                 ui.separator();
                                 ui.strong(&item.title);
                                 ui.label(at.format("%Y-%m-%d %H:%M · 本机时间").to_string());
+                                let open_response = ui.add_enabled(
+                                    self.pending.is_none(),
+                                    egui::Button::new("打开日程 →"),
+                                );
+                                #[cfg(feature = "ui-preview")]
+                                {
+                                    open_rect = Some(open_response.rect);
+                                }
+                                if open_response.clicked() {
+                                    selected = Some((id.clone(), *at));
+                                }
                                 let editing = self.draft.as_ref().is_some_and(|i| &i.id == id)
                                     && self.has_unsaved();
                                 ui.add_enabled_ui(self.pending.is_none() && !editing, |ui| {
@@ -581,6 +605,19 @@ impl State {
                 }
             });
         self.alarm_open = open;
+        #[cfg(feature = "ui-preview")]
+        {
+            self.preview_open_reminder_rect = open_rect;
+        }
+        if let Some((id, at)) = selected {
+            match self.open_event(&id, at) {
+                Ok(()) => return true,
+                Err(error) => {
+                    self.message = error.to_string();
+                    self.error = true;
+                }
+            }
+        }
         if let Some((id, at, minutes)) = action
             && let Some(mut item) = self.items.iter().find(|i| i.id == id).cloned()
         {
@@ -594,6 +631,7 @@ impl State {
             }
             self.launch(Some(item));
         }
+        false
     }
 
     #[cfg(feature = "ui-preview")]

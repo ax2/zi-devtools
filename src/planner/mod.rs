@@ -235,8 +235,79 @@ pub struct State {
     focus_editor: bool,
     #[cfg(feature = "ui-preview")]
     pub preview_delivered: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_open_reminder_rect: Option<egui::Rect>,
 }
 impl State {
+    /// Receive a snapshot in memory. Persistence still requires the Save action.
+    pub fn receive_text(&mut self, source: &str, text: &str) -> Result<()> {
+        ensure!(
+            self.loaded && self.pending.is_none(),
+            "备忘录正在加载或保存，请稍后重试"
+        );
+        ensure!(
+            !self.has_unsaved(),
+            "请先保存或放弃备忘 / 日程的当前编辑，再接收结果"
+        );
+        ensure!(
+            !text.is_empty() && text.len() <= MAX_BODY,
+            "备忘正文需要 1 字节至 128 KiB，请先缩小结果范围"
+        );
+        let mut item = Item::new(None);
+        item.title = format!("来自 {source}")
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(120)
+            .collect();
+        item.body = text.to_owned();
+        item.validate()?;
+        self.edit(item);
+        self.calendar = false;
+        self.trash = false;
+        self.query.clear();
+        self.message = "结果已填入新备忘草稿；点击保存后才会保留到本机。".into();
+        self.error = false;
+        Ok(())
+    }
+    pub fn transfer_text(&self) -> Option<(String, &str)> {
+        self.draft.as_ref().filter(|item| !item.trash).map(|item| {
+            (
+                format!(
+                    "{}正文 · {}",
+                    if item.schedule.is_some() {
+                        "日程"
+                    } else {
+                        "备忘录"
+                    },
+                    item.title
+                ),
+                item.body.as_str(),
+            )
+        })
+    }
+    fn open_event(&mut self, id: &str, at: NaiveDateTime) -> Result<()> {
+        ensure!(self.pending.is_none(), "正在读写本地记录，请稍后打开日程");
+        let item = self
+            .items
+            .iter()
+            .find(|i| i.id == id && !i.trash && i.schedule.is_some())
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("日程已不可用，请重新加载"))?;
+        if self.draft.as_ref().is_none_or(|draft| draft.id != id) {
+            ensure!(
+                !self.has_unsaved(),
+                "请先保存或放弃当前备忘 / 日程编辑，再打开提醒对应的日程"
+            );
+            self.edit(item);
+        }
+        self.calendar = true;
+        self.trash = false;
+        self.query.clear();
+        self.select_date(at.date());
+        self.focus_editor = true;
+        self.alarm_open = false;
+        Ok(())
+    }
     pub fn saving(&self) -> bool {
         self.pending.is_some() && self.saving.is_some()
     }
@@ -254,6 +325,8 @@ impl State {
     pub fn new(path: PathBuf) -> Self {
         let today = Local::now().date_naive();
         let mut state = Self {
+            #[cfg(feature = "ui-preview")]
+            preview_open_reminder_rect: None,
             #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,

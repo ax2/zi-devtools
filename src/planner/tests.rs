@@ -280,3 +280,74 @@ fn global_poll_delivers_once_suppresses_trash_and_recovers_after_restart() {
     std::fs::remove_file(&path).unwrap();
     std::fs::remove_dir(path.parent().unwrap()).unwrap();
 }
+
+#[test]
+fn incoming_result_is_explicit_unsaved_bounded_and_never_overwrites_edits() {
+    let path = fixture();
+    let mut state = State::new(path.clone());
+    assert!(state.receive_text("report", "loading").is_err());
+    wait_state(&mut state);
+    assert!(
+        state
+            .receive_text("report", &"x".repeat(MAX_BODY + 1))
+            .is_err()
+    );
+    assert!(state.receive_text("report", "").is_err());
+    assert!(state.draft.is_none());
+    let content = "# 中文结果\n\nKeep **markup** and JSON: {\"ok\":true}";
+    state.receive_text(&"title\n".repeat(100), content).unwrap();
+    assert!(!path.exists());
+    assert!(state.has_unsaved());
+    assert_eq!(state.transfer_text().unwrap().1, content);
+    assert_eq!(state.draft.as_ref().unwrap().title.chars().count(), 120);
+    assert!(state.receive_text("another", "overwrite").is_err());
+    assert_eq!(state.transfer_text().unwrap().1, content);
+    state.save_draft();
+    assert!(state.receive_text("another", "while saving").is_err());
+    wait_state(&mut state);
+    assert_eq!(store::load(&path).unwrap()[0].body, content);
+    state.receive_text("next", "new draft").unwrap();
+    assert_eq!(store::load(&path).unwrap().len(), 1);
+    state.discard();
+    assert!(state.transfer_text().is_none());
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn open_reminder_preserves_unsaved_draft_and_does_not_acknowledge() {
+    let path = fixture();
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    let item = event();
+    let at = item.schedule.as_ref().unwrap().start;
+    state.items.push(item.clone());
+    state.receive_text("another tool", "unsaved").unwrap();
+    assert!(state.open_event(&item.id, at).is_err());
+    assert_eq!(state.transfer_text().unwrap().1, "unsaved");
+    state.discard();
+    state.alarm_open = true;
+    state.open_event(&item.id, at).unwrap();
+    assert!(state.calendar);
+    assert!(!state.alarm_open);
+    assert_eq!(state.selected, at.date());
+    assert!(
+        state
+            .draft
+            .as_ref()
+            .unwrap()
+            .schedule
+            .as_ref()
+            .unwrap()
+            .handled
+            .is_none()
+    );
+    state.draft.as_mut().unwrap().body = "currently editing this event".into();
+    state.open_event(&item.id, at).unwrap();
+    assert_eq!(
+        state.transfer_text().unwrap().1,
+        "currently editing this event"
+    );
+    assert!(state.open_event("missing", at).is_err());
+    assert!(!path.exists());
+}

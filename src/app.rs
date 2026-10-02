@@ -251,6 +251,25 @@ pub struct DevToolsApp {
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_reminder_click_position(&self) -> Option<egui::Pos2> {
+        self.planner
+            .preview_open_reminder_rect
+            .map(|rect| rect.center())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_reminder_click_start(&mut self, ctx: &egui::Context) {
+        self.preview_scene(ctx, 202, PathBuf::new());
+        self.page = Page::Home;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_reminder_click_assert(&self) {
+        assert_eq!(self.page, Page::Calendar);
+        assert!(self.planner.preview_reminder_opened());
+        println!(
+            "PASS reminder UI click: opens exact calendar event from Home without acknowledging reminder"
+        );
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_planner_editor(&mut self) {
         self.planner.preview_focus_editor();
     }
@@ -353,6 +372,7 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            208..=211 => self.preview_memo_handoff(scene >= 210),
             198..=207 => {
                 self.page = if scene >= 200 {
                     Page::Calendar
@@ -3839,7 +3859,9 @@ impl eframe::App for DevToolsApp {
         self.handoff_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
-        self.planner.reminder_ui(ctx);
+        if self.planner.reminder_ui(ctx) {
+            self.navigate(Page::Calendar, None);
+        }
         self.recorder.selection_overlay(ctx);
         if self.recorder.take_restore_request() {
             restore_main_window(self.window_handle, ctx);
