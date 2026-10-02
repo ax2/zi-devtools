@@ -23,6 +23,7 @@ pub struct TokenSet {
     issuer: String,
     client_id: String,
     scopes: Vec<String>,
+    token_endpoint: Url,
 }
 
 impl TokenSet {
@@ -72,6 +73,28 @@ fn error_present<'de, D: serde::Deserializer<'de>>(
 }
 
 fn parse(bytes: &[u8], grant: &CodeGrant, started: Instant) -> Result<TokenSet> {
+    let (endpoint, _, resource, client_id) = grant.bindings();
+    parse_bound(
+        bytes,
+        TokenBinding {
+            resource,
+            client_id,
+            issuer: grant.issuer(),
+            scopes: grant.scopes(),
+            endpoint,
+        },
+        started,
+    )
+}
+
+struct TokenBinding<'a> {
+    resource: &'a str,
+    client_id: &'a str,
+    issuer: &'a str,
+    scopes: &'a [String],
+    endpoint: &'a Url,
+}
+fn parse_bound(bytes: &[u8], binding: TokenBinding<'_>, started: Instant) -> Result<TokenSet> {
     ensure!(bytes.len() <= MAX_BYTES, "令牌响应超过 64 KiB");
     let reply: TokenReply =
         serde_json::from_slice(bytes).map_err(|_| anyhow::anyhow!("令牌响应格式无效"))?;
@@ -95,7 +118,7 @@ fn parse(bytes: &[u8], grant: &CodeGrant, started: Instant) -> Result<TokenSet> 
             scopes.len() <= 16
                 && scopes
                     .iter()
-                    .all(|value| !value.is_empty() && grant.scopes().contains(value))
+                    .all(|value| !value.is_empty() && binding.scopes.contains(value))
                 && scopes
                     .iter()
                     .collect::<std::collections::BTreeSet<_>>()
@@ -105,7 +128,7 @@ fn parse(bytes: &[u8], grant: &CodeGrant, started: Instant) -> Result<TokenSet> 
         );
         scopes
     } else {
-        grant.scopes().to_vec()
+        binding.scopes.to_vec()
     };
     let expires = reply
         .expires_in
@@ -132,15 +155,15 @@ fn parse(bytes: &[u8], grant: &CodeGrant, started: Instant) -> Result<TokenSet> 
             Secret::new(value)
         })
         .transpose()?;
-    let (_, _, resource, client_id) = grant.bindings();
     Ok(TokenSet {
         access: Secret::new(reply.access_token)?,
         refresh,
         expires,
-        resource: resource.into(),
-        issuer: grant.issuer().into(),
-        client_id: client_id.into(),
+        resource: binding.resource.into(),
+        issuer: binding.issuer.into(),
+        client_id: binding.client_id.into(),
         scopes,
+        token_endpoint: binding.endpoint.clone(),
     })
 }
 
@@ -167,6 +190,37 @@ fn exchange_at(grant: CodeGrant, endpoint: Url, cancel: &AtomicBool) -> Result<T
     })
 }
 
+/// Consumes old credentials even on failure/cancellation, because rotation outcome may be unknown.
+pub fn refresh(old: TokenSet, cancel: &AtomicBool) -> Result<TokenSet> {
+    let endpoint = mcp_oauth::secure_url(old.token_endpoint.as_str(), true)?;
+    refresh_at(old, endpoint, cancel)
+}
+fn refresh_at(mut old: TokenSet, endpoint: Url, cancel: &AtomicBool) -> Result<TokenSet> {
+    ensure!(old.refresh.is_some(), "服务未提供刷新令牌，请重新登录");
+    ensure!(
+        !cancel.load(Ordering::Relaxed),
+        "已取消令牌刷新，请重新登录"
+    );
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| anyhow::anyhow!("无法创建刷新任务"))?;
+    let mut updated = runtime.block_on(async {
+        tokio::select! {
+            result = async {
+                let fields = [("grant_type", "refresh_token"), ("refresh_token", old.refresh.as_ref().unwrap().expose()), ("client_id", old.client_id.as_str()), ("resource", old.resource.as_str())];
+                let (bytes, started) = post(endpoint, &fields).await?;
+                parse_bound(&bytes, TokenBinding { resource: &old.resource, client_id: &old.client_id, issuer: &old.issuer, scopes: &old.scopes, endpoint: &old.token_endpoint }, started)
+            } => { ensure!(!cancel.load(Ordering::Relaxed), "已取消令牌刷新，请重新登录"); result },
+            _ = cancelled(cancel) => { bail!("已取消令牌刷新，请重新登录"); }
+        }
+    })?;
+    if updated.refresh.is_none() {
+        updated.refresh = old.refresh.take();
+    }
+    Ok(updated)
+}
+
 async fn cancelled(cancel: &AtomicBool) {
     while !cancel.load(Ordering::Relaxed) {
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -174,14 +228,6 @@ async fn cancelled(cancel: &AtomicBool) {
 }
 
 async fn request(grant: &CodeGrant, endpoint: Url) -> Result<TokenSet> {
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .redirect(Policy::none())
-        .retry(reqwest::retry::never())
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|_| anyhow::anyhow!("无法创建令牌请求"))?;
     let (_, redirect, resource, client_id) = grant.bindings();
     let started = Instant::now();
     let fields = [
@@ -192,10 +238,24 @@ async fn request(grant: &CodeGrant, endpoint: Url) -> Result<TokenSet> {
         ("resource", resource),
         ("client_id", client_id),
     ];
+    let (bytes, _) = post(endpoint, &fields).await?;
+    parse(&bytes, grant, started)
+}
+
+async fn post(endpoint: Url, fields: &[(&str, &str)]) -> Result<(Vec<u8>, Instant)> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(Policy::none())
+        .retry(reqwest::retry::never())
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|_| anyhow::anyhow!("无法创建令牌请求"))?;
+    let started = Instant::now();
     let mut response = client
         .post(endpoint)
         .header(ACCEPT, "application/json")
-        .form(&fields)
+        .form(fields)
         .send()
         .await
         .map_err(|_| anyhow::anyhow!("令牌请求失败或超时，请重新登录"))?;
@@ -237,7 +297,7 @@ async fn request(grant: &CodeGrant, endpoint: Url) -> Result<TokenSet> {
         );
         bytes.extend_from_slice(&chunk);
     }
-    parse(&bytes, grant, started)
+    Ok((bytes, started))
 }
 
 #[cfg(test)]
@@ -310,7 +370,7 @@ mod tests {
             }
         }
     }
-    fn fixture(
+    pub(super) fn fixture(
         status: &str,
         content_type: &str,
         body: Vec<u8>,
@@ -494,4 +554,110 @@ pub(crate) fn fixture_token(expired: bool) -> TokenSet {
         token.expires = Some(Instant::now() - Duration::from_secs(1));
     }
     token
+}
+
+#[cfg(feature = "ui-preview")]
+pub(crate) fn preview_token(resource: &str, issuer: &str, client_id: &str) -> TokenSet {
+    TokenSet {
+        access: Secret::new("synthetic-preview-access".into()).unwrap(),
+        refresh: Some(Secret::new("synthetic-preview-refresh".into()).unwrap()),
+        expires: Some(Instant::now() + Duration::from_secs(600)),
+        resource: resource.into(),
+        issuer: issuer.into(),
+        client_id: client_id.into(),
+        scopes: vec!["tools:read".into()],
+        token_endpoint: Url::parse("https://auth.example.test/token").unwrap(),
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::*;
+    #[test]
+    fn refresh_rotates_and_retains_only_bound_refresh_token() {
+        let old = fixture_token(true);
+        assert!(old.access_for("https://mcp.example.test/mcp").is_err());
+        let body = br#"{"access_token":"synthetic-new-access","token_type":"Bearer","expires_in":600,"refresh_token":"synthetic-rotated-refresh","scope":"tools:read"}"#.to_vec();
+        let (endpoint, server) = tests::fixture("200 OK", "application/json", body);
+        let updated = refresh_at(old, endpoint, &AtomicBool::new(false)).unwrap();
+        let request = String::from_utf8(server.join().unwrap()).unwrap();
+        let (headers, body) = request.split_once("\r\n\r\n").unwrap();
+        assert!(
+            !headers.to_ascii_lowercase().contains("authorization:")
+                && !headers.to_ascii_lowercase().contains("cookie:")
+        );
+        assert!(!request.contains("synthetic-access"));
+        let url = Url::parse(&format!("http://localhost/?{body}")).unwrap();
+        let fields: std::collections::BTreeMap<_, _> = url.query_pairs().collect();
+        assert_eq!(fields.len(), 4);
+        assert_eq!(fields["grant_type"], "refresh_token");
+        assert_eq!(fields["refresh_token"], "synthetic-refresh");
+        assert_eq!(fields["client_id"], "synthetic-client");
+        assert_eq!(fields["resource"], "https://mcp.example.test/mcp");
+        assert!(
+            updated
+                .access_for("https://mcp.example.test/mcp")
+                .unwrap()
+                .expose()
+                == "synthetic-new-access"
+        );
+        assert_eq!(
+            updated.refresh.as_ref().unwrap().expose(),
+            "synthetic-rotated-refresh"
+        );
+        assert_eq!(
+            updated.token_endpoint.as_str(),
+            "https://auth.example.test/token"
+        );
+        let body =
+            br#"{"access_token":"synthetic-next-access","token_type":"Bearer","expires_in":600}"#
+                .to_vec();
+        let (endpoint, server) = tests::fixture("200 OK", "application/json", body);
+        let next = refresh_at(updated, endpoint, &AtomicBool::new(false)).unwrap();
+        let request = String::from_utf8(server.join().unwrap()).unwrap();
+        assert!(
+            request.contains("synthetic-rotated-refresh")
+                && !request.contains("synthetic-refresh&")
+        );
+        assert_eq!(
+            next.refresh.as_ref().unwrap().expose(),
+            "synthetic-rotated-refresh"
+        );
+        assert_eq!(next.bindings().3, &["tools:read"]);
+    }
+    #[test]
+    fn missing_refresh_cancellation_and_scope_expansion_reject() {
+        let mut old = fixture_token(false);
+        old.refresh = None;
+        assert!(refresh(old, &AtomicBool::new(false)).is_err());
+        assert!(refresh(fixture_token(false), &AtomicBool::new(true)).is_err());
+        let body =
+            br#"{"access_token":"synthetic-secret","token_type":"Bearer","scope":"tools:write"}"#
+                .to_vec();
+        let (endpoint, server) = tests::fixture("200 OK", "application/json", body);
+        let error = refresh_at(fixture_token(false), endpoint, &AtomicBool::new(false))
+            .err()
+            .unwrap();
+        assert!(!format!("{error:#}").contains("synthetic-secret"));
+        server.join().unwrap();
+    }
+    #[test]
+    fn refresh_errors_and_redirects_never_echo_or_replay() {
+        for status in [
+            "400 Bad Request",
+            "401 Unauthorized",
+            "307 Temporary Redirect",
+        ] {
+            let (endpoint, server) = tests::fixture(
+                status,
+                "application/json",
+                b"synthetic-refresh-secret".to_vec(),
+            );
+            let error = refresh_at(fixture_token(false), endpoint, &AtomicBool::new(false))
+                .err()
+                .unwrap();
+            assert!(!format!("{error:#}").contains("synthetic-refresh-secret"));
+            server.join().unwrap();
+        }
+    }
 }

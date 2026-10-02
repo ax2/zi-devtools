@@ -236,6 +236,12 @@ impl McpState {
         self.temporary_bearer = false;
         self.oauth.preview(&self.http_endpoint);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_oauth_refresh(&mut self) {
+        self.preview_oauth_metadata();
+        self.oauth.preview_refresh(&self.http_endpoint);
+        self.message = "合成刷新界面预览 · 无网络请求".into();
+    }
 
     fn config(&self) -> Result<Config, String> {
         let args: Vec<String> = serde_json::from_str(&self.arguments)
@@ -622,9 +628,9 @@ impl McpState {
                 });
                 if self.temporary_bearer {
                     if self.connection.is_some() {
-                        ui.small("本次连接已启用认证，令牌输入已清空。暂未提供 OAuth 登录或自动刷新。");
+                        ui.small("本次连接已启用认证，令牌输入已清空。OAuth 浏览器登录见下方；自动刷新仍在开发。");
                     } else {
-                        ui.small("仅用于上方完整端点；临时输入不保存，主动保存使用 Windows 凭据管理器。暂未提供 OAuth 登录或自动刷新。");
+                        ui.small("仅用于上方完整端点；临时输入不保存，主动保存使用 Windows 凭据管理器。OAuth 浏览器登录见下方；自动刷新仍在开发。");
                     }
                 }
             }
@@ -641,6 +647,16 @@ impl McpState {
                         .clicked()
                 {
                     self.connect();
+                }
+                if self.transport == Transport::Http && self.connection.is_some()
+                    && ui.add_enabled(!busy && self.oauth.has_refresh(), egui::Button::new("断开并刷新授权")).clicked() {
+                    self.cancelled.store(true, Ordering::Relaxed);
+                    self.connection = None;
+                    self.report = None;
+                    self.message = match self.oauth.start_refresh() {
+                        Ok(()) => "正在断开并刷新 OAuth 授权，成功后请主动重新连接".into(),
+                        Err(error) => error.to_string(),
+                    };
                 }
                 if ui
                     .add_enabled(

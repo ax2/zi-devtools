@@ -18,7 +18,7 @@ enum Reply {
 enum LoginReply {
     Waiting,
     Exchanging,
-    Finished(Result<crate::mcp_oauth_token::TokenSet, String>),
+    Finished(Result<Box<crate::mcp_oauth_token::TokenSet>, String>),
 }
 
 #[derive(Default)]
@@ -44,6 +44,17 @@ impl Drop for OAuthPanel {
     }
 }
 impl OAuthPanel {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_refresh(&mut self, endpoint: &str) {
+        self.preview(endpoint);
+        self.scopes.insert("tools:read".into());
+        self.token = Some(crate::mcp_oauth_token::preview_token(
+            endpoint,
+            "https://auth.example.test/tenant",
+            &self.client_id,
+        ));
+        self.message = "合成已登录状态 · 无实际服务或用户凭据".into();
+    }
     pub fn clear(&mut self) {
         if let Some(cancel) = self.login_cancel.take() {
             cancel.store(true, Ordering::Relaxed);
@@ -66,7 +77,7 @@ impl OAuthPanel {
         let token = self
             .token
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("请先完成当前服务的浏览器登录"))?;
+            .ok_or_else(|| anyhow::anyhow!("请先完成当前服务的登录或刷新"))?;
         anyhow::ensure!(
             token.bindings().2 == self.client_id.trim()
                 && self
@@ -109,7 +120,7 @@ impl OAuthPanel {
                 crate::mcp_oauth_token::exchange(grant, &worker_cancel)
             })()
             .map_err(|error| error.to_string());
-            let _ = sender.send(LoginReply::Finished(result));
+            let _ = sender.send(LoginReply::Finished(result.map(Box::new)));
         });
         Ok(())
     }
@@ -127,7 +138,7 @@ impl OAuthPanel {
                 self.login_cancel = None;
                 self.message = match result {
                     Ok(token) => {
-                        self.token = Some(token);
+                        self.token = Some(*token);
                         "已登录当前服务，可点击连接并保持".into()
                     }
                     Err(error) => error,
@@ -142,6 +153,40 @@ impl OAuthPanel {
         if self.login_receiver.is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
         }
+    }
+    pub fn has_refresh(&self) -> bool {
+        self.enabled && self.token.as_ref().is_some_and(|token| token.has_refresh())
+    }
+    pub fn start_refresh(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(self.enabled, "当前未选择 OAuth 认证");
+        anyhow::ensure!(self.login_receiver.is_none(), "授权任务正在进行");
+        let token = self
+            .token
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("当前没有可刷新的授权"))?;
+        anyhow::ensure!(token.has_refresh(), "服务未提供刷新令牌，请重新登录");
+        anyhow::ensure!(
+            token.bindings().2 == self.client_id.trim()
+                && self
+                    .authorization
+                    .as_ref()
+                    .is_some_and(|auth| auth.issuer == token.bindings().1)
+                && mcp_oauth::canonical_resource(&self.endpoint)? == token.bindings().0,
+            "授权目标已变化，请重新登录"
+        );
+        let token = self.token.take().unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.login_receiver = Some(receiver);
+        self.login_cancel = Some(cancel);
+        self.message = "正在刷新当前服务授权…最长 15 秒".into();
+        std::thread::spawn(move || {
+            let result = crate::mcp_oauth_token::refresh(token, &worker_cancel)
+                .map_err(|error| error.to_string());
+            let _ = sender.send(LoginReply::Finished(result.map(Box::new)));
+        });
+        Ok(())
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview(&mut self, endpoint: &str) {
@@ -223,7 +268,7 @@ impl OAuthPanel {
             }
         }
         egui::CollapsingHeader::new("OAuth 浏览器登录").id_salt("mcp-oauth-discovery").default_open(self.expanded).show(ui, |ui| {
-            ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；客户端注册与自动刷新仍在开发。");
+            ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；客户端注册与自动刷新仍在开发；已连接时可先断开并刷新授权。");
             if let Ok(resource) = mcp_oauth::canonical_resource(endpoint) { ui.label(format!("目标资源：{resource}")); }
             egui::CollapsingHeader::new("服务发现与授权配置").id_salt("oauth-config-steps").default_open(self.authorization.is_none()).show(ui, |ui| {
             let active = allowed && self.receiver.is_none() && self.login_receiver.is_none();
@@ -329,6 +374,9 @@ impl OAuthPanel {
                     if ui.add_enabled(active && self.enabled && !self.client_id.trim().is_empty() && self.scopes.len() <= 16, egui::Button::new("在浏览器登录")).clicked() {
                         if let Err(error) = self.start_login() { self.message = error.to_string(); }
                     }
+                    if ui.add_enabled(active && self.enabled && self.token.as_ref().is_some_and(|token| token.has_refresh()), egui::Button::new("刷新本次授权")).clicked() {
+                        if let Err(error) = self.start_refresh() { self.message = error.to_string(); }
+                    }
                     if ui.add_enabled(allowed && (self.login_receiver.is_some() || self.token.is_some()), egui::Button::new(if self.login_receiver.is_some() { "取消登录" } else { "清除本次授权" })).clicked() {
                         self.clear();
                         self.message = "本次授权已清除；已打开的浏览器页面可手动关闭".into();
@@ -336,7 +384,7 @@ impl OAuthPanel {
                 });
                 if let Some(token) = &self.token {
                     ui.label(match token.remaining() { Some(duration) if duration.is_zero() => "访问令牌已过期，请重新登录".into(), Some(duration) => format!("已登录 · 剩余有效期约 {} 分钟", duration.as_secs().div_ceil(60)), None => "已登录 · 服务未提供有效期".into() });
-                    ui.small("只用于当前服务，断开后清除；尚未自动刷新或持久保存 OAuth 授权。");
+                    ui.small("只用于当前服务；刷新失败或取消须重新登录。尚未自动刷新或持久保存授权。");
                     ui.ctx().request_repaint_after(Duration::from_secs(1));
                 }
             }
@@ -387,9 +435,9 @@ mod tests {
         assert!(cancel.load(Ordering::Relaxed));
         assert!(
             old_sender
-                .send(LoginReply::Finished(Ok(
+                .send(LoginReply::Finished(Ok(Box::new(
                     crate::mcp_oauth_token::fixture_token(false)
-                )))
+                ))))
                 .is_err()
         );
         let (new_sender, new_receiver) = mpsc::channel();
@@ -402,9 +450,9 @@ mod tests {
         poll(&mut panel);
         assert!(panel.message.contains("获取"));
         new_sender
-            .send(LoginReply::Finished(Ok(
+            .send(LoginReply::Finished(Ok(Box::new(
                 crate::mcp_oauth_token::fixture_token(false),
-            )))
+            ))))
             .unwrap();
         poll(&mut panel);
         assert!(panel.login_receiver.is_none());
