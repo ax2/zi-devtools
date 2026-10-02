@@ -10,7 +10,7 @@
 2. 提交源代码与生成文档，等待 CI 通过。
 3. 在 Actions 运行 Release（workflow_dispatch）：读取 Cargo 版本，通过检查后自动创建 `v<version>` 标签和 Release。也可推送同名标签触发。
 4. Windows runner 执行文档同步检查、fmt、Clippy、测试、release 构建、安装器生成、静默安装/卸载检查，然后发布 MSI、便携 EXE 与 SHA256SUMS.txt。
-5. 已有 Release 不允许覆写；修复需要新版本。发版后检查下载和校验和，并更新官网清单快照。
+5. 已有 Release 不允许覆写；修复需要新版本。发版后下载四件资产，执行 `python scripts/verify_release.py --artifact-dir release/stage-current-public --version <版本号>`，检查三件程序/安装文件与 SHA256SUMS 完整且一致，然后更新官网清单快照。校验和检查检测文件损坏，不等于发布者签名验证。
 
 本地构建：`cargo build --release --locked`。使用 .NET 8 执行 `dotnet tool install --global wix --version 5.0.2` 后，再执行 `pwsh -File scripts/package.ps1`。默认输出到 release/：MSI、桌面便携 EXE、知识库 MCP 便携 EXE、SHA256SUMS，无 ZIP。如果旧便携 EXE 正在运行，可用 `pwsh -File scripts/package.ps1 -OutputDir release/stage-current` 在项目内独立目录打包，并用 `python scripts/installer_smoke.py --artifact-dir release/stage-current` 验证；CI 继续使用默认目录。MSI 同时安装两个程序，便携使用时将两 EXE 放在同一目录。安装为当前用户，不需要管理员权限。最低 Windows 10，x64。当前未配置代码签名，不能声明 Microsoft Store 认证。
 
@@ -19,6 +19,8 @@
 唯一来源 docs/tools.json；生成文档 docs/tools.md。CI 用源码入口 ID 检查已实现列表。官网同源快照来自这份 JSON，页面优先读取公开 GitHub 最新清单，失败时显示快照日期。
 
 ## 验证基线
+
+Stage 77 的 2025 Streamable HTTP 调试台通过 8 项有界会话与异常集成测试、官方 SDK 1.31.0 JSON/SSE 合成互操作、完整本地检查、真实 eframe 明暗预览、release 构建及 MSI 静默安装/卸载。公开 CI 36954104994、最终说明 CI 36954466886 与 Release 36954783249 均成功；[v0.77.0](https://github.com/ax2/zi-devtools/releases/tag/v0.77.0) 四件公开文件下载后同时匹配 SHA256SUMS 与 GitHub asset digest/size。官网更新已暂存并通过主站构建与文件校验，浏览器读取超时导致最新网页渲染与切换待完成；不宣称本轮手机网页验收通过。认证、2026 协议、独立 GET 流与业务服务器兼容性仍未实现。
 
 Stage 75 的 SQLite 浏览器通过异常表名、分页、源文件未修改、错误文件、慢查询取消、1 MiB BLOB/长文本裁剪和 CSV 不覆盖/公式前缀测试；完整本地测试、格式、严格 Clippy、真实 eframe 亮/暗预览、release 构建、WiX 打包及 MSI 静默安装/卸载通过。公开 CI `36872868710`、修复后 CI `36874551475` 成功；首次 Release `36873499881` 因既有服务网络夹具并行抢占端口失败，提交 `ea30044` 串行化夹具后，Release `36875043358` 成功。[v0.75.0](https://github.com/ax2/zi-devtools/releases/tag/v0.75.0) 四件资产齐全，三个公开程序/安装文件下载后按 SHA256SUMS 核验通过。官网首页、清单与新图线上哈希一致，Edge 桌面 1440×1000、手机 390×844 显示 v0.75.0、87 项已实现与返回主站链接，无横向溢出。本轮深度维护清理 10,869,701,712 字节可重建缓存，Stage 75 本地四件完整文件保留、无 ZIP。只读 SQLite 连接可能管理 WAL 辅助文件，页间不保证一致性快照；CSV 只导出当前页预览。
 
