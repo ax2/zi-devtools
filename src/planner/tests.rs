@@ -626,3 +626,305 @@ fn export_snapshots_current_unsaved_body_without_saving_or_event_metadata() {
     std::fs::remove_file(target).unwrap();
     std::fs::remove_dir(root).unwrap();
 }
+
+#[test]
+fn escaped_body_can_save_load_and_backup_at_the_body_limit() {
+    let path = fixture();
+    let mut item = event();
+    item.body = "\u{0001}".repeat(MAX_BODY);
+    store::save(&path, item).unwrap();
+    let records = store::load(&path).unwrap();
+    assert_eq!(records[0].body.len(), MAX_BODY);
+    let doc = backup::Document::new(records.clone()).unwrap();
+    let file = path.with_file_name("backup.json");
+    backup::write(&file, &doc).unwrap();
+    assert_eq!(backup::read(&file).unwrap().records, records);
+    std::fs::remove_file(file).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn backup_roundtrip_preserves_full_schedule_trash_and_rejects_malformed_data() {
+    let path = fixture();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let file = path.with_file_name("backup.json");
+    let mut item = event();
+    item.revision = 8;
+    item.trash = true;
+    item.pinned = true;
+    item.updated = Local::now().timestamp();
+    item.body = "中文\nfull body".into();
+    let schedule = item.schedule.as_mut().unwrap();
+    schedule.repeat = Repeat::Weekly;
+    schedule.handled = Some(schedule.start);
+    schedule.snooze = Some((schedule.start, Local::now().timestamp() + 600));
+    let doc = backup::Document::new(vec![item.clone()]).unwrap();
+    backup::write(&file, &doc).unwrap();
+    let bytes = std::fs::read(&file).unwrap();
+    assert_eq!(backup::read(&file).unwrap().records, vec![item.clone()]);
+    assert!(backup::write(&file, &doc).is_err());
+    assert_eq!(std::fs::read(&file).unwrap(), bytes);
+    let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for variant in 0..7 {
+        let mut bad = original.clone();
+        match variant {
+            0 => bad["version"] = 2.into(),
+            1 => bad["records"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::to_value(&item).unwrap()),
+            2 => bad["records"][0]["revision"] = 0.into(),
+            3 => bad["records"][0]["unknown-field"] = true.into(),
+            4 => bad["created_at"] = i64::MAX.into(),
+            5 => bad["records"][0]["updated"] = i64::MAX.into(),
+            _ => bad["records"][0]["schedule"]["snooze"][1] = i64::MAX.into(),
+        }
+        std::fs::write(&file, serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(backup::read(&file).is_err(), "variant {variant}");
+    }
+    std::fs::remove_file(file).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn restore_modes_count_changes_and_reminders_require_choice() {
+    let mut shared = event();
+    shared.revision = 1;
+    shared.title = "current".into();
+    let mut local = shared.clone();
+    local.id = uuid::Uuid::new_v4().to_string();
+    local.title = "local only".into();
+    let mut incoming = shared.clone();
+    incoming.title = "backup content".into();
+    let mut new = incoming.clone();
+    new.id = uuid::Uuid::new_v4().to_string();
+    new.trash = true;
+    let current = vec![shared.clone(), local];
+    let doc = backup::Document::new(vec![incoming, new]).unwrap();
+    let keep = backup::plan(&current, &doc, backup::Mode::KeepCurrent, false).unwrap();
+    assert_eq!(
+        (keep.added, keep.updated, keep.removed, keep.kept),
+        (1, 0, 0, 2)
+    );
+    assert_eq!(
+        keep.records.iter().find(|i| i.id == shared.id).unwrap(),
+        &shared
+    );
+    assert!(
+        !keep
+            .records
+            .iter()
+            .find(|i| i.trash)
+            .unwrap()
+            .schedule
+            .as_ref()
+            .unwrap()
+            .remind
+    );
+    let merge = backup::plan(&current, &doc, backup::Mode::BackupWins, true).unwrap();
+    assert_eq!(
+        (merge.added, merge.updated, merge.removed, merge.kept),
+        (1, 1, 0, 1)
+    );
+    assert!(
+        merge
+            .records
+            .iter()
+            .all(|i| i.schedule.as_ref().unwrap().remind)
+    );
+    let replace = backup::plan(&current, &doc, backup::Mode::ReplaceAll, true).unwrap();
+    assert_eq!(
+        (
+            replace.added,
+            replace.updated,
+            replace.removed,
+            replace.kept
+        ),
+        (1, 1, 1, 0)
+    );
+    let mut restored = doc.records.clone();
+    for i in &mut restored {
+        i.revision += 10;
+    }
+    let same = backup::plan(&restored, &doc, backup::Mode::ReplaceAll, true).unwrap();
+    assert!(same.changes.is_empty());
+    assert_eq!(same.records, restored);
+}
+
+#[test]
+fn restore_transaction_rejects_stale_preview_and_stale_editor_versions() {
+    let path = fixture();
+    let mut original = event();
+    original.body = "old".into();
+    store::save(&path, original).unwrap();
+    let before = store::load(&path).unwrap();
+    let mut imported = before.clone();
+    imported[0].body = "from backup".into();
+    let mut concurrent = before[0].clone();
+    concurrent.title = "concurrent".into();
+    store::save(&path, concurrent).unwrap();
+    let changed = store::load(&path).unwrap();
+    assert!(store::restore(&path, &before, &imported).is_err());
+    assert_eq!(store::load(&path).unwrap(), changed);
+    let restored = store::restore(&path, &changed, &imported).unwrap();
+    assert_eq!(restored[0].body, "from backup");
+    assert_ne!(restored[0].revision, before[0].revision);
+    assert_ne!(restored[0].revision, changed[0].revision);
+    assert!(store::save(&path, changed[0].clone()).is_err());
+    let mut edit = restored[0].clone();
+    edit.title = "valid edit".into();
+    store::save(&path, edit).unwrap();
+    let current = store::load(&path).unwrap();
+    assert_eq!(current[0].revision, restored[0].revision + 1);
+    std::fs::remove_file(&path).unwrap();
+    assert!(store::restore(&path, &current, &imported).is_err());
+    assert!(!path.exists());
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn invalid_restore_rolls_back_and_empty_backup_can_explicitly_replace_all() {
+    let path = fixture();
+    store::save(&path, event()).unwrap();
+    let before = store::load(&path).unwrap();
+    let duplicate = vec![before[0].clone(), before[0].clone()];
+    assert!(store::restore(&path, &before, &duplicate).is_err());
+    assert_eq!(store::load(&path).unwrap(), before);
+    let doc = backup::Document::new(Vec::new()).unwrap();
+    let plan = backup::plan(&before, &doc, backup::Mode::ReplaceAll, false).unwrap();
+    assert_eq!(plan.removed, 1);
+    assert!(
+        store::restore(&path, &before, &plan.records)
+            .unwrap()
+            .is_empty()
+    );
+    let recreated = store::restore(&path, &[], &before).unwrap();
+    assert_ne!(recreated[0].revision, before[0].revision);
+    assert!(store::save(&path, before[0].clone()).is_err());
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn backup_restore_workflow_requires_review_confirmation_and_preserves_failure_state() {
+    let path = fixture();
+    store::save(&path, event()).unwrap();
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state.prepare_backup().unwrap();
+    wait_state(&mut state);
+    let file = path.with_file_name("backup.json");
+    assert!(!file.exists());
+    state.backup_review = None;
+    assert!(!file.exists());
+    state.prepare_backup().unwrap();
+    wait_state(&mut state);
+    state.save_backup(file.clone()).unwrap();
+    assert!(state.saving());
+    wait_state(&mut state);
+    assert!(!state.error);
+    let mut changed = state.items[0].clone();
+    changed.body = "new local content".into();
+    store::save(&path, changed).unwrap();
+    state.read_backup(file.clone()).unwrap();
+    wait_state(&mut state);
+    let Some(backup::Review::Restore(review)) = state.backup_review.as_mut() else {
+        panic!()
+    };
+    review.mode = backup::Mode::BackupWins;
+    review.reminders = true;
+    review.rebuild();
+    assert_eq!(review.plan.as_ref().unwrap().updated, 1);
+    assert!(state.restore_backup().is_err());
+    let Some(backup::Review::Restore(review)) = state.backup_review.as_mut() else {
+        panic!()
+    };
+    review.confirmed = true;
+    let mut newer = store::load(&path).unwrap().remove(0);
+    newer.body = "another writer".into();
+    store::save(&path, newer).unwrap();
+    state.restore_backup().unwrap();
+    wait_state(&mut state);
+    assert!(state.error);
+    assert_eq!(store::load(&path).unwrap()[0].body, "another writer");
+    state.read_backup(file.clone()).unwrap();
+    wait_state(&mut state);
+    let Some(backup::Review::Restore(review)) = state.backup_review.as_mut() else {
+        panic!()
+    };
+    review.mode = backup::Mode::BackupWins;
+    review.reminders = true;
+    review.rebuild();
+    review.confirmed = true;
+    state.restore_backup().unwrap();
+    assert!(state.saving() && state.has_unsaved());
+    wait_state(&mut state);
+    assert!(!state.error && !state.has_unsaved());
+    assert!(state.items[0].body.is_empty());
+    assert!(state.draft.is_none());
+    state.new_draft(None);
+    state.draft.as_mut().unwrap().title = "unsaved".into();
+    assert!(state.prepare_backup().is_err());
+    assert!(state.read_backup(file.clone()).is_err());
+    std::fs::remove_file(file).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn backup_and_restore_enforce_record_byte_and_file_limits() {
+    let mut records = Vec::new();
+    for _ in 0..MAX_ITEMS {
+        let mut item = event();
+        item.revision = 1;
+        records.push(item);
+    }
+    let mut extra = event();
+    extra.revision = 1;
+    let doc = backup::Document::new(vec![extra.clone()]).unwrap();
+    assert!(backup::plan(&records, &doc, backup::Mode::KeepCurrent, false).is_err());
+    records.push(extra);
+    assert!(backup::Document::new(records.clone()).is_err());
+    let path = fixture();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let file = path.with_file_name("large.json");
+    let raw = serde_json::json!({"format":"zi-devtools-planner","version":1,"created_at":0,"records":records});
+    std::fs::write(&file, serde_json::to_vec(&raw).unwrap()).unwrap();
+    assert!(backup::read(&file).is_err());
+    std::fs::File::create(&file)
+        .unwrap()
+        .set_len(40 * 1024 * 1024 + 1)
+        .unwrap();
+    assert!(backup::read(&file).is_err());
+    let mut large = Vec::new();
+    for _ in 0..44 {
+        let mut item = event();
+        item.revision = 1;
+        item.body = "\u{0001}".repeat(MAX_BODY);
+        large.push(item);
+    }
+    assert!(backup::Document::new(large).is_err());
+    std::fs::remove_file(file).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn restore_rolls_back_after_a_midtransaction_insert_failure() {
+    let path = fixture();
+    store::save(&path, event()).unwrap();
+    let before = store::load(&path).unwrap();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute_batch("CREATE TRIGGER reject_restore BEFORE INSERT ON records WHEN NEW.payload LIKE '%force_restore_abort%' BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END;").unwrap();
+    drop(connection);
+    let mut first = Item::new(None);
+    first.revision = 1;
+    first.title = "first insertion succeeds".into();
+    let mut second = first.clone();
+    second.id = uuid::Uuid::new_v4().to_string();
+    second.title = "force_restore_abort".into();
+    assert!(store::restore(&path, &before, &[first, second]).is_err());
+    assert_eq!(store::load(&path).unwrap(), before);
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}

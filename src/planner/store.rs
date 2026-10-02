@@ -35,8 +35,11 @@ pub(super) fn load(path: &Path) -> Result<Vec<Item>> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let conn = connect(path, false)?;
-    load_connection(&conn)
+    let mut conn = connect(path, false)?;
+    let tx = conn.transaction()?;
+    let result = load_connection(&tx)?;
+    tx.commit()?;
+    Ok(result)
 }
 fn load_connection(conn: &Connection) -> Result<Vec<Item>> {
     let (count, bytes): (i64, i64) = conn.query_row(
@@ -59,7 +62,7 @@ fn load_connection(conn: &Connection) -> Result<Vec<Item>> {
     let mut result = Vec::new();
     for row in rows {
         let (id, revision, payload) = row?;
-        ensure!(payload.len() <= MAX_BODY + 8192, "记录过大");
+        ensure!(payload.len() <= MAX_BODY * 6 + 8192, "记录过大");
         let item: Item = serde_json::from_str(&payload)?;
         item.validate()?;
         ensure!(
@@ -151,4 +154,57 @@ pub(super) fn purge(path: &Path, reviewed: &[Item]) -> Result<Vec<Item>> {
     let remaining = load_connection(&tx)?;
     tx.commit()?;
     Ok(remaining)
+}
+
+pub(super) fn restore(path: &Path, expected: &[Item], records: &[Item]) -> Result<Vec<Item>> {
+    backup::validate_records(records)?;
+    ensure!(
+        path.exists() || expected.is_empty(),
+        "本地数据库已移除，请重新加载后确认"
+    );
+    let mut conn = connect(path, true)?;
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let current = load_connection(&tx)?;
+    let mut before: Vec<_> = expected.iter().collect();
+    let mut actual: Vec<_> = current.iter().collect();
+    before.sort_by_key(|i| &i.id);
+    actual.sort_by_key(|i| &i.id);
+    ensure!(
+        actual == before,
+        "本地记录在预览后发生变化，本次未恢复；请重新读取备份并确认"
+    );
+    let old: HashMap<_, _> = current.iter().map(|i| (i.id.as_str(), i)).collect();
+    let mut restored = records.to_vec();
+    for item in &mut restored {
+        if old
+            .get(item.id.as_str())
+            .is_none_or(|before| **before != *item)
+        {
+            // Restoration must not resurrect a stale optimistic-lock version.
+            // High random version tokens also differ from ordinary low counters.
+            loop {
+                let token = ((uuid::Uuid::new_v4().as_u128() as u64 & ((1u64 << 61) - 1))
+                    | (1u64 << 62)) as i64;
+                if token != item.revision
+                    && old
+                        .get(item.id.as_str())
+                        .is_none_or(|i| i.revision != token)
+                {
+                    item.revision = token;
+                    break;
+                }
+            }
+        }
+    }
+    backup::validate_records(&restored)?;
+    tx.execute("DELETE FROM records", [])?;
+    for item in restored {
+        tx.execute(
+            "INSERT INTO records(id,revision,payload) VALUES(?1,?2,?3)",
+            params![item.id, item.revision, serde_json::to_string(&item)?],
+        )?;
+    }
+    let result = load_connection(&tx)?;
+    tx.commit()?;
+    Ok(result)
 }

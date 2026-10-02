@@ -165,11 +165,12 @@ impl State {
         ui.add_space(12.0);
         ui.collapsing("本地保存与容量", |ui| {
             ui.label(format!("{} 条 / 2000 条（含回收站）；正文每条 128 KiB，总内容 32 MiB。", self.items.len()));
-            ui.label("内容未加密，不会自动上传。备份前请退出程序，再复制数据库文件。回收站支持确认后永久删除；释放记录容量，数据库文件空间由 SQLite 复用，不保证文件立即缩小或安全擦除。");
+            ui.label("内容未加密，不会自动上传。内置完整备份无需退出；手工复制数据库文件前请完全退出。回收站清理释放记录容量，数据库空间由 SQLite 复用，不保证立即缩小或安全擦除。");
             ui.label(self.path.display().to_string());
         });
         self.purge_ui(ui.ctx());
         self.export_ui(ui.ctx());
+        self.backup_ui(ui.ctx());
     }
 
     fn purge_ui(&mut self, ctx: &egui::Context) {
@@ -785,6 +786,7 @@ impl State {
         self.purge_review = None;
         self.file_operation = false;
         self.export_review = None;
+        self.backup_review = None;
         self.trash = false;
         self.loaded = true;
         self.items.clear();

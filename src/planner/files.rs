@@ -101,13 +101,15 @@ impl State {
         );
         ensure!(!self.has_unsaved(), "请先保存或放弃当前编辑，再导入文件");
         ensure!(
-            self.purge_review.is_none() && self.export_review.is_none(),
+            self.purge_review.is_none()
+                && self.export_review.is_none()
+                && self.backup_review.is_none(),
             "请先关闭当前确认窗口"
         );
         self.start_file(move || read_note(&path).map(Reply::Imported));
         Ok(())
     }
-    fn start_file(&mut self, work: impl FnOnce() -> Result<Reply> + Send + 'static) {
+    pub(super) fn start_file(&mut self, work: impl FnOnce() -> Result<Reply> + Send + 'static) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.file_operation = true;
@@ -122,7 +124,10 @@ impl State {
             self.loaded && self.pending.is_none(),
             "正在读写本地记录，请稍后重试"
         );
-        ensure!(self.purge_review.is_none(), "请先关闭回收站确认窗口");
+        ensure!(
+            self.purge_review.is_none() && self.backup_review.is_none(),
+            "请先关闭其他确认窗口"
+        );
         let item = self.draft.as_ref().context("请先打开备忘或日程")?;
         ensure!(!item.trash, "请先从回收站恢复记录，再导出正文");
         ensure!(
@@ -187,6 +192,7 @@ impl State {
                 "文件 → 新备忘草稿 · UTF-8 · 最大 128 KiB"
             });
         });
+        self.backup_buttons(ui);
     }
     pub(super) fn export_ui(&mut self, ctx: &egui::Context) {
         let Some(reviewed) = self.export_review.as_ref() else {

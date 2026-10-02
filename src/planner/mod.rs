@@ -1,4 +1,6 @@
 //! Local, explicitly saved notes and calendar events. No network or OS scheduler.
+mod backup;
+mod backup_ui;
 mod files;
 mod store;
 #[cfg(test)]
@@ -49,6 +51,7 @@ impl Repeat {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Schedule {
     start: NaiveDateTime,
     minutes: u32,
@@ -111,6 +114,7 @@ impl Schedule {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Item {
     id: String,
     revision: i64,
@@ -148,6 +152,7 @@ impl Item {
             "记录标识无效"
         );
         ensure!(self.revision >= 0, "记录版本无效");
+        ensure!(valid_timestamp(self.updated), "记录更新时间无效");
         ensure!(
             !self.title.trim().is_empty()
                 && self.title.chars().count() <= 120
@@ -156,6 +161,10 @@ impl Item {
         );
         ensure!(self.body.len() <= MAX_BODY, "正文最多 128 KiB");
         if let Some(s) = &self.schedule {
+            ensure!(
+                s.snooze.is_none_or(|(_, until)| valid_timestamp(until)),
+                "稍后提醒时间无效"
+            );
             ensure!(
                 (MIN_YEAR..=MAX_YEAR).contains(&s.start.year()),
                 "日程支持 1901–2099 年"
@@ -170,6 +179,10 @@ impl Item {
         }
         Ok(())
     }
+}
+
+fn valid_timestamp(value: i64) -> bool {
+    DateTime::from_timestamp(value, 0).is_some_and(|time| (1..=9999).contains(&time.year()))
 }
 
 #[derive(Clone)]
@@ -213,6 +226,9 @@ enum Reply {
     Loaded(Vec<Item>),
     Imported(Item),
     Exported(PathBuf, usize),
+    BackupReady(Box<backup::Review>),
+    BackupSaved(PathBuf, usize),
+    Restored(Vec<Item>),
 }
 type LoadResult = std::result::Result<Reply, String>;
 pub struct State {
@@ -224,6 +240,7 @@ pub struct State {
     purge_review: Option<Vec<Item>>,
     file_operation: bool,
     export_review: Option<files::Export>,
+    backup_review: Option<backup::Review>,
     loaded: bool,
     draft: Option<Item>,
     original: Option<Item>,
@@ -251,6 +268,8 @@ pub struct State {
     pub preview_purge_rects: Option<[egui::Rect; 2]>,
     #[cfg(feature = "ui-preview")]
     pub preview_export_cancel_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_backup_rects: [Option<egui::Rect>; 4],
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -347,6 +366,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_export_cancel_rect: None,
             #[cfg(feature = "ui-preview")]
+            preview_backup_rects: [None; 4],
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -356,6 +377,7 @@ impl State {
             purge_review: None,
             file_operation: false,
             export_review: None,
+            backup_review: None,
             loaded: false,
             draft: None,
             original: None,
@@ -553,6 +575,29 @@ impl State {
                 self.pending = None;
                 self.file_operation = false;
                 match reply {
+                    Ok(Reply::BackupReady(review)) => {
+                        self.backup_review = Some(*review);
+                        self.message = "已读取已保存记录的快照，请核对范围后继续。".into();
+                        self.error = false;
+                    }
+                    Ok(Reply::BackupSaved(path, count)) => {
+                        self.message = format!("完整备份已保存 · {count} 条 · {}", path.display());
+                        self.error = false;
+                    }
+                    Ok(Reply::Restored(items)) => {
+                        self.items = items;
+                        self.draft = None;
+                        self.original = None;
+                        self.date_text.clear();
+                        self.time_text.clear();
+                        self.loaded = true;
+                        self.query.clear();
+                        self.message =
+                            "备份恢复已完成。日程按本机时区安排，已启用的到期提醒可能立即显示。"
+                                .into();
+                        self.error = false;
+                        self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
+                    }
                     Ok(Reply::Imported(item)) => {
                         self.finish_import(item);
                     }
