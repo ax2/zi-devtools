@@ -2,6 +2,22 @@ use super::*;
 use crate::tasks::Phase;
 
 impl DevToolsApp {
+    pub(super) fn open_task_result(
+        &mut self,
+        key: &str,
+        instance: Option<&str>,
+    ) -> anyhow::Result<()> {
+        if let Some(id) = instance {
+            self.data_state.select(id)?;
+        }
+        let entry = self
+            .entries("")
+            .into_iter()
+            .find(|e| e.id == key)
+            .ok_or_else(|| anyhow::anyhow!("任务入口不可用"))?;
+        self.open_entry(&entry);
+        Ok(())
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_tasks(&mut self) {
         self.tasks = Default::default();
@@ -23,55 +39,51 @@ impl DevToolsApp {
             .observe(job.snapshot("csv-merge", "表格合并与关联", true));
     }
 
-    fn observe_tasks(&mut self) {
-        self.tasks.observe(
-            self.data_state
-                .parse_job
-                .snapshot("data", "数据解析", false),
-        );
-        self.tasks.observe(self.data_state.join_job().snapshot(
-            "csv-merge",
-            "表格合并与关联",
-            true,
-        ));
-        self.tasks
-            .observe(self.file_state.job.snapshot("files", "批量文件校验", true));
+    fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
+        let mut rows = self.data_state.snapshots();
+        rows.extend(self.file_state.job.snapshot("files", "批量文件校验", true));
+        rows
+    }
+    pub(super) fn observe_tasks(&mut self) {
+        for row in self.task_snapshots() {
+            self.tasks.observe(Some(row));
+        }
     }
     pub(super) fn poll_tasks(&mut self, ctx: &egui::Context) {
         self.observe_tasks();
-        let before = [
-            self.data_state.parse_job.phase,
-            self.data_state.join_job().phase,
-            self.file_state.job.phase,
-        ];
+        let before = self.task_snapshots();
         self.data_state.poll();
         self.file_state.poll();
-        let after = [
-            self.data_state.parse_job.phase,
-            self.data_state.join_job().phase,
-            self.file_state.job.phase,
-        ];
-        for (index, (before, after)) in before.into_iter().zip(after).enumerate() {
-            if before.active() && !after.active() {
+        let after = self.task_snapshots();
+        for row in &after {
+            if !row.phase.active()
+                && before.iter().any(|r| {
+                    r.key == row.key
+                        && r.instance == row.instance
+                        && r.generation == row.generation
+                        && r.phase.active()
+                })
+            {
                 self.toast = Some((
                     format!(
-                        "{} · {}",
-                        ["数据解析", "表格合并", "文件校验"][index],
-                        after.label()
+                        "{} · {} · {}",
+                        row.instance_name.as_deref().unwrap_or("文件校验"),
+                        row.title,
+                        row.phase.label()
                     ),
                     Instant::now(),
                 ));
             }
         }
         self.observe_tasks();
-        if after.into_iter().any(Phase::active) {
+        if after.iter().any(|r| r.phase.active()) || self.data_state.operation_pending() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
     }
     pub(super) fn tasks_page(&mut self, ui: &mut egui::Ui) {
         ui.heading("后台任务中心");
         ui.label("数据解析、表格合并与文件校验 · 切换页面后继续收取结果");
-        ui.small("保留本次运行最近 50 条记录；这里只显示任务状态，不保存输入、文件路径或凭据。其他工具任务暂在各自页面查看。");
+        ui.small("保留本次运行最近 50 条记录；这里显示任务状态和实例名称，不保存正文或凭据。其他工具任务暂在各自页面查看。");
         let active = self.tasks.rows.iter().filter(|r| r.phase.active()).count();
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!(
@@ -95,7 +107,7 @@ impl DevToolsApp {
                 let mut rows: Vec<_> = self.tasks.rows.iter().rev().collect();
                 rows.sort_by_key(|row| !row.phase.active());
                 for row in rows {
-                    ui.push_id((row.key, row.generation), |ui| {
+                    ui.push_id((row.key, &row.instance, row.generation), |ui| {
                         egui::Frame::new()
                             .fill(self.colors.card)
                             .corner_radius(10)
@@ -104,6 +116,9 @@ impl DevToolsApp {
                                 ui.set_min_width(ui.available_width());
                                 ui.horizontal_wrapped(|ui| {
                                     ui.strong(row.title);
+                                    if let Some(name) = &row.instance_name {
+                                        ui.label(name);
+                                    }
                                     let color = match row.phase {
                                         Phase::Failed => self.colors.red,
                                         Phase::Done => self.colors.green,
@@ -113,13 +128,14 @@ impl DevToolsApp {
                                     ui.colored_label(color, row.phase.label());
                                     ui.label(format!("{:.1} 秒", row.elapsed.as_secs_f32()));
                                     if ui.button("打开工具").clicked() {
-                                        open = Some(row.key);
+                                        open = Some((row.key, row.instance.clone()));
                                     }
                                     if row.cancellable
                                         && row.phase == Phase::Running
                                         && ui.button("取消任务").clicked()
                                     {
-                                        cancel = Some(row.key);
+                                        cancel =
+                                            Some((row.key, row.instance.clone(), row.generation));
                                     }
                                 });
                                 if row.phase.active() {
@@ -147,17 +163,17 @@ impl DevToolsApp {
                     });
                 }
             });
-        if let Some(key) = cancel {
-            match key {
-                "csv-merge" => self.data_state.cancel_join(),
-                "files" => self.file_state.cancel_task(),
+        if let Some((key, instance, generation)) = cancel {
+            match (key, instance) {
+                ("csv-merge", Some(id)) => self.data_state.cancel(&id, generation),
+                ("files", _) => self.file_state.cancel_task(),
                 _ => {}
             }
         }
-        if let Some(key) = open
-            && let Some(entry) = self.entries("").into_iter().find(|e| e.id == key)
-        {
-            self.open_entry(&entry);
+        if let Some((key, instance)) = open {
+            if let Err(error) = self.open_task_result(key, instance.as_deref()) {
+                self.toast = Some((error.to_string(), Instant::now()));
+            }
         }
     }
 }

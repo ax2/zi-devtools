@@ -64,7 +64,13 @@ impl DevToolsApp {
                 self.navigate(Page::Files, None);
             }
             Target::Csv | Target::Tsv | Target::JsonData => {
-                self.data_state.import_text(
+                let name = value
+                    .paths
+                    .first()
+                    .and_then(|p| p.file_name())
+                    .map(|n| n.to_string_lossy().chars().take(80).collect::<String>())
+                    .unwrap_or_else(|| "导入数据".into());
+                self.data_state.import_new(
                     value.text,
                     if value.target == Target::JsonData {
                         crate::workbench::DataFormat::Json
@@ -72,6 +78,7 @@ impl DevToolsApp {
                         crate::workbench::DataFormat::Csv
                     },
                     value.target == Target::Tsv,
+                    &name,
                 )?;
                 self.navigate(Page::Data, None);
             }

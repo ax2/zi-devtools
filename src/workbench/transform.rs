@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Operation {
     #[default]
     Trim,
@@ -46,6 +46,8 @@ impl Operation {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Proposal {
     data: Dataset,
     changed: usize,
@@ -53,7 +55,8 @@ struct Proposal {
     description: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct State {
     column: usize,
     operation: Operation,
@@ -62,6 +65,23 @@ pub(super) struct State {
     undo: Option<Dataset>,
     keep: Vec<bool>,
     force_open: bool,
+}
+
+impl State {
+    pub(super) fn validate_saved(&self, columns: usize) -> Result<()> {
+        anyhow::ensure!(
+            self.column < columns.max(1) && (self.keep.is_empty() || self.keep.len() == columns),
+            "转换列索引无效"
+        );
+        anyhow::ensure!(self.value.len() <= INPUT_LIMIT, "转换参数过大");
+        if let Some(p) = &self.proposal {
+            p.data.validate_saved()?;
+        }
+        if let Some(d) = &self.undo {
+            d.validate_saved()?;
+        }
+        Ok(())
+    }
 }
 
 fn propose(data: &Dataset, column: usize, operation: Operation, value: &str) -> Result<Proposal> {
@@ -404,6 +424,20 @@ impl DataState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_transform_restores_preview_and_undo_data() {
+        let mut state = DataState::default();
+        state.input = "name\n padded ".into();
+        state.dataset = Some(Dataset::parse(&state.input, DataFormat::Csv, b',').unwrap());
+        state.transform.proposal =
+            Some(propose(state.dataset.as_ref().unwrap(), 0, Operation::Trim, "").unwrap());
+        let mut restored = DataState::restore(&state.snapshot().unwrap()).unwrap();
+        restored.apply_transform();
+        assert_eq!(restored.dataset.as_ref().unwrap().rows[0][0], "padded");
+        let mut restored = DataState::restore(&restored.snapshot().unwrap()).unwrap();
+        restored.undo_transform();
+        assert_eq!(restored.dataset.as_ref().unwrap().rows[0][0], " padded ");
+    }
     fn data() -> Dataset {
         Dataset::parse(
             r#"[{"a":"  ß  ","b":2},{"a":"","b":true},{"a":null},{"a":42},{"a":{"x":1}}]"#,

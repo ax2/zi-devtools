@@ -69,6 +69,8 @@ impl Job {
     ) -> Option<Row> {
         self.started.map(|started| Row {
             key,
+            instance: None,
+            instance_name: None,
             generation: self.generation,
             title,
             phase: self.phase,
@@ -86,6 +88,8 @@ impl Job {
 #[derive(Clone)]
 pub struct Row {
     pub key: &'static str,
+    pub instance: Option<String>,
+    pub instance_name: Option<String>,
     pub generation: u64,
     pub title: &'static str,
     pub phase: Phase,
@@ -97,7 +101,7 @@ pub struct Row {
 #[derive(Default)]
 pub struct Center {
     pub rows: Vec<Row>,
-    cleared: std::collections::HashMap<&'static str, u64>,
+    cleared: std::collections::HashMap<(&'static str, Option<String>), u64>,
 }
 impl Center {
     pub fn observe(&mut self, row: Option<Row>) {
@@ -106,16 +110,14 @@ impl Center {
         };
         if self
             .cleared
-            .get(row.key)
+            .get(&(row.key, row.instance.clone()))
             .is_some_and(|&generation| generation >= row.generation)
         {
             return;
         }
-        if let Some(existing) = self
-            .rows
-            .iter_mut()
-            .find(|r| r.key == row.key && r.generation == row.generation)
-        {
+        if let Some(existing) = self.rows.iter_mut().find(|r| {
+            r.key == row.key && r.instance == row.instance && r.generation == row.generation
+        }) {
             *existing = row;
         } else {
             self.rows.push(row);
@@ -124,7 +126,7 @@ impl Center {
             if let Some(i) = self.rows.iter().position(|r| !r.phase.active()) {
                 let removed = self.rows.remove(i);
                 self.cleared
-                    .entry(removed.key)
+                    .entry((removed.key, removed.instance))
                     .and_modify(|g| *g = (*g).max(removed.generation))
                     .or_insert(removed.generation);
             } else {
@@ -136,7 +138,7 @@ impl Center {
         for row in &self.rows {
             if !row.phase.active() {
                 self.cleared
-                    .entry(row.key)
+                    .entry((row.key, row.instance.clone()))
                     .and_modify(|g| *g = (*g).max(row.generation))
                     .or_insert(row.generation);
             }
@@ -147,6 +149,32 @@ impl Center {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn same_tool_generations_are_separate_for_each_instance() {
+        let mut center = Center::default();
+        let mut first = Job::default();
+        let mut second = Job::default();
+        first.begin();
+        second.begin();
+        let row = |job: &Job, id: &str| {
+            let mut r = job.snapshot("data", "数据", false).unwrap();
+            r.instance = Some(id.into());
+            r
+        };
+        center.observe(Some(row(&first, "one")));
+        center.observe(Some(row(&second, "two")));
+        assert_eq!(center.rows.len(), 2);
+        first.finish(Phase::Done, "first result");
+        center.observe(Some(row(&first, "one")));
+        center.clear_finished();
+        assert_eq!(center.rows.len(), 1);
+        assert_eq!(center.rows[0].instance.as_deref(), Some("two"));
+        center.observe(Some(row(&first, "one")));
+        assert_eq!(center.rows.len(), 1);
+        second.finish(Phase::Done, "second result");
+        center.observe(Some(row(&second, "two")));
+        assert_eq!(center.rows[0].summary, "second result");
+    }
     #[test]
     fn cancelling_is_not_terminal_and_history_clear_does_not_resurrect() {
         let mut job = Job::default();

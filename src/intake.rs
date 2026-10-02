@@ -214,11 +214,13 @@ impl State {
             ui.label("扩展名只用于推荐。日志无法仅凭文件名判断语言，请选择实际类型。");
             if self.target != Target::Files {
                 ui.label(
-                    "导入会替换目标工具的当前输入草稿；不会自动执行诊断。数据表导入后会解析预览。",
+                    "数据表在新工作实例中解析预览，保留原实例；其他工具替换当前输入草稿，不会自动执行诊断。",
                 );
             }
-            let label = if self.target == Target::Files {
-                "添加到文件校验"
+              let label = if self.target == Target::Files {
+                  "添加到文件校验"
+              } else if matches!(self.target, Target::Csv | Target::Tsv | Target::JsonData) {
+                  "在新实例中打开"
             } else {
                 "替换目标草稿并打开"
             };

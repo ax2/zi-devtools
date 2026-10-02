@@ -1,9 +1,11 @@
 use crate::tasks::{Job, Phase};
 mod join;
+pub mod sessions;
 mod transform;
 
 use anyhow::{Context, Result, anyhow, bail};
 use eframe::egui::{self, RichText};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256, Sha512};
 use std::{
@@ -22,19 +24,37 @@ const INPUT_LIMIT: usize = 2 * 1024 * 1024;
 const ROW_LIMIT: usize = 10_000;
 const COLUMN_LIMIT: usize = 128;
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DataFormat {
     #[default]
     Csv,
     Json,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Dataset {
     pub headers: Vec<String>,
     pub rows: Vec<Vec<Value>>,
 }
 impl Dataset {
+    fn validate_saved(&self) -> Result<()> {
+        anyhow::ensure!(
+            !self.headers.is_empty() && self.headers.len() <= COLUMN_LIMIT,
+            "保存表格的列数无效"
+        );
+        anyhow::ensure!(self.rows.len() <= ROW_LIMIT, "保存表格的行数超限");
+        anyhow::ensure!(
+            self.headers.iter().all(|h| !h.trim().is_empty())
+                && self.headers.iter().collect::<BTreeSet<_>>().len() == self.headers.len(),
+            "保存表格的列名无效"
+        );
+        anyhow::ensure!(
+            self.rows.iter().all(|r| r.len() == self.headers.len()),
+            "保存表格的行宽不一致"
+        );
+        Ok(())
+    }
     pub fn parse(input: &str, format: DataFormat, delimiter: u8) -> Result<Self> {
         if input.len() > INPUT_LIMIT {
             bail!("输入最多 2 MiB");
@@ -191,11 +211,13 @@ pub fn save_new_file(path: &str, content: &str) -> Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DataState {
     pub input: String,
     pub format: DataFormat,
     pub output: String,
+    #[serde(skip)]
     pub message: String,
     path: String,
     export_path: String,
@@ -204,10 +226,13 @@ pub struct DataState {
     transform: transform::State,
     join: join::State,
     query: String,
+    #[serde(skip)]
     visible: Vec<usize>,
     sort: Option<usize>,
     descending: bool,
+    #[serde(skip)]
     receiver: Option<Receiver<std::result::Result<Dataset, String>>>,
+    #[serde(skip)]
     pub parse_job: Job,
 }
 impl DataState {

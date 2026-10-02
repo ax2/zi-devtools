@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 190] = [
+const NAMES: [&str; 198] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -200,6 +200,14 @@ const NAMES: [&str; 190] = [
     "task-search-light",
     "tool-library-compact-dark",
     "tool-library-compact-light",
+    "workspace-data-dark",
+    "workspace-data-light",
+    "workspace-library-dark",
+    "workspace-library-light",
+    "workspace-save-dark",
+    "workspace-save-light",
+    "workspace-tasks-dark",
+    "workspace-tasks-light",
 ];
 
 struct Capture {
@@ -727,7 +735,11 @@ impl eframe::App for Capture {
                 );
                 self.app.preview_catalog_routes();
                 self.app.preview_import_routes();
+                self.app.preview_instance_start();
                 self.app.preview_hidden_panel(ctx, false);
+            }
+            if self.frames == 70 {
+                self.app.preview_instance_results();
             }
             if self.frames >= 90 && std::env::args().nth(3).as_deref() == Some("panel") {
                 ctx.request_repaint_after(Duration::from_millis(60));
@@ -767,7 +779,11 @@ impl eframe::App for Capture {
                 egui::vec2(1280.0, 1180.0)
             } else if (134..=135).contains(&self.scene) {
                 egui::vec2(1280.0, 1080.0)
-            } else if self.scene == 3 || self.scene == 7 || self.scene == 59 || self.scene >= 188 {
+            } else if self.scene == 3
+                || self.scene == 7
+                || self.scene == 59
+                || (188..=189).contains(&self.scene)
+            {
                 egui::vec2(980.0, 760.0)
             } else {
                 egui::vec2(1280.0, 900.0)

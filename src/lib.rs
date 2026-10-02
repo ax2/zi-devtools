@@ -78,3 +78,4 @@ pub mod mcp_oauth_registration;
 #[cfg(test)]
 mod mcp_oauth_tls_tests;
 pub mod mcp_oauth_token;
+pub mod workspace_store;

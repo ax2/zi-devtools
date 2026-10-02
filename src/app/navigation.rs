@@ -244,6 +244,34 @@ impl DevToolsApp {
                 });
             });
         ui.add_space(22.0);
+        ui.horizontal(|ui| {
+            ui.strong("继续数据工作");
+            if ui.small_button("已保存实例…").clicked() {
+                self.page = Page::Data;
+                self.data_state.open_library();
+            }
+        });
+        let work: Vec<_> = self
+            .data_state
+            .instances
+            .iter()
+            .filter(|i| i.state.has_content())
+            .take(4)
+            .map(|i| (i.id.clone(), i.name.clone(), i.state.busy()))
+            .collect();
+        if work.is_empty() {
+            ui.small("临时工作保留在本次运行中；已保存的快照可在重启后恢复。");
+        }
+        for (id, name, busy) in work {
+            if ui
+                .button(format!("{name}{} →", if busy { " · 运行中" } else { "" }))
+                .clicked()
+            {
+                let _ = self.data_state.select(&id);
+                self.page = Page::Data;
+            }
+        }
+        ui.add_space(16.0);
         let entries = self.entries("");
         for (title, filter, ids) in [
             ("我的常用", "收藏", self.preferences.favorites.clone()),

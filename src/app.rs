@@ -196,6 +196,7 @@ pub struct DevToolsApp {
     config_path_input: String,
     config_error: Option<String>,
     quit_requested: bool,
+    workspace_exit_confirm: bool,
     tray_bridge_stop: Arc<AtomicBool>,
     tray_exit_requested: Arc<AtomicBool>,
     window_handle: Option<isize>,
@@ -210,7 +211,7 @@ pub struct DevToolsApp {
     launcher_focus: bool,
     launcher_index: usize,
     toast: Option<(String, Instant)>,
-    data_state: DataState,
+    data_state: crate::workbench::sessions::Workspace,
     file_state: FileState,
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
@@ -301,6 +302,16 @@ impl DevToolsApp {
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
             0 | 1 => self.page = Page::Home,
+            190..=197 => {
+                self.page = if scene >= 196 {
+                    Page::Tasks
+                } else {
+                    Page::Data
+                };
+                self.data_state
+                    .preview_fixture(matches!(scene, 192 | 193), matches!(scene, 194 | 195));
+                self.observe_tasks();
+            }
             184 | 185 | 188 => self.page = Page::Library,
             189 => {
                 self.page = Page::Library;
@@ -715,6 +726,62 @@ impl DevToolsApp {
         self.frameworks.preview(crate::framework::Tool::Sql);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_instance_start(&mut self) {
+        self.data_state
+            .import_new(
+                "id,name\n1,Alpha".into(),
+                crate::workbench::DataFormat::Csv,
+                false,
+                "并行实例 A",
+            )
+            .unwrap();
+        self.data_state
+            .import_new(
+                "id,name\n2,Beta".into(),
+                crate::workbench::DataFormat::Csv,
+                false,
+                "并行实例 B",
+            )
+            .unwrap();
+        self.page = Page::Home;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_instance_results(&mut self) {
+        let a = self
+            .data_state
+            .instances
+            .iter()
+            .find(|i| i.name == "并行实例 A")
+            .unwrap()
+            .id
+            .clone();
+        let b = self
+            .data_state
+            .instances
+            .iter()
+            .find(|i| i.name == "并行实例 B")
+            .unwrap()
+            .id
+            .clone();
+        for id in [&a, &b] {
+            assert!(
+                self.tasks.rows.iter().any(
+                    |r| r.instance.as_ref() == Some(id) && r.phase == crate::tasks::Phase::Done
+                )
+            );
+        }
+        self.open_task_result("data", Some(&a)).unwrap();
+        assert!(self.data_state.input.contains("Alpha"));
+        self.open_task_result("data", Some(&b)).unwrap();
+        assert!(self.data_state.input.contains("Beta"));
+        self.data_state.close(&a, true).unwrap();
+        assert!(self.open_task_result("data", Some(&a)).is_err());
+        assert_eq!(self.data_state.active_id(), b);
+        println!(
+            "PASS instances: two background parses while hidden, distinct task rows, exact result routing, closed instance refusal"
+        );
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_catalog_routes(&mut self) {
         let entries = self.entries("");
         let favorites = self.preferences.favorites.clone();
@@ -988,6 +1055,7 @@ impl DevToolsApp {
             config_path_input: config_path.to_string_lossy().into_owned(),
             config_error,
             quit_requested: false,
+            workspace_exit_confirm: false,
             tray_bridge_stop,
             tray_exit_requested,
             window_handle,
@@ -996,7 +1064,7 @@ impl DevToolsApp {
             preferences, preferences_path: preferences_path.clone(),
             tool_search: String::new(), library_query: String::new(), launcher_query: String::new(), launcher_open: false,
             launcher_focus: false, launcher_index: 0, toast: None,
-            data_state: DataState::default(), file_state: FileState::default(), clear_tool_confirm:false,
+            data_state: crate::workbench::sessions::Workspace::new(preferences_path.with_file_name("workspace.sqlite3")), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: crate::mcp_ui::McpState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
             agent: crate::agent_ui::State::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
@@ -3287,8 +3355,13 @@ impl eframe::App for DevToolsApp {
         }
 
         if self.tray_exit_requested.swap(false, Ordering::AcqRel) {
-            self.quit_requested = true;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            if self.data_state.has_work() {
+                self.workspace_exit_confirm = true;
+                restore_main_window(self.window_handle, ctx);
+            } else {
+                self.quit_requested = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
         }
         if self.last_refresh.elapsed() >= Duration::from_secs(2) {
             self.maybe_reload_config();
@@ -3301,6 +3374,27 @@ impl eframe::App for DevToolsApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.hide_to_tray(ctx);
         }
+        if ctx.input(|input| input.viewport().close_requested())
+            && !self.quit_requested
+            && self.tray.is_none()
+            && self.data_state.has_work()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.workspace_exit_confirm = true;
+        }
+        if self.workspace_exit_confirm {
+            egui::Modal::new(egui::Id::new("workspace-exit-confirm")).show(ctx, |ui| {
+                ui.heading("退出前保留工作");
+                ui.label("数据工作实例的修改不会自动保存。已保存快照会保留，未保存内容及运行中的结果会丢失。");
+                ui.horizontal(|ui| {
+                    if ui.button("返回工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
+                    if ui.add_enabled(!self.data_state.operation_pending(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                        self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+                if self.data_state.operation_pending() { ui.label("正在保存或恢复，请等待完成后退出。"); }
+            });
+        }
 
         #[cfg(windows)]
         if self.quick_open && main_window_cloaked(self.window_handle) {
@@ -3308,6 +3402,8 @@ impl eframe::App for DevToolsApp {
         }
 
         if self.handoff.is_none()
+            && !self.workspace_exit_confirm
+            && !self.data_state.modal_open()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K))
         {
             self.open_launcher();

@@ -1,7 +1,7 @@
 use super::*;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 enum Mode {
     #[default]
     Left,
@@ -19,12 +19,14 @@ impl Mode {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Preview {
     data: Dataset,
     report: String,
 }
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct State {
     input: String,
     path: String,
@@ -34,14 +36,35 @@ pub(super) struct State {
     left_key: usize,
     right_key: String,
     preview: Option<Preview>,
+    #[serde(skip)]
     receiver: Option<Receiver<std::result::Result<Preview, String>>>,
+    #[serde(skip)]
     cancel: Arc<AtomicBool>,
     force_open: bool,
+    #[serde(skip)]
     message: String,
+    #[serde(skip)]
     pub(super) job: Job,
+    #[serde(skip)]
     invalidated: bool,
 }
 impl State {
+    pub(super) fn has_content(&self) -> bool {
+        !self.input.is_empty() || self.preview.is_some()
+    }
+    pub(super) fn validate_saved(&self, columns: usize) -> Result<()> {
+        anyhow::ensure!(
+            self.input.len() <= INPUT_LIMIT
+                && self.path.len() <= 32768
+                && self.right_key.len() <= INPUT_LIMIT,
+            "合并草稿过大"
+        );
+        anyhow::ensure!(self.left_key < columns.max(1), "合并列索引无效");
+        if let Some(p) = &self.preview {
+            p.data.validate_saved()?;
+        }
+        Ok(())
+    }
     pub(super) fn invalidate(&mut self) {
         if self.receiver.is_some() {
             self.cancel.store(true, Ordering::Relaxed);
@@ -392,6 +415,34 @@ impl DataState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_join_keeps_right_input_and_unapplied_result_without_a_job() {
+        let mut state = DataState::default();
+        state.input = "id,left\n1,A".into();
+        state.dataset = Some(Dataset::parse(&state.input, DataFormat::Csv, b',').unwrap());
+        state.join.input = "id,right\n1,B".into();
+        state.join.preview = Some(
+            combine(
+                state.dataset.as_ref().unwrap(),
+                &Dataset::parse(&state.join.input, DataFormat::Csv, b',').unwrap(),
+                Mode::Left,
+                0,
+                "id",
+                &AtomicBool::new(false),
+            )
+            .unwrap(),
+        );
+        let restored = DataState::restore(&state.snapshot().unwrap()).unwrap();
+        assert_eq!(restored.join.input, state.join.input);
+        assert_eq!(
+            restored.join.preview.as_ref().unwrap().data,
+            state.join.preview.as_ref().unwrap().data
+        );
+        assert_eq!(restored.join.preview.as_ref().unwrap().data.rows[0][3], "B");
+        assert!(restored.join.receiver.is_none());
+        assert_eq!(restored.join.job.phase, Phase::Idle);
+        assert_eq!(restored.dataset.as_ref().unwrap().headers.len(), 2);
+    }
     fn csv(s: &str) -> Dataset {
         Dataset::parse(s, DataFormat::Csv, b',').unwrap()
     }

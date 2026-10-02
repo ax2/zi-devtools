@@ -43,6 +43,7 @@ pub(super) struct Transfer {
     query: String,
     target: Target,
     error: String,
+    new_data_instance: bool,
 }
 impl Transfer {
     pub(super) fn new(source: String, text: &str) -> anyhow::Result<Self> {
@@ -58,6 +59,7 @@ impl Transfer {
             query: String::new(),
             target: Target::Tool(ToolKind::Json),
             error: String::new(),
+            new_data_instance: true,
         })
     }
     fn apply(
@@ -151,7 +153,7 @@ impl DevToolsApp {
                 ui.small(if text.is_empty() {
                     "生成结果后，可交给其他工具继续处理"
                 } else {
-                    "预览结果 → 选择目标 → 替换输入"
+                    "预览结果 → 选择目标 → 继续处理"
                 });
             });
         });
@@ -189,11 +191,13 @@ impl DevToolsApp {
             });
             ui.separator();
             ui.label(format!("目标：{}", transfer.target.label()));
-            ui.small("将替换目标输入并清除旧结果，保留其他参数。请检查目标的操作模式；数据工作台会解析预览，其他工具需手动运行。");
+            let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
+            if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
+            ui.small(if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
             if !transfer.error.is_empty() { ui.colored_label(self.colors.red, &transfer.error); }
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
-                apply = ui.button("替换输入并打开").clicked();
+                apply = ui.button(if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}).clicked();
             });
         });
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
@@ -203,11 +207,31 @@ impl DevToolsApp {
             self.handoff = None;
         } else if apply {
             let transfer = self.handoff.as_ref().unwrap();
-            match transfer.apply(
-                &mut self.tool_state,
-                &mut self.data_state,
-                &mut self.diff_state,
-            ) {
+            let result = if transfer.new_data_instance
+                && matches!(
+                    transfer.target,
+                    Target::Csv | Target::Tsv | Target::JsonData
+                ) {
+                self.data_state
+                    .import_new(
+                        transfer.text.clone(),
+                        if transfer.target == Target::JsonData {
+                            crate::workbench::DataFormat::Json
+                        } else {
+                            crate::workbench::DataFormat::Csv
+                        },
+                        transfer.target == Target::Tsv,
+                        "接力数据",
+                    )
+                    .map(|_| (Page::Data, None))
+            } else {
+                transfer.apply(
+                    &mut self.tool_state,
+                    &mut self.data_state,
+                    &mut self.diff_state,
+                )
+            };
+            match result {
                 Ok((page, kind)) => {
                     self.handoff = None;
                     self.navigate(page, kind);
