@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 230] = [
+const NAMES: [&str; 234] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -240,6 +240,10 @@ const NAMES: [&str; 230] = [
     "planner-agenda-light",
     "planner-agenda-compact-dark",
     "planner-agenda-compact-light",
+    "sidebar-minimum-dark",
+    "sidebar-minimum-light",
+    "sidebar-long-title-dark",
+    "sidebar-long-title-light",
 ];
 
 struct Capture {
@@ -261,6 +265,45 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("sidebar-smoke") {
+            let step = self.frames.saturating_sub(20);
+            let control = match step {
+                5 | 6 => Some("theme"),
+                11 | 12 => Some("category"),
+                22 | 23 => Some("back"),
+                32 | 33 => Some("settings"),
+                50 | 51 => Some("sixth"),
+                94 | 95 => Some("frequent"),
+                _ => None,
+            };
+            if let Some(control) = control {
+                let pos = self.app.preview_sidebar_position(control);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(step, 5 | 11 | 22 | 32 | 50 | 94),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if matches!(step, 40 | 41) || (60..=90).contains(&step) {
+                input
+                    .events
+                    .push(egui::Event::PointerMoved(egui::pos2(100.0, 220.0)));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(
+                        0.0,
+                        if step >= 60 {
+                            self.app.preview_sidebar_scroll_delta("frequent")
+                        } else {
+                            -1500.0
+                        },
+                    ),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("planner-agenda-smoke")
             && matches!(self.frames, 5 | 6)
         {
@@ -379,6 +422,36 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("sidebar-smoke") {
+            let step = self.frames.saturating_sub(20);
+            if matches!(step, 0 | 16 | 27 | 37 | 56) {
+                self.app.preview_scene(ctx, 230, self.fixture.clone());
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 640.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames < 20 {
+                self.frames += 1;
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            match step {
+                4 | 20 | 30 => self.app.preview_sidebar_assert(0),
+                9 => self.app.preview_sidebar_assert(1),
+                15 => self.app.preview_sidebar_assert(2),
+                26 => self.app.preview_sidebar_assert(3),
+                36 => self.app.preview_sidebar_assert(4),
+                49 => self.app.preview_sidebar_assert(5),
+                54 => self.app.preview_sidebar_assert(6),
+                99 => {
+                    self.app.preview_sidebar_assert(7);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("planner-agenda-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 226, self.fixture.clone());
@@ -980,7 +1053,9 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (96..=99).contains(&self.scene)
+            let size = if (230..=231).contains(&self.scene) {
+                egui::vec2(980.0, 640.0)
+            } else if (96..=99).contains(&self.scene)
                 || (136..=137).contains(&self.scene)
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)

@@ -1,16 +1,75 @@
 use super::*;
 
 impl DevToolsApp {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sidebar_scroll_delta(&self, name: &str) -> f32 {
+        let (rect, clip) = self
+            .preview_sidebar
+            .get(name)
+            .expect("sidebar control exists");
+        if clip.contains_rect(*rect) {
+            0.0
+        } else {
+            (clip.center().y - rect.center().y).clamp(-240.0, 240.0)
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sidebar_position(&self, name: &str) -> egui::Pos2 {
+        let (rect, clip) = self
+            .preview_sidebar
+            .get(name)
+            .expect("sidebar control exists");
+        assert!(
+            clip.contains_rect(*rect),
+            "{name} clipped: {rect:?}, {clip:?}"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sidebar_assert(&self, phase: u8) {
+        match phase {
+            0 => {
+                for key in ["title", "back", "category", "theme", "tray", "settings"] {
+                    self.preview_sidebar_position(key);
+                }
+            }
+            1 => assert_eq!(self.theme, Theme::Light),
+            2 => {
+                assert_eq!(self.page, Page::Library);
+                assert_eq!(self.home_category, "时间与生成");
+            }
+            3 => {
+                assert_eq!(self.page, Page::Library);
+                assert_eq!(self.home_filter, "收藏");
+                assert_eq!(self.library_query, "日历");
+            }
+            4 => assert_eq!(self.page, Page::Settings),
+            5 => {
+                self.preview_sidebar_assert(0);
+                self.preview_sidebar_position("sixth");
+            }
+            6 => {
+                assert_eq!(self.page, Page::Notes);
+                println!(
+                    "PASS sidebar: minimum-height dock visible; real theme/category/back/settings clicks; scroll reaches sixth favorite and opens memo"
+                );
+            }
+            7 => {
+                assert_eq!(self.page, Page::Library);
+                assert_eq!(self.home_filter, "常用");
+                println!("PASS sidebar frequent shortcut selects usage-ranked library");
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn navigation_footer(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let p = self.colors;
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            ui.label(
-                RichText::new(format!("Stage 77  ·  v{}", env!("CARGO_PKG_VERSION")))
-                    .size(11.0)
-                    .color(p.muted),
-            );
+        ui.vertical(|ui| {
+            ui.add_space(8.0);
+            ui.separator();
             ui.horizontal(|ui| {
-                if ui
+                let theme = ui
                     .add_sized(
                         [36.0, 32.0],
                         egui::Button::new(RichText::new("☀").size(20.0)),
@@ -18,9 +77,11 @@ impl DevToolsApp {
                     .on_hover_text(format!(
                         "当前{} · 点击切换主题，自动保存",
                         self.theme.label()
-                    ))
-                    .clicked()
-                {
+                    ));
+                #[cfg(feature = "ui-preview")]
+                self.preview_sidebar
+                    .insert("theme", (theme.rect, ui.clip_rect()));
+                if theme.clicked() {
                     self.set_theme(
                         ctx,
                         if self.theme == Theme::Dark {
@@ -30,30 +91,37 @@ impl DevToolsApp {
                         },
                     );
                 }
-                if ui
+                let tray = ui
                     .add_enabled(
                         self.tray.is_some(),
                         egui::Button::new(RichText::new("↓").size(20.0))
                             .min_size([36.0, 32.0].into()),
                     )
-                    .on_hover_text("隐藏到托盘 · 任务继续运行；单击托盘图标可打开")
-                    .clicked()
-                {
+                    .on_hover_text("隐藏到托盘 · 任务继续运行；单击托盘图标可打开");
+                #[cfg(feature = "ui-preview")]
+                self.preview_sidebar
+                    .insert("tray", (tray.rect, ui.clip_rect()));
+                if tray.clicked() {
                     self.hide_to_tray(ctx);
                 }
-                if ui
+                let settings = ui
                     .add_sized(
                         [36.0, 32.0],
                         egui::Button::new(RichText::new("⚙").size(20.0)),
                     )
-                    .on_hover_text("设置")
-                    .clicked()
-                {
+                    .on_hover_text("设置");
+                #[cfg(feature = "ui-preview")]
+                self.preview_sidebar
+                    .insert("settings", (settings.rect, ui.clip_rect()));
+                if settings.clicked() {
                     self.page = Page::Settings;
                 }
             });
-            ui.add_space(8.0);
-            ui.separator();
+            ui.label(
+                RichText::new(format!("Stage 77  ·  v{}", env!("CARGO_PKG_VERSION")))
+                    .size(11.0)
+                    .color(p.muted),
+            );
         });
     }
 }
@@ -69,11 +137,24 @@ impl DevToolsApp {
 
     pub(super) fn sidebar(&mut self, ctx: &egui::Context) {
         let p = self.colors;
+        #[cfg(feature = "ui-preview")]
+        self.preview_sidebar.clear();
         egui::SidePanel::left("sidebar")
             .resizable(false)
             .exact_width(224.0)
             .frame(egui::Frame::new().fill(p.panel).inner_margin(16.0))
             .show(ctx, |ui| {
+                // Reserve the tool context and footer before laying out the
+                // independently scrolling navigation. Content count cannot push
+                // these actions out of view at the supported minimum height.
+                egui::TopBottomPanel::bottom("sidebar-dock")
+                    .frame(egui::Frame::NONE)
+                    .show_separator_line(false)
+                    .default_height(210.0)
+                    .show_inside(ui, |ui| {
+                        self.current_tool_navigation(ui);
+                        self.navigation_footer(ui, ctx);
+                    });
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.label(
@@ -102,9 +183,11 @@ impl DevToolsApp {
                     self.open_launcher();
                 }
                 ui.add_space(14.0);
+                ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
                 egui::ScrollArea::vertical()
                     .id_salt("sidebar-scroll")
-                    .max_height((ui.available_height() - 102.0).max(100.0))
+                    .auto_shrink([false, false])
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
                         for (page, label) in [
                             (Page::Home, "开始"),
@@ -141,6 +224,16 @@ impl DevToolsApp {
                                 self.open_library("最近", "全部分类");
                             }
                         });
+                        let frequent = ui.add_sized(
+                            [ui.available_width(), 30.0],
+                            egui::Button::new("常用排行 →"),
+                        );
+                        #[cfg(feature = "ui-preview")]
+                        self.preview_sidebar
+                            .insert("frequent", (frequent.rect, ui.clip_rect()));
+                        if frequent.clicked() {
+                            self.open_library("常用", "全部分类");
+                        }
                         let entries = self.entries("");
                         let pinned: Vec<_> = self
                             .preferences
@@ -157,54 +250,84 @@ impl DevToolsApp {
                                     .color(p.muted),
                             );
                         }
-                        for entry in pinned {
-                            if ui
+                        for (index, entry) in pinned.iter().enumerate() {
+                            let favorite = ui
                                 .add_sized(
                                     [ui.available_width(), 32.0],
-                                    egui::Button::new(&entry.title).frame(false),
+                                    egui::Button::new(&entry.title).frame(false).truncate(),
                                 )
-                                .on_hover_text(&entry.description)
-                                .clicked()
-                            {
-                                self.open_entry(&entry);
+                                .on_hover_text(format!("{}\n{}", entry.title, entry.description));
+                            #[cfg(feature = "ui-preview")]
+                            if index == 5 {
+                                self.preview_sidebar
+                                    .insert("sixth", (favorite.rect, ui.clip_rect()));
                             }
-                        }
-                        if !matches!(
-                            self.page,
-                            Page::Home
-                                | Page::Library
-                                | Page::Tasks
-                                | Page::Plugins
-                                | Page::Settings
-                        ) {
-                            ui.add_space(16.0);
-                            ui.separator();
-                            if ui.small_button("← 返回工具库").clicked() {
-                                self.page = Page::Library;
-                            }
-                            ui.small("当前工作台");
-                            let active = entries.iter().find(|e| {
-                                e.page == self.page
-                                    && match e.kind {
-                                        Some(kind) => kind == self.tool_state.selected,
-                                        None if matches!(self.page, Page::Java | Page::Django) => {
-                                            e.id == self.frameworks.selected.id()
-                                        }
-                                        None => true,
-                                    }
-                            });
-                            if let Some(entry) = active {
-                                ui.label(RichText::new(&entry.title).color(p.accent_hover));
-                                let category = entry.category.clone();
-                                if ui.small_button("浏览同类工具 →").clicked() {
-                                    self.open_library("全部", &category);
-                                }
+                            #[cfg(not(feature = "ui-preview"))]
+                            let _ = index;
+                            if favorite.clicked() {
+                                self.open_entry(entry);
                             }
                         }
                         ui.add_space(10.0);
                     });
-                self.navigation_footer(ui, ctx);
             });
+    }
+
+    fn current_tool_navigation(&mut self, ui: &mut egui::Ui) {
+        if matches!(
+            self.page,
+            Page::Home | Page::Library | Page::Tasks | Page::Plugins | Page::Settings
+        ) {
+            return;
+        }
+        ui.separator();
+        ui.small("当前工作台");
+        let entries = self.entries("");
+        let active = entries.iter().find(|e| {
+            e.page == self.page
+                && match e.kind {
+                    Some(kind) => kind == self.tool_state.selected,
+                    None if matches!(self.page, Page::Java | Page::Django) => {
+                        e.id == self.frameworks.selected.id()
+                    }
+                    None => true,
+                }
+        });
+        if let Some(entry) = active {
+            let title = ui
+                .add(
+                    egui::Label::new(RichText::new(&entry.title).color(self.colors.accent_hover))
+                        .truncate(),
+                )
+                .on_hover_text(&entry.title);
+            #[cfg(feature = "ui-preview")]
+            self.preview_sidebar
+                .insert("title", (title.rect, ui.clip_rect()));
+            #[cfg(not(feature = "ui-preview"))]
+            let _ = title;
+        }
+        let back = ui.add_sized(
+            [ui.available_width(), 30.0],
+            egui::Button::new("← 返回工具库"),
+        );
+        #[cfg(feature = "ui-preview")]
+        self.preview_sidebar
+            .insert("back", (back.rect, ui.clip_rect()));
+        if back.clicked() {
+            self.page = Page::Library;
+        }
+        if let Some(entry) = active {
+            let category = ui.add_sized(
+                [ui.available_width(), 30.0],
+                egui::Button::new("浏览同类工具 →"),
+            );
+            #[cfg(feature = "ui-preview")]
+            self.preview_sidebar
+                .insert("category", (category.rect, ui.clip_rect()));
+            if category.clicked() {
+                self.open_library("全部", &entry.category);
+            }
+        }
     }
 
     pub(super) fn start_page(&mut self, ui: &mut egui::Ui) {

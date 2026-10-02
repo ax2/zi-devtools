@@ -155,6 +155,8 @@ pub struct DevToolsApp {
     manager: Arc<ServiceManager>,
     #[cfg(feature = "ui-preview")]
     preview_panel_frames: usize,
+    #[cfg(feature = "ui-preview")]
+    preview_sidebar: std::collections::HashMap<&'static str, (egui::Rect, egui::Rect)>,
     hotkey: crate::hotkey::Service,
     hotkey_edit: crate::hotkey::Setting,
     hotkey_status: String,
@@ -409,6 +411,25 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            230..=233 => {
+                self.page = Page::Calendar;
+                self.planner.preview_agenda(false);
+                self.preferences.favorites =
+                    ["data", "files", "json", "base64", "timestamp", "memos"]
+                        .map(str::to_owned)
+                        .to_vec();
+                self.home_filter = "收藏".into();
+                self.library_query = "日历".into();
+                if scene >= 232 {
+                    let entry = self
+                        .entries("")
+                        .into_iter()
+                        .filter(|e| e.kind.is_some())
+                        .max_by_key(|e| e.title.chars().count())
+                        .unwrap();
+                    self.open_entry(&entry);
+                }
+            }
             226..=229 => {
                 self.page = Page::Calendar;
                 self.planner.preview_agenda(scene >= 228);
@@ -1172,6 +1193,8 @@ impl DevToolsApp {
         let mut app = Self {
             #[cfg(feature = "ui-preview")]
             preview_panel_frames: 0,
+            #[cfg(feature = "ui-preview")]
+            preview_sidebar: Default::default(),
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,
