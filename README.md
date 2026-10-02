@@ -4,7 +4,7 @@
 
 MIT 开源的 Windows 原生 Rust 桌面开发工具。
 
-Stage 77 正在本地开发：MCP 调试台新增 2025 版 Streamable HTTP 连接入口，支持 JSON/SSE、逐次确认工具调用、资源和提示词读取，以及取消与响应上限。失效会话会重新初始化，原操作不自动重放。认证、2026 协议与第三方兼容性待完善，尚未发布。公开下载仍为 v0.76.0，详见 [MCP 使用说明](docs/mcp-inspector.md)。
+Stage 77 / v0.77.0 候选：MCP 调试台新增 2025 版 Streamable HTTP 连接入口，支持 JSON/SSE、逐次确认工具调用、资源和提示词读取，以及取消与响应上限。失效会话会重新初始化，原操作不自动重放。官方 SDK 1.31.0 的 JSON/SSE 合成服务互操作通过；认证、2026 协议与真实业务服务器兼容性待完善。尚未发布，公开下载仍为 v0.76.0，详见 [MCP 使用说明](docs/mcp-inspector.md)。
 
 ![Zi DevTools 工具首页](docs/images/workspace.png)
 
