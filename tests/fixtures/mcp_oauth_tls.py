@@ -22,10 +22,11 @@ from cryptography.x509.oid import NameOID
 
 parser = argparse.ArgumentParser()
 parser.add_argument('sdk_endpoint')
+parser.add_argument('--temporary-parent', type=Path)
 args = parser.parse_args()
 sdk = urlsplit(args.sdk_endpoint)
 assert sdk.scheme == 'http' and sdk.hostname == '127.0.0.1' and sdk.path == '/mcp'
-temporary = tempfile.TemporaryDirectory(prefix='zi-oauth-tls-')
+temporary = tempfile.TemporaryDirectory(prefix='zi-oauth-tls-', dir=args.temporary_parent)
 root = Path(temporary.name)
 key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

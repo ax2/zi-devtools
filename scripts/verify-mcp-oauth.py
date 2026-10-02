@@ -78,7 +78,7 @@ cases = []
 # Compile first: a fixture's short lifetime must not be consumed by compilation.
 run(['cargo', 'test', '--locked', '--lib', '--no-run'])
 run(['cargo', 'test', '--locked', '--test', 'mcp_http_sdk', '--no-run'])
-with tempfile.TemporaryDirectory(prefix='zi-sdk-verify-', dir=sdk_directory) as temporary:
+with tempfile.TemporaryDirectory(prefix='zi-sdk-verify-', dir=sdk_directory) as temporary, tempfile.TemporaryDirectory(prefix='zi-oauth-run-') as tls_temporary:
     fixture = Path(temporary)/'fixture.mjs'
     shutil.copyfile(ROOT/'tests/fixtures/mcp_sdk_http.mjs', fixture)
     for mode in ('json', 'sse'):
@@ -95,12 +95,14 @@ with tempfile.TemporaryDirectory(prefix='zi-sdk-verify-', dir=sdk_directory) as 
                 for key in ('ZIDEVTOOLS_MCP_SDK_ENDPOINT', 'ZIDEVTOOLS_MCP_TLS_ENDPOINT', 'ZIDEVTOOLS_MCP_TLS_CERTIFICATE'):
                     env.pop(key, None)
                 if phase == 'tls':
-                    with service([sys.executable, str(ROOT/'tests/fixtures/mcp_oauth_tls.py'), endpoint]) as ready:
+                    # Parent owns this directory too: Windows process termination
+                    # need not run the child's finally/TemporaryDirectory cleanup.
+                    with service([sys.executable, str(ROOT/'tests/fixtures/mcp_oauth_tls.py'), endpoint, '--temporary-parent', tls_temporary]) as ready:
                         info = json.loads(ready)
                         env['ZIDEVTOOLS_MCP_TLS_ENDPOINT'] = loopback(info['endpoint'], 'https')
                         certificate = Path(info['certificate']).resolve(strict=True)
                         # A fixture-created temp directory is the only accepted trust source.
-                        temp_root = Path(tempfile.gettempdir()).resolve()
+                        temp_root = Path(tls_temporary).resolve()
                         if not certificate.is_relative_to(temp_root) or not certificate.parent.name.startswith('zi-oauth-tls-') or certificate.name != 'cert.pem':
                             raise RuntimeError('Fixture certificate is outside its disposable directory')
                         env['ZIDEVTOOLS_MCP_TLS_CERTIFICATE'] = str(certificate)
