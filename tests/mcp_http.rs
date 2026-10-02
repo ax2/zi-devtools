@@ -28,6 +28,9 @@ enum Mode {
     Hanging,
     ChangedDefinition,
     Expired,
+    ExpiredCall,
+    BadInitialized,
+    RecoveryFailure,
 }
 
 fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<String>>>) {
@@ -106,16 +109,19 @@ fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<St
                 continue;
             }
             let response = match rpc {
+                "initialize" if matches!(mode, Mode::RecoveryFailure) && trace.lock().unwrap().iter().filter(|m| *m == "initialize").count() > 1 => ("503 Service Unavailable", "application/json", String::new(), ""),
                 "initialize" => {
                     assert!(!headers.contains("mcp-session-id:"));
                     let result = json!({"protocolVersion":"2025-06-18","serverInfo":{"name":"HTTP fixture"},"capabilities":{"tools":{},"resources":{},"prompts":{}}});
                     ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":result}).to_string(), "Mcp-Session-Id: fixture-session\r\n")
                 }
+                "notifications/initialized" if matches!(mode, Mode::BadInitialized) => ("202 Accepted", "application/json", "{}".into(), ""),
                 "notifications/initialized" | "notifications/cancelled" => ("202 Accepted", "application/json", String::new(), ""),
                 "tools/list" if matches!(mode, Mode::ChangedDefinition) && trace.lock().unwrap().iter().filter(|m| *m == "tools/list").count() > 1 => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"tools":[{"name":"echo","inputSchema":{"type":"object"},"description":"changed"}]}}).to_string(), ""),
                 "tools/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"tools":[{"name":"echo","inputSchema":{"type":"object"}}]}}).to_string(), ""),
                 "resources/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"resources":[{"name":"Guide","uri":"fixture://guide"}]}}).to_string(), ""),
                 "prompts/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"prompts":[{"name":"summary"}]}}).to_string(), ""),
+                "tools/call" if matches!(mode, Mode::ExpiredCall) => ("404 Not Found", "application/json", String::new(), ""),
                 "tools/call" => {
                     let progress = json!({"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}});
                     let result = json!({"jsonrpc":"2.0","id":body["id"],"result":{"content":[{"type":"text","text":"fixture result"}]}});
@@ -124,7 +130,7 @@ fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<St
                 "resources/read" if matches!(mode, Mode::OversizeJson) => ("200 OK", "application/json", "x".repeat(1024 * 1024 + 1), ""),
                 "resources/read" if matches!(mode, Mode::OversizeSse) => ("200 OK", "text/event-stream", format!("data: {}\n\n", "x".repeat(1024 * 1024 + 1)), ""),
                 "resources/read" if matches!(mode, Mode::Redirect) => ("307 Temporary Redirect", "application/json", String::new(), "Location: http://127.0.0.1:1/unreachable\r\n"),
-                "resources/read" if matches!(mode, Mode::Expired) => ("404 Not Found", "application/json", String::new(), ""),
+                "resources/read" if matches!(mode, Mode::Expired | Mode::RecoveryFailure) => ("404 Not Found", "application/json", String::new(), ""),
                 "resources/read" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"contents":[{"uri":"fixture://guide","text":"safe"}]}}).to_string(), ""),
                 "prompts/get" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"messages":[]}}).to_string(), ""),
                 "DELETE" => ("200 OK", "application/json", String::new(), ""),
@@ -332,6 +338,92 @@ fn changed_tool_definition_is_rejected_before_call() {
     worker.join().unwrap();
     server.join().unwrap();
     assert!(!methods.lock().unwrap().iter().any(|m| m == "tools/call"));
+}
+
+#[test]
+fn expired_call_reinitializes_without_replaying_and_accepts_new_inspection() {
+    let (endpoint, server, methods) = fixture_mode(Mode::ExpiredCall);
+    let (sender, requests) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        mcp_http::serve_http(
+            HttpConfig { endpoint },
+            Arc::new(AtomicBool::new(false)),
+            requests,
+        )
+        .unwrap()
+    });
+    let report = ask(&sender, Action::Inspect, false).unwrap();
+    let error = ask(
+        &sender,
+        Action::Call {
+            tool: "echo".into(),
+            arguments: json!({}),
+            expected_tool: report.tools[0].clone(),
+        },
+        true,
+    )
+    .unwrap_err();
+    assert!(error.contains("已重新连接"));
+    assert!(error.contains("未重试"));
+    ask(&sender, Action::Inspect, false).unwrap();
+    drop(sender);
+    worker.join().unwrap();
+    server.join().unwrap();
+    let trace = methods.lock().unwrap();
+    assert_eq!(trace.iter().filter(|m| *m == "initialize").count(), 2);
+    assert_eq!(trace.iter().filter(|m| *m == "tools/call").count(), 1);
+    assert_eq!(trace.last().unwrap(), "DELETE");
+}
+
+#[test]
+fn failed_initialization_cleans_up_minted_session() {
+    let (endpoint, server, methods) = fixture_mode(Mode::BadInitialized);
+    let (sender, requests) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        mcp_http::serve_http(
+            HttpConfig { endpoint },
+            Arc::new(AtomicBool::new(false)),
+            requests,
+        )
+        .unwrap()
+    });
+    let error = ask(&sender, Action::Inspect, false).unwrap_err();
+    assert!(error.contains("空响应"));
+    drop(sender);
+    worker.join().unwrap();
+    server.join().unwrap();
+    assert_eq!(methods.lock().unwrap().last().unwrap(), "DELETE");
+}
+
+#[test]
+fn failed_reinitialization_reports_failure_without_replay() {
+    let (endpoint, server, methods) = fixture_mode(Mode::RecoveryFailure);
+    let (sender, requests) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        mcp_http::serve_http(
+            HttpConfig { endpoint },
+            Arc::new(AtomicBool::new(false)),
+            requests,
+        )
+        .unwrap()
+    });
+    ask(&sender, Action::Inspect, false).unwrap();
+    let error = ask(
+        &sender,
+        Action::ReadResource {
+            uri: "fixture://guide".into(),
+        },
+        false,
+    )
+    .unwrap_err();
+    assert!(error.contains("重新连接失败"));
+    assert!(error.contains("503"));
+    drop(sender);
+    worker.join().unwrap();
+    server.join().unwrap();
+    let trace = methods.lock().unwrap();
+    assert_eq!(trace.iter().filter(|m| *m == "initialize").count(), 2);
+    assert_eq!(trace.iter().filter(|m| *m == "resources/read").count(), 1);
 }
 
 #[test]

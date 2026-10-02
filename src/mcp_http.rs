@@ -23,6 +23,15 @@ use std::{
 const PROTOCOL: &str = "2025-06-18";
 const ACCEPT_VALUE: &str = "application/json, text/event-stream";
 
+#[derive(Debug)]
+struct SessionExpired;
+impl std::fmt::Display for SessionExpired {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MCP HTTP 会话已失效；本次操作未自动重试")
+    }
+}
+impl std::error::Error for SessionExpired {}
+
 #[derive(Clone, Debug)]
 pub struct HttpConfig {
     pub endpoint: String,
@@ -103,7 +112,7 @@ fn response_value(value: &Value, id: u64) -> Result<Option<Value>> {
 }
 
 impl HttpSession {
-    async fn open(config: &HttpConfig) -> Result<Self> {
+    fn create(config: &HttpConfig) -> Result<Self> {
         let endpoint = config.validate()?;
         let client = Client::builder()
             .no_proxy()
@@ -111,7 +120,7 @@ impl HttpSession {
             .connect_timeout(Duration::from_secs(5))
             .build()
             .context("无法创建 MCP HTTP 客户端")?;
-        let mut session = Self {
+        Ok(Self {
             client,
             endpoint,
             session_id: None,
@@ -120,9 +129,12 @@ impl HttpSession {
             capabilities: Value::Null,
             next_id: 1,
             active_id: None,
-        };
+        })
+    }
+
+    async fn initialize(&mut self) -> Result<()> {
         let mut budget = 0;
-        let response = session
+        let response = self
             .request(
                 "initialize",
                 json!({
@@ -141,21 +153,21 @@ impl HttpSession {
             ["2025-03-26", PROTOCOL].contains(&version),
             "MCP HTTP 服务选择不受支持的版本：{version}"
         );
-        session.protocol = version.to_owned();
-        session.server = response
+        self.protocol = version.to_owned();
+        self.server = response
             .pointer("/serverInfo/name")
             .and_then(Value::as_str)
             .context("MCP HTTP 服务未返回名称")?
             .chars()
             .take(120)
             .collect();
-        session.capabilities = response
+        self.capabilities = response
             .get("capabilities")
             .filter(|v| v.is_object())
             .context("MCP HTTP 服务未返回 capabilities")?
             .clone();
-        session.notify_initialized().await?;
-        Ok(session)
+        self.notify_initialized().await?;
+        Ok(())
     }
 
     async fn notify_initialized(&self) -> Result<()> {
@@ -192,10 +204,9 @@ impl HttpSession {
             !response.status().is_redirection(),
             "MCP HTTP 端点发生重定向，已拒绝跟随"
         );
-        ensure!(
-            response.status().as_u16() != 404 || self.session_id.is_none(),
-            "MCP HTTP 会话已失效，请重新连接；本次操作未自动重试"
-        );
+        if response.status().as_u16() == 404 && self.session_id.is_some() {
+            return Err(SessionExpired.into());
+        }
         ensure!(
             response.status().is_success(),
             "MCP HTTP 服务返回状态 {}",
@@ -450,7 +461,14 @@ impl HttpSession {
             self.client
                 .delete(self.endpoint.clone())
                 .header("Mcp-Session-Id", session_id)
-                .header("MCP-Protocol-Version", &self.protocol)
+                .header(
+                    "MCP-Protocol-Version",
+                    if self.protocol.is_empty() {
+                        PROTOCOL
+                    } else {
+                        &self.protocol
+                    },
+                )
                 .header(ACCEPT, ACCEPT_VALUE)
                 .send(),
         )
@@ -472,6 +490,25 @@ fn bounded<T>(
     })
 }
 
+/// Keep minted session state available for cleanup even when initialization is cancelled.
+fn open_bounded(
+    runtime: &tokio::runtime::Runtime,
+    token: Arc<AtomicBool>,
+    config: &HttpConfig,
+) -> Result<HttpSession> {
+    let mut session = HttpSession::create(config)?;
+    if let Err(error) = bounded(
+        runtime,
+        token,
+        Duration::from_secs(15),
+        session.initialize(),
+    ) {
+        runtime.block_on(session.close());
+        return Err(error);
+    }
+    Ok(session)
+}
+
 /// Worker-thread entry point; one selected endpoint owns one logical session.
 pub fn serve_http(
     config: HttpConfig,
@@ -490,12 +527,7 @@ pub fn serve_http(
         .enable_all()
         .build()
         .context("无法创建 MCP HTTP 运行时")?;
-    let mut session = match bounded(
-        &runtime,
-        Arc::clone(&cancelled_flag),
-        Duration::from_secs(15),
-        HttpSession::open(&config),
-    ) {
+    let mut session = match open_bounded(&runtime, Arc::clone(&cancelled_flag), &config) {
         Ok(session) => session,
         Err(error) => {
             let _ = first.response.send(Err(error.to_string()));
@@ -533,6 +565,30 @@ pub fn serve_http(
             timeout,
             session.perform(request.action, request.manual_confirmed),
         );
+        let expired = result
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.is::<SessionExpired>());
+        if expired && !cancelled_flag.load(Ordering::Relaxed) {
+            // Initialize without the obsolete ID; never replay the failed action.
+            match open_bounded(&runtime, Arc::clone(&cancelled_flag), &config) {
+                Ok(fresh) => {
+                    session = fresh;
+                    let _ = request.response.send(Err(
+                        "MCP HTTP 会话已失效，已重新连接；本次操作未重试，请重新检查能力后再操作"
+                            .into(),
+                    ));
+                    idle_since = Instant::now();
+                    continue;
+                }
+                Err(error) => {
+                    let _ = request
+                        .response
+                        .send(Err(format!("MCP HTTP 会话已失效，重新连接失败：{error}")));
+                    break;
+                }
+            }
+        }
         let failed = result.is_err();
         if failed {
             runtime.block_on(session.cancel_active());

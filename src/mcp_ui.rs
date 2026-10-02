@@ -391,7 +391,13 @@ impl McpState {
             Ok(Err(error)) => {
                 self.message = error;
                 self.receiver = None;
-                self.connection = None;
+                if self.transport != Transport::Http
+                    || !self.connection_alive.load(Ordering::Relaxed)
+                {
+                    self.connection = None;
+                }
+                self.report = None;
+                self.call_confirm = false;
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 self.message = "MCP 后台任务意外结束".into();
@@ -492,7 +498,7 @@ impl McpState {
                 }
             }
             ui.horizontal(|ui| {
-                if self.transport == Transport::Stdio && ui
+                if (self.transport == Transport::Stdio || self.connection.is_some()) && ui
                     .add_enabled(!busy, egui::Button::new("检查服务能力"))
                     .clicked()
                 {
