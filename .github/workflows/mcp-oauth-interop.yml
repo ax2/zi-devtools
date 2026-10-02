@@ -1,0 +1,59 @@
+name: MCP OAuth interoperability
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/mcp*.rs'
+      - 'tests/mcp*.rs'
+      - 'tests/fixtures/mcp*'
+      - 'scripts/verify-mcp-oauth.py'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/mcp-oauth-interop.yml'
+  pull_request:
+    paths:
+      - 'src/mcp*.rs'
+      - 'tests/mcp*.rs'
+      - 'tests/fixtures/mcp*'
+      - 'scripts/verify-mcp-oauth.py'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/mcp-oauth-interop.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-oauth:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install pinned development fixtures
+        shell: pwsh
+        run: |
+          python -m pip install cryptography==50.0.1
+          if ($LASTEXITCODE -ne 0) { throw 'Python fixture dependency installation failed' }
+          $sdkDirectory = Join-Path $env:RUNNER_TEMP 'zi-mcp-sdk'
+          New-Item -ItemType Directory -Path $sdkDirectory -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $sdkDirectory 'package.json') -Value '{"private":true}' -Encoding utf8
+          npm install --prefix $sdkDirectory --ignore-scripts --no-audit --no-fund '@modelcontextprotocol/sdk@1.31.0'
+          if ($LASTEXITCODE -ne 0) { throw 'SDK fixture dependency installation failed' }
+      - name: Run JSON and SSE interoperability suites
+        shell: pwsh
+        run: |
+          $sdkDirectory = Join-Path $env:RUNNER_TEMP 'zi-mcp-sdk'
+          python scripts/verify-mcp-oauth.py --sdk-directory $sdkDirectory --output oauth-interop-result.json
+          if ($LASTEXITCODE -ne 0) { throw 'OAuth interoperability failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oauth-interop-results
+          path: oauth-interop-result.json
+          if-no-files-found: error
