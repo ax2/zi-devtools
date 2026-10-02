@@ -279,7 +279,7 @@ mod tests {
             .append_pair("code", "synthetic-code+/=");
         tx.accept_callback(callback.as_str()).unwrap()
     }
-    fn success() -> Vec<u8> {
+    pub(super) fn success() -> Vec<u8> {
         br#"{"access_token":"synthetic-access","token_type":"Bearer","expires_in":3600,"refresh_token":"synthetic-refresh","scope":"tools:read"}"#.to_vec()
     }
     pub(super) fn request_bytes(stream: &mut std::net::TcpStream) -> Vec<u8> {
@@ -485,4 +485,13 @@ mod chunked_tests {
         assert!(error.to_string().contains("64 KiB"));
         server.join().unwrap();
     }
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_token(expired: bool) -> TokenSet {
+    let mut token = parse(&tests::success(), &tests::grant(), Instant::now()).unwrap();
+    if expired {
+        token.expires = Some(Instant::now() - Duration::from_secs(1));
+    }
+    token
 }

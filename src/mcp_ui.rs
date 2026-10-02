@@ -356,7 +356,15 @@ impl McpState {
         } else {
             None
         };
-        let credential = if self.transport == Transport::Http && self.temporary_bearer {
+        let credential = if self.transport == Transport::Http && self.oauth.enabled() {
+            match self.oauth.credential(&self.http_endpoint) {
+                Ok(secret) => Some(secret),
+                Err(error) => {
+                    self.message = error.to_string();
+                    return;
+                }
+            }
+        } else if self.transport == Transport::Http && self.temporary_bearer {
             let result = http_credential(
                 &self.http_endpoint,
                 self.use_saved_bearer,
@@ -391,8 +399,15 @@ impl McpState {
     }
 
     fn poll(&mut self, ui: &egui::Ui) {
+        if self.connection.is_some() && self.oauth.enabled() && self.oauth.expired() {
+            self.cancelled.store(true, Ordering::Relaxed);
+            self.connection = None;
+            self.oauth.clear();
+            self.message = "OAuth 访问令牌已过期，正在断开连接，请重新登录".into();
+        }
         if self.connection.is_some() && !self.connection_alive.load(Ordering::Relaxed) {
             self.connection = None;
+            self.oauth.clear();
             if self.receiver.is_none() {
                 self.message = "MCP 连接已断开".into();
             }
@@ -499,6 +514,7 @@ impl McpState {
                     ui.selectable_value(&mut self.transport, Transport::Http, "Streamable HTTP（2025）");
                 });
                 if self.transport != previous {
+                    self.oauth.clear();
                     self.report = None;
                     self.server_scope = None;
                     self.scope_error = None;
@@ -563,6 +579,7 @@ impl McpState {
                 ui.weak("HTTPS 或精确 127.0.0.1/::1 的 HTTP 端点；不跟随重定向、不使用环境代理。HTTP 工具调用每次人工确认。");
                 ui.label("MCP HTTP 端点");
                 if ui.add_enabled(!busy && self.connection.is_none(), egui::TextEdit::singleline(&mut self.http_endpoint).desired_width(f32::INFINITY)).changed() {
+                    self.oauth.clear();
                     self.report = None;
                     self.call_confirm = false;
                     self.confirmation_name.clear();
@@ -571,6 +588,7 @@ impl McpState {
                 }
                 ui.add_enabled_ui(!busy && self.connection.is_none(), |ui| {
                     if ui.checkbox(&mut self.temporary_bearer, "本次连接使用 Bearer 令牌").changed() {
+                        self.oauth.clear();
                         self.http_token.clear();
                         self.use_saved_bearer = false;
                     }
@@ -632,6 +650,7 @@ impl McpState {
                     .clicked()
                 {
                     self.cancelled.store(true, Ordering::Relaxed);
+                    self.oauth.clear();
                     self.http_token.clear();
                     self.connection = None;
                     self.message = "正在断开 MCP 连接…".into();
@@ -644,6 +663,11 @@ impl McpState {
         if self.transport == Transport::Http {
             self.oauth
                 .ui(ui, &self.http_endpoint, !busy && self.connection.is_none());
+            if self.oauth.enabled() {
+                self.temporary_bearer = false;
+                self.use_saved_bearer = false;
+                self.http_token.clear();
+            }
         }
         if !self.message.is_empty() {
             ui.label(&self.message);

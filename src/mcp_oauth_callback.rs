@@ -18,10 +18,10 @@ impl CallbackReceiver {
         let listener = TcpListener::bind(("127.0.0.1", 0)).context("无法创建本机登录回调")?;
         listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();
-        let path = uuid::Uuid::new_v4().simple().to_string();
         Ok(Self {
             listener,
-            redirect: format!("http://127.0.0.1:{port}/oauth/callback/{path}"),
+            // A pre-registered native client requires a stable path; only the port varies.
+            redirect: format!("http://127.0.0.1:{port}/oauth/callback/zi-devtools"),
         })
     }
     pub fn redirect_uri(&self) -> &str {
@@ -199,6 +199,7 @@ mod tests {
         let receiver = CallbackReceiver::bind().unwrap();
         let tx = prepare(&receiver);
         let redirect = reqwest::Url::parse(receiver.redirect_uri()).unwrap();
+        assert_eq!(redirect.path(), "/oauth/callback/zi-devtools");
         let address = format!("127.0.0.1:{}", redirect.port().unwrap());
         let state = tx
             .authorization_url()

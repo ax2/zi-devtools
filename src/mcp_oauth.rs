@@ -58,7 +58,7 @@ pub struct ResourceMetadata {
     pub bearer_methods_supported: Option<Vec<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct AuthorizationMetadata {
     #[serde(default)]
     pub authorization_response_iss_parameter_supported: bool,
