@@ -6,6 +6,7 @@ use std::{
 };
 
 enum Reply {
+    Address(mcp_oauth::DiscoveryAddress),
     Resource(ResourceMetadata),
     Authorization(AuthorizationMetadata),
 }
@@ -60,6 +61,17 @@ impl OAuthPanel {
                 Ok(reply) => {
                     self.receiver = None;
                     match reply {
+                        Ok(Reply::Address(value)) => {
+                            self.metadata_url = value.metadata_url;
+                            self.resource = None;
+                            self.authorization = None;
+                            self.message = if value.advertised {
+                                "服务返回了授权配置地址，请检查后主动读取"
+                            } else {
+                                "服务未返回配置地址提示，已生成默认地址；请按服务说明检查"
+                            }
+                            .into();
+                        }
                         Ok(Reply::Resource(value)) => {
                             self.resource = Some(value);
                             self.authorization = None;
@@ -83,8 +95,22 @@ impl OAuthPanel {
             }
         }
         egui::CollapsingHeader::new("OAuth 登录准备 · 查看授权信息").id_salt("mcp-oauth-discovery").default_open(self.expanded).show(ui, |ui| {
-            ui.weak("逐步读取公开 HTTPS 配置，不发送令牌、不自动登录。当前尚未接入 401 地址发现、浏览器授权与自动刷新。");
+            ui.weak("逐步读取公开 HTTPS 配置，不发送令牌、不自动登录。浏览器授权与自动刷新尚未接入。");
             if let Ok(resource) = mcp_oauth::canonical_resource(endpoint) { ui.label(format!("目标资源：{resource}")); }
+            let active = allowed && self.receiver.is_none();
+            if ui.add_enabled(active, egui::Button::new("查找服务授权配置地址")).clicked() {
+                self.resource = None;
+                self.authorization = None;
+                self.metadata_url.clear();
+                let endpoint = endpoint.to_owned();
+                let (sender, receiver) = mpsc::channel();
+                self.receiver = Some(receiver);
+                self.message = "正在查找服务授权配置地址…最长 10 秒".into();
+                std::thread::spawn(move || {
+                    let result = mcp_oauth::discover_address(&endpoint).map(Reply::Address).map_err(|e| e.to_string());
+                    let _ = sender.send(result);
+                });
+            }
             ui.label("资源授权配置地址 · 可按服务说明修改");
             let active = allowed && self.receiver.is_none();
             ui.add_enabled_ui(active, |ui| {

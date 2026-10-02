@@ -136,14 +136,18 @@ fn parse_authorization(bytes: &[u8], expected: &str) -> Result<AuthorizationMeta
     Ok(metadata)
 }
 
-fn fetch_json(url: Url) -> Result<Vec<u8>> {
-    let client = reqwest::blocking::Client::builder()
+fn metadata_client() -> Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(10))
         .build()
-        .context("无法创建 OAuth 元数据客户端")?;
+        .context("无法创建 OAuth 元数据客户端")
+}
+
+fn fetch_json(url: Url) -> Result<Vec<u8>> {
+    let client = metadata_client()?;
     let response = client
         .get(url)
         .header("Accept", "application/json")
@@ -185,6 +189,158 @@ pub fn fetch_resource(endpoint: &str, metadata_url: &str) -> Result<ResourceMeta
 pub fn fetch_authorization(issuer: &str) -> Result<AuthorizationMetadata> {
     let bytes = fetch_json(secure_url(&authorization_metadata_url(issuer)?, false)?)?;
     parse_authorization(&bytes, issuer)
+}
+
+pub struct DiscoveryAddress {
+    pub metadata_url: String,
+    pub advertised: bool,
+}
+
+fn token_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&c)
+}
+
+// Split challenge fields only at commas outside quoted strings.
+fn challenge_fields(header: &str) -> Result<Vec<&str>> {
+    ensure!(header.len() <= 8192, "OAuth 认证提示超过 8 KiB");
+    let mut fields = Vec::new();
+    let (mut start, mut quoted, mut escaped) = (0, false, false);
+    for (index, c) in header.bytes().enumerate() {
+        ensure!(c >= 0x20 || c == b'\t', "OAuth 认证提示含控制字符");
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if quoted && c == b'\\' {
+            escaped = true;
+            continue;
+        }
+        if c == b'"' {
+            quoted = !quoted;
+        }
+        if c == b',' && !quoted {
+            fields.push(header[start..index].trim());
+            start = index + 1;
+        }
+    }
+    ensure!(!quoted && !escaped, "OAuth 认证提示引号未闭合");
+    fields.push(header[start..].trim());
+    ensure!(fields.len() <= 32, "OAuth 认证提示参数过多");
+    Ok(fields)
+}
+
+fn parameter_value(value: &str) -> Result<String> {
+    if let Some(quoted) = value.strip_prefix('"') {
+        ensure!(quoted.ends_with('"'), "OAuth 认证提示值无效");
+        let inner = &quoted[..quoted.len() - 1];
+        let mut result = String::new();
+        let mut escaped = false;
+        for c in inner.chars() {
+            if escaped {
+                result.push(c);
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else {
+                ensure!(c != '"', "OAuth 认证提示值无效");
+                result.push(c);
+            }
+        }
+        ensure!(!escaped, "OAuth 认证提示转义无效");
+        Ok(result)
+    } else {
+        ensure!(
+            !value.is_empty() && value.bytes().all(token_char),
+            "OAuth 认证提示值无效"
+        );
+        Ok(value.into())
+    }
+}
+
+fn metadata_hint(headers: &reqwest::header::HeaderMap) -> Result<Option<String>> {
+    let mut found = None;
+    let mut total = 0;
+    for (count, header) in headers
+        .get_all(reqwest::header::WWW_AUTHENTICATE)
+        .iter()
+        .enumerate()
+    {
+        ensure!(count < 16, "OAuth 认证提示头过多");
+        total += header.as_bytes().len();
+        ensure!(total <= 8192, "OAuth 认证提示超过 8 KiB");
+        let text = header.to_str().context("OAuth 认证提示不是有效文本")?;
+        let mut scheme = "";
+        for field in challenge_fields(text)? {
+            if field.is_empty() {
+                continue;
+            }
+            let token_end = field.bytes().take_while(|c| token_char(*c)).count();
+            ensure!(token_end > 0, "OAuth 认证提示参数无效");
+            let mut parameter = field;
+            if !field[token_end..].trim_start().starts_with('=') {
+                scheme = &field[..token_end];
+                let rest = &field[token_end..];
+                ensure!(
+                    rest.is_empty() || rest.starts_with([' ', '\t']),
+                    "OAuth 认证提示格式无效"
+                );
+                parameter = rest.trim();
+                if parameter.is_empty() {
+                    continue;
+                }
+            }
+            let Some((key, raw)) = parameter.split_once('=') else {
+                continue;
+            };
+            if !key.trim().eq_ignore_ascii_case("resource_metadata") {
+                continue;
+            }
+            ensure!(
+                scheme.eq_ignore_ascii_case("Bearer"),
+                "当前仅支持 Bearer 授权地址提示"
+            );
+            ensure!(found.is_none(), "OAuth 认证提示包含多个资源配置地址");
+            let url = parameter_value(raw.trim())?;
+            secure_url(&url, false)?;
+            found = Some(url);
+        }
+    }
+    Ok(found)
+}
+
+fn probe_url(url: Url) -> Result<DiscoveryAddress> {
+    let fallback = format!(
+        "{}/.well-known/oauth-protected-resource{}",
+        url.origin().ascii_serialization(),
+        if url.path() == "/" { "" } else { url.path() }
+    );
+    // GET only, no initialization/session/tool request and no credentials.
+    let response = metadata_client()?
+        .get(url)
+        .header("Accept", "text/event-stream")
+        .send()
+        .map_err(|_| anyhow::anyhow!("授权地址发现失败或超时（最长 10 秒）"))?;
+    let status = response.status().as_u16();
+    if status == 401
+        && let Some(metadata_url) = metadata_hint(response.headers())?
+    {
+        return Ok(DiscoveryAddress {
+            metadata_url,
+            advertised: true,
+        });
+    }
+    ensure!(
+        [200, 400, 401, 404, 405].contains(&status),
+        "授权地址发现返回 HTTP {status}"
+    );
+    Ok(DiscoveryAddress {
+        metadata_url: fallback,
+        advertised: false,
+    })
+}
+
+pub fn discover_address(endpoint: &str) -> Result<DiscoveryAddress> {
+    probe_url(secure_url(endpoint.trim(), false)?)
 }
 
 #[cfg(test)]
@@ -291,5 +447,105 @@ mod tests {
             }
             server.join().unwrap();
         }
+    }
+    #[test]
+    fn challenge_parser_handles_schemes_quotes_and_rejects_ambiguous_targets() {
+        use reqwest::header::{HeaderMap, HeaderValue, WWW_AUTHENTICATE};
+        let mut headers = HeaderMap::new();
+        headers.append(WWW_AUTHENTICATE, HeaderValue::from_static(r#"Basic realm="example,site", Bearer realm="mcp", RESOURCE_METADATA = "https://example.test/config,one""#));
+        assert_eq!(
+            metadata_hint(&headers).unwrap().unwrap(),
+            "https://example.test/config,one"
+        );
+        headers.clear();
+        headers.append(
+            WWW_AUTHENTICATE,
+            HeaderValue::from_static("Basic realm=site"),
+        );
+        headers.append(
+            WWW_AUTHENTICATE,
+            HeaderValue::from_static(
+                r#"Bearer resource_metadata="https:\/\/example.test\/config""#,
+            ),
+        );
+        assert_eq!(
+            metadata_hint(&headers).unwrap().unwrap(),
+            "https://example.test/config"
+        );
+        headers.append(
+            WWW_AUTHENTICATE,
+            HeaderValue::from_static(r#"Bearer resource_metadata="https://other.test/config""#),
+        );
+        assert!(metadata_hint(&headers).is_err());
+        for value in [
+            r#"Bearer resource_metadata="http://example.test/config""#,
+            r#"Bearer resource_metadata="https://example.test/config?token=x""#,
+            r#"Bearer resource_metadata="https://u:p@example.test/config""#,
+            r#"Bearer resource_metadata="https://example.test/config"#,
+            r#"DPoP resource_metadata="https://example.test/config""#,
+        ] {
+            headers.clear();
+            headers.insert(WWW_AUTHENTICATE, HeaderValue::from_str(value).unwrap());
+            assert!(
+                metadata_hint(&headers).is_err(),
+                "accepted invalid challenge"
+            );
+        }
+    }
+
+    #[test]
+    fn discovery_reads_only_original_endpoint_and_never_follows_hint_or_redirect() {
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+            thread,
+        };
+        for (status, expected) in [
+            ("401 Unauthorized", Some(true)),
+            ("405 Method Not Allowed", Some(false)),
+            ("307 Temporary Redirect", None),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let url =
+                Url::parse(&format!("http://{}/mcp", listener.local_addr().unwrap())).unwrap();
+            let original = url.to_string();
+            let server = thread::spawn(move || {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0u8; 1024];
+                while !bytes.windows(4).any(|part| part == b"\r\n\r\n") {
+                    let n = socket.read(&mut buffer).unwrap();
+                    assert!(n > 0);
+                    bytes.extend_from_slice(&buffer[..n]);
+                }
+                let headers = String::from_utf8(bytes).unwrap().to_ascii_lowercase();
+                assert!(headers.starts_with("get /mcp "));
+                assert!(!headers.contains("authorization:"));
+                assert!(!headers.contains("cookie:"));
+                socket.write_all(format!("HTTP/1.1 {status}\r\nWWW-Authenticate: Bearer resource_metadata=\"https://hint.example.test/config\"\r\nLocation: https://hint.example.test/redirect\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).unwrap();
+            });
+            let result = probe_url(url); // Private HTTP fixture; production discover_address requires HTTPS.
+            match expected {
+                Some(true) => {
+                    let value = result.unwrap();
+                    assert!(value.advertised);
+                    assert_eq!(value.metadata_url, "https://hint.example.test/config");
+                }
+                Some(false) => {
+                    let value = result.unwrap();
+                    assert!(!value.advertised);
+                    assert_eq!(
+                        value.metadata_url,
+                        original.replace("/mcp", "/.well-known/oauth-protected-resource/mcp")
+                    );
+                }
+                None => assert!(result.err().unwrap().to_string().contains("HTTP 307")),
+            }
+            server.join().unwrap();
+        }
+        assert!(discover_address("http://127.0.0.1:1/mcp").is_err());
     }
 }
