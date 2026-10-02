@@ -151,6 +151,19 @@ fn register_at(
         }
     })
 }
+#[cfg(test)]
+pub(crate) fn fixture_register(
+    endpoint: Url,
+    redirect: &str,
+    scopes: &[String],
+    cancel: &AtomicBool,
+) -> Result<RegisteredClient> {
+    ensure!(
+        endpoint.scheme() == "http" && endpoint.host_str() == Some("127.0.0.1"),
+        "fixture must be loopback"
+    );
+    register_at(endpoint, redirect, scopes, cancel)
+}
 async fn request(endpoint: Url, redirect: &str, scopes: &[String]) -> Result<RegisteredClient> {
     let client = reqwest::Client::builder()
         .no_proxy()

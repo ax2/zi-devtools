@@ -194,6 +194,38 @@ pub fn exchange(grant: CodeGrant, cancel: &AtomicBool) -> Result<TokenSet> {
     let endpoint = mcp_oauth::secure_url(grant.bindings().0.as_str(), true)?;
     exchange_at(grant, endpoint, cancel)
 }
+#[cfg(test)]
+pub(crate) fn fixture_exchange(
+    grant: CodeGrant,
+    endpoint: Url,
+    cancel: &AtomicBool,
+) -> Result<TokenSet> {
+    ensure!(
+        endpoint.scheme() == "http" && endpoint.host_str() == Some("127.0.0.1"),
+        "fixture must be loopback"
+    );
+    exchange_at(grant, endpoint, cancel)
+}
+#[cfg(test)]
+pub(crate) fn fixture_refresh(
+    old: TokenSet,
+    endpoint: Url,
+    cancel: &AtomicBool,
+) -> Result<TokenSet> {
+    ensure!(
+        endpoint.scheme() == "http" && endpoint.host_str() == Some("127.0.0.1"),
+        "fixture must be loopback"
+    );
+    refresh_at(old, endpoint, cancel)
+}
+#[cfg(test)]
+pub(crate) fn fixture_revoke(old: TokenSet, endpoint: Url, cancel: &AtomicBool) -> Result<()> {
+    ensure!(
+        endpoint.scheme() == "http" && endpoint.host_str() == Some("127.0.0.1"),
+        "fixture must be loopback"
+    );
+    revoke_at(old, endpoint, cancel)
+}
 
 fn exchange_at(grant: CodeGrant, endpoint: Url, cancel: &AtomicBool) -> Result<TokenSet> {
     ensure!(!cancel.load(Ordering::Relaxed), "已取消令牌交换");
