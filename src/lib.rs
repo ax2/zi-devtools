@@ -65,3 +65,7 @@ pub mod plugin_settings;
 pub mod recorder;
 #[cfg(windows)]
 pub mod recorder_ui;
+
+pub mod mcp_oauth;
+
+pub mod mcp_oauth_ui;

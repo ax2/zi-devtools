@@ -73,6 +73,7 @@ enum Transport {
 
 pub struct McpState {
     transport: Transport,
+    oauth: crate::mcp_oauth_ui::OAuthPanel,
     executable: String,
     arguments: String,
     http_endpoint: String,
@@ -103,6 +104,7 @@ impl McpState {
     pub fn new(access_path: PathBuf) -> Self {
         Self {
             transport: Transport::Stdio,
+            oauth: crate::mcp_oauth_ui::OAuthPanel::default(),
             executable: String::new(),
             arguments: "[]".into(),
             http_endpoint: "http://127.0.0.1:3000/mcp".into(),
@@ -226,6 +228,13 @@ impl McpState {
         self.temporary_bearer = true;
         self.http_token.clear();
         self.message = "合成认证界面预览 · 未输入令牌 · 无网络请求".into();
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_oauth_metadata(&mut self) {
+        self.preview_http_authentication();
+        self.temporary_bearer = false;
+        self.oauth.preview(&self.http_endpoint);
     }
 
     fn config(&self) -> Result<Config, String> {
@@ -632,6 +641,10 @@ impl McpState {
                 }
             });
         });
+        if self.transport == Transport::Http {
+            self.oauth
+                .ui(ui, &self.http_endpoint, !busy && self.connection.is_none());
+        }
         if !self.message.is_empty() {
             ui.label(&self.message);
         }
