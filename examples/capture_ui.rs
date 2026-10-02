@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 184] = [
+const NAMES: [&str; 190] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -194,6 +194,12 @@ const NAMES: [&str; 184] = [
     "mcp-oauth-register-light",
     "mcp-oauth-revoke-dark",
     "mcp-oauth-revoke-light",
+    "tool-library-dark",
+    "tool-library-light",
+    "task-search-dark",
+    "task-search-light",
+    "tool-library-compact-dark",
+    "tool-library-compact-light",
 ];
 
 struct Capture {
@@ -719,6 +725,7 @@ impl eframe::App for Capture {
                 println!(
                     "PASS keyboard: diagnostic search, navigation, Ctrl Enter background completion"
                 );
+                self.app.preview_catalog_routes();
                 self.app.preview_import_routes();
                 self.app.preview_hidden_panel(ctx, false);
             }
@@ -760,7 +767,7 @@ impl eframe::App for Capture {
                 egui::vec2(1280.0, 1180.0)
             } else if (134..=135).contains(&self.scene) {
                 egui::vec2(1280.0, 1080.0)
-            } else if self.scene == 3 || self.scene == 7 || self.scene == 59 {
+            } else if self.scene == 3 || self.scene == 7 || self.scene == 59 || self.scene >= 188 {
                 egui::vec2(980.0, 760.0)
             } else {
                 egui::vec2(1280.0, 900.0)

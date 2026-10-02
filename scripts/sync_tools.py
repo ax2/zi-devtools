@@ -12,8 +12,8 @@ assert len({t['id'] for t in items}) == len(items), 'Duplicate tool IDs'
 assert all(t['status'] in ('implemented','planned','in-progress') for t in items)
 source = (root/'src/tools.rs').read_text(encoding='utf-8')
 ids = set(re.findall(r'Self::\w+ => "([a-z0-9-]+)"', source[source.index('fn id'):source.index('pub fn description')]))
-app = (root/'src/app.rs').read_text(encoding='utf-8')
-ids |= set(re.findall(r'id: "([a-z0-9-]+)"', app[app.index('fn catalog()'):app.index('pub struct DevToolsApp')]))
+registry = (root/'src/app/registry.rs').read_text(encoding='utf-8')
+ids |= set(re.findall(r'"([a-z0-9-]+)" => Page::', registry))
 ids.add('services')
 framework = (root/'src/framework/mod.rs').read_text(encoding='utf-8')
 ids |= set(re.findall(r'Self::\w+ => "([a-z0-9-]+)"', framework[framework.index('pub fn id'):framework.index('pub fn label')]))
@@ -21,6 +21,16 @@ implemented_ids = {t['id'] for t in items if t['status']=='implemented'}
 visible_ids = {t['id'] for t in items if t['status'] in ('implemented', 'in-progress')}
 assert implemented_ids <= ids, 'Implemented catalog entries lack source UI IDs'
 assert ids <= visible_ids, 'Source UI IDs are missing or still marked planned'
+for tool in items:
+    if tool['id'] in ids:
+        discovery = tool.get('discovery')
+        assert discovery, f"Missing discovery metadata: {tool['id']}"
+        assert all(isinstance(discovery.get(k), str) and discovery[k].strip() for k in ('label', 'summary', 'category'))
+        assert isinstance(discovery.get('keywords'), str)
+        assert isinstance(discovery.get('aliases'), list) and all(isinstance(a, str) and a.strip() for a in discovery['aliases'])
+    else:
+        assert not tool.get('discovery'), f"Unrouted discovery entry: {tool['id']}"
+
 lines = ['# 工具清单与路线图', '', f"更新：{data['updated']} · 已实现版本：v{data['version']}", '', '本文件由 `docs/tools.json` 生成。规划表示方向，不代表已经可用，也不承诺发布日期。', '', '## 已实现', '', '| 工具 | 分类 | 当前范围 |', '| --- | --- | --- |']
 for t in items:
     if t['status']=='implemented': lines.append(f"| {t['name']} | {t['category']} | {t['scope']} |")
