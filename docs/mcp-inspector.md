@@ -22,7 +22,11 @@
 
 已对官方 TypeScript SDK 1.31.0 验证 JSON 与 SSE 两种模式，使用只提供合成文本的本机临时服务；不是实际第三方业务服务器或 OAuth 验收。可复核的开发夹具位于 `tests/fixtures/mcp_sdk_http.mjs`，桌面端不依赖 Node 或该 SDK。
 
-在项目外的临时目录安装固定版本 `@modelcontextprotocol/sdk@1.31.0`（可使用 `--ignore-scripts --no-audit --no-fund`），复制夹具到该目录。执行 `node fixture.mjs json` 或 `node fixture.mjs sse`，把打印的回环地址设为测试进程环境变量 `ZIDEVTOOLS_MCP_SDK_ENDPOINT`，再运行 `cargo test --test mcp_http_sdk -- --ignored`。测试完成后 DELETE 关闭服务；60 秒无操作自动退出。只发送合成样本，不需要凭据或生产服务。
+在项目外的临时目录安装固定版本 `@modelcontextprotocol/sdk@1.31.0`（可使用 `--ignore-scripts --no-audit --no-fund`），复制夹具到该目录。执行 `node fixture.mjs json` 或 `node fixture.mjs sse`，把打印的回环地址设为测试进程环境变量 `ZIDEVTOOLS_MCP_SDK_ENDPOINT`，再运行 `cargo test --test mcp_http_sdk official_sdk_lists_calls_reads_and_gets_prompts -- --ignored --exact`。每次测试须启动独立夹具；测试完成后 DELETE 关闭服务，60 秒期限自动退出。只发送合成样本，不需要凭据或生产服务。
+
+Stage 78 增加 SDK 自带 `requireBearerAuth` 中间件校验。分别启动 `node fixture.mjs json auth` 和 `node fixture.mjs sse auth`，对各自回环地址运行 `cargo test --test mcp_http_sdk official_sdk_authentication_and_credential_rotation -- --ignored --exact`。缺失或过期令牌返回 401、权限不足返回 403；初始化后经确认通道替换令牌，SDK 收到新令牌后拒绝旧令牌，工具调用和资源读取继续成功。工具回显的新旧合成令牌都被客户端隐藏，断开 DELETE 也通过 SDK 认证。两种模式已显式运行通过，服务退出码均为 0。
+
+此测试的令牌由夹具固定提供，不包含授权服务器、注册、浏览器登录、PKCE 交换或刷新/撤销请求；仍须完成官方 OAuth 全流程与真实授权服务验收。测试默认忽略，普通 CI 不代表它已执行。
 
 
 ## 临时 Bearer（Stage 78 开发中，未发布）

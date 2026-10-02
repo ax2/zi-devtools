@@ -4,9 +4,35 @@ import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as z from 'zod/v4';
+import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
+import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 
 const sessions = new Map();
 const jsonResponse = process.argv[2] === 'json';
+const authenticated = process.argv[3] === 'auth';
+let rotated = false;
+const auth = requireBearerAuth({
+  requiredScopes: ['fixture:read'],
+  verifier: { async verifyAccessToken(token) {
+    if (token === 'zi-sdk-synthetic-restricted')
+      return { token, clientId: 'synthetic-client', scopes: [], expiresAt: Date.now() / 1000 + 120 };
+    if (token === 'zi-sdk-synthetic-expired')
+      return { token, clientId: 'synthetic-client', scopes: ['fixture:read'], expiresAt: Date.now() / 1000 - 10 };
+    if (token === 'zi-sdk-synthetic-new') rotated = true;
+    if (token !== 'zi-sdk-synthetic-new' && (token !== 'zi-sdk-synthetic-old' || rotated))
+      throw new InvalidTokenError('Synthetic token rejected');
+    return { token, clientId: 'synthetic-client', scopes: ['fixture:read'], expiresAt: Date.now() / 1000 + 120 };
+  } },
+});
+// Node response adapter for the SDK's documented Express middleware surface.
+async function authorize(req, res) {
+  res.set = (key, value) => { res.setHeader(key, value); return res; };
+  res.status = code => { res.statusCode = code; return res; };
+  res.json = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); return res; };
+  let accepted = false;
+  await auth(req, res, () => { accepted = true; });
+  return accepted;
+}
 function createServer() {
   const server = new McpServer({ name: 'Zi SDK interoperability fixture', version: '1.0.0' });
   server.registerTool('echo', { inputSchema: { text: z.string() } }, async ({ text }) => ({ content: [{ type: 'text', text }] }));
@@ -17,6 +43,7 @@ function createServer() {
 const listener = http.createServer(async (req, res) => {
   try {
     if (req.url !== '/mcp') { res.writeHead(404).end(); return; }
+    if (authenticated && !await authorize(req, res)) return;
     const id = req.headers['mcp-session-id'];
     let transport = sessions.get(id);
     let body;
