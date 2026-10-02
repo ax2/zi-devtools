@@ -14,7 +14,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver, Sender},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 fn display_json(value: &Value, limit: usize) -> String {
@@ -71,6 +71,12 @@ enum Transport {
     Http,
 }
 
+struct CredentialAck {
+    revision: u64,
+    deadline: Instant,
+    receiver: Receiver<Result<(), String>>,
+}
+
 pub struct McpState {
     transport: Transport,
     oauth: crate::mcp_oauth_ui::OAuthPanel,
@@ -96,6 +102,9 @@ pub struct McpState {
     receiver: Option<Receiver<Result<Report, String>>>,
     connection: Option<Sender<ConnectedRequest>>,
     connection_alive: Arc<AtomicBool>,
+    credential_updates: Option<Sender<mcp_http::CredentialUpdate>>,
+    credential_ack: Option<CredentialAck>,
+    applied_revision: u64,
     cancelled: Arc<AtomicBool>,
     message: String,
 }
@@ -127,6 +136,9 @@ impl McpState {
             receiver: None,
             connection: None,
             connection_alive: Arc::new(AtomicBool::new(false)),
+            credential_updates: None,
+            credential_ack: None,
+            applied_revision: 0,
             cancelled: Arc::new(AtomicBool::new(false)),
             message: String::new(),
         }
@@ -237,6 +249,11 @@ impl McpState {
         self.oauth.preview(&self.http_endpoint);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_oauth_auto(&mut self) {
+        self.preview_oauth_refresh();
+        self.oauth.preview_auto();
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_oauth_refresh(&mut self) {
         self.preview_oauth_metadata();
         self.oauth.preview_refresh(&self.http_endpoint);
@@ -255,6 +272,10 @@ impl McpState {
     }
 
     fn start(&mut self, action: Action, manual_confirmed: bool) {
+        if self.oauth.pending() || self.credential_ack.is_some() {
+            self.message = "授权更新中，请等待连接确认后再操作".into();
+            return;
+        }
         let config = if self.transport == Transport::Stdio {
             let config = match self.config() {
                 Ok(config) => config,
@@ -339,6 +360,10 @@ impl McpState {
     }
 
     fn connect(&mut self) {
+        if self.oauth.pending() || self.credential_ack.is_some() {
+            self.message = "请等待授权任务完成后连接".into();
+            return;
+        }
         let stdio = if self.transport == Transport::Stdio {
             match self.config() {
                 Ok(config) => Some(config),
@@ -392,11 +417,17 @@ impl McpState {
         let alive = Arc::clone(&self.connection_alive);
         let access_path = self.access.path().to_path_buf();
         let (sender, requests) = mpsc::channel();
+        let (updates, update_rx) = mpsc::channel();
+        self.credential_updates = http.as_ref().map(|_| updates);
+        self.credential_ack = None;
+        self.applied_revision = self.oauth.revision();
         std::thread::spawn(move || {
             if let Some(config) = stdio {
                 let _ = mcp::serve_connected(config, cancelled, access_path, requests);
             } else if let Some(config) = http {
-                let _ = mcp_http::serve_http_authenticated(config, credential, cancelled, requests);
+                let _ = mcp_http::serve_http_with_updates(
+                    config, credential, cancelled, requests, update_rx,
+                );
             }
             alive.store(false, Ordering::Relaxed);
         });
@@ -404,12 +435,87 @@ impl McpState {
         self.start(Action::Inspect, false);
     }
 
-    fn poll(&mut self, ui: &egui::Ui) {
+    fn end_authorized_connection(&mut self, message: String) {
+        self.cancelled.store(true, Ordering::Relaxed);
+        self.connection = None;
+        // A cancelled operation must not restore a report after authorization is discarded.
+        self.receiver = None;
+        self.credential_updates = None;
+        self.credential_ack = None;
+        self.report = None;
+        self.oauth.clear();
+        self.message = message;
+    }
+
+    pub fn tick(&mut self, ctx: &egui::Context) {
+        self.oauth.tick(ctx);
+        if self.connection.is_none() {
+            self.credential_updates = None;
+            self.credential_ack = None;
+        }
+        if self.connection.is_some() && self.oauth.enabled() {
+            if let Some(ack) = &self.credential_ack {
+                match ack.receiver.try_recv() {
+                    Ok(Ok(())) => {
+                        self.applied_revision = ack.revision;
+                        self.credential_ack = None;
+                        self.message = "授权已续期，连接已确认，可以继续操作".into();
+                    }
+                    Ok(Err(error)) => {
+                        self.end_authorized_connection(format!("连接拒绝授权更新：{error}"))
+                    }
+                    Err(mpsc::TryRecvError::Disconnected) => self
+                        .end_authorized_connection("授权更新确认失败，已断开，请重新登录".into()),
+                    Err(mpsc::TryRecvError::Empty) if Instant::now() >= ack.deadline => self
+                        .end_authorized_connection("授权更新确认超时，已断开，请重新登录".into()),
+                    Err(mpsc::TryRecvError::Empty) => {
+                        ctx.request_repaint_after(Duration::from_millis(50));
+                    }
+                }
+            }
+            if self.connection.is_some() && !self.oauth.pending() && self.credential_ack.is_none() {
+                match self.oauth.credential(&self.http_endpoint) {
+                    Err(_) => self.end_authorized_connection(
+                        "当前授权已失效或刷新失败，已断开，请重新登录".into(),
+                    ),
+                    Ok(secret) if self.oauth.revision() != self.applied_revision => {
+                        let (response, ack) = mpsc::channel();
+                        let update = mcp_http::CredentialUpdate {
+                            endpoint: self.http_endpoint.clone(),
+                            credential: secret,
+                            response,
+                        };
+                        if self
+                            .credential_updates
+                            .as_ref()
+                            .is_some_and(|sender| sender.send(update).is_ok())
+                        {
+                            self.credential_ack = Some(CredentialAck {
+                                revision: self.oauth.revision(),
+                                deadline: Instant::now() + Duration::from_secs(3),
+                                receiver: ack,
+                            });
+                            self.message = "续期成功，正在等待连接确认…".into();
+                        } else {
+                            self.end_authorized_connection(
+                                "无法更新连接授权，已断开，请重新登录".into(),
+                            );
+                        }
+                    }
+                    Ok(_) if self.receiver.is_none() && self.oauth.refresh_due() => {
+                        if let Err(error) = self.oauth.start_refresh() {
+                            self.end_authorized_connection(format!("无法开始自动续期：{error}"));
+                        } else {
+                            self.message = "正在自动续期，新操作暂时暂停…".into();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         if self.connection.is_some() && self.oauth.enabled() && self.oauth.expired() {
-            self.cancelled.store(true, Ordering::Relaxed);
-            self.connection = None;
-            self.oauth.clear();
-            self.message = "OAuth 访问令牌已过期，正在断开连接，请重新登录".into();
+            self.end_authorized_connection("OAuth 访问令牌已过期，已断开，请重新登录".into());
         }
         if self.connection.is_some() && !self.connection_alive.load(Ordering::Relaxed) {
             self.connection = None;
@@ -418,7 +524,7 @@ impl McpState {
                 self.message = "MCP 连接已断开".into();
             }
         } else if self.connection.is_some() {
-            ui.ctx().request_repaint_after(Duration::from_millis(500));
+            ctx.request_repaint_after(Duration::from_millis(500));
         }
         let Some(receiver) = &self.receiver else {
             return;
@@ -493,14 +599,14 @@ impl McpState {
                 self.receiver = None;
             }
             Err(mpsc::TryRecvError::Empty) => {
-                ui.ctx().request_repaint_after(Duration::from_millis(80));
+                ctx.request_repaint_after(Duration::from_millis(80));
             }
         }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        self.poll(ui);
-        let busy = self.receiver.is_some();
+        self.tick(ui.ctx());
+        let busy = self.receiver.is_some() || self.oauth.pending() || self.credential_ack.is_some();
         ui.heading("MCP 协议调试台");
         ui.label("检查 MCP 工具、资源和提示词，并在逐次确认后调用工具。可选本机 stdio 或 Streamable HTTP；连接信息与结果不会保存。");
         if self.connection.is_some() {
@@ -628,9 +734,9 @@ impl McpState {
                 });
                 if self.temporary_bearer {
                     if self.connection.is_some() {
-                        ui.small("本次连接已启用认证，令牌输入已清空。OAuth 浏览器登录见下方；自动刷新仍在开发。");
+                        ui.small("本次连接已启用认证，令牌输入已清空。OAuth 浏览器登录见下方；可在下方主动开启自动续期。");
                     } else {
-                        ui.small("仅用于上方完整端点；临时输入不保存，主动保存使用 Windows 凭据管理器。OAuth 浏览器登录见下方；自动刷新仍在开发。");
+                        ui.small("仅用于上方完整端点；临时输入不保存，主动保存使用 Windows 凭据管理器。OAuth 浏览器登录见下方；可在下方主动开启自动续期。");
                     }
                 }
             }
@@ -677,8 +783,11 @@ impl McpState {
             });
         });
         if self.transport == Transport::Http {
-            self.oauth
-                .ui(ui, &self.http_endpoint, !busy && self.connection.is_none());
+            self.oauth.ui(
+                ui,
+                &self.http_endpoint,
+                self.receiver.is_none() && self.connection.is_none(),
+            );
             if self.oauth.enabled() {
                 self.temporary_bearer = false;
                 self.use_saved_bearer = false;
@@ -1119,5 +1228,118 @@ mod tests {
         ] {
             assert!(!declared_read_only(&tool));
         }
+    }
+}
+
+#[cfg(test)]
+mod renewal_tests {
+    use super::*;
+    fn state() -> (
+        McpState,
+        Receiver<ConnectedRequest>,
+        Receiver<mcp_http::CredentialUpdate>,
+    ) {
+        let mut state = McpState::new(
+            std::env::temp_dir().join(format!("zi-renewal-{}.json", uuid::Uuid::new_v4())),
+        );
+        state.transport = Transport::Http;
+        state.http_endpoint = "https://mcp.example.test/mcp".into();
+        state.oauth = crate::mcp_oauth_ui::OAuthPanel::test_ready(false);
+        state.applied_revision = state.oauth.revision();
+        let (sender, requests) = mpsc::channel();
+        state.connection = Some(sender);
+        state.connection_alive.store(true, Ordering::Relaxed);
+        let (updates, receiver) = mpsc::channel();
+        state.credential_updates = Some(updates);
+        (state, requests, receiver)
+    }
+    #[test]
+    fn new_token_blocks_operations_until_worker_ack_and_preserves_connection() {
+        let (mut state, requests, updates) = state();
+        let _job = state.oauth.test_pending(Some(true));
+        let ctx = egui::Context::default();
+        state.tick(&ctx); // Entirely outside the MCP page.
+        let update = updates.try_recv().unwrap();
+        assert_eq!(update.endpoint, state.http_endpoint);
+        assert!(state.credential_ack.is_some());
+        state.start(Action::Inspect, false);
+        assert!(requests.try_recv().is_err());
+        update.response.send(Ok(())).unwrap();
+        state.tick(&ctx);
+        assert!(state.credential_ack.is_none());
+        assert!(state.connection.is_some());
+        assert_eq!(state.applied_revision, state.oauth.revision());
+        state.start(Action::Inspect, false);
+        assert!(requests.try_recv().is_ok());
+    }
+    #[test]
+    fn failed_refresh_or_lost_update_ack_closes_without_replay() {
+        for failure in 0..3 {
+            let (mut state, requests, updates) = state();
+            let _job = state.oauth.test_pending(Some(failure != 0));
+            let ctx = egui::Context::default();
+            state.tick(&ctx);
+            if failure != 0 {
+                let update = updates.try_recv().unwrap();
+                if failure == 1 {
+                    update
+                        .response
+                        .send(Err("synthetic rejection".into()))
+                        .unwrap();
+                }
+                drop(update);
+                state.tick(&ctx);
+            }
+            assert!(state.connection.is_none());
+            assert!(state.cancelled.load(Ordering::Relaxed));
+            assert!(!state.oauth.enabled());
+            assert!(state.report.is_none());
+            assert!(requests.try_recv().is_err());
+        }
+    }
+    #[test]
+    fn expiry_during_pending_refresh_disconnects_and_discards_late_result() {
+        let (mut state, requests, _) = state();
+        let (late_response, receiver) = mpsc::channel();
+        state.receiver = Some(receiver);
+        let _job = state.oauth.test_pending(None);
+        state.oauth.test_expire_pending();
+        state.tick(&egui::Context::default());
+        assert!(state.connection.is_none());
+        assert!(!state.oauth.pending());
+        assert!(state.cancelled.load(Ordering::Relaxed));
+        assert!(requests.try_recv().is_err());
+        assert!(late_response.send(Ok(Report::default())).is_err());
+    }
+    #[test]
+    fn stalled_ack_is_bounded_without_sending_another_operation() {
+        let (mut state, requests, updates) = state();
+        let _job = state.oauth.test_pending(Some(true));
+        let ctx = egui::Context::default();
+        state.tick(&ctx);
+        let _update = updates.try_recv().unwrap();
+        state.credential_ack.as_mut().unwrap().deadline = Instant::now() - Duration::from_secs(1);
+        state.tick(&ctx);
+        assert!(state.connection.is_none());
+        assert!(state.message.contains("超时"));
+        assert!(requests.try_recv().is_err());
+    }
+    #[test]
+    fn busy_operation_defers_automatic_refresh_and_pending_refresh_blocks_new_action() {
+        let (mut state, requests, _) = state();
+        state.oauth = crate::mcp_oauth_ui::OAuthPanel::test_ready(true);
+        let (_sender, receiver) = mpsc::channel();
+        state.receiver = Some(receiver);
+        state.tick(&egui::Context::default());
+        assert!(!state.oauth.pending());
+        assert!(state.oauth.refresh_due());
+        let _job = state.oauth.test_pending(None);
+        state.receiver = None;
+        state.start(Action::Inspect, false);
+        assert!(requests.try_recv().is_err());
+        assert!(state.oauth.pending());
+        state.end_authorized_connection("cancelled".into());
+        assert!(!state.oauth.pending());
+        assert!(!state.oauth.refresh_due());
     }
 }

@@ -19,6 +19,7 @@ pub struct TokenSet {
     access: Secret,
     refresh: Option<Secret>,
     expires: Option<Instant>,
+    refresh_due: Option<Instant>,
     resource: String,
     issuer: String,
     client_id: String,
@@ -42,6 +43,9 @@ impl TokenSet {
     pub fn remaining(&self) -> Option<Duration> {
         self.expires
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+    }
+    pub fn refresh_due(&self) -> Option<Instant> {
+        self.refresh.as_ref().and(self.refresh_due)
     }
     pub fn has_refresh(&self) -> bool {
         self.refresh.is_some()
@@ -159,12 +163,20 @@ fn parse_bound(bytes: &[u8], binding: TokenBinding<'_>, started: Instant) -> Res
         access: Secret::new(reply.access_token)?,
         refresh,
         expires,
+        refresh_due: refresh_time(started, reply.expires_in),
         resource: binding.resource.into(),
         issuer: binding.issuer.into(),
         client_id: binding.client_id.into(),
         scopes,
         token_endpoint: binding.endpoint.clone(),
     })
+}
+
+// A 15-second network budget needs headroom; tiny lifetimes must not cause refresh storms.
+fn refresh_time(started: Instant, seconds: Option<u64>) -> Option<Instant> {
+    let seconds = seconds.filter(|seconds| *seconds > 30)?;
+    let lead = (seconds / 5).clamp(20, 60);
+    started.checked_add(Duration::from_secs(seconds - lead))
 }
 
 /// Consumes the validated grant even on failure; never retry an authorization code automatically.
@@ -562,6 +574,7 @@ pub(crate) fn preview_token(resource: &str, issuer: &str, client_id: &str) -> To
         access: Secret::new("synthetic-preview-access".into()).unwrap(),
         refresh: Some(Secret::new("synthetic-preview-refresh".into()).unwrap()),
         expires: Some(Instant::now() + Duration::from_secs(600)),
+        refresh_due: Some(Instant::now() + Duration::from_secs(540)),
         resource: resource.into(),
         issuer: issuer.into(),
         client_id: client_id.into(),
@@ -659,5 +672,37 @@ mod refresh_tests {
             assert!(!format!("{error:#}").contains("synthetic-refresh-secret"));
             server.join().unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_due_token() -> TokenSet {
+    let mut token = fixture_token(false);
+    token.refresh_due = Some(Instant::now() - Duration::from_secs(1));
+    token
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    use super::*;
+    #[test]
+    fn schedule_requires_known_lifetime_and_keeps_network_headroom() {
+        let now = Instant::now();
+        for seconds in [None, Some(0), Some(1), Some(30)] {
+            assert!(refresh_time(now, seconds).is_none());
+        }
+        for (seconds, due) in [(31, 11), (60, 40), (300, 240), (3600, 3540)] {
+            assert_eq!(
+                refresh_time(now, Some(seconds))
+                    .unwrap()
+                    .duration_since(now)
+                    .as_secs(),
+                due
+            );
+        }
+        let mut token = fixture_due_token();
+        assert!(token.refresh_due().unwrap() < Instant::now());
+        token.refresh = None;
+        assert!(token.refresh_due().is_none());
     }
 }

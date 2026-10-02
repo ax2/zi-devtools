@@ -6,7 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 enum Reply {
@@ -37,6 +37,9 @@ pub struct OAuthPanel {
     login_receiver: Option<Receiver<LoginReply>>,
     login_cancel: Option<Arc<AtomicBool>>,
     token: Option<crate::mcp_oauth_token::TokenSet>,
+    auto_refresh: bool,
+    revision: u64,
+    refresh_deadline: Option<Instant>,
 }
 impl Drop for OAuthPanel {
     fn drop(&mut self) {
@@ -55,6 +58,46 @@ impl OAuthPanel {
         ));
         self.message = "合成已登录状态 · 无实际服务或用户凭据".into();
     }
+    #[cfg(test)]
+    pub(crate) fn test_ready(due: bool) -> Self {
+        let mut panel = tests::panel();
+        panel.token = Some(if due {
+            crate::mcp_oauth_token::fixture_due_token()
+        } else {
+            crate::mcp_oauth_token::fixture_token(false)
+        });
+        panel.revision = 1;
+        panel.auto_refresh = due;
+        panel
+    }
+    #[cfg(test)]
+    pub(crate) fn test_pending(&mut self, result: Option<bool>) -> impl Sized + use<> {
+        self.refresh_deadline = self
+            .token
+            .as_ref()
+            .and_then(|token| token.remaining())
+            .and_then(|remaining| Instant::now().checked_add(remaining));
+        self.token = None;
+        let (sender, receiver) = mpsc::channel();
+        self.login_receiver = Some(receiver);
+        if let Some(success) = result {
+            let value = if success {
+                Ok(Box::new(crate::mcp_oauth_token::fixture_token(false)))
+            } else {
+                Err("synthetic refresh failure".into())
+            };
+            sender.send(LoginReply::Finished(value)).unwrap();
+        }
+        sender
+    }
+    #[cfg(test)]
+    pub(crate) fn test_expire_pending(&mut self) {
+        self.refresh_deadline = Some(Instant::now() - Duration::from_secs(1));
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_auto(&mut self) {
+        self.auto_refresh = true;
+    }
     pub fn clear(&mut self) {
         if let Some(cancel) = self.login_cancel.take() {
             cancel.store(true, Ordering::Relaxed);
@@ -62,15 +105,36 @@ impl OAuthPanel {
         self.login_receiver = None;
         self.token = None;
         self.enabled = false;
+        self.auto_refresh = false;
+        self.refresh_deadline = None;
     }
     pub fn enabled(&self) -> bool {
         self.enabled
     }
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+    pub fn pending(&self) -> bool {
+        self.login_receiver.is_some()
+    }
+    pub fn refresh_due(&self) -> bool {
+        self.enabled
+            && self.auto_refresh
+            && !self.pending()
+            && self
+                .token
+                .as_ref()
+                .and_then(|token| token.refresh_due())
+                .is_some_and(|deadline| Instant::now() >= deadline)
+    }
     pub fn expired(&self) -> bool {
-        self.token
-            .as_ref()
-            .and_then(|token| token.remaining())
-            .is_some_and(|remaining| remaining.is_zero())
+        self.refresh_deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+            || self
+                .token
+                .as_ref()
+                .and_then(|token| token.remaining())
+                .is_some_and(|remaining| remaining.is_zero())
     }
     pub fn credential(&self, endpoint: &str) -> anyhow::Result<crate::credentials::Secret> {
         anyhow::ensure!(self.enabled, "当前未选择 OAuth 认证");
@@ -124,7 +188,7 @@ impl OAuthPanel {
         });
         Ok(())
     }
-    fn poll_login(&mut self, ui: &egui::Ui) {
+    pub fn tick(&mut self, ctx: &egui::Context) {
         let reply = self.login_receiver.as_ref().map(Receiver::try_recv);
         match reply {
             Some(Ok(LoginReply::Waiting)) => {
@@ -136,9 +200,11 @@ impl OAuthPanel {
             Some(Ok(LoginReply::Finished(result))) => {
                 self.login_receiver = None;
                 self.login_cancel = None;
+                self.refresh_deadline = None;
                 self.message = match result {
                     Ok(token) => {
                         self.token = Some(*token);
+                        self.revision = self.revision.wrapping_add(1);
                         "已登录当前服务，可点击连接并保持".into()
                     }
                     Err(error) => error,
@@ -151,7 +217,7 @@ impl OAuthPanel {
             _ => {}
         }
         if self.login_receiver.is_some() {
-            ui.ctx().request_repaint_after(Duration::from_millis(50));
+            ctx.request_repaint_after(Duration::from_millis(50));
         }
     }
     pub fn has_refresh(&self) -> bool {
@@ -174,6 +240,9 @@ impl OAuthPanel {
                 && mcp_oauth::canonical_resource(&self.endpoint)? == token.bindings().0,
             "授权目标已变化，请重新登录"
         );
+        self.refresh_deadline = token
+            .remaining()
+            .and_then(|remaining| Instant::now().checked_add(remaining));
         let token = self.token.take().unwrap();
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
@@ -227,7 +296,7 @@ impl OAuthPanel {
             self.receiver = None;
             self.message.clear();
         }
-        self.poll_login(ui);
+        self.tick(ui.ctx());
         if let Some(receiver) = &self.receiver {
             match receiver.try_recv() {
                 Ok(reply) => {
@@ -268,7 +337,7 @@ impl OAuthPanel {
             }
         }
         egui::CollapsingHeader::new("OAuth 浏览器登录").id_salt("mcp-oauth-discovery").default_open(self.expanded).show(ui, |ui| {
-            ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；客户端注册与自动刷新仍在开发；已连接时可先断开并刷新授权。");
+            ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；客户端注册仍在开发；可选择自动续期，或先断开并刷新授权。");
             if let Ok(resource) = mcp_oauth::canonical_resource(endpoint) { ui.label(format!("目标资源：{resource}")); }
             egui::CollapsingHeader::new("服务发现与授权配置").id_salt("oauth-config-steps").default_open(self.authorization.is_none()).show(ui, |ui| {
             let active = allowed && self.receiver.is_none() && self.login_receiver.is_none();
@@ -377,16 +446,22 @@ impl OAuthPanel {
                     if ui.add_enabled(active && self.enabled && self.token.as_ref().is_some_and(|token| token.has_refresh()), egui::Button::new("刷新本次授权")).clicked() {
                         if let Err(error) = self.start_refresh() { self.message = error.to_string(); }
                     }
-                    if ui.add_enabled(allowed && (self.login_receiver.is_some() || self.token.is_some()), egui::Button::new(if self.login_receiver.is_some() { "取消登录" } else { "清除本次授权" })).clicked() {
+                    if ui.add_enabled(allowed && (self.login_receiver.is_some() || self.token.is_some()), egui::Button::new(if self.login_receiver.is_some() { "取消授权任务" } else { "清除本次授权" })).clicked() {
                         self.clear();
                         self.message = "本次授权已清除；已打开的浏览器页面可手动关闭".into();
                     }
                 });
                 if let Some(token) = &self.token {
                     ui.label(match token.remaining() { Some(duration) if duration.is_zero() => "访问令牌已过期，请重新登录".into(), Some(duration) => format!("已登录 · 剩余有效期约 {} 分钟", duration.as_secs().div_ceil(60)), None => "已登录 · 服务未提供有效期".into() });
-                    ui.small("只用于当前服务；刷新失败或取消须重新登录。尚未自动刷新或持久保存授权。");
+                    ui.small("只用于当前服务；刷新失败或取消须重新登录。授权不会持久保存。");
                     ui.ctx().request_repaint_after(Duration::from_secs(1));
                 }
+            }
+            if self.enabled {
+                let eligible = self.token.as_ref().and_then(|token| token.refresh_due()).is_some();
+                ui.add_enabled_ui(eligible && !self.pending(), |ui| { ui.checkbox(&mut self.auto_refresh, "连接期间自动续期授权"); });
+                if !eligible && !self.pending() { ui.small("自动续期需要刷新令牌和超过 30 秒的明确有效期；不猜测未知期限。"); }
+                if self.pending() && self.auto_refresh { ui.small("正在续期，新操作暂停；失败或取消将断开连接。"); }
             }
             if self.login_receiver.is_some() { ui.spinner(); }
             if self.receiver.is_some() { ui.spinner(); }
@@ -398,7 +473,7 @@ impl OAuthPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn panel() -> OAuthPanel {
+    pub(super) fn panel() -> OAuthPanel {
         OAuthPanel {
             endpoint: "https://mcp.example.test/mcp".into(), enabled: true,
             client_id: "synthetic-client".into(),
@@ -416,12 +491,15 @@ mod tests {
             login_receiver: None,
             login_cancel: None,
             token: None,
+            auto_refresh: false,
+            revision: 0,
+            refresh_deadline: None,
         }
     }
     fn poll(panel: &mut OAuthPanel) {
         let ctx = egui::Context::default();
         let _ = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| panel.poll_login(ui));
+            egui::CentralPanel::default().show(ctx, |ui| panel.tick(ui.ctx()));
         });
     }
     #[test]

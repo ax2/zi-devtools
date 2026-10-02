@@ -966,6 +966,10 @@ impl DevToolsApp {
                 self.page = Page::Mcp;
                 self.mcp.preview_oauth_metadata();
             }
+            178 | 179 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_oauth_auto();
+            }
             176 | 177 => {
                 self.page = Page::Mcp;
                 self.mcp.preview_oauth_refresh();
@@ -4098,6 +4102,7 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.mcp.tick(ctx);
         if self.recorder.poll() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
