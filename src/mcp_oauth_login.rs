@@ -37,6 +37,7 @@ pub struct Transaction {
     authorization_url: Url,
     issuer: String,
     token_endpoint: Url,
+    revocation_endpoint: Option<Url>,
     redirect: Url,
     resource: String,
     client_id: String,
@@ -53,6 +54,7 @@ pub struct CodeGrant {
     code: Secret,
     verifier: Secret,
     token_endpoint: Url,
+    revocation_endpoint: Option<Url>,
     redirect: String,
     resource: String,
     client_id: String,
@@ -60,6 +62,9 @@ pub struct CodeGrant {
     scopes: Vec<String>,
 }
 impl CodeGrant {
+    pub(crate) fn revocation_endpoint(&self) -> Option<&Url> {
+        self.revocation_endpoint.as_ref()
+    }
     pub(crate) fn issuer(&self) -> &str {
         &self.issuer
     }
@@ -150,6 +155,31 @@ impl Transaction {
         let resource = mcp_oauth::canonical_resource(resource)?;
         let mut authorization_url = mcp_oauth::secure_url(&metadata.authorization_endpoint, true)?;
         let token_endpoint = mcp_oauth::secure_url(&metadata.token_endpoint, true)?;
+        let revocation_endpoint = if metadata
+            .revocation_endpoint_auth_methods_supported
+            .as_ref()
+            .is_some_and(|methods| methods.iter().any(|v| v == "none"))
+        {
+            metadata
+                .revocation_endpoint
+                .as_deref()
+                .map(|url| mcp_oauth::secure_url(url, true))
+                .transpose()?
+        } else {
+            None
+        };
+        if let Some(url) = &revocation_endpoint {
+            ensure!(
+                !url.query_pairs().any(|(key, _)| [
+                    "token",
+                    "token_type_hint",
+                    "client_id",
+                    "client_secret"
+                ]
+                .contains(&key.as_ref())),
+                "撤销地址包含重复认证参数"
+            );
+        }
         let reserved = [
             "response_type",
             "client_id",
@@ -198,6 +228,7 @@ impl Transaction {
             authorization_url,
             issuer: metadata.issuer.clone(),
             token_endpoint,
+            revocation_endpoint,
             redirect,
             resource,
             client_id: client_id.into(),
@@ -299,6 +330,7 @@ impl Transaction {
             code,
             verifier,
             token_endpoint: self.token_endpoint.clone(),
+            revocation_endpoint: self.revocation_endpoint.clone(),
             redirect: self.redirect.to_string(),
             resource: self.resource.clone(),
             client_id: self.client_id.clone(),
@@ -339,6 +371,33 @@ mod tests {
             .append_pair("state", state)
             .append_pair("iss", issuer);
         url.to_string()
+    }
+    #[test]
+    fn revocation_binding_is_frozen_and_requires_explicit_none() {
+        let mut metadata = metadata();
+        metadata.revocation_endpoint = Some("https://auth.example.test/revoke".into());
+        let prepare = |metadata: &AuthorizationMetadata| {
+            Transaction::prepare(
+                metadata,
+                "https://mcp.example.test/mcp",
+                "synthetic-client",
+                "http://127.0.0.1:50123/oauth/callback/synthetic-fixture",
+                &[],
+            )
+        };
+        assert!(prepare(&metadata).unwrap().revocation_endpoint.is_none());
+        metadata.revocation_endpoint_auth_methods_supported = Some(vec!["none".into()]);
+        let mut tx = prepare(&metadata).unwrap();
+        metadata.revocation_endpoint = Some("https://other.example.test/revoke".into());
+        let url = callback(&tx, tx.state.expose(), &tx.issuer);
+        let grant = tx.accept_callback(&url).unwrap();
+        assert_eq!(
+            grant.revocation_endpoint().unwrap().as_str(),
+            "https://auth.example.test/revoke"
+        );
+        metadata.revocation_endpoint =
+            Some("https://auth.example.test/revoke?token=synthetic".into());
+        assert!(prepare(&metadata).is_err());
     }
     #[test]
     fn pkce_matches_rfc7636_vector_and_binds_resource_without_verifier_in_url() {

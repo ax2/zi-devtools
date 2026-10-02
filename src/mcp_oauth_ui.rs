@@ -16,6 +16,7 @@ enum Reply {
 }
 
 enum LoginReply {
+    Revoked(Result<(), String>),
     Registered(String, Vec<String>),
     Waiting,
     Exchanging,
@@ -40,6 +41,7 @@ pub struct OAuthPanel {
     token: Option<crate::mcp_oauth_token::TokenSet>,
     auto_refresh: bool,
     registered_client: bool,
+    revoking: bool,
     revision: u64,
     refresh_deadline: Option<Instant>,
 }
@@ -113,6 +115,7 @@ impl OAuthPanel {
         self.login_receiver = None;
         self.token = None;
         self.enabled = false;
+        self.revoking = false;
         self.auto_refresh = false;
         if self.registered_client {
             self.client_id.clear();
@@ -251,6 +254,15 @@ impl OAuthPanel {
     pub fn tick(&mut self, ctx: &egui::Context) {
         let reply = self.login_receiver.as_ref().map(Receiver::try_recv);
         match reply {
+            Some(Ok(LoginReply::Revoked(result))) => {
+                self.login_receiver = None;
+                self.login_cancel = None;
+                self.revoking = false;
+                self.message = match result {
+                    Ok(()) => "服务端已接受撤销请求；本机授权已清除".into(),
+                    Err(error) => error,
+                };
+            }
             Some(Ok(LoginReply::Registered(client_id, scopes))) => {
                 self.client_id = client_id;
                 self.registered_client = true;
@@ -285,6 +297,43 @@ impl OAuthPanel {
         if self.login_receiver.is_some() {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
+    }
+    pub fn can_revoke(&self) -> bool {
+        self.enabled
+            && !self.pending()
+            && self.token.as_ref().is_some_and(|token| token.can_revoke())
+    }
+    fn take_revoke_token(&mut self) -> anyhow::Result<crate::mcp_oauth_token::TokenSet> {
+        anyhow::ensure!(self.can_revoke(), "当前授权不支持公共客户端撤销");
+        let token = self.token.as_ref().unwrap();
+        anyhow::ensure!(
+            token.bindings().2 == self.client_id.trim()
+                && self
+                    .authorization
+                    .as_ref()
+                    .is_some_and(|auth| auth.issuer == token.bindings().1)
+                && mcp_oauth::canonical_resource(&self.endpoint)? == token.bindings().0,
+            "授权目标已变化，不能撤销到其他服务"
+        );
+        let token = self.token.take().unwrap();
+        self.clear();
+        Ok(token)
+    }
+    pub fn start_revoke(&mut self) -> anyhow::Result<()> {
+        let token = self.take_revoke_token()?;
+        self.revoking = true;
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.login_receiver = Some(receiver);
+        self.login_cancel = Some(cancel);
+        self.message = "本机授权已清除，正在请求服务端撤销…最长 15 秒".into();
+        std::thread::spawn(move || {
+            let result = crate::mcp_oauth_token::revoke(token, &worker_cancel)
+                .map_err(|error| error.to_string());
+            let _ = sender.send(LoginReply::Revoked(result));
+        });
+        Ok(())
     }
     pub fn has_refresh(&self) -> bool {
         self.enabled && self.token.as_ref().is_some_and(|token| token.has_refresh())
@@ -342,6 +391,8 @@ impl OAuthPanel {
             authorization_endpoint: "https://auth.example.test/authorize".into(),
             token_endpoint: "https://auth.example.test/token".into(),
             registration_endpoint: None,
+            revocation_endpoint: Some("https://auth.example.test/revoke".into()),
+            revocation_endpoint_auth_methods_supported: Some(vec!["none".into()]),
             response_types_supported: vec!["code".into()],
             code_challenge_methods_supported: vec!["S256".into()],
             token_endpoint_auth_methods_supported: Some(vec!["none".into()]),
@@ -490,6 +541,7 @@ impl OAuthPanel {
                 let active = allowed && self.receiver.is_none() && self.login_receiver.is_none();
                 ui.add_enabled_ui(active, |ui| {
                     if ui.checkbox(&mut self.enabled, "本次连接使用 OAuth 登录").changed() && !self.enabled { self.token = None; }
+                    egui::CollapsingHeader::new("客户端 ID 与申请权限").id_salt(("oauth-client-fields", self.token.is_some())).default_open(self.token.is_none()).show(ui, |ui| {
                     ui.label("公共客户端 ID · 预注册时填写，开放注册可留空；认证方式须为 none");
                     ui.small("回调路径：/oauth/callback/zi-devtools；服务须允许 127.0.0.1 的动态端口");
                     if ui.add(egui::TextEdit::singleline(&mut self.client_id).char_limit(512).desired_width(f32::INFINITY)).changed() { self.token = None; self.registered_client = false; }
@@ -504,6 +556,7 @@ impl OAuthPanel {
                         }
                         if resource.scopes_supported.is_empty() { ui.weak("服务未声明可选权限，请在浏览器确认实际授权范围。"); }
                     }
+                    });
                 });
                 let can_register = auth.registration_endpoint.is_some();
                 if let Some(url) = &auth.registration_endpoint {
@@ -520,13 +573,20 @@ impl OAuthPanel {
                     if ui.add_enabled(active && self.enabled && self.token.as_ref().is_some_and(|token| token.has_refresh()), egui::Button::new("刷新本次授权")).clicked() {
                         if let Err(error) = self.start_refresh() { self.message = error.to_string(); }
                     }
+                    if ui.add_enabled(active && self.can_revoke(), egui::Button::new("撤销服务端授权")).clicked() {
+                        if let Err(error) = self.start_revoke() { self.message = error.to_string(); }
+                    }
                     if ui.add_enabled(allowed && (self.login_receiver.is_some() || self.token.is_some()), egui::Button::new(if self.login_receiver.is_some() { "取消授权任务" } else { "清除本次授权" })).clicked() {
+                        let revoking = self.revoking;
                         self.clear();
-                        self.message = "本次授权已清除；已打开的浏览器页面可手动关闭".into();
+                        self.message = if revoking { "本机授权已清除；撤销任务已取消，服务端结果未知" } else { "本次授权已在本机清除；未向服务端撤销，已打开的浏览器页面可手动关闭" }.into();
                     }
                 });
+                if let Some(target) = self.token.as_ref().and_then(|token| token.revocation_target()) { ui.small(format!("撤销目标：{target}")); }
+                ui.small("清除仅移除本机授权；撤销会联系服务端，不删除客户端注册记录。");
                 if self.registered_client { ui.small("临时注册 ID 仅用于本次回调；再次登录需重新注册。服务端记录可能保留，取消不会自动删除。"); }
                 if let Some(token) = &self.token {
+                    if !token.can_revoke() { ui.small("服务未声明公共客户端撤销入口；本机清除不会撤销服务端授权。"); }
                     ui.label(match token.remaining() { Some(duration) if duration.is_zero() => "访问令牌已过期，请重新登录".into(), Some(duration) => format!("已登录 · 剩余有效期约 {} 分钟", duration.as_secs().div_ceil(60)), None => "已登录 · 服务未提供有效期".into() });
                     ui.small("只用于当前服务；刷新失败或取消须重新登录。授权不会持久保存。");
                     ui.ctx().request_repaint_after(Duration::from_secs(1));
@@ -568,6 +628,7 @@ mod tests {
             token: None,
             auto_refresh: false,
             registered_client: false,
+            revoking: false,
             revision: 0,
             refresh_deadline: None,
         }
@@ -577,6 +638,35 @@ mod tests {
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| panel.tick(ui.ctx()));
         });
+    }
+    #[test]
+    fn revocation_moves_credentials_out_before_job_and_never_restores_on_terminal_result() {
+        for success in [true, false] {
+            let mut panel = panel();
+            panel.token = Some(crate::mcp_oauth_token::fixture_revoke_token());
+            panel.auto_refresh = true;
+            let token = panel.take_revoke_token().unwrap();
+            assert!(token.can_revoke());
+            assert!(panel.token.is_none() && !panel.enabled && !panel.auto_refresh);
+            let (sender, receiver) = mpsc::channel();
+            panel.login_receiver = Some(receiver);
+            panel.revoking = true;
+            sender
+                .send(LoginReply::Revoked(if success {
+                    Ok(())
+                } else {
+                    Err("synthetic failure".into())
+                }))
+                .unwrap();
+            poll(&mut panel);
+            assert!(panel.token.is_none() && !panel.enabled && !panel.pending() && !panel.revoking);
+            assert!(panel.credential("https://mcp.example.test/mcp").is_err());
+        }
+        let mut panel = panel();
+        panel.token = Some(crate::mcp_oauth_token::fixture_revoke_token());
+        panel.endpoint = "https://other.example.test/mcp".into();
+        assert!(panel.take_revoke_token().is_err());
+        assert!(panel.token.is_some());
     }
     #[test]
     fn registration_result_narrows_scopes_and_cannot_be_reused_after_clear() {

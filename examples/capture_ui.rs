@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 182] = [
+const NAMES: [&str; 184] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -192,6 +192,8 @@ const NAMES: [&str; 182] = [
     "mcp-oauth-auto-light",
     "mcp-oauth-register-dark",
     "mcp-oauth-register-light",
+    "mcp-oauth-revoke-dark",
+    "mcp-oauth-revoke-light",
 ];
 
 struct Capture {

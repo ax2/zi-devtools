@@ -67,6 +67,10 @@ pub struct AuthorizationMetadata {
     pub token_endpoint: String,
     #[serde(default)]
     pub registration_endpoint: Option<String>,
+    #[serde(default)]
+    pub revocation_endpoint: Option<String>,
+    #[serde(default)]
+    pub revocation_endpoint_auth_methods_supported: Option<Vec<String>>,
     pub response_types_supported: Vec<String>,
     #[serde(default)]
     pub code_challenge_methods_supported: Vec<String>,
@@ -129,6 +133,12 @@ fn parse_authorization(bytes: &[u8], expected: &str) -> Result<AuthorizationMeta
     secure_url(&metadata.token_endpoint, true)?;
     if let Some(endpoint) = &metadata.registration_endpoint {
         secure_url(endpoint, true)?;
+    }
+    if let Some(endpoint) = &metadata.revocation_endpoint {
+        secure_url(endpoint, true)?;
+    }
+    if let Some(methods) = &metadata.revocation_endpoint_auth_methods_supported {
+        bounded_strings(methods, 16)?;
     }
     bounded_strings(&metadata.response_types_supported, 16)?;
     bounded_strings(&metadata.code_challenge_methods_supported, 16)?;

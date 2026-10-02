@@ -25,6 +25,7 @@ pub struct TokenSet {
     client_id: String,
     scopes: Vec<String>,
     token_endpoint: Url,
+    revocation_endpoint: Option<Url>,
 }
 
 impl TokenSet {
@@ -46,6 +47,12 @@ impl TokenSet {
     }
     pub fn refresh_due(&self) -> Option<Instant> {
         self.refresh.as_ref().and(self.refresh_due)
+    }
+    pub fn revocation_target(&self) -> Option<&str> {
+        self.revocation_endpoint.as_ref().map(Url::as_str)
+    }
+    pub fn can_revoke(&self) -> bool {
+        self.revocation_endpoint.is_some()
     }
     pub fn has_refresh(&self) -> bool {
         self.refresh.is_some()
@@ -86,6 +93,7 @@ fn parse(bytes: &[u8], grant: &CodeGrant, started: Instant) -> Result<TokenSet> 
             issuer: grant.issuer(),
             scopes: grant.scopes(),
             endpoint,
+            revocation_endpoint: grant.revocation_endpoint(),
         },
         started,
     )
@@ -97,6 +105,7 @@ struct TokenBinding<'a> {
     issuer: &'a str,
     scopes: &'a [String],
     endpoint: &'a Url,
+    revocation_endpoint: Option<&'a Url>,
 }
 fn parse_bound(bytes: &[u8], binding: TokenBinding<'_>, started: Instant) -> Result<TokenSet> {
     ensure!(bytes.len() <= MAX_BYTES, "令牌响应超过 64 KiB");
@@ -169,6 +178,7 @@ fn parse_bound(bytes: &[u8], binding: TokenBinding<'_>, started: Instant) -> Res
         client_id: binding.client_id.into(),
         scopes,
         token_endpoint: binding.endpoint.clone(),
+        revocation_endpoint: binding.revocation_endpoint.cloned(),
     })
 }
 
@@ -222,7 +232,7 @@ fn refresh_at(mut old: TokenSet, endpoint: Url, cancel: &AtomicBool) -> Result<T
             result = async {
                 let fields = [("grant_type", "refresh_token"), ("refresh_token", old.refresh.as_ref().unwrap().expose()), ("client_id", old.client_id.as_str()), ("resource", old.resource.as_str())];
                 let (bytes, started) = post(endpoint, &fields).await?;
-                parse_bound(&bytes, TokenBinding { resource: &old.resource, client_id: &old.client_id, issuer: &old.issuer, scopes: &old.scopes, endpoint: &old.token_endpoint }, started)
+                parse_bound(&bytes, TokenBinding { resource: &old.resource, client_id: &old.client_id, issuer: &old.issuer, scopes: &old.scopes, endpoint: &old.token_endpoint, revocation_endpoint: old.revocation_endpoint.as_ref() }, started)
             } => { ensure!(!cancel.load(Ordering::Relaxed), "已取消令牌刷新，请重新登录"); result },
             _ = cancelled(cancel) => { bail!("已取消令牌刷新，请重新登录"); }
         }
@@ -231,6 +241,78 @@ fn refresh_at(mut old: TokenSet, endpoint: Url, cancel: &AtomicBool) -> Result<T
         updated.refresh = old.refresh.take();
     }
     Ok(updated)
+}
+
+/// Consumes local authorization before network work; never restore or automatically retry.
+pub fn revoke(old: TokenSet, cancel: &AtomicBool) -> Result<()> {
+    let endpoint = mcp_oauth::secure_url(
+        old.revocation_endpoint
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("服务未声明公共客户端撤销入口"))?
+            .as_str(),
+        true,
+    )?;
+    revoke_at(old, endpoint, cancel)
+}
+fn revoke_at(old: TokenSet, endpoint: Url, cancel: &AtomicBool) -> Result<()> {
+    revoke_at_bounded(old, endpoint, cancel, Duration::from_secs(15))
+}
+fn revoke_at_bounded(
+    old: TokenSet,
+    endpoint: Url,
+    cancel: &AtomicBool,
+    timeout: Duration,
+) -> Result<()> {
+    ensure!(
+        !cancel.load(Ordering::Relaxed),
+        "本机授权已清除；已取消撤销，服务端结果未知"
+    );
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| anyhow::anyhow!("本机授权已清除；无法创建撤销任务"))?;
+    runtime.block_on(async {
+        tokio::select! {
+            result = tokio::time::timeout(timeout, async {
+                let client = reqwest::Client::builder().no_proxy().redirect(Policy::none()).retry(reqwest::retry::never())
+                    .connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(15)).build().map_err(|_| anyhow::anyhow!("无法创建撤销请求"))?;
+                let refresh_result = if let Some(refresh) = &old.refresh {
+                    revoke_request(&client, &endpoint, refresh.expose(), "refresh_token", &old.client_id).await
+                } else { Ok(()) };
+                ensure!(!cancel.load(Ordering::Relaxed), "已取消撤销");
+                // Revoking a refresh token need not invalidate access tokens on every server.
+                let access_result = revoke_request(&client, &endpoint, old.access.expose(), "access_token", &old.client_id).await;
+                ensure!(refresh_result.is_ok() && access_result.is_ok(), "服务端未全部接受撤销请求");
+                Ok::<(), anyhow::Error>(())
+            }) => {
+                ensure!(!cancel.load(Ordering::Relaxed), "本机授权已清除；已取消撤销，服务端结果未知");
+                result.map_err(|_| anyhow::anyhow!("本机授权已清除；撤销超时，服务端结果未知"))?
+                    .map_err(|_| anyhow::anyhow!("本机授权已清除；服务端撤销未全部确认，请在服务端检查授权"))
+            },
+            _ = cancelled(cancel) => bail!("本机授权已清除；已取消撤销，服务端结果未知")
+        }
+    })
+}
+async fn revoke_request(
+    client: &reqwest::Client,
+    endpoint: &Url,
+    token: &str,
+    hint: &str,
+    client_id: &str,
+) -> Result<()> {
+    let response = client
+        .post(endpoint.clone())
+        .form(&[
+            ("token", token),
+            ("token_type_hint", hint),
+            ("client_id", client_id),
+        ])
+        .send()
+        .await
+        .map_err(|_| anyhow::anyhow!("撤销请求失败"))?;
+    // RFC 7009 accepts unknown tokens too; response bodies are ignored, never displayed or accumulated.
+    ensure!(response.status().as_u16() == 200, "撤销请求未被接受");
+    Ok(())
 }
 
 async fn cancelled(cancel: &AtomicBool) {
@@ -580,6 +662,7 @@ pub(crate) fn preview_token(resource: &str, issuer: &str, client_id: &str) -> To
         client_id: client_id.into(),
         scopes: vec!["tools:read".into()],
         token_endpoint: Url::parse("https://auth.example.test/token").unwrap(),
+        revocation_endpoint: Some(Url::parse("https://auth.example.test/revoke").unwrap()),
     }
 }
 
@@ -588,7 +671,8 @@ mod refresh_tests {
     use super::*;
     #[test]
     fn refresh_rotates_and_retains_only_bound_refresh_token() {
-        let old = fixture_token(true);
+        let mut old = fixture_token(true);
+        old.revocation_endpoint = Some(Url::parse("https://auth.example.test/revoke").unwrap());
         assert!(old.access_for("https://mcp.example.test/mcp").is_err());
         let body = br#"{"access_token":"synthetic-new-access","token_type":"Bearer","expires_in":600,"refresh_token":"synthetic-rotated-refresh","scope":"tools:read"}"#.to_vec();
         let (endpoint, server) = tests::fixture("200 OK", "application/json", body);
@@ -637,6 +721,10 @@ mod refresh_tests {
             "synthetic-rotated-refresh"
         );
         assert_eq!(next.bindings().3, &["tools:read"]);
+        assert_eq!(
+            next.revocation_target(),
+            Some("https://auth.example.test/revoke")
+        );
     }
     #[test]
     fn missing_refresh_cancellation_and_scope_expansion_reject() {
@@ -704,5 +792,178 @@ mod schedule_tests {
         assert!(token.refresh_due().unwrap() < Instant::now());
         token.refresh = None;
         assert!(token.refresh_due().is_none());
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn fixture_revoke_token() -> TokenSet {
+    let mut token = fixture_token(false);
+    token.revocation_endpoint = Some(Url::parse("https://auth.example.test/revoke").unwrap());
+    token
+}
+
+#[cfg(test)]
+mod revocation_tests {
+    use super::*;
+    use std::{
+        io::Write,
+        net::TcpListener,
+        sync::{Arc, mpsc},
+        thread,
+    };
+    fn revoke_fixture(status: &str, count: usize) -> (Url, thread::JoinHandle<Vec<Vec<u8>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint =
+            Url::parse(&format!("http://{}/revoke", listener.local_addr().unwrap())).unwrap();
+        let status = status.to_owned();
+        let handle = thread::spawn(move || {
+            let mut requests = Vec::new();
+            for _ in 0..count {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                requests.push(tests::request_bytes(&mut socket));
+                // Success need not be JSON; even an unbounded streaming body is ignored.
+                let header = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nLocation: https://other.example.test/revoke\r\nConnection: close\r\n\r\n"
+                );
+                socket.write_all(header.as_bytes()).unwrap();
+                let _ = socket.write_all(b"19\r\nsynthetic-private-response\r\n0\r\n\r\n");
+            }
+            requests
+        });
+        (endpoint, handle)
+    }
+    fn form(bytes: &[u8]) -> std::collections::BTreeMap<String, String> {
+        let end = bytes.windows(4).position(|v| v == b"\r\n\r\n").unwrap() + 4;
+        let headers = String::from_utf8_lossy(&bytes[..end]).to_ascii_lowercase();
+        assert!(!headers.contains("authorization:") && !headers.contains("cookie:"));
+        reqwest::Url::parse(&format!(
+            "https://example.test/?{}",
+            String::from_utf8_lossy(&bytes[end..])
+        ))
+        .unwrap()
+        .query_pairs()
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect()
+    }
+    #[test]
+    fn sends_refresh_and_access_once_with_exact_public_client_form() {
+        let (endpoint, server) = revoke_fixture("200 OK", 2);
+        let old = fixture_revoke_token();
+        let refresh = old.refresh.as_ref().unwrap().expose().to_owned();
+        let access = old.access.expose().to_owned();
+        revoke_at(old, endpoint, &AtomicBool::new(false)).unwrap();
+        let requests = server.join().unwrap();
+        for (request, (hint, token)) in requests
+            .iter()
+            .zip([("refresh_token", refresh), ("access_token", access)])
+        {
+            let fields = form(request);
+            assert_eq!(fields.len(), 3);
+            assert_eq!(fields["token_type_hint"], hint);
+            assert_eq!(fields["token"], token);
+            assert_eq!(fields["client_id"], "synthetic-client");
+        }
+    }
+    #[test]
+    fn expired_access_without_refresh_can_be_revoked_and_failures_never_echo_or_redirect() {
+        let (endpoint, server) = revoke_fixture("200 OK", 1);
+        let mut old = fixture_revoke_token();
+        old.refresh = None;
+        old.expires = Some(Instant::now() - Duration::from_secs(1));
+        revoke_at(old, endpoint, &AtomicBool::new(false)).unwrap();
+        assert_eq!(
+            form(&server.join().unwrap()[0])["token_type_hint"],
+            "access_token"
+        );
+        for status in [
+            "400 Bad Request",
+            "401 Unauthorized",
+            "307 Temporary Redirect",
+            "503 Service Unavailable",
+        ] {
+            let (endpoint, server) = revoke_fixture(status, 2);
+            let error = revoke_at(fixture_revoke_token(), endpoint, &AtomicBool::new(false))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("未全部确认"));
+            assert!(!error.contains("synthetic-private") && !error.contains("other.example"));
+            assert_eq!(server.join().unwrap().len(), 2);
+        }
+    }
+    #[test]
+    fn missing_endpoint_http_endpoint_and_pre_cancel_send_nothing() {
+        assert!(revoke(fixture_token(false), &AtomicBool::new(false)).is_err());
+        let mut old = fixture_revoke_token();
+        old.revocation_endpoint = Some(Url::parse("http://127.0.0.1:1/revoke").unwrap());
+        assert!(revoke(old, &AtomicBool::new(false)).is_err());
+        assert!(revoke(fixture_revoke_token(), &AtomicBool::new(true)).is_err());
+    }
+    #[test]
+    fn stalled_endpoint_obeys_overall_deadline_without_replaying() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint =
+            Url::parse(&format!("http://{}/revoke", listener.local_addr().unwrap())).unwrap();
+        let (release, done) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            tests::request_bytes(&mut socket);
+            done.recv_timeout(Duration::from_secs(3)).unwrap();
+            listener.set_nonblocking(true).unwrap();
+            assert!(listener.accept().is_err());
+        });
+        let error = revoke_at_bounded(
+            fixture_revoke_token(),
+            endpoint,
+            &AtomicBool::new(false),
+            Duration::from_millis(250),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("超时") && error.contains("结果未知"));
+        release.send(()).unwrap();
+        server.join().unwrap();
+    }
+    #[test]
+    fn in_flight_cancel_discards_credentials_and_never_sends_second_token() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint =
+            Url::parse(&format!("http://{}/revoke", listener.local_addr().unwrap())).unwrap();
+        let (seen, wait) = mpsc::channel();
+        let (release, done) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let request = tests::request_bytes(&mut socket);
+            seen.send(()).unwrap();
+            done.recv_timeout(Duration::from_secs(3)).unwrap();
+            listener.set_nonblocking(true).unwrap();
+            assert!(listener.accept().is_err());
+            request
+        });
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let worker = thread::spawn(move || {
+            revoke_at(fixture_revoke_token(), endpoint, &worker_cancel)
+                .unwrap_err()
+                .to_string()
+        });
+        wait.recv_timeout(Duration::from_secs(3)).unwrap();
+        let started = Instant::now();
+        cancel.store(true, Ordering::Relaxed);
+        assert!(worker.join().unwrap().contains("结果未知"));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        release.send(()).unwrap();
+        assert_eq!(
+            form(&server.join().unwrap())["token_type_hint"],
+            "refresh_token"
+        );
     }
 }

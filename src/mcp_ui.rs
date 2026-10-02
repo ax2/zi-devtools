@@ -769,6 +769,19 @@ impl McpState {
                         Err(error) => error.to_string(),
                     };
                 }
+                if self.transport == Transport::Http && self.connection.is_some()
+                    && ui.add_enabled(!busy && self.oauth.can_revoke(), egui::Button::new("撤销授权并断开")).clicked() {
+                    self.cancelled.store(true, Ordering::Relaxed);
+                    self.connection = None;
+                    self.receiver = None;
+                    self.report = None;
+                    self.credential_updates = None;
+                    self.credential_ack = None;
+                    self.message = match self.oauth.start_revoke() {
+                        Ok(()) => "已结束连接，正在请求服务端撤销授权".into(),
+                        Err(error) => { self.oauth.clear(); error.to_string() },
+                    };
+                }
                 if ui
                     .add_enabled(
                         busy || self.connection.is_some(),
