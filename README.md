@@ -6,7 +6,7 @@ MIT 开源的 Windows 原生 Rust 桌面开发工具。
 
 Stage 77 / [v0.77.0 已发布](https://github.com/ax2/zi-devtools/releases/tag/v0.77.0)：MCP 调试台新增 2025 版 Streamable HTTP 连接入口，支持 JSON/SSE、逐次确认工具调用、资源和提示词读取，以及取消与响应上限。失效会话会重新初始化，原操作不自动重放。官方 SDK 1.31.0 的 JSON/SSE 合成服务互操作、本地完整检查与安装验收、公开 CI/Release 及四件下载资产摘要均通过。认证、2026 协议与真实业务服务器兼容性待完善。官网更新已暂存，浏览器页面读取超时导致本轮渲染验收和上线切换尚未完成；详见 [MCP 使用说明](docs/mcp-inspector.md)。
 
-Stage 78 开发中：HTTP 调试台新增可主动输入的临时 Bearer 认证，连接后清空编辑框，不持久保存；认证失败不会自动重放操作。认证相关集成测试已通过，完整检查和界面验收仍在进行，尚未发版。OAuth 登录与自动刷新另行推进。
+Stage 78 开发中：HTTP 调试台新增可主动输入的临时 Bearer 认证，连接后清空编辑框，临时输入不保存，也可主动保存到 Windows 凭据管理器并按完整端点使用；认证失败不会自动重放操作。认证相关集成测试已通过，完整检查和界面验收仍在进行，尚未发版。OAuth 登录与自动刷新另行推进。
 
 ![Zi DevTools 工具首页](docs/images/workspace.png)
 

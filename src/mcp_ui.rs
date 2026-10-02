@@ -28,6 +28,32 @@ fn display_json(value: &Value, limit: usize) -> String {
     }
 }
 
+fn http_credential(
+    endpoint: &str,
+    saved: bool,
+    temporary: String,
+) -> anyhow::Result<crate::credentials::Secret> {
+    HttpConfig {
+        endpoint: endpoint.into(),
+    }
+    .validate()?;
+    let secret = if saved {
+        let target = crate::credentials::Target::mcp_http(endpoint)?;
+        crate::credentials::read(&target)?
+            .ok_or_else(|| anyhow::anyhow!("此端点没有已保存令牌，请输入后保存或使用临时令牌"))?
+    } else {
+        crate::credentials::Secret::new(temporary)?
+    };
+    anyhow::ensure!(
+        secret
+            .expose()
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-._~+/=".contains(&b)),
+        "Bearer 令牌格式无效"
+    );
+    Ok(secret)
+}
+
 fn declared_read_only(tool: &Value) -> bool {
     tool.pointer("/annotations/readOnlyHint") == Some(&Value::Bool(true))
 }
@@ -51,6 +77,7 @@ pub struct McpState {
     arguments: String,
     http_endpoint: String,
     temporary_bearer: bool,
+    use_saved_bearer: bool,
     http_token: String,
     report: Option<Report>,
     section: McpSection,
@@ -80,6 +107,7 @@ impl McpState {
             arguments: "[]".into(),
             http_endpoint: "http://127.0.0.1:3000/mcp".into(),
             temporary_bearer: false,
+            use_saved_bearer: false,
             http_token: String::new(),
             report: None,
             section: McpSection::Tools,
@@ -320,7 +348,12 @@ impl McpState {
             None
         };
         let credential = if self.transport == Transport::Http && self.temporary_bearer {
-            match crate::credentials::Secret::new(std::mem::take(&mut self.http_token)) {
+            let result = http_credential(
+                &self.http_endpoint,
+                self.use_saved_bearer,
+                std::mem::take(&mut self.http_token),
+            );
+            match result {
                 Ok(secret) => Some(secret),
                 Err(error) => {
                     self.message = error.to_string();
@@ -463,6 +496,7 @@ impl McpState {
                     self.call_confirm = false;
                     self.http_token.clear();
                     self.temporary_bearer = false;
+                    self.use_saved_bearer = false;
                 }
             });
             if self.transport == Transport::Stdio {
@@ -524,18 +558,46 @@ impl McpState {
                     self.call_confirm = false;
                     self.confirmation_name.clear();
                     self.http_token.clear();
+                    self.use_saved_bearer = false;
                 }
                 ui.add_enabled_ui(!busy && self.connection.is_none(), |ui| {
-                    if ui.checkbox(&mut self.temporary_bearer, "本次连接使用临时 Bearer 令牌").changed() { self.http_token.clear(); }
+                    if ui.checkbox(&mut self.temporary_bearer, "本次连接使用 Bearer 令牌").changed() {
+                        self.http_token.clear();
+                        self.use_saved_bearer = false;
+                    }
                     if self.temporary_bearer && self.connection.is_none() {
+                        #[cfg(windows)]
+                        if ui.checkbox(&mut self.use_saved_bearer, "连接时使用此端点的已保存令牌").changed() { self.http_token.clear(); }
+                        if !self.use_saved_bearer {
                         ui.add(egui::TextEdit::singleline(&mut self.http_token).password(true).hint_text("仅输入为上方端点签发的令牌").desired_width(f32::INFINITY));
+                        }
+                        #[cfg(windows)]
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.add_enabled(!self.use_saved_bearer && !self.http_token.trim().is_empty(), egui::Button::new("保存输入令牌")).clicked() {
+                                let result = crate::credentials::Target::mcp_http(&self.http_endpoint).and_then(|target| {
+                                    let secret = crate::credentials::Secret::new(std::mem::take(&mut self.http_token))?;
+                                    anyhow::ensure!(secret.expose().bytes().all(|b| b.is_ascii_alphanumeric() || b"-._~+/=".contains(&b)), "Bearer 令牌格式无效");
+                                    crate::credentials::save(&target, secret.expose())
+                                });
+                                self.message = match result {
+                                    Ok(()) => { self.use_saved_bearer = true; "已保存到 Windows 凭据管理器，输入已清空；仅用于上方完整端点".into() },
+                                    Err(error) => error.to_string(),
+                                };
+                            }
+                            if ui.button("删除此端点已保存令牌").clicked() {
+                                self.message = match crate::credentials::Target::mcp_http(&self.http_endpoint).and_then(|target| crate::credentials::delete(&target)) {
+                                    Ok(()) => { self.use_saved_bearer = false; "此端点已保存令牌已删除".into() },
+                                    Err(error) => error.to_string(),
+                                };
+                            }
+                        });
                     }
                 });
                 if self.temporary_bearer {
                     if self.connection.is_some() {
-                        ui.small("本次连接已启用临时认证，令牌输入已清空；断开后需重新输入。暂未提供 OAuth 登录或自动刷新。");
+                        ui.small("本次连接已启用认证，令牌输入已清空。暂未提供 OAuth 登录或自动刷新。");
                     } else {
-                        ui.small("令牌仅用于上方端点，不会保存；连接后清空输入。暂未提供 OAuth 登录或自动刷新。");
+                        ui.small("仅用于上方完整端点；临时输入不保存，主动保存使用 Windows 凭据管理器。暂未提供 OAuth 登录或自动刷新。");
                     }
                 }
             }
@@ -958,6 +1020,39 @@ impl McpState {
 mod tests {
     use super::declared_read_only;
     use serde_json::json;
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "explicit disposable MCP UI credential selection test"]
+    fn saved_selection_is_bound_to_endpoint_and_never_falls_back_to_temporary() {
+        use crate::credentials::{Target, delete, save};
+        let endpoint = format!("https://example.test/mcp/{}", uuid::Uuid::new_v4());
+        let target = Target::mcp_http(&endpoint).unwrap();
+        struct Cleanup(Target);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = delete(&self.0);
+            }
+        }
+        let cleanup = Cleanup(target);
+        save(&cleanup.0, "synthetic-ui-saved").unwrap();
+        assert!(
+            super::http_credential(&endpoint, true, String::new())
+                .unwrap()
+                .expose()
+                == "synthetic-ui-saved"
+        );
+        assert!(
+            super::http_credential(&endpoint, false, "synthetic-ui-temporary".into())
+                .unwrap()
+                .expose()
+                == "synthetic-ui-temporary"
+        );
+        let other = format!("{endpoint}/other");
+        assert!(super::http_credential(&other, true, "synthetic-ui-temporary".into()).is_err());
+        delete(&cleanup.0).unwrap();
+        assert!(super::http_credential(&endpoint, true, String::new()).is_err());
+    }
 
     #[test]
     fn only_explicit_true_counts_as_read_only() {

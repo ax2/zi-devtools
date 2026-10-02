@@ -4,6 +4,18 @@ use sha2::{Digest, Sha256};
 
 pub struct Target(String);
 impl Target {
+    /// Separate namespace, bound to the normalized complete MCP endpoint.
+    pub fn mcp_http(endpoint: &str) -> Result<Self> {
+        let url = crate::mcp_http::HttpConfig {
+            endpoint: endpoint.into(),
+        }
+        .validate()?;
+        Ok(Self(format!(
+            "ZiDevTools/v1/mcp-http/{:x}",
+            Sha256::digest(url.as_str().as_bytes())
+        )))
+    }
+
     pub fn plugin(id: &str, method: &str, endpoint: &str) -> Result<Self> {
         ensure!(
             id.starts_with("plugin:")
@@ -149,6 +161,59 @@ pub use platform::{delete, read, save};
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mcp_binding_normalizes_host_and_separates_full_endpoint_and_plugins() {
+        let target = Target::mcp_http("https://EXAMPLE.com:443/mcp").unwrap();
+        assert_eq!(
+            target.0,
+            Target::mcp_http("https://example.com/mcp").unwrap().0
+        );
+        for endpoint in [
+            "https://example.com/MCP",
+            "https://example.com/other",
+            "https://example.com:8443/mcp",
+            "https://other.example/mcp",
+        ] {
+            assert_ne!(target.0, Target::mcp_http(endpoint).unwrap().0);
+        }
+        assert_ne!(
+            target.0,
+            Target::plugin("plugin:test/chat", "POST", "https://example.com/mcp")
+                .unwrap()
+                .0
+        );
+        for endpoint in [
+            "https://example.com/mcp?token=x",
+            "https://u:p@example.com/mcp",
+            "http://example.com/mcp",
+        ] {
+            assert!(Target::mcp_http(endpoint).is_err());
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    #[ignore = "explicit disposable MCP Windows credential-store smoke test"]
+    fn mcp_windows_store_roundtrip_and_delete() {
+        let target = Target::mcp_http(&format!(
+            "https://example.test/mcp/{}",
+            uuid::Uuid::new_v4()
+        ))
+        .unwrap();
+        struct Cleanup(Target);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = delete(&self.0);
+            }
+        }
+        let cleanup = Cleanup(target);
+        assert!(read(&cleanup.0).unwrap().is_none());
+        save(&cleanup.0, "synthetic-mcp-fixture").unwrap();
+        assert!(read(&cleanup.0).unwrap().unwrap().expose() == "synthetic-mcp-fixture");
+        delete(&cleanup.0).unwrap();
+        assert!(read(&cleanup.0).unwrap().is_none());
+    }
+
     #[test]
     fn credential_binding_separates_tools_methods_and_destinations() {
         let target =
