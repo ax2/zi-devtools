@@ -60,6 +60,8 @@ pub struct ResourceMetadata {
 
 #[derive(Deserialize)]
 pub struct AuthorizationMetadata {
+    #[serde(default)]
+    pub authorization_response_iss_parameter_supported: bool,
     pub issuer: String,
     pub authorization_endpoint: String,
     pub token_endpoint: String,

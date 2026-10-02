@@ -69,3 +69,6 @@ pub mod recorder_ui;
 pub mod mcp_oauth;
 
 pub mod mcp_oauth_ui;
+
+pub mod mcp_oauth_callback;
+pub mod mcp_oauth_login;

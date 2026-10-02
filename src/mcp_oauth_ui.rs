@@ -35,6 +35,7 @@ impl OAuthPanel {
             bearer_methods_supported: Some(vec!["header".into()]),
         });
         self.authorization = Some(AuthorizationMetadata {
+            authorization_response_iss_parameter_supported: true,
             issuer: "https://auth.example.test/tenant".into(),
             authorization_endpoint: "https://auth.example.test/authorize".into(),
             token_endpoint: "https://auth.example.test/token".into(),
