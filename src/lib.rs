@@ -57,6 +57,7 @@ pub mod conversation;
 pub mod mcp;
 pub mod mcp_access;
 pub mod mcp_export;
+pub mod mcp_http;
 pub mod mcp_ui;
 pub mod model_discovery;
 pub mod plugin_settings;

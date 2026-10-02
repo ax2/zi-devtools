@@ -954,6 +954,10 @@ impl DevToolsApp {
                 self.page = Page::Mcp;
                 self.mcp.preview_connected();
             }
+            170 | 171 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_http();
+            }
             100 | 101 => {
                 self.page = Page::Recorder;
                 self.recorder.preview_fixture();

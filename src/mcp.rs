@@ -14,10 +14,10 @@ use std::{
 };
 
 const PROTOCOL: &str = "2025-06-18";
-const MAX_FRAME: usize = 1024 * 1024;
-const MAX_SESSION_BYTES: usize = 4 * 1024 * 1024;
-const MAX_ITEMS: usize = 128;
-const MAX_PAGES: usize = 8;
+pub(crate) const MAX_FRAME: usize = 1024 * 1024;
+pub(crate) const MAX_SESSION_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const MAX_ITEMS: usize = 128;
+pub(crate) const MAX_PAGES: usize = 8;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -601,7 +601,7 @@ fn perform_on_session(
     perform_listed_action(config, action, session, report, access)
 }
 
-fn validate_action(action: &Action) -> Result<()> {
+pub(crate) fn validate_action(action: &Action) -> Result<()> {
     match &action {
         Action::Call {
             tool,

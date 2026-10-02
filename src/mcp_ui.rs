@@ -1,6 +1,7 @@
 use crate::{
     mcp::{self, Action, Config, ConnectedRequest, Report},
     mcp_access::{self, Decision, Rule, Store},
+    mcp_http::{self, HttpConfig},
 };
 use eframe::egui;
 use serde_json::Value;
@@ -38,9 +39,17 @@ enum McpSection {
     Prompts,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Transport {
+    Stdio,
+    Http,
+}
+
 pub struct McpState {
+    transport: Transport,
     executable: String,
     arguments: String,
+    http_endpoint: String,
     report: Option<Report>,
     section: McpSection,
     selected_tool: String,
@@ -64,8 +73,10 @@ pub struct McpState {
 impl McpState {
     pub fn new(access_path: PathBuf) -> Self {
         Self {
+            transport: Transport::Stdio,
             executable: String::new(),
             arguments: "[]".into(),
+            http_endpoint: "http://127.0.0.1:3000/mcp".into(),
             report: None,
             section: McpSection::Tools,
             selected_tool: String::new(),
@@ -163,6 +174,17 @@ impl McpState {
         self.message = "合成界面预览 · 持续连接状态，无外部进程".into();
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_http(&mut self) {
+        self.preview_fixture(false);
+        self.transport = Transport::Http;
+        self.http_endpoint = "https://mcp.example.test/mcp".into();
+        let (sender, _receiver) = mpsc::channel();
+        self.connection = Some(sender);
+        self.connection_alive.store(true, Ordering::Relaxed);
+        self.message = "合成 HTTP 界面预览 · 无网络请求".into();
+    }
+
     fn config(&self) -> Result<Config, String> {
         let args: Vec<String> = serde_json::from_str(&self.arguments)
             .map_err(|_| "参数必须是 JSON 字符串数组，例如 [\"server.js\"]".to_owned())?;
@@ -175,27 +197,40 @@ impl McpState {
     }
 
     fn start(&mut self, action: Action, manual_confirmed: bool) {
-        let config = match self.config() {
-            Ok(config) => config,
-            Err(error) => {
-                self.message = error;
-                return;
-            }
-        };
-        match mcp_access::server_scope(&config) {
-            Ok(scope) => {
-                self.server_scope = Some(scope);
-                self.scope_error = None;
-            }
-            Err(error) => {
-                self.server_scope = None;
-                self.scope_error = Some(format!("无法核对 MCP 服务身份：{error:#}"));
-                if matches!(&action, Action::Call { .. }) {
-                    self.message = self.scope_error.clone().unwrap_or_default();
+        let config = if self.transport == Transport::Stdio {
+            let config = match self.config() {
+                Ok(config) => config,
+                Err(error) => {
+                    self.message = error;
                     return;
                 }
+            };
+            match mcp_access::server_scope(&config) {
+                Ok(scope) => {
+                    self.server_scope = Some(scope);
+                    self.scope_error = None;
+                }
+                Err(error) => {
+                    self.server_scope = None;
+                    self.scope_error = Some(format!("无法核对 MCP 服务身份：{error:#}"));
+                    if matches!(&action, Action::Call { .. }) {
+                        self.message = self.scope_error.clone().unwrap_or_default();
+                        return;
+                    }
+                }
             }
-        }
+            Some(config)
+        } else {
+            if self.connection.is_none() {
+                self.message = "请先连接 MCP HTTP 服务".into();
+                return;
+            }
+            if matches!(&action, Action::Call { .. }) && !manual_confirmed {
+                self.message = "MCP HTTP 工具调用须逐次确认".into();
+                return;
+            }
+            None
+        };
         let (sender, receiver) = mpsc::channel();
         self.last_called_tool = match &action {
             Action::Call { tool, .. } => tool.clone(),
@@ -222,6 +257,10 @@ impl McpState {
                 return;
             }
         } else {
+            let Some(config) = config else {
+                self.message = "MCP HTTP 连接已退出，请重新连接".into();
+                return;
+            };
             self.cancelled = Arc::new(AtomicBool::new(false));
             let cancelled = Arc::clone(&self.cancelled);
             let access_path = self.access.path().to_path_buf();
@@ -242,12 +281,28 @@ impl McpState {
     }
 
     fn connect(&mut self) {
-        let config = match self.config() {
-            Ok(config) => config,
-            Err(error) => {
-                self.message = error;
+        let stdio = if self.transport == Transport::Stdio {
+            match self.config() {
+                Ok(config) => Some(config),
+                Err(error) => {
+                    self.message = error;
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let http = if self.transport == Transport::Http {
+            let config = HttpConfig {
+                endpoint: self.http_endpoint.trim().into(),
+            };
+            if let Err(error) = config.validate() {
+                self.message = error.to_string();
                 return;
             }
+            Some(config)
+        } else {
+            None
         };
         self.cancelled = Arc::new(AtomicBool::new(false));
         let cancelled = Arc::clone(&self.cancelled);
@@ -256,7 +311,11 @@ impl McpState {
         let access_path = self.access.path().to_path_buf();
         let (sender, requests) = mpsc::channel();
         std::thread::spawn(move || {
-            let _ = mcp::serve_connected(config, cancelled, access_path, requests);
+            if let Some(config) = stdio {
+                let _ = mcp::serve_connected(config, cancelled, access_path, requests);
+            } else if let Some(config) = http {
+                let _ = mcp_http::serve_http(config, cancelled, requests);
+            }
             alive.store(false, Ordering::Relaxed);
         });
         self.connection = Some(sender);
@@ -348,7 +407,7 @@ impl McpState {
         self.poll(ui);
         let busy = self.receiver.is_some();
         ui.heading("MCP 协议调试台");
-        ui.label("明确启动本机 stdio 服务，查看能力并手动调用工具、读取资源或获取提示词。可使用短会话或显式持续连接；不会保存路径、参数或结果。");
+        ui.label("检查 MCP 工具、资源和提示词，并在逐次确认后调用工具。可选本机 stdio 或 Streamable HTTP；连接信息与结果不会保存。");
         if self.connection.is_some() {
             ui.colored_label(
                 egui::Color32::from_rgb(86, 163, 118),
@@ -358,10 +417,23 @@ impl McpState {
         ui.add_space(8.0);
         ui.group(|ui| {
             ui.strong("连接目标");
-            ui.weak(
-                "只接受存在的绝对 EXE 路径；不经 shell。服务程序由你选择执行，本功能不是沙箱。",
-            );
             ui.horizontal(|ui| {
+                let editable = !busy && self.connection.is_none();
+                let previous = self.transport;
+                ui.add_enabled_ui(editable, |ui| {
+                    ui.selectable_value(&mut self.transport, Transport::Stdio, "本机 stdio");
+                    ui.selectable_value(&mut self.transport, Transport::Http, "Streamable HTTP（2025）");
+                });
+                if self.transport != previous {
+                    self.report = None;
+                    self.server_scope = None;
+                    self.scope_error = None;
+                    self.call_confirm = false;
+                }
+            });
+            if self.transport == Transport::Stdio {
+                ui.weak("只接受存在的绝对 EXE 路径；不经 shell。服务程序由你选择执行，本功能不是沙箱。");
+                ui.horizontal(|ui| {
                 ui.label("可执行程序");
                 if ui
                     .add_enabled(
@@ -395,23 +467,32 @@ impl McpState {
                     self.call_confirm = false;
                     self.confirmation_name.clear();
                 }
-            });
-            ui.label("参数 · JSON 字符串数组");
-            if ui
+                });
+                ui.label("参数 · JSON 字符串数组");
+                if ui
                 .add_enabled(
                     !busy && self.connection.is_none(),
                     egui::TextEdit::singleline(&mut self.arguments).desired_width(f32::INFINITY),
                 )
                 .changed()
-            {
-                self.report = None;
-                self.server_scope = None;
-                self.scope_error = None;
-                self.call_confirm = false;
-                self.confirmation_name.clear();
+                {
+                    self.report = None;
+                    self.server_scope = None;
+                    self.scope_error = None;
+                    self.call_confirm = false;
+                    self.confirmation_name.clear();
+                }
+            } else {
+                ui.weak("HTTPS 或精确 127.0.0.1/::1 的 HTTP 端点；不跟随重定向、不使用环境代理。HTTP 工具调用每次人工确认，暂不支持认证。");
+                ui.label("MCP HTTP 端点");
+                if ui.add_enabled(!busy && self.connection.is_none(), egui::TextEdit::singleline(&mut self.http_endpoint).desired_width(f32::INFINITY)).changed() {
+                    self.report = None;
+                    self.call_confirm = false;
+                    self.confirmation_name.clear();
+                }
             }
             ui.horizontal(|ui| {
-                if ui
+                if self.transport == Transport::Stdio && ui
                     .add_enabled(!busy, egui::Button::new("检查服务能力"))
                     .clicked()
                 {
@@ -427,13 +508,13 @@ impl McpState {
                 if ui
                     .add_enabled(
                         busy || self.connection.is_some(),
-                        egui::Button::new("断开并退出进程"),
+                        egui::Button::new(if self.transport == Transport::Http { "断开 HTTP 连接" } else { "断开并退出进程" }),
                     )
                     .clicked()
                 {
                     self.cancelled.store(true, Ordering::Relaxed);
                     self.connection = None;
-                    self.message = "正在停止 MCP 进程…".into();
+                    self.message = "正在断开 MCP 连接…".into();
                 }
                 if busy {
                     ui.spinner();
@@ -510,7 +591,7 @@ impl McpState {
                 if mcp_access::declared_low_impact(tool) {
                     ui.colored_label(
                         egui::Color32::from_rgb(90, 160, 110),
-                        "服务声明：本机低影响只读工具",
+                        "服务声明：低影响只读工具",
                     );
                 } else if declared_read_only(tool) {
                     ui.colored_label(
@@ -532,7 +613,10 @@ impl McpState {
                         });
                 }
                 ui.add_space(4.0);
-                if let Some(error) = &self.access.error {
+                if self.transport == Transport::Http {
+                    access_decision = Decision::Confirm;
+                    ui.small("HTTP 端点不会继承本机 EXE 授权规则；每次工具调用都要人工确认。服务可能位于外部网络，请确认端点与参数。");
+                } else if let Some(error) = &self.access.error {
                     ui.colored_label(egui::Color32::from_rgb(210, 100, 80), error);
                     access_decision = Decision::Deny;
                 } else if let Some(scope) = self.server_scope.as_deref() {
@@ -638,8 +722,13 @@ impl McpState {
             if self.call_confirm && access_decision == Decision::Confirm {
                 ui.horizontal_wrapped(|ui| {
                     ui.weak(format!(
-                        "将启动 {} 并调用 {}；参数会交给该服务。",
-                        self.executable, self.selected_tool
+                        "将连接 {} 并调用 {}；参数会交给该服务。",
+                        if self.transport == Transport::Http {
+                            &self.http_endpoint
+                        } else {
+                            &self.executable
+                        },
+                        self.selected_tool
                     ));
                     let low_impact = selected_descriptor
                         .as_ref()
