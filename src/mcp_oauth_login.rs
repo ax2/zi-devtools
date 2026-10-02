@@ -1,4 +1,4 @@
-//! PKCE transaction and callback validation; UI/browser/token exchange is not wired yet.
+//! PKCE transaction and callback validation; browser/login UI is not wired yet.
 use crate::{
     credentials::Secret,
     mcp_oauth::{self, AuthorizationMetadata},
@@ -40,6 +40,7 @@ pub struct Transaction {
     redirect: Url,
     resource: String,
     client_id: String,
+    scopes: Vec<String>,
     state: Secret,
     verifier: Option<Secret>,
     require_issuer: bool,
@@ -55,8 +56,16 @@ pub struct CodeGrant {
     redirect: String,
     resource: String,
     client_id: String,
+    issuer: String,
+    scopes: Vec<String>,
 }
 impl CodeGrant {
+    pub(crate) fn issuer(&self) -> &str {
+        &self.issuer
+    }
+    pub(crate) fn scopes(&self) -> &[String] {
+        &self.scopes
+    }
     pub fn code(&self) -> &Secret {
         &self.code
     }
@@ -152,6 +161,11 @@ impl Transaction {
             "code_challenge_method",
             "request",
             "request_uri",
+            "grant_type",
+            "code",
+            "code_verifier",
+            "refresh_token",
+            "client_secret",
         ];
         for url in [&authorization_url, &token_endpoint] {
             ensure!(
@@ -187,6 +201,7 @@ impl Transaction {
             redirect,
             resource,
             client_id: client_id.into(),
+            scopes: scopes.to_vec(),
             state,
             verifier: Some(verifier),
             require_issuer: metadata.authorization_response_iss_parameter_supported,
@@ -287,6 +302,8 @@ impl Transaction {
             redirect: self.redirect.to_string(),
             resource: self.resource.clone(),
             client_id: self.client_id.clone(),
+            issuer: self.issuer.clone(),
+            scopes: self.scopes.clone(),
         })
     }
 }
