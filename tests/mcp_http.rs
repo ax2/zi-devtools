@@ -31,9 +31,27 @@ enum Mode {
     ExpiredCall,
     BadInitialized,
     RecoveryFailure,
+    Authenticated,
+    AuthError,
+    AuthSchemaLeak,
+    Unauthorized,
+    Forbidden,
 }
 
 fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<String>>>) {
+    fixture_with_auth(
+        mode,
+        matches!(
+            mode,
+            Mode::Authenticated | Mode::AuthError | Mode::AuthSchemaLeak
+        ),
+    )
+}
+
+fn fixture_with_auth(
+    mode: Mode,
+    authenticated: bool,
+) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let endpoint = format!("http://{}/mcp", listener.local_addr().unwrap());
@@ -94,6 +112,11 @@ fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<St
                 body.get("method").and_then(Value::as_str).unwrap()
             };
             trace.lock().unwrap().push(rpc.into());
+            if authenticated {
+                assert!(headers.contains("authorization: bearer zi-synthetic-test-token"));
+            } else {
+                assert!(!headers.contains("authorization:"));
+            }
             assert!(headers.contains("accept: application/json, text/event-stream"));
             if rpc != "initialize" {
                 assert!(headers.contains("mcp-session-id: fixture-session"));
@@ -112,26 +135,32 @@ fn fixture_mode(mode: Mode) -> (String, thread::JoinHandle<()>, Arc<Mutex<Vec<St
                 "initialize" if matches!(mode, Mode::RecoveryFailure) && trace.lock().unwrap().iter().filter(|m| *m == "initialize").count() > 1 => ("503 Service Unavailable", "application/json", String::new(), ""),
                 "initialize" => {
                     assert!(!headers.contains("mcp-session-id:"));
-                    let result = json!({"protocolVersion":"2025-06-18","serverInfo":{"name":"HTTP fixture"},"capabilities":{"tools":{},"resources":{},"prompts":{}}});
+                    let name = if matches!(mode, Mode::Authenticated) { "HTTP fixture zi-synthetic-test-token" } else { "HTTP fixture" };
+                    let result = json!({"protocolVersion":"2025-06-18","serverInfo":{"name":name},"capabilities":{"tools":{},"resources":{},"prompts":{}}});
                     ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":result}).to_string(), "Mcp-Session-Id: fixture-session\r\n")
                 }
                 "notifications/initialized" if matches!(mode, Mode::BadInitialized) => ("202 Accepted", "application/json", "{}".into(), ""),
                 "notifications/initialized" | "notifications/cancelled" => ("202 Accepted", "application/json", String::new(), ""),
                 "tools/list" if matches!(mode, Mode::ChangedDefinition) && trace.lock().unwrap().iter().filter(|m| *m == "tools/list").count() > 1 => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"tools":[{"name":"echo","inputSchema":{"type":"object"},"description":"changed"}]}}).to_string(), ""),
+                "tools/list" if matches!(mode, Mode::AuthSchemaLeak) => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"tools":[{"name":"echo","inputSchema":{"type":"object","description":"zi-synthetic-test-token"}}]}}).to_string(), ""),
                 "tools/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"tools":[{"name":"echo","inputSchema":{"type":"object"}}]}}).to_string(), ""),
                 "resources/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"resources":[{"name":"Guide","uri":"fixture://guide"}]}}).to_string(), ""),
                 "prompts/list" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"prompts":[{"name":"summary"}]}}).to_string(), ""),
+                "tools/call" if matches!(mode, Mode::AuthError) => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"error":{"code":-32000,"message":format!("{}zi-synthetic-test-token", "x".repeat(290))}}).to_string(), ""),
                 "tools/call" if matches!(mode, Mode::ExpiredCall) => ("404 Not Found", "application/json", String::new(), ""),
                 "tools/call" => {
                     let progress = json!({"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}});
-                    let result = json!({"jsonrpc":"2.0","id":body["id"],"result":{"content":[{"type":"text","text":"fixture result"}]}});
+                    let text = if matches!(mode, Mode::Authenticated) { "echoed zi-synthetic-test-token" } else { "fixture result" };
+                    let result = json!({"jsonrpc":"2.0","id":body["id"],"result":{"content":[{"type":"text","text":text}]}});
                     ("200 OK", "text/event-stream", format!(": keepalive\r\ndata: {progress}\r\n\r\ndata: {result}\r\n\r\n"), "")
                 }
+                "resources/read" if matches!(mode, Mode::Unauthorized) => ("401 Unauthorized", "application/json", "zi-synthetic-test-token".into(), ""),
+                "resources/read" if matches!(mode, Mode::Forbidden) => ("403 Forbidden", "application/json", "zi-synthetic-test-token".into(), ""),
                 "resources/read" if matches!(mode, Mode::OversizeJson) => ("200 OK", "application/json", "x".repeat(1024 * 1024 + 1), ""),
                 "resources/read" if matches!(mode, Mode::OversizeSse) => ("200 OK", "text/event-stream", format!("data: {}\n\n", "x".repeat(1024 * 1024 + 1)), ""),
                 "resources/read" if matches!(mode, Mode::Redirect) => ("307 Temporary Redirect", "application/json", String::new(), "Location: http://127.0.0.1:1/unreachable\r\n"),
                 "resources/read" if matches!(mode, Mode::Expired | Mode::RecoveryFailure) => ("404 Not Found", "application/json", String::new(), ""),
-                "resources/read" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"contents":[{"uri":"fixture://guide","text":"safe"}]}}).to_string(), ""),
+                "resources/read" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"contents":[{"uri":"fixture://guide","text": if matches!(mode, Mode::Authenticated) {"zi-synthetic-test-token"} else {"safe"}}]}}).to_string(), ""),
                 "prompts/get" => ("200 OK", "application/json", json!({"jsonrpc":"2.0","id":body["id"],"result":{"messages":[]}}).to_string(), ""),
                 "DELETE" => ("200 OK", "application/json", String::new(), ""),
                 _ => panic!("unexpected RPC: {rpc}"),
@@ -342,11 +371,22 @@ fn changed_tool_definition_is_rejected_before_call() {
 
 #[test]
 fn expired_call_reinitializes_without_replaying_and_accepts_new_inspection() {
-    let (endpoint, server, methods) = fixture_mode(Mode::ExpiredCall);
+    for authenticated in [false, true] {
+        expired_call_reinitializes_without_replaying_and_accepts_new_inspection_with_auth(
+            authenticated,
+        );
+    }
+}
+
+fn expired_call_reinitializes_without_replaying_and_accepts_new_inspection_with_auth(
+    authenticated: bool,
+) {
+    let (endpoint, server, methods) = fixture_with_auth(Mode::ExpiredCall, authenticated);
     let (sender, requests) = mpsc::channel();
     let worker = thread::spawn(move || {
-        mcp_http::serve_http(
+        mcp_http::serve_http_authenticated(
             HttpConfig { endpoint },
+            test_credential(authenticated),
             Arc::new(AtomicBool::new(false)),
             requests,
         )
@@ -427,13 +467,111 @@ fn failed_reinitialization_reports_failure_without_replay() {
 }
 
 #[test]
+fn explicit_bearer_covers_session_requests_and_redacts_json_sse_and_errors() {
+    for mode in [Mode::Authenticated, Mode::AuthError] {
+        let (endpoint, server, methods) = fixture_mode(mode);
+        let (sender, requests) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            mcp_http::serve_http_authenticated(
+                HttpConfig { endpoint },
+                Some(
+                    zi_devtools::credentials::Secret::new("zi-synthetic-test-token".into())
+                        .unwrap(),
+                ),
+                Arc::new(AtomicBool::new(false)),
+                requests,
+            )
+            .unwrap()
+        });
+        let report = ask(&sender, Action::Inspect, false).unwrap();
+        assert!(!report.server.contains("zi-synthetic"));
+        let call = ask(
+            &sender,
+            Action::Call {
+                tool: "echo".into(),
+                arguments: json!({}),
+                expected_tool: report.tools[0].clone(),
+            },
+            true,
+        );
+        if matches!(mode, Mode::AuthError) {
+            let error = call.unwrap_err();
+            assert!(!error.contains("zi-synthetic"));
+            assert!(error.contains("隐藏令牌"));
+        } else {
+            let text = call.unwrap().call_result.unwrap().to_string();
+            assert!(!text.contains("zi-synthetic"));
+            assert!(text.contains("隐藏令牌"));
+            let resource = ask(
+                &sender,
+                Action::ReadResource {
+                    uri: "fixture://guide".into(),
+                },
+                false,
+            )
+            .unwrap()
+            .resource_result
+            .unwrap()
+            .1
+            .to_string();
+            assert!(!resource.contains("zi-synthetic"));
+            assert!(resource.contains("隐藏令牌"));
+        }
+        drop(sender);
+        worker.join().unwrap();
+        server.join().unwrap();
+        assert_eq!(methods.lock().unwrap().last().unwrap(), "DELETE");
+    }
+}
+
+#[test]
+fn credential_bearing_tool_schema_is_rejected_without_call() {
+    let (endpoint, server, methods) = fixture_mode(Mode::AuthSchemaLeak);
+    let (sender, requests) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        mcp_http::serve_http_authenticated(
+            HttpConfig { endpoint },
+            Some(zi_devtools::credentials::Secret::new("zi-synthetic-test-token".into()).unwrap()),
+            Arc::new(AtomicBool::new(false)),
+            requests,
+        )
+        .unwrap()
+    });
+    let error = ask(&sender, Action::Inspect, false).unwrap_err();
+    assert!(error.contains("工具定义包含认证内容"));
+    assert!(!error.contains("zi-synthetic"));
+    drop(sender);
+    worker.join().unwrap();
+    server.join().unwrap();
+    assert!(
+        !methods
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|method| method == "tools/call")
+    );
+}
+
+#[test]
 fn cancellation_stops_pending_stream_and_notifies_server() {
-    let (endpoint, server, methods) = fixture_mode(Mode::Hanging);
+    for authenticated in [false, true] {
+        cancellation_stops_pending_stream_and_notifies_server_with_auth(authenticated);
+    }
+}
+
+fn cancellation_stops_pending_stream_and_notifies_server_with_auth(authenticated: bool) {
+    let (endpoint, server, methods) = fixture_with_auth(Mode::Hanging, authenticated);
     let cancelled = Arc::new(AtomicBool::new(false));
     let token = Arc::clone(&cancelled);
     let (sender, requests) = mpsc::channel();
     let worker = thread::spawn(move || {
-        mcp_http::serve_http(HttpConfig { endpoint }, token, requests).unwrap()
+        mcp_http::serve_http_authenticated(
+            HttpConfig { endpoint },
+            test_credential(authenticated),
+            token,
+            requests,
+        )
+        .unwrap()
     });
     ask(&sender, Action::Inspect, false).unwrap();
     let (response, receiver) = mpsc::channel();
@@ -472,4 +610,48 @@ fn cancellation_stops_pending_stream_and_notifies_server() {
     let trace = methods.lock().unwrap();
     assert!(trace.iter().any(|m| m == "notifications/cancelled"));
     assert_eq!(trace.last().unwrap(), "DELETE");
+}
+
+fn test_credential(enabled: bool) -> Option<zi_devtools::credentials::Secret> {
+    enabled
+        .then(|| zi_devtools::credentials::Secret::new("zi-synthetic-test-token".into()).unwrap())
+}
+
+#[test]
+fn authentication_failures_and_redirect_do_not_replay_or_show_response_body() {
+    for (mode, expected) in [
+        (Mode::Unauthorized, "认证失败（401）"),
+        (Mode::Forbidden, "访问被拒绝（403）"),
+        (Mode::Redirect, "重定向"),
+    ] {
+        let (endpoint, server, methods) = fixture_with_auth(mode, true);
+        let (sender, requests) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            mcp_http::serve_http_authenticated(
+                HttpConfig { endpoint },
+                test_credential(true),
+                Arc::new(AtomicBool::new(false)),
+                requests,
+            )
+            .unwrap()
+        });
+        ask(&sender, Action::Inspect, false).unwrap();
+        let error = ask(
+            &sender,
+            Action::ReadResource {
+                uri: "fixture://guide".into(),
+            },
+            false,
+        )
+        .unwrap_err();
+        assert!(error.contains(expected), "{error}");
+        assert!(!error.contains("zi-synthetic"));
+        drop(sender);
+        worker.join().unwrap();
+        server.join().unwrap();
+        let trace = methods.lock().unwrap();
+        assert_eq!(trace.iter().filter(|m| *m == "initialize").count(), 1);
+        assert_eq!(trace.iter().filter(|m| *m == "resources/read").count(), 1);
+        assert_eq!(trace.last().unwrap(), "DELETE");
+    }
 }

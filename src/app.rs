@@ -958,6 +958,10 @@ impl DevToolsApp {
                 self.page = Page::Mcp;
                 self.mcp.preview_http();
             }
+            172 | 173 => {
+                self.page = Page::Mcp;
+                self.mcp.preview_http_authentication();
+            }
             100 | 101 => {
                 self.page = Page::Recorder;
                 self.recorder.preview_fixture();

@@ -6,7 +6,7 @@ use crate::mcp::{
 use anyhow::{Context, Result, bail, ensure};
 use reqwest::{
     Client, Url,
-    header::{ACCEPT, CONTENT_TYPE, HeaderValue},
+    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue},
     redirect::Policy,
 };
 use serde_json::{Value, json};
@@ -22,6 +22,21 @@ use std::{
 
 const PROTOCOL: &str = "2025-06-18";
 const ACCEPT_VALUE: &str = "application/json, text/event-stream";
+
+fn redact_value(value: &mut Value, secret: &str) {
+    match value {
+        Value::String(text) => *text = text.replace(secret, "[隐藏令牌]"),
+        Value::Array(items) => items.iter_mut().for_each(|item| redact_value(item, secret)),
+        Value::Object(fields) => {
+            let old = std::mem::take(fields);
+            for (key, mut value) in old {
+                redact_value(&mut value, secret);
+                fields.insert(key.replace(secret, "[隐藏令牌]"), value);
+            }
+        }
+        _ => {}
+    }
+}
 
 #[derive(Debug)]
 struct SessionExpired;
@@ -68,6 +83,7 @@ struct HttpSession {
     capabilities: Value,
     next_id: u64,
     active_id: Option<u64>,
+    credential: Option<Arc<crate::credentials::Secret>>,
 }
 
 async fn cancelled(token: &AtomicBool) {
@@ -112,9 +128,27 @@ fn response_value(value: &Value, id: u64) -> Result<Option<Value>> {
 }
 
 impl HttpSession {
-    fn create(config: &HttpConfig) -> Result<Self> {
+    fn create(
+        config: &HttpConfig,
+        credential: Option<Arc<crate::credentials::Secret>>,
+    ) -> Result<Self> {
         let endpoint = config.validate()?;
+        let mut headers = HeaderMap::new();
+        if let Some(secret) = &credential {
+            ensure!(
+                secret
+                    .expose()
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-._~+/=".contains(&b)),
+                "Bearer 令牌格式无效"
+            );
+            let mut header = HeaderValue::from_str(&format!("Bearer {}", secret.expose()))
+                .context("无法设置认证头")?;
+            header.set_sensitive(true);
+            headers.insert(AUTHORIZATION, header);
+        }
         let client = Client::builder()
+            .default_headers(headers)
             .no_proxy()
             .redirect(Policy::none())
             .connect_timeout(Duration::from_secs(5))
@@ -129,7 +163,38 @@ impl HttpSession {
             capabilities: Value::Null,
             next_id: 1,
             active_id: None,
+            credential,
         })
+    }
+
+    fn sanitize(&self, mut value: Value) -> Result<Value> {
+        if let Some(secret) = &self.credential {
+            if let Some(tools) = value.pointer("/result/tools").and_then(Value::as_array) {
+                ensure!(
+                    !tools
+                        .iter()
+                        .any(|tool| tool.to_string().contains(secret.expose())),
+                    "MCP 工具定义包含认证内容，已拒绝使用"
+                );
+            }
+            // Never transform routable server identifiers into a different tool/URI.
+            for (field, key) in [("tools", "name"), ("resources", "uri"), ("prompts", "name")] {
+                if let Some(items) = value
+                    .pointer(&format!("/result/{field}"))
+                    .and_then(Value::as_array)
+                {
+                    ensure!(
+                        !items.iter().any(|item| item
+                            .get(key)
+                            .and_then(Value::as_str)
+                            .is_some_and(|text| text.contains(secret.expose()))),
+                        "MCP 服务标识包含认证内容，已拒绝使用"
+                    );
+                }
+            }
+            redact_value(&mut value, secret.expose());
+        }
+        Ok(value)
     }
 
     async fn initialize(&mut self) -> Result<()> {
@@ -204,6 +269,11 @@ impl HttpSession {
             !response.status().is_redirection(),
             "MCP HTTP 端点发生重定向，已拒绝跟随"
         );
+        match response.status().as_u16() {
+            401 => bail!("MCP HTTP 认证失败（401）：请重新连接并提供有效令牌；本次操作未重试"),
+            403 => bail!("MCP HTTP 访问被拒绝（403）：请检查令牌权限；本次操作未重试"),
+            _ => {}
+        }
         if response.status().as_u16() == 404 && self.session_id.is_some() {
             return Err(SessionExpired.into());
         }
@@ -254,6 +324,7 @@ impl HttpSession {
                 ensure!(bytes.len() <= MAX_FRAME, "MCP HTTP JSON 消息超过 1 MiB");
             }
             let value: Value = serde_json::from_slice(&bytes).context("MCP HTTP 返回无效 JSON")?;
+            let value = self.sanitize(value)?;
             let result = response_value(&value, id)?.context("MCP HTTP JSON 响应不是请求结果")?;
             self.active_id = None;
             return Ok(result);
@@ -282,6 +353,7 @@ impl HttpSession {
                             }
                             let value: Value = serde_json::from_slice(&data)
                                 .context("MCP HTTP SSE 包含无效 JSON")?;
+                            let value = self.sanitize(value)?;
                             if let Some(result) = response_value(&value, id)? {
                                 self.active_id = None;
                                 return Ok(result);
@@ -495,8 +567,9 @@ fn open_bounded(
     runtime: &tokio::runtime::Runtime,
     token: Arc<AtomicBool>,
     config: &HttpConfig,
+    credential: Option<Arc<crate::credentials::Secret>>,
 ) -> Result<HttpSession> {
-    let mut session = HttpSession::create(config)?;
+    let mut session = HttpSession::create(config, credential)?;
     if let Err(error) = bounded(
         runtime,
         token,
@@ -515,6 +588,17 @@ pub fn serve_http(
     cancelled_flag: Arc<AtomicBool>,
     requests: Receiver<ConnectedRequest>,
 ) -> Result<()> {
+    serve_http_authenticated(config, None, cancelled_flag, requests)
+}
+
+/// Credentials are explicit, temporary and bound to this worker's selected endpoint.
+pub fn serve_http_authenticated(
+    config: HttpConfig,
+    credential: Option<crate::credentials::Secret>,
+    cancelled_flag: Arc<AtomicBool>,
+    requests: Receiver<ConnectedRequest>,
+) -> Result<()> {
+    let credential = credential.map(Arc::new);
     let first = requests.recv().context("MCP HTTP 连接尚未收到操作")?;
     if let Err(error) = config
         .validate()
@@ -527,7 +611,12 @@ pub fn serve_http(
         .enable_all()
         .build()
         .context("无法创建 MCP HTTP 运行时")?;
-    let mut session = match open_bounded(&runtime, Arc::clone(&cancelled_flag), &config) {
+    let mut session = match open_bounded(
+        &runtime,
+        Arc::clone(&cancelled_flag),
+        &config,
+        credential.clone(),
+    ) {
         Ok(session) => session,
         Err(error) => {
             let _ = first.response.send(Err(error.to_string()));
@@ -571,7 +660,12 @@ pub fn serve_http(
             .is_some_and(|error| error.is::<SessionExpired>());
         if expired && !cancelled_flag.load(Ordering::Relaxed) {
             // Initialize without the obsolete ID; never replay the failed action.
-            match open_bounded(&runtime, Arc::clone(&cancelled_flag), &config) {
+            match open_bounded(
+                &runtime,
+                Arc::clone(&cancelled_flag),
+                &config,
+                credential.clone(),
+            ) {
                 Ok(fresh) => {
                     session = fresh;
                     let _ = request.response.send(Err(

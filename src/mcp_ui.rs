@@ -50,6 +50,8 @@ pub struct McpState {
     executable: String,
     arguments: String,
     http_endpoint: String,
+    temporary_bearer: bool,
+    http_token: String,
     report: Option<Report>,
     section: McpSection,
     selected_tool: String,
@@ -77,6 +79,8 @@ impl McpState {
             executable: String::new(),
             arguments: "[]".into(),
             http_endpoint: "http://127.0.0.1:3000/mcp".into(),
+            temporary_bearer: false,
+            http_token: String::new(),
             report: None,
             section: McpSection::Tools,
             selected_tool: String::new(),
@@ -183,6 +187,17 @@ impl McpState {
         self.connection = Some(sender);
         self.connection_alive.store(true, Ordering::Relaxed);
         self.message = "合成 HTTP 界面预览 · 无网络请求".into();
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_http_authentication(&mut self) {
+        self.preview_http();
+        self.connection = None;
+        self.connection_alive.store(false, Ordering::Relaxed);
+        self.report = None;
+        self.temporary_bearer = true;
+        self.http_token.clear();
+        self.message = "合成认证界面预览 · 未输入令牌 · 无网络请求".into();
     }
 
     fn config(&self) -> Result<Config, String> {
@@ -304,6 +319,17 @@ impl McpState {
         } else {
             None
         };
+        let credential = if self.transport == Transport::Http && self.temporary_bearer {
+            match crate::credentials::Secret::new(std::mem::take(&mut self.http_token)) {
+                Ok(secret) => Some(secret),
+                Err(error) => {
+                    self.message = error.to_string();
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         self.cancelled = Arc::new(AtomicBool::new(false));
         let cancelled = Arc::clone(&self.cancelled);
         self.connection_alive = Arc::new(AtomicBool::new(true));
@@ -314,7 +340,7 @@ impl McpState {
             if let Some(config) = stdio {
                 let _ = mcp::serve_connected(config, cancelled, access_path, requests);
             } else if let Some(config) = http {
-                let _ = mcp_http::serve_http(config, cancelled, requests);
+                let _ = mcp_http::serve_http_authenticated(config, credential, cancelled, requests);
             }
             alive.store(false, Ordering::Relaxed);
         });
@@ -435,6 +461,8 @@ impl McpState {
                     self.server_scope = None;
                     self.scope_error = None;
                     self.call_confirm = false;
+                    self.http_token.clear();
+                    self.temporary_bearer = false;
                 }
             });
             if self.transport == Transport::Stdio {
@@ -489,12 +517,26 @@ impl McpState {
                     self.confirmation_name.clear();
                 }
             } else {
-                ui.weak("HTTPS 或精确 127.0.0.1/::1 的 HTTP 端点；不跟随重定向、不使用环境代理。HTTP 工具调用每次人工确认，暂不支持认证。");
+                ui.weak("HTTPS 或精确 127.0.0.1/::1 的 HTTP 端点；不跟随重定向、不使用环境代理。HTTP 工具调用每次人工确认。");
                 ui.label("MCP HTTP 端点");
                 if ui.add_enabled(!busy && self.connection.is_none(), egui::TextEdit::singleline(&mut self.http_endpoint).desired_width(f32::INFINITY)).changed() {
                     self.report = None;
                     self.call_confirm = false;
                     self.confirmation_name.clear();
+                    self.http_token.clear();
+                }
+                ui.add_enabled_ui(!busy && self.connection.is_none(), |ui| {
+                    if ui.checkbox(&mut self.temporary_bearer, "本次连接使用临时 Bearer 令牌").changed() { self.http_token.clear(); }
+                    if self.temporary_bearer && self.connection.is_none() {
+                        ui.add(egui::TextEdit::singleline(&mut self.http_token).password(true).hint_text("仅输入为上方端点签发的令牌").desired_width(f32::INFINITY));
+                    }
+                });
+                if self.temporary_bearer {
+                    if self.connection.is_some() {
+                        ui.small("本次连接已启用临时认证，令牌输入已清空；断开后需重新输入。暂未提供 OAuth 登录或自动刷新。");
+                    } else {
+                        ui.small("令牌仅用于上方端点，不会保存；连接后清空输入。暂未提供 OAuth 登录或自动刷新。");
+                    }
                 }
             }
             ui.horizontal(|ui| {
@@ -519,6 +561,7 @@ impl McpState {
                     .clicked()
                 {
                     self.cancelled.store(true, Ordering::Relaxed);
+                    self.http_token.clear();
                     self.connection = None;
                     self.message = "正在断开 MCP 连接…".into();
                 }
