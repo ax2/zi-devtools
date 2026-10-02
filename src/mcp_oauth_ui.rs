@@ -453,7 +453,8 @@ impl OAuthPanel {
                 }
             }
         }
-        egui::CollapsingHeader::new("OAuth 浏览器登录").id_salt("mcp-oauth-discovery").default_open(self.expanded).show(ui, |ui| {
+        egui::CollapsingHeader::new("OAuth 浏览器登录 · 实验性").id_salt("mcp-oauth-discovery").default_open(self.expanded).show(ui, |ui| {
+            ui.weak("仅支持公共客户端；服务需支持本机动态端口回调。实际服务兼容性仍需验证。");
             ui.weak("先检查服务与权限，再主动打开系统浏览器。授权只保留在内存；可使用预注册客户端或主动开放注册；可选择自动续期。");
             if let Ok(resource) = mcp_oauth::canonical_resource(endpoint) { ui.label(format!("目标资源：{resource}")); }
             egui::CollapsingHeader::new("服务发现与授权配置").id_salt("oauth-config-steps").default_open(self.authorization.is_none()).show(ui, |ui| {
