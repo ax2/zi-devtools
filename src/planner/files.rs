@@ -103,7 +103,8 @@ impl State {
         ensure!(
             self.purge_review.is_none()
                 && self.export_review.is_none()
-                && self.backup_review.is_none(),
+                && self.backup_review.is_none()
+                && self.ics_review.is_none(),
             "请先关闭当前确认窗口"
         );
         self.start_file(move || read_note(&path).map(Reply::Imported));
@@ -125,7 +126,9 @@ impl State {
             "正在读写本地记录，请稍后重试"
         );
         ensure!(
-            self.purge_review.is_none() && self.backup_review.is_none(),
+            self.purge_review.is_none()
+                && self.backup_review.is_none()
+                && self.ics_review.is_none(),
             "请先关闭其他确认窗口"
         );
         let item = self.draft.as_ref().context("请先打开备忘或日程")?;
@@ -167,31 +170,35 @@ impl State {
         Ok(())
     }
     pub(super) fn file_toolbar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            #[cfg(windows)]
-            if ui
-                .add_enabled(
-                    self.loaded && self.pending.is_none() && !self.has_unsaved(),
-                    egui::Button::new("导入 Markdown / 文本…"),
-                )
-                .on_hover_text(
-                    "读取 UTF-8 文件为新备忘草稿，最多 128 KiB；不修改原文件，也不自动保存。",
-                )
-                .clicked()
-                && let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Markdown / 文本", &["md", "markdown", "txt"])
-                    .pick_file()
-                && let Err(error) = self.import_file(path)
-            {
-                self.message = format!("{error:#}");
-                self.error = true;
-            }
-            ui.small(if self.pending.is_none() && self.has_unsaved() {
-                "先保存或放弃当前编辑，才能导入新备忘。"
-            } else {
-                "文件 → 新备忘草稿 · UTF-8 · 最大 128 KiB"
+        if self.calendar {
+            self.ics_buttons(ui);
+        } else {
+            ui.horizontal_wrapped(|ui| {
+                #[cfg(windows)]
+                if ui
+                    .add_enabled(
+                        self.loaded && self.pending.is_none() && !self.has_unsaved(),
+                        egui::Button::new("导入 Markdown / 文本…"),
+                    )
+                    .on_hover_text(
+                        "读取 UTF-8 文件为新备忘草稿，最多 128 KiB；不修改原文件，也不自动保存。",
+                    )
+                    .clicked()
+                    && let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Markdown / 文本", &["md", "markdown", "txt"])
+                        .pick_file()
+                    && let Err(error) = self.import_file(path)
+                {
+                    self.message = format!("{error:#}");
+                    self.error = true;
+                }
+                ui.small(if self.pending.is_none() && self.has_unsaved() {
+                    "先保存或放弃当前编辑，才能导入新备忘。"
+                } else {
+                    "文件 → 新备忘草稿 · UTF-8 · 最大 128 KiB"
+                });
             });
-        });
+        }
         self.backup_buttons(ui);
     }
     pub(super) fn export_ui(&mut self, ctx: &egui::Context) {

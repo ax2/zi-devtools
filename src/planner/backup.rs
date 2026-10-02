@@ -360,7 +360,8 @@ impl State {
         ensure!(
             self.purge_review.is_none()
                 && self.export_review.is_none()
-                && self.backup_review.is_none(),
+                && self.backup_review.is_none()
+                && self.ics_review.is_none(),
             "请先关闭其他确认窗口"
         );
         Ok(())

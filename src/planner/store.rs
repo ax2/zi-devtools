@@ -171,7 +171,7 @@ pub(super) fn restore(path: &Path, expected: &[Item], records: &[Item]) -> Resul
     actual.sort_by_key(|i| &i.id);
     ensure!(
         actual == before,
-        "本地记录在预览后发生变化，本次未恢复；请重新读取备份并确认"
+        "本地记录在预览后发生变化，本次未写入；请重新预览并确认"
     );
     let old: HashMap<_, _> = current.iter().map(|i| (i.id.as_str(), i)).collect();
     let mut restored = records.to_vec();

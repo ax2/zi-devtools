@@ -1,7 +1,7 @@
 use super::*;
 use backup::{Mode, Review};
 
-fn item_details(ui: &mut egui::Ui, item: &Item) {
+pub(super) fn item_details(ui: &mut egui::Ui, item: &Item) {
     ui.strong(&item.title);
     ui.label(format!(
         "{} · {}",

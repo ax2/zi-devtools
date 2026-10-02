@@ -302,6 +302,21 @@ impl DevToolsApp {
         self.planner.preview_interval_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_ics_position(&self, index: usize) -> egui::Pos2 {
+        self.planner.preview_ics_rects[index]
+            .expect("ICS control rendered")
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_ics_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Calendar;
+        self.planner.preview_ics_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_ics_interop(&self, folder: &Path) {
+        self.planner.preview_ics_interop(folder);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_files_smoke(&mut self, phase: u8) -> bool {
         self.page = Page::Notes;
         self.planner.preview_files_smoke(phase)
@@ -439,6 +454,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            246..=251 => {
+                self.page = Page::Calendar;
+                self.planner.preview_ics(scene >= 248);
+            }
             238..=245 => {
                 self.page = Page::Calendar;
                 self.planner.preview_interval(scene >= 240);

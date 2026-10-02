@@ -3,6 +3,12 @@ mod agenda;
 mod backup;
 mod backup_ui;
 mod files;
+mod ics;
+#[cfg(feature = "ui-preview")]
+mod ics_preview;
+#[cfg(test)]
+mod ics_tests;
+mod ics_ui;
 mod interval;
 #[cfg(test)]
 mod interval_tests;
@@ -95,6 +101,8 @@ struct Item {
     trash: bool,
     updated: i64,
     schedule: Option<Schedule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    calendar_uid: Option<String>,
 }
 impl Item {
     fn new(date: Option<NaiveDate>) -> Self {
@@ -106,6 +114,7 @@ impl Item {
             pinned: false,
             trash: false,
             updated: 0,
+            calendar_uid: None,
             schedule: date.map(|date| Schedule {
                 start: date.and_hms_opt(9, 0, 0).unwrap(),
                 end: None,
@@ -122,6 +131,15 @@ impl Item {
         }
     }
     fn validate(&self) -> Result<()> {
+        if let Some(uid) = &self.calendar_uid {
+            ensure!(
+                self.schedule.is_some()
+                    && !uid.is_empty()
+                    && uid.len() <= 1024
+                    && !uid.chars().any(char::is_control),
+                "日历 UID 无效"
+            );
+        }
         ensure!(
             uuid::Uuid::parse_str(&self.id)?.to_string() == self.id,
             "记录标识无效"
@@ -203,6 +221,9 @@ fn lunar_day(date: NaiveDate) -> LunarDay {
 }
 
 enum Reply {
+    IcsReady(Box<ics_ui::Review>),
+    IcsSaved(PathBuf, usize),
+    IcsImported(Vec<Item>, usize),
     Loaded(Vec<Item>),
     Imported(Item),
     Exported(PathBuf, usize),
@@ -221,6 +242,7 @@ pub struct State {
     file_operation: bool,
     export_review: Option<files::Export>,
     backup_review: Option<backup::Review>,
+    ics_review: Option<ics_ui::Review>,
     loaded: bool,
     draft: Option<Item>,
     original: Option<Item>,
@@ -261,6 +283,8 @@ pub struct State {
     pub preview_recurrence_rects: [Option<(egui::Rect, egui::Rect)>; 2],
     #[cfg(feature = "ui-preview")]
     pub preview_interval_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_ics_rects: [Option<egui::Rect>; 4],
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -366,6 +390,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_interval_rect: None,
             #[cfg(feature = "ui-preview")]
+            preview_ics_rects: [None; 4],
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -376,6 +402,7 @@ impl State {
             file_operation: false,
             export_review: None,
             backup_review: None,
+            ics_review: None,
             loaded: false,
             draft: None,
             original: None,
@@ -639,6 +666,33 @@ impl State {
                 self.pending = None;
                 self.file_operation = false;
                 match reply {
+                    Ok(Reply::IcsReady(review)) => {
+                        self.ics_review = Some(*review);
+                        self.message.clear();
+                        self.error = false;
+                    }
+                    Ok(Reply::IcsSaved(path, count)) => {
+                        self.message = format!("已导出 {count} 条日程 · {}", path.display());
+                        self.error = false;
+                    }
+                    Ok(Reply::IcsImported(items, count)) => {
+                        self.items = items;
+                        self.loaded = true;
+                        self.draft = None;
+                        self.original = None;
+                        self.date_text.clear();
+                        self.time_text.clear();
+                        self.end_date_text.clear();
+                        self.end_time_text.clear();
+                        self.query.clear();
+                        self.calendar = true;
+                        self.trash = false;
+                        self.message = format!(
+                            "已导入 / 更新 {count} 条日程；这些条目的提醒已关闭。可打开日程设置提醒后保存。"
+                        );
+                        self.error = false;
+                        self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
+                    }
                     Ok(Reply::BackupReady(review)) => {
                         self.backup_review = Some(*review);
                         self.message = "已读取已保存记录的快照，请核对范围后继续。".into();
