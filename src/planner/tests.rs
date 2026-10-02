@@ -351,3 +351,133 @@ fn open_reminder_preserves_unsaved_draft_and_does_not_acknowledge() {
     assert!(state.open_event("missing", at).is_err());
     assert!(!path.exists());
 }
+
+#[test]
+fn purge_snapshot_is_atomic_and_excludes_live_and_later_records() {
+    let path = fixture();
+    let mut first = event();
+    first.trash = true;
+    let mut second = Item::new(None);
+    second.title = "trashed memo".into();
+    second.trash = true;
+    let live = event();
+    for item in [first, second, live.clone()] {
+        store::save(&path, item).unwrap();
+    }
+    let reviewed: Vec<_> = store::load(&path)
+        .unwrap()
+        .into_iter()
+        .filter(|i| i.trash)
+        .collect();
+    let mut restored = reviewed[1].clone();
+    restored.trash = false;
+    store::save(&path, restored.clone()).unwrap();
+    assert!(store::purge(&path, &reviewed).is_err());
+    let after = store::load(&path).unwrap();
+    assert_eq!(after.len(), 3); // First delete was rolled back when second conflicted.
+    assert!(after.iter().any(|i| i.id == reviewed[0].id));
+    assert!(
+        store::purge(
+            &path,
+            std::slice::from_ref(after.iter().find(|i| i.id == live.id).unwrap())
+        )
+        .is_err()
+    );
+    let fresh: Vec<_> = after.into_iter().filter(|i| i.trash).collect();
+    let mut later = event();
+    later.trash = true;
+    let later_id = later.id.clone();
+    store::save(&path, later).unwrap();
+    assert!(store::purge(&path, &[fresh[0].clone(), fresh[0].clone()]).is_err());
+    assert_eq!(store::load(&path).unwrap().len(), 4);
+    let remaining = store::purge(&path, &fresh).unwrap();
+    assert_eq!(remaining.len(), 3);
+    assert!(remaining.iter().any(|i| i.id == later_id && i.trash));
+    assert!(remaining.iter().any(|i| i.id == restored.id && !i.trash));
+    assert_eq!(store::load(&path).unwrap(), remaining);
+    assert!(store::purge(&path, &fresh).is_err());
+    assert_eq!(store::load(&path).unwrap(), remaining);
+    std::fs::remove_file(&path).unwrap();
+    assert!(store::purge(&path, &fresh).is_err());
+    assert!(!path.exists());
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn purge_requires_confirmation_protects_edits_and_clears_deleted_selection() {
+    let path = fixture();
+    let mut memo = Item::new(None);
+    memo.title = "memo".into();
+    memo.trash = true;
+    let mut scheduled = event();
+    scheduled.trash = true;
+    for item in [memo.clone(), scheduled] {
+        store::save(&path, item).unwrap();
+    }
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state.edit(
+        state
+            .items
+            .iter()
+            .find(|i| i.id == memo.id)
+            .unwrap()
+            .clone(),
+    );
+    state.query = "no matches".into();
+    state.calendar = true;
+    let before = std::fs::read(&path).unwrap();
+    assert!(state.confirm_purge().is_err());
+    state.request_purge(true).unwrap();
+    assert_eq!(state.purge_review.as_ref().unwrap().len(), 2);
+    state.purge_review = None; // Cancel has no storage effect.
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    state.draft.as_mut().unwrap().body = "unsaved".into();
+    assert!(state.request_purge(true).is_err());
+    state.discard();
+    state.request_purge(false).unwrap();
+    assert_eq!(state.purge_review.as_ref().unwrap().len(), 1);
+    state.confirm_purge().unwrap();
+    assert!(state.saving() && state.has_unsaved());
+    assert!(state.request_purge(true).is_err());
+    wait_state(&mut state);
+    assert!(!state.error && !state.saving() && !state.has_unsaved());
+    assert!(state.draft.is_none() && state.original.is_none());
+    assert_eq!(state.items.len(), 1);
+    state.request_purge(true).unwrap();
+    state.confirm_purge().unwrap();
+    wait_state(&mut state);
+    assert!(state.items.is_empty());
+    state.new_draft(None);
+    state.draft.as_mut().unwrap().title = "new".into();
+    state.save_draft();
+    wait_state(&mut state);
+    assert_eq!(store::load(&path).unwrap().len(), 1);
+    assert!(state.request_purge(true).is_err());
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn purge_failure_retains_selection_and_database_without_partial_deletion() {
+    let path = fixture();
+    let mut item = event();
+    item.trash = true;
+    store::save(&path, item).unwrap();
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state.edit(state.items[0].clone());
+    state.request_purge(true).unwrap();
+    let mut changed = state.items[0].clone();
+    changed.body = "edited elsewhere".into();
+    store::save(&path, changed).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    state.confirm_purge().unwrap();
+    wait_state(&mut state);
+    assert!(state.error && state.deleting.is_none());
+    assert!(state.draft.is_some());
+    assert_eq!(state.items.len(), 1);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+}

@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 212] = [
+const NAMES: [&str; 216] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -222,6 +222,10 @@ const NAMES: [&str; 212] = [
     "memo-handoff-light",
     "memo-received-dark",
     "memo-received-light",
+    "planner-trash-dark",
+    "planner-trash-light",
+    "planner-purge-dark",
+    "planner-purge-light",
 ];
 
 struct Capture {
@@ -243,6 +247,21 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("planner-trash-smoke")
+            && matches!(self.frames, 5 | 6 | 16 | 17)
+        {
+            let pos = self
+                .app
+                .preview_purge_click_position(self.frames >= 16)
+                .expect("purge action rendered");
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 5 | 16),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if std::env::args().nth(3).as_deref() == Some("reminder-open-smoke")
             && matches!(self.frames, 5 | 6)
         {
@@ -294,6 +313,22 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("planner-trash-smoke") {
+            if self.frames == 0 {
+                self.app.preview_purge_smoke(0);
+            }
+            if self.frames == 12 {
+                self.app.preview_purge_smoke(1);
+            }
+            self.app.update(ctx, frame);
+            if self.frames >= 30 && self.app.preview_purge_smoke(2) {
+                std::process::exit(0);
+            }
+            assert!(self.frames < 150, "purge operation timed out");
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("reminder-open-smoke") {
             if self.frames == 0 {
                 self.app.preview_reminder_click_start(ctx);

@@ -214,6 +214,8 @@ pub struct State {
     items: Vec<Item>,
     pending: Option<mpsc::Receiver<LoadResult>>,
     saving: Option<String>,
+    deleting: Option<Vec<String>>,
+    purge_review: Option<Vec<Item>>,
     loaded: bool,
     draft: Option<Item>,
     original: Option<Item>,
@@ -237,6 +239,8 @@ pub struct State {
     pub preview_delivered: std::sync::Arc<std::sync::atomic::AtomicBool>,
     #[cfg(feature = "ui-preview")]
     pub preview_open_reminder_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_purge_rects: Option<[egui::Rect; 2]>,
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -309,7 +313,7 @@ impl State {
         Ok(())
     }
     pub fn saving(&self) -> bool {
-        self.pending.is_some() && self.saving.is_some()
+        self.pending.is_some() && (self.saving.is_some() || self.deleting.is_some())
     }
     pub fn needs_clock(&self) -> bool {
         self.pending.is_some()
@@ -328,11 +332,15 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_open_reminder_rect: None,
             #[cfg(feature = "ui-preview")]
+            preview_purge_rects: None,
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
             pending: None,
             saving: None,
+            deleting: None,
+            purge_review: None,
             loaded: false,
             draft: None,
             original: None,
@@ -378,8 +386,43 @@ impl State {
     fn reload(&mut self) {
         self.launch(None);
     }
+    fn request_purge(&mut self, all: bool) -> Result<()> {
+        ensure!(
+            self.loaded && self.pending.is_none(),
+            "正在读写本地记录，请稍后重试"
+        );
+        ensure!(!self.has_unsaved(), "请先保存或放弃当前编辑，再清理回收站");
+        let selected = self.draft.as_ref().map(|i| i.id.as_str());
+        let reviewed: Vec<_> = self
+            .items
+            .iter()
+            .filter(|i| i.trash && (all || Some(i.id.as_str()) == selected))
+            .cloned()
+            .collect();
+        ensure!(!reviewed.is_empty(), "没有可永久删除的回收站记录");
+        self.purge_review = Some(reviewed);
+        Ok(())
+    }
+    fn confirm_purge(&mut self) -> Result<()> {
+        ensure!(
+            self.loaded && self.pending.is_none() && !self.has_unsaved(),
+            "记录正在读写或有未保存编辑，请稍后重试"
+        );
+        let reviewed = self
+            .purge_review
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("请先预览要删除的记录"))?;
+        self.deleting = Some(reviewed.iter().map(|i| i.id.clone()).collect());
+        let path = self.path.clone();
+        let (tx, rx) = mpsc::channel();
+        self.pending = Some(rx);
+        std::thread::spawn(move || {
+            let _ = tx.send(store::purge(&path, &reviewed).map_err(|e| e.to_string()));
+        });
+        Ok(())
+    }
     pub fn has_unsaved(&self) -> bool {
-        if self.pending.is_some() && self.saving.is_some() {
+        if self.saving() {
             return true;
         }
         self.draft.as_ref().is_some_and(|item| {
@@ -500,6 +543,19 @@ impl State {
                             "已加载本地记录"
                         }
                         .into();
+                        if let Some(ids) = self.deleting.take() {
+                            self.message = format!(
+                                "已永久删除 {} 条回收站记录，记录容量可再次使用。",
+                                ids.len()
+                            );
+                            if self.draft.as_ref().is_some_and(|i| ids.contains(&i.id)) {
+                                self.draft = None;
+                                self.original = None;
+                                self.date_text.clear();
+                                self.time_text.clear();
+                            }
+                            self.shown.retain(|(id, _)| !ids.contains(id));
+                        }
                         if let Some(id) = self.saving.take() {
                             if self.draft.as_ref().is_some_and(|i| i.id == id)
                                 && let Some(item) = self.items.iter().find(|i| i.id == id).cloned()
@@ -514,6 +570,7 @@ impl State {
                         self.message = error;
                         self.error = true;
                         self.saving = None;
+                        self.deleting = None;
                     }
                 }
             }

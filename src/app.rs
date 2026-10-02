@@ -251,6 +251,17 @@ pub struct DevToolsApp {
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_purge_click_position(&self, confirm: bool) -> Option<egui::Pos2> {
+        self.planner
+            .preview_purge_rects
+            .map(|r| r[usize::from(confirm)].center())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_purge_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Notes;
+        self.planner.preview_purge_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_reminder_click_position(&self) -> Option<egui::Pos2> {
         self.planner
             .preview_open_reminder_rect
@@ -372,6 +383,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            212..=215 => {
+                self.page = Page::Notes;
+                self.planner.preview_trash(scene >= 214);
+            }
             208..=211 => self.preview_memo_handoff(scene >= 210),
             198..=207 => {
                 self.page = if scene >= 200 {

@@ -99,6 +99,24 @@ impl State {
                 self.new_draft(self.calendar.then_some(self.selected));
             }
         });
+        if self.trash {
+            let count = self.items.iter().filter(|i| i.trash).count();
+            ui.horizontal_wrapped(|ui| {
+                ui.label(format!("回收站共 {count} 条，包含备忘与日程。"));
+                if ui
+                    .add_enabled(
+                        self.loaded && self.pending.is_none() && !self.has_unsaved() && count > 0,
+                        egui::Button::new("清空回收站…"),
+                    )
+                    .clicked()
+                    && let Err(error) = self.request_purge(true)
+                {
+                    self.message = error.to_string();
+                    self.error = true;
+                }
+                ui.small("清空范围不受当前搜索、日期或类型筛选影响。");
+            });
+        }
         if self.pending.is_some() {
             ui.horizontal(|ui| {
                 ui.spinner();
@@ -146,9 +164,54 @@ impl State {
         ui.add_space(12.0);
         ui.collapsing("本地保存与容量", |ui| {
             ui.label(format!("{} 条 / 2000 条（含回收站）；正文每条 128 KiB，总内容 32 MiB。", self.items.len()));
-            ui.label("内容未加密，不会自动上传。备份前请退出程序，再复制数据库文件。回收站保留内容，当前版本不提供永久清空。");
+            ui.label("内容未加密，不会自动上传。备份前请退出程序，再复制数据库文件。回收站支持确认后永久删除；释放记录容量，数据库文件空间由 SQLite 复用，不保证文件立即缩小或安全擦除。");
             ui.label(self.path.display().to_string());
         });
+        self.purge_ui(ui.ctx());
+    }
+
+    fn purge_ui(&mut self, ctx: &egui::Context) {
+        let Some(reviewed) = self.purge_review.as_ref() else {
+            return;
+        };
+        let mut cancel = false;
+        let mut confirm = false;
+        #[cfg(feature = "ui-preview")]
+        let mut rects = None;
+        egui::Modal::new(egui::Id::new("planner-purge")).show(ctx, |ui| {
+            ui.set_width(440.0_f32.min((ctx.screen_rect().width() - 48.0).max(180.0)));
+            ui.heading(format!("永久删除 {} 条记录？", reviewed.len()));
+            ui.label("仅删除下面列出的回收站记录，包含备忘和日程。此操作无法撤销，之后无法从回收站恢复。");
+            ui.add_space(8.0);
+            egui::ScrollArea::vertical().id_salt("purge-items").max_height(180.0).show(ui, |ui| {
+                for item in reviewed {
+                    ui.label(format!("{} · {}", if item.schedule.is_some() { "日程" } else { "备忘" }, item.title));
+                }
+            });
+            ui.add_space(8.0);
+            ui.small("提交时复核记录是否已修改或恢复；有冲突则整批取消。打开此窗口之后新增的回收站记录不会被删除。");
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                let cancel_response = ui.button("取消，保留记录");
+                let confirm_response = ui.button(egui::RichText::new("确认永久删除").color(ui.visuals().error_fg_color));
+                cancel = cancel_response.clicked();
+                confirm = confirm_response.clicked();
+                #[cfg(feature = "ui-preview")]
+                { rects = Some([cancel_response.rect, confirm_response.rect]); }
+            });
+        });
+        #[cfg(feature = "ui-preview")]
+        {
+            self.preview_purge_rects = rects;
+        }
+        cancel |= ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        if cancel {
+            self.purge_review = None;
+        } else if confirm && let Err(error) = self.confirm_purge() {
+            self.purge_review = None;
+            self.message = error.to_string();
+            self.error = true;
+        }
     }
 
     fn calendar_ui(&mut self, ui: &mut egui::Ui) {
@@ -325,7 +388,11 @@ impl State {
         ui.strong(format!(
             "{} · {} 条",
             if self.trash {
-                "回收站"
+                if self.calendar {
+                    "日程回收站 · 当前筛选"
+                } else {
+                    "备忘回收站 · 当前筛选"
+                }
             } else if self.calendar && !query.is_empty() {
                 "所有日期的搜索结果"
             } else if self.calendar {
@@ -393,6 +460,7 @@ impl State {
         let mut discard = false;
         let mut convert = false;
         let mut trash = false;
+        let mut purge = false;
         ui.heading(if item.schedule.is_some() {
             "编辑日程"
         } else {
@@ -518,6 +586,12 @@ impl State {
                 .clicked();
             if item.trash {
                 ui.label("回收站中的日程不会提醒。恢复后，未处理的过期提醒会再次显示。");
+                purge = ui
+                    .add_enabled(
+                        item.revision > 0 && !dirty,
+                        egui::Button::new("永久删除这条记录…"),
+                    )
+                    .clicked();
             }
         });
         self.draft = Some(item.clone());
@@ -529,6 +603,11 @@ impl State {
         } else if trash {
             item.trash = !item.trash;
             self.launch(Some(item));
+        } else if purge {
+            if let Err(error) = self.request_purge(false) {
+                self.message = error.to_string();
+                self.error = true;
+            }
         } else if convert {
             let mut event = Item::new(Some(self.selected));
             event.title = item.title;
@@ -635,10 +714,65 @@ impl State {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub fn preview_trash(&mut self, confirm: bool) {
+        self.preview(false, false);
+        self.items[0].trash = true;
+        self.items[2].trash = true;
+        self.edit(self.items[0].clone());
+        self.trash = true;
+        self.query.clear();
+        if confirm {
+            self.request_purge(true).unwrap();
+        }
+        self.focus_editor = false;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_purge_smoke(&mut self, phase: u8) -> bool {
+        match phase {
+            0 => {
+                self.preview_trash(false);
+                self.path = std::env::temp_dir()
+                    .join(format!("zi-planner-purge-ui-{}", uuid::Uuid::new_v4()))
+                    .join("planner.sqlite3");
+                for mut item in self.items.clone() {
+                    item.revision = 0;
+                    store::save(&self.path, item).unwrap();
+                }
+                self.items = store::load(&self.path).unwrap();
+                self.edit(self.items.iter().find(|i| i.trash).unwrap().clone());
+                self.request_purge(true).unwrap();
+            }
+            1 => {
+                assert!(self.purge_review.is_none() && self.pending.is_none());
+                assert_eq!(store::load(&self.path).unwrap().len(), 3);
+                self.request_purge(true).unwrap();
+            }
+            2 => {
+                if self.pending.is_some() {
+                    return false;
+                }
+                assert!(!self.error && self.purge_review.is_none());
+                assert_eq!(self.items.len(), 1);
+                assert!(!self.items[0].trash && self.draft.is_none());
+                assert_eq!(store::load(&self.path).unwrap(), self.items);
+                std::fs::remove_file(&self.path).unwrap();
+                std::fs::remove_dir(self.path.parent().unwrap()).unwrap();
+                println!(
+                    "PASS trash UI: actual cancel retains all records; actual confirm deletes only reviewed trash, clears selection and preserves live record"
+                );
+            }
+            _ => unreachable!(),
+        }
+        true
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview(&mut self, calendar: bool, alarm: bool) {
         // The capture app uses an isolated config directory; never writes user records.
         self.pending = None;
         self.saving = None;
+        self.deleting = None;
+        self.purge_review = None;
+        self.trash = false;
         self.loaded = true;
         self.items.clear();
         self.calendar = calendar;

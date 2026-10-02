@@ -36,6 +36,9 @@ pub(super) fn load(path: &Path) -> Result<Vec<Item>> {
         return Ok(Vec::new());
     }
     let conn = connect(path, false)?;
+    load_connection(&conn)
+}
+fn load_connection(conn: &Connection) -> Result<Vec<Item>> {
     let (count, bytes): (i64, i64) = conn.query_row(
         "SELECT count(*), coalesce(sum(length(CAST(payload AS BLOB))),0) FROM records",
         [],
@@ -105,4 +108,47 @@ pub(super) fn save(path: &Path, mut item: Item) -> Result<()> {
     }
     tx.commit()?;
     Ok(())
+}
+
+/// Delete only the reviewed snapshot; a conflicting row rolls back the whole batch.
+pub(super) fn purge(path: &Path, reviewed: &[Item]) -> Result<Vec<Item>> {
+    ensure!(
+        !reviewed.is_empty() && reviewed.len() <= MAX_ITEMS,
+        "请选择回收站记录"
+    );
+    ensure!(path.exists(), "本地记录已不可用，请重新加载");
+    let mut conn = connect(path, true)?;
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let mut ids = HashSet::new();
+    for expected in reviewed {
+        expected.validate()?;
+        ensure!(
+            expected.trash && expected.revision > 0 && ids.insert(&expected.id),
+            "仅能永久删除已保存的回收站记录"
+        );
+        let current: String = tx
+            .query_row(
+                "SELECT payload FROM records WHERE id=?1 AND revision=?2",
+                params![expected.id, expected.revision],
+                |r| r.get(0),
+            )
+            .map_err(|_| {
+                anyhow::anyhow!("记录已变化或被删除；本次未删除任何记录，请重新加载后确认")
+            })?;
+        let current: Item = serde_json::from_str(&current)?;
+        ensure!(
+            current == *expected && current.trash,
+            "记录已恢复或修改；本次未删除任何记录，请重新加载后确认"
+        );
+        ensure!(
+            tx.execute(
+                "DELETE FROM records WHERE id=?1 AND revision=?2",
+                params![expected.id, expected.revision]
+            )? == 1,
+            "记录已变化"
+        );
+    }
+    let remaining = load_connection(&tx)?;
+    tx.commit()?;
+    Ok(remaining)
 }
