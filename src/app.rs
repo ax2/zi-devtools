@@ -370,6 +370,23 @@ impl DevToolsApp {
         self.planner.preview_purge_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_duplicate_position(&self) -> egui::Pos2 {
+        let (rect, clip) = self
+            .planner
+            .preview_duplicate_rect
+            .expect("copy control rendered");
+        assert!(
+            clip.contains_rect(rect),
+            "copy button clipped: rect={rect:?}, clip={clip:?}"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_duplicate_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Calendar;
+        self.planner.preview_duplicate_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_listing_position(&self, index: usize) -> egui::Pos2 {
         self.planner.preview_list_rects[index]
             .expect("list control rendered")
@@ -513,6 +530,14 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            274..=277 => {
+                self.page = if scene >= 276 {
+                    Page::Calendar
+                } else {
+                    Page::Notes
+                };
+                self.planner.preview_duplicate(scene >= 276);
+            }
             270..=273 => {
                 self.page = Page::Notes;
                 self.planner.preview_listing(scene >= 272);

@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 274] = [
+const NAMES: [&str; 278] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -284,6 +284,10 @@ const NAMES: [&str; 274] = [
     "planner-list-many-light",
     "planner-list-pinned-dark",
     "planner-list-pinned-light",
+    "planner-copy-memo-dark",
+    "planner-copy-memo-light",
+    "planner-copy-calendar-dark",
+    "planner-copy-calendar-light",
 ];
 
 struct Capture {
@@ -354,6 +358,28 @@ impl eframe::App for Capture {
                 delta: egui::vec2(0.0, -2000.0),
                 modifiers: egui::Modifiers::NONE,
             });
+        }
+        if std::env::args().nth(3).as_deref() == Some("duplicate-smoke") {
+            if matches!(self.frames, 25 | 26) {
+                let pos = self.app.preview_duplicate_position();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames == 25,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 45 {
+                input.modifiers = egui::Modifiers::CTRL;
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::S,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::CTRL,
+                });
+            }
         }
         let actions_mode = std::env::args().nth(3);
         if matches!(
@@ -676,6 +702,29 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("duplicate-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 276, self.fixture.clone());
+                self.app.preview_duplicate_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 40 {
+                self.app.preview_duplicate_smoke(1);
+            }
+            if self.frames >= 70 {
+                if !self.app.preview_duplicate_smoke(2) {
+                    ctx.request_repaint_after(Duration::from_millis(60));
+                    return;
+                }
+                std::process::exit(0);
+            }
+            assert!(self.started.elapsed() < Duration::from_secs(35));
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+
         if smoke_mode.as_deref() == Some("listing-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 270, self.fixture.clone());
@@ -1555,6 +1604,7 @@ impl eframe::App for Capture {
             let size = if (244..=245).contains(&self.scene)
                 || (250..=251).contains(&self.scene)
                 || (254..=255).contains(&self.scene)
+                || (274..=275).contains(&self.scene)
             {
                 egui::vec2(980.0, 760.0)
             } else if (230..=231).contains(&self.scene) || (260..=273).contains(&self.scene) {
@@ -1565,6 +1615,7 @@ impl eframe::App for Capture {
                 || (136..=137).contains(&self.scene)
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)
+                || (276..=277).contains(&self.scene)
             {
                 egui::vec2(1280.0, 1180.0)
             } else if (134..=135).contains(&self.scene) {
@@ -1585,7 +1636,8 @@ impl eframe::App for Capture {
         if ((206..=207).contains(&self.scene)
             || (244..=245).contains(&self.scene)
             || (254..=255).contains(&self.scene)
-            || (262..=265).contains(&self.scene))
+            || (262..=265).contains(&self.scene)
+            || (276..=277).contains(&self.scene))
             && self.frames == 6
         {
             self.app.preview_planner_editor();

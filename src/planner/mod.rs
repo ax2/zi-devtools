@@ -9,6 +9,7 @@ mod backup_ui;
 mod cutoff_preview;
 #[cfg(test)]
 mod cutoff_tests;
+mod duplicate;
 mod files;
 mod ics;
 #[cfg(feature = "ui-preview")]
@@ -300,6 +301,10 @@ pub struct State {
     focus_editor: bool,
     editor_action: Option<(String, actions::Action)>,
     #[cfg(feature = "ui-preview")]
+    pub preview_duplicate_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    preview_duplicate_source: Option<Item>,
+    #[cfg(feature = "ui-preview")]
     pub preview_delivered: std::sync::Arc<std::sync::atomic::AtomicBool>,
     #[cfg(feature = "ui-preview")]
     pub preview_open_reminder_rect: Option<egui::Rect>,
@@ -489,6 +494,10 @@ impl State {
             preview_snooze_rects: [None; 3],
             focus_editor: false,
             editor_action: None,
+            #[cfg(feature = "ui-preview")]
+            preview_duplicate_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_duplicate_source: None,
         };
         state.reload();
         state
