@@ -370,6 +370,20 @@ impl DevToolsApp {
         self.planner.preview_purge_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_week_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) = self.planner.preview_week_rects[index].expect("week control rendered");
+        assert!(
+            clip.contains_rect(rect),
+            "week control clipped: {rect:?}, {clip:?}"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_week_smoke(&mut self, phase: u8) {
+        self.page = Page::Calendar;
+        self.planner.preview_week_smoke(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_convert_position(&self) -> egui::Pos2 {
         let (rect, clip) = self
             .planner
@@ -559,6 +573,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            282..=285 => {
+                self.page = Page::Calendar;
+                self.planner.preview_week();
+            }
             278..=281 => {
                 self.page = if scene < 280 {
                     Page::Notes

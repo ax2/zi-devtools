@@ -41,6 +41,8 @@ impl State {
     pub(super) fn replace_items(&mut self, items: Vec<Item>) {
         self.items = items;
         self.list_cache.invalidate();
+        self.agenda_cache = Default::default();
+        self.week_cache = Default::default();
     }
     pub(super) fn listed_indices(&mut self) -> Vec<usize> {
         let key = QueryKey {

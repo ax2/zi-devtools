@@ -28,6 +28,7 @@ mod store;
 #[cfg(test)]
 mod tests;
 mod ui;
+mod week;
 
 use anyhow::{Result, ensure};
 use chrono::{
@@ -275,6 +276,8 @@ pub struct State {
     trash: bool,
     pub calendar: bool,
     agenda_days: u32,
+    week_view: bool,
+    week_cache: week::Cache,
     agenda_done: bool,
     agenda_cache: agenda::Cache,
     selected: NaiveDate,
@@ -319,6 +322,8 @@ pub struct State {
     pub preview_backup_rects: [Option<egui::Rect>; 4],
     #[cfg(feature = "ui-preview")]
     pub preview_agenda_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_week_rects: [Option<(egui::Rect, egui::Rect)>; 3],
     #[cfg(feature = "ui-preview")]
     pub preview_recurrence_rects: [Option<(egui::Rect, egui::Rect)>; 2],
     #[cfg(feature = "ui-preview")]
@@ -398,6 +403,7 @@ impl State {
         }
         self.calendar = true;
         self.agenda_days = 1;
+        self.week_view = false;
         self.trash = false;
         self.query.clear();
         self.select_date(at.date());
@@ -433,6 +439,8 @@ impl State {
             preview_backup_rects: [None; 4],
             #[cfg(feature = "ui-preview")]
             preview_agenda_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_week_rects: [None; 3],
             #[cfg(feature = "ui-preview")]
             preview_recurrence_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
@@ -471,6 +479,8 @@ impl State {
             trash: false,
             calendar: false,
             agenda_days: 1,
+            week_view: false,
+            week_cache: Default::default(),
             agenda_done: false,
             agenda_cache: Default::default(),
             selected: today,

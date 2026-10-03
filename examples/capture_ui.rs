@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 282] = [
+const NAMES: [&str; 286] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -292,6 +292,10 @@ const NAMES: [&str; 282] = [
     "planner-event-to-memo-light",
     "planner-memo-to-event-dark",
     "planner-memo-to-event-light",
+    "planner-week-dark",
+    "planner-week-light",
+    "planner-week-small-dark",
+    "planner-week-small-light",
 ];
 
 struct Capture {
@@ -409,6 +413,27 @@ impl eframe::App for Capture {
                     modifiers: egui::Modifiers::CTRL,
                 });
             }
+        }
+        if matches!(
+            std::env::args().nth(3).as_deref(),
+            Some("week-smoke" | "week-small-smoke")
+        ) && matches!(self.frames, 15 | 16 | 20 | 21 | 25 | 26)
+        {
+            let index = if self.frames < 20 {
+                1
+            } else if self.frames < 25 {
+                0
+            } else {
+                2
+            };
+            let pos = self.app.preview_week_position(index);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 15 | 20 | 25),
+                modifiers: egui::Modifiers::NONE,
+            });
         }
         let actions_mode = std::env::args().nth(3);
         if matches!(
@@ -781,6 +806,28 @@ impl eframe::App for Capture {
             return;
         }
 
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("week-smoke" | "week-small-smoke")
+        ) {
+            if self.frames == 0 {
+                self.app.preview_week_smoke(0);
+                let size = if smoke_mode.as_deref() == Some("week-small-smoke") {
+                    egui::vec2(980.0, 760.0)
+                } else {
+                    egui::vec2(1440.0, 980.0)
+                };
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+            }
+            self.app.update(ctx, frame);
+            if self.frames >= 40 {
+                self.app.preview_week_smoke(1);
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("listing-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 270, self.fixture.clone());
@@ -1657,7 +1704,10 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (244..=245).contains(&self.scene)
+            let size = if (282..=283).contains(&self.scene) {
+                egui::vec2(1440.0, 980.0)
+            } else if (284..=285).contains(&self.scene)
+                || (244..=245).contains(&self.scene)
                 || (250..=251).contains(&self.scene)
                 || (254..=255).contains(&self.scene)
                 || (274..=279).contains(&self.scene)

@@ -137,16 +137,39 @@ impl State {
             ui.label(RichText::new("按本机时区安排。运行或缩到托盘时弹出提醒；完全退出不提醒，重启后补显示。休眠期间不唤醒。重复日程合并显示最近一次错过的提醒。").small().weak());
             if !self.trash {
                 ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.agenda_days, 1, "月历 / 单日");
-                    ui.selectable_value(&mut self.agenda_days, 7, "7 天日程");
-                    ui.selectable_value(&mut self.agenda_days, 30, "30 天日程");
-                    ui.small("以所选日期为起点");
+                    for (days, label) in [(1, "月历 / 单日"), (7, "7 天日程"), (30, "30 天日程")]
+                    {
+                        if ui
+                            .selectable_label(!self.week_view && self.agenda_days == days, label)
+                            .clicked()
+                        {
+                            self.week_view = false;
+                            self.agenda_days = days;
+                        }
+                    }
+                    if ui.selectable_label(self.week_view, "周视图").clicked() {
+                        self.week_view = true;
+                    }
+                    ui.small(if self.week_view {
+                        "周一至周日"
+                    } else {
+                        "以所选日期为起点"
+                    });
                 });
             }
             ui.add_space(8.0);
         }
         let width = ui.available_width();
-        if width < 860.0 && self.calendar {
+        if self.calendar && self.week_view && !self.trash {
+            self.week_ui(ui);
+            ui.add_space(12.0);
+            let editor = egui::Frame::group(ui.style())
+                .inner_margin(16.0)
+                .show(ui, |ui| self.editor_ui(ui));
+            if self.focus_editor {
+                editor.response.scroll_to_me(Some(egui::Align::Min));
+            }
+        } else if width < 860.0 && self.calendar {
             self.calendar_list_ui(ui);
             ui.add_space(12.0);
             let editor = egui::Frame::group(ui.style())
@@ -518,7 +541,7 @@ impl State {
         let Some(mut item) = self.draft.clone() else {
             ui.add_space(35.0);
             ui.heading("留住想法，安排下一步");
-            ui.label("从左侧打开记录，或新建一条。备忘录可以直接转成日程，填写提醒时间后保存。");
+            ui.label("打开一条记录，或新建一条。备忘录可以复制为日程，调整日期与提醒后保存。");
             ui.add_space(35.0);
             return;
         };
