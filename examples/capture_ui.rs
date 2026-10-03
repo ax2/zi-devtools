@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 294] = [
+const NAMES: [&str; 296] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -304,6 +304,8 @@ const NAMES: [&str; 294] = [
     "sqlite-export-review-light",
     "sqlite-export-review-small-dark",
     "sqlite-export-review-small-light",
+    "sqlite-export-discovery-dark",
+    "sqlite-export-discovery-light",
 ];
 
 struct Capture {

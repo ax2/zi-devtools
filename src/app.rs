@@ -626,6 +626,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            294..=295 => {
+                self.page = Page::Library;
+                self.library_query = "表格另存".into();
+            }
             290..=293 => {
                 self.page = Page::Data;
                 self.data_state
