@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 288] = [
+const NAMES: [&str; 290] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -298,6 +298,8 @@ const NAMES: [&str; 288] = [
     "planner-week-small-light",
     "event-handoff-dark",
     "event-handoff-light",
+    "handoff-discovery-dark",
+    "handoff-discovery-light",
 ];
 
 struct Capture {
@@ -450,6 +452,20 @@ impl eframe::App for Capture {
                 pos,
                 button: egui::PointerButton::Primary,
                 pressed: matches!(self.frames, 25 | 55),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if std::env::args().nth(3).as_deref() == Some("handoff-discovery-smoke")
+            && matches!(self.frames, 20 | 21 | 35 | 36)
+        {
+            let pos = self
+                .app
+                .preview_handoff_discovery_position(usize::from(self.frames >= 35));
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 20 | 35),
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -887,6 +903,20 @@ impl eframe::App for Capture {
             }
             if self.frames >= 80 {
                 self.app.preview_planner_navigation_smoke(2, week);
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("handoff-discovery-smoke") {
+            if self.frames == 0 {
+                self.app.preview_handoff_discovery_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames >= 65 {
+                self.app.preview_handoff_discovery_smoke(1);
                 std::process::exit(0);
             }
             self.frames += 1;

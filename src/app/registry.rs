@@ -46,7 +46,7 @@ struct SearchText {
     name_words: Vec<String>,
 }
 
-fn normalized(text: &str) -> String {
+pub(super) fn normalized(text: &str) -> String {
     text.nfkc()
         .collect::<String>()
         .to_lowercase()

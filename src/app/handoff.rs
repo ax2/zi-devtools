@@ -1,4 +1,5 @@
 use super::*;
+mod discovery;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Target {
@@ -50,8 +51,14 @@ pub(super) struct Transfer {
     target: Target,
     error: String,
     new_data_instance: bool,
+    category: String,
+    recommendations: Vec<discovery::Recommendation>,
+    matches_key: Option<(String, String)>,
+    matches: Vec<Target>,
     #[cfg(feature = "ui-preview")]
     preview_rects: [Option<egui::Rect>; 2],
+    #[cfg(feature = "ui-preview")]
+    preview_recommendation_rect: Option<egui::Rect>,
 }
 impl Transfer {
     pub(super) fn new(source: String, text: &str) -> anyhow::Result<Self> {
@@ -68,9 +75,23 @@ impl Transfer {
             target: Target::Tool(ToolKind::Json),
             error: String::new(),
             new_data_instance: true,
+            category: String::new(),
+            recommendations: discovery::recommendations(text),
+            matches_key: None,
+            matches: Vec::new(),
             #[cfg(feature = "ui-preview")]
             preview_rects: [None; 2],
+            #[cfg(feature = "ui-preview")]
+            preview_recommendation_rect: None,
         })
+    }
+    fn matching_targets(&mut self) -> Vec<Target> {
+        let key = (registry::normalized(&self.query), self.category.clone());
+        if self.matches_key.as_ref() != Some(&key) {
+            self.matches = discovery::search(&key.0, &key.1);
+            self.matches_key = Some(key);
+        }
+        self.matches.clone()
     }
     fn apply(
         &self,
@@ -197,16 +218,39 @@ impl DevToolsApp {
             });
             ui.separator();
             ui.add(egui::TextEdit::singleline(&mut transfer.query).hint_text("搜索目标，例如 JSON、对比、备忘录、日程"));
+            egui::ComboBox::from_id_salt("handoff-category")
+                .selected_text(if transfer.category.is_empty() { "全部分类" } else { &transfer.category })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut transfer.category, String::new(), "全部分类");
+                    for category in discovery::categories() {
+                        ui.selectable_value(&mut transfer.category, category.clone(), category);
+                    }
+                });
+            let targets = transfer.matching_targets();
+            ui.small(format!("{} 个可接收目标 · 可按名称、别名、分类或用途搜索", targets.len()));
             egui::ScrollArea::vertical().id_salt("handoff-targets").max_height(160.0).show(ui, |ui| {
-                let query = transfer.query.trim().to_lowercase();
-                let mut count = 0;
-                for target in Target::all().into_iter().filter(|t| t.label().to_lowercase().contains(&query)) {
+                let recommended: Vec<_> = if transfer.query.trim().is_empty() {
+                    transfer.recommendations.iter().filter(|item| targets.contains(&item.target)).collect()
+                } else { Vec::new() };
+                if !recommended.is_empty() {
+                    ui.small("推荐目标 · 仅提示，不自动执行");
+                    for item in &recommended {
+                        let response = ui.selectable_value(&mut transfer.target, item.target, item.target.label());
+                        #[cfg(feature = "ui-preview")]
+                        if item.target == Target::JsonData { transfer.preview_recommendation_rect = Some(response.rect); }
+                        if response.changed() { transfer.error.clear(); }
+                        ui.label(egui::RichText::new(item.reason).small().weak());
+                    }
+                    ui.separator();
+                    ui.small("其他目标");
+                }
+                for target in targets.iter().copied().filter(|target| !recommended.iter().any(|item| item.target == *target)) {
                     let _response = ui.selectable_value(&mut transfer.target, target, target.label());
+                    if _response.changed() { transfer.error.clear(); }
                     #[cfg(feature = "ui-preview")]
                     if target == Target::Event { transfer.preview_rects[0] = Some(_response.rect); }
-                    count += 1;
                 }
-                if count == 0 { ui.label("没有匹配的目标，请调整关键词"); }
+                if targets.is_empty() { ui.label("没有匹配的目标，请调整关键词或分类。已选目标仍显示在下方。"); }
             });
             ui.separator();
             ui.label(format!("目标：{}", transfer.target.label()));
@@ -278,6 +322,40 @@ impl DevToolsApp {
                 }
                 Err(error) => self.handoff.as_mut().unwrap().error = error.to_string(),
             }
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_handoff_discovery_position(&self, index: usize) -> egui::Pos2 {
+        let transfer = self.handoff.as_ref().unwrap();
+        if index == 0 {
+            transfer.preview_recommendation_rect.unwrap().center()
+        } else {
+            transfer.preview_rects[1].unwrap().center()
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_handoff_discovery_smoke(&mut self, phase: u8) {
+        if phase == 0 {
+            self.preview_memo_handoff(false);
+            self.data_state.input = "existing data work".into();
+            self.data_state.output = "original export".into();
+            self.tool_state.output =
+                r#"[{"name":"Zi","count":1},{"name":"Tools","count":2}]"#.into();
+            self.handoff =
+                Some(Transfer::new("JSON 对象数组结果".into(), &self.tool_state.output).unwrap());
+        } else {
+            assert!(self.handoff.is_none() && self.page == Page::Data);
+            assert_eq!(self.data_state.instances.len(), 2);
+            let old = &self.data_state.instances[0];
+            assert_eq!(old.state.input, "existing data work");
+            assert_eq!(old.state.output, "original export");
+            assert_ne!(self.data_state.active_id(), old.id);
+            assert_eq!(self.data_state.input, self.tool_state.output);
+            assert!(self.data_state.format == crate::workbench::DataFormat::Json);
+            assert_eq!(self.data_state.parse_job.phase, crate::tasks::Phase::Done);
+            println!(
+                "PASS handoff discovery: actual recommended JSON-table click and explicit apply; new instance parses successfully; original data draft/export and source JSON preserved"
+            );
         }
     }
     #[cfg(feature = "ui-preview")]
