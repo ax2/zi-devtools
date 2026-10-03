@@ -1,6 +1,7 @@
 use crate::tasks::{Job, Phase};
 mod join;
 pub mod sessions;
+mod sqlite_export;
 mod transform;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -234,8 +235,26 @@ pub struct DataState {
     receiver: Option<Receiver<std::result::Result<Dataset, String>>>,
     #[serde(skip)]
     pub parse_job: Job,
+    #[serde(skip)]
+    sqlite_export: sqlite_export::State,
 }
 impl DataState {
+    pub fn take_sqlite_open_request(&mut self) -> Option<PathBuf> {
+        self.sqlite_export.open_request.take()
+    }
+    pub fn show_sqlite_export(&mut self) {
+        self.sqlite_export.reveal = true;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sqlite_export(&mut self, path: PathBuf) {
+        self.format = DataFormat::Json;
+        self.input = r#"[{"编号":"001","名称":"本地资料","启用":true,"标签":["备忘","日程"]},{"编号":"002","名称":"工具结果","启用":false,"标签":["CSV","SQLite"]}]"#.into();
+        let data = Dataset::parse(&self.input, self.format, b',').unwrap();
+        self.visible = (0..data.rows.len()).collect();
+        self.sqlite_export
+            .preview_review(&data, &self.visible, path);
+        self.dataset = Some(data);
+    }
     pub fn import_text(&mut self, text: String, format: DataFormat, tsv: bool) -> Result<()> {
         if self.receiver.is_some() {
             bail!("数据工作台正在解析，请稍后重试");
@@ -300,6 +319,7 @@ impl DataState {
             }
         }
         self.poll_join();
+        self.sqlite_export.poll();
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         heading(
@@ -495,6 +515,8 @@ impl DataState {
                     );
                 });
         }
+        self.sqlite_export
+            .ui(ui, self.dataset.as_ref(), &self.visible);
         if !self.message.is_empty() {
             ui.add_space(8.0);
             ui.label(&self.message);

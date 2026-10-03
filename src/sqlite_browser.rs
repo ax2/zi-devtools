@@ -18,7 +18,7 @@ use crate::disk_inspector::is_link;
 const PAGE_SIZE: usize = 50;
 const MAX_PAGES: usize = 200;
 const MAX_TABLES: usize = 200;
-const MAX_COLUMNS: usize = 64;
+const MAX_COLUMNS: usize = 128;
 const MAX_CELL_BYTES: usize = 4096;
 const MAX_PAGE_BYTES: usize = 2 * 1024 * 1024;
 const QUERY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -365,6 +365,12 @@ impl Default for State {
 }
 
 impl State {
+    pub fn open_path(&mut self, path: PathBuf) -> Result<()> {
+        ensure!(self.receiver.is_none(), "SQLite浏览器正在读取，请稍后重试");
+        self.path = path.to_str().context("数据库路径不是有效Unicode")?.into();
+        self.start_catalog();
+        Ok(())
+    }
     fn poll(&mut self) {
         let Some(receiver) = &self.receiver else {
             return;

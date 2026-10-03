@@ -10,6 +10,12 @@ impl DevToolsApp {
         if let Some(id) = instance {
             self.data_state.select(id)?;
         }
+        let key = if key == "sqlite-export" {
+            self.data_state.show_sqlite_export();
+            "data"
+        } else {
+            key
+        };
         let entry = self
             .entries("")
             .into_iter()
@@ -166,6 +172,7 @@ impl DevToolsApp {
         if let Some((key, instance, generation)) = cancel {
             match (key, instance) {
                 ("csv-merge", Some(id)) => self.data_state.cancel(&id, generation),
+                ("sqlite-export", Some(id)) => self.data_state.cancel_sqlite(&id, generation),
                 ("files", _) => self.file_state.cancel_task(),
                 _ => {}
             }

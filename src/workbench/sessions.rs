@@ -41,7 +41,9 @@ enum Reply {
 
 impl DataState {
     pub fn busy(&self) -> bool {
-        self.parse_job.phase.active() || self.join.job.phase.active()
+        self.parse_job.phase.active()
+            || self.join.job.phase.active()
+            || self.sqlite_export.job.phase.active()
     }
     pub fn has_content(&self) -> bool {
         !self.input.is_empty()
@@ -51,7 +53,10 @@ impl DataState {
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>> {
-        anyhow::ensure!(!self.busy(), "请等待当前实例的解析或合并结束再保存");
+        anyhow::ensure!(
+            !self.busy(),
+            "请等待当前实例的解析、合并或数据库另存任务结束再保存"
+        );
         self.validate_saved()?;
         let bytes = serde_json::to_vec(self)?;
         anyhow::ensure!(
@@ -198,7 +203,7 @@ impl Workspace {
             .context("实例已关闭")?;
         anyhow::ensure!(
             !self.instances[index].state.busy(),
-            "实例仍在运行，请等待结束或取消合并"
+            "实例仍在运行，请等待结束或取消相关任务"
         );
         anyhow::ensure!(
             discard || !self.instances[index].state.has_content(),
@@ -236,6 +241,11 @@ impl Workspace {
                         .join
                         .job
                         .snapshot("csv-merge", "表格合并与关联", true),
+                    instance.state.sqlite_export.job.snapshot(
+                        "sqlite-export",
+                        "表格另存 SQLite",
+                        true,
+                    ),
                 ]
                 .into_iter()
                 .flatten()
@@ -256,6 +266,18 @@ impl Workspace {
                 .is_some_and(|r| r.generation == generation)
         {
             i.state.cancel_join();
+        }
+    }
+    pub fn cancel_sqlite(&mut self, id: &str, generation: u64) {
+        if let Some(instance) = self.instances.iter_mut().find(|i| i.id == id)
+            && instance
+                .state
+                .sqlite_export
+                .job
+                .snapshot("sqlite-export", "", true)
+                .is_some_and(|r| r.generation == generation)
+        {
+            instance.state.sqlite_export.cancel();
         }
     }
     pub fn poll(&mut self) {

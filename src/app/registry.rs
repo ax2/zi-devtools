@@ -367,6 +367,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "global-launcher" => Page::Settings,
             "file-intake" => Page::Intake,
             "data" => Page::Data,
+            "data-sqlite-export" => Page::Data,
             "workspace-sessions" => Page::Data,
             "data-transform" => Page::Data,
             "csv-merge" => Page::Data,

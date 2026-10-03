@@ -1,5 +1,5 @@
 {
-  "version": "0.80.0",
+  "version": "0.81.0-dev.1",
   "updated": "2026-10-03",
   "tools": [
     {
@@ -1928,6 +1928,25 @@
       "category": "日常工具",
       "priority": "P2",
       "scope": "标签、多文件批量导入导出，以及主动将备忘送往知识库；单文件正文交换、完整备忘/日程 JSON 备份恢复、核心结果互传和回收站永久清理已归入备忘录入口"
+    },
+    {
+      "id": "data-sqlite-export",
+      "name": "表格另存 SQLite",
+      "status": "in-progress",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "Stage81开发中：数据工作台结果快照明确另存新SQLite，筛选/全部范围、类型转换与目标预览；事务写入/独立校验、拒绝已有及竞争目标、取消、实例任务归属、主动打开只读浏览器。九项后台验证、416项完整测试和严格Clippy通过；明暗确认窗口已实屏检查，实际点击流程与发版仍待验收，不支持追加或改写已有数据库",
+      "discovery": {
+        "label": "表格另存 SQLite",
+        "summary": "预览范围、类型和新文件，确认后将CSV/JSON表格保存为SQLite",
+        "category": "数据与格式",
+        "keywords": "sqlite db 数据库 另存 生成 保存 导出 csv json 表格 本地 写入",
+        "aliases": [
+          "CSV转SQLite",
+          "JSON转SQLite",
+          "表格存数据库"
+        ]
+      }
     }
   ],
   "plugin_examples": [

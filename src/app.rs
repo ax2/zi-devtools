@@ -593,6 +593,11 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            290..=291 => {
+                self.page = Page::Data;
+                self.data_state
+                    .preview_sqlite_export(fixture.parent().unwrap().join("本地资料.sqlite"));
+            }
             288..=289 => self.preview_handoff_discovery_smoke(0),
             286..=287 => self.preview_event_handoff_scene(),
             282..=285 => {
@@ -1895,6 +1900,8 @@ impl DevToolsApp {
             self.data_state.show_join();
         } else if e.id == "data-transform" {
             self.data_state.show_transform();
+        } else if e.id == "data-sqlite-export" {
+            self.data_state.show_sqlite_export();
         } else if matches!(
             e.id.as_str(),
             "screen-recorder-audio-mix"
@@ -3923,6 +3930,15 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("data-page")
                         .show(ui, |ui| self.data_state.ui(ui, ctx));
+                    if let Some(path) = self.data_state.take_sqlite_open_request() {
+                        match self.sqlite_browser.open_path(path) {
+                            Ok(()) => {
+                                self.page = Page::SqliteBrowser;
+                                self.visit("sqlite-browser");
+                            }
+                            Err(error) => self.data_state.message = error.to_string(),
+                        }
+                    }
                 }
                 Page::Files => {
                     egui::ScrollArea::vertical()
