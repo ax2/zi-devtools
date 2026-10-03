@@ -361,10 +361,14 @@ impl eframe::App for Capture {
                 modifiers: egui::Modifiers::NONE,
             });
         }
+        if std::env::args().nth(3).as_deref() == Some("listing-smoke")
+            && (95..=110).contains(&self.frames)
+        {
+            input.events.push(egui::Event::PointerMoved(
+                self.app.preview_listing_position(3),
+            ));
+        }
         if std::env::args().nth(3).as_deref() == Some("listing-smoke") && self.frames == 95 {
-            input
-                .events
-                .push(egui::Event::PointerMoved(egui::pos2(400.0, 440.0)));
             input.events.push(egui::Event::MouseWheel {
                 unit: egui::MouseWheelUnit::Point,
                 delta: egui::vec2(0.0, -2000.0),
