@@ -1,5 +1,5 @@
 {
-  "version": "0.79.0-dev.10",
+  "version": "0.79.0",
   "updated": "2026-10-03",
   "tools": [
     {
@@ -1919,7 +1919,7 @@
       "status": "planned",
       "category": "日常工具",
       "priority": "P2",
-      "scope": "农历生日重复、周视图、ICS 时区、COUNT 次数和例外扩展、系统通知与退出后的系统任务提醒；全天与结束时间已归入 Stage 79 开发版日程入口；基础 ICS 文件交换、重复截止与 UNTIL 已归入 Stage 79 开发版日程入口"
+      "scope": "农历生日重复、ICS 时区、COUNT 次数和例外扩展、系统通知与退出后的系统任务提醒；周视图、全天与结束时间、基础 ICS 文件交换、重复截止与 UNTIL 已归入现有日程入口"
     },
     {
       "id": "memo-library",
