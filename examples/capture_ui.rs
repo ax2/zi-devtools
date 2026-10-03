@@ -435,6 +435,22 @@ impl eframe::App for Capture {
                 modifiers: egui::Modifiers::NONE,
             });
         }
+        if matches!(
+            std::env::args().nth(3).as_deref(),
+            Some("calendar-navigation-smoke" | "week-navigation-smoke")
+        ) && matches!(self.frames, 25 | 26 | 55 | 56)
+        {
+            let pos = self
+                .app
+                .preview_planner_navigation_position(usize::from(self.frames >= 55));
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 25 | 55),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if std::env::args().nth(3).as_deref() == Some("week-scroll-smoke") {
             if (25..45).contains(&self.frames) || (50..70).contains(&self.frames) {
                 let index = usize::from(self.frames >= 50);
@@ -840,6 +856,27 @@ impl eframe::App for Capture {
             return;
         }
 
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("calendar-navigation-smoke" | "week-navigation-smoke")
+        ) {
+            let week = smoke_mode.as_deref() == Some("week-navigation-smoke");
+            if self.frames == 0 {
+                self.app.preview_planner_navigation_smoke(0, week);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 45 {
+                self.app.preview_planner_navigation_smoke(1, week);
+            }
+            if self.frames >= 80 {
+                self.app.preview_planner_navigation_smoke(2, week);
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("week-scroll-smoke") {
             if self.frames == 0 {
                 self.app.preview_week_scroll_smoke(0);

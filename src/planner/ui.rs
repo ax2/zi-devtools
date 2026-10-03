@@ -3,6 +3,56 @@ use egui::{RichText, vec2};
 
 impl State {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_navigation_smoke(&mut self, phase: u8, week: bool) {
+        if phase == 0 {
+            if week {
+                self.preview_week();
+                self.edit(self.items[2].clone());
+            } else {
+                self.preview(true, false);
+                self.week_view = false;
+            }
+            self.path = std::env::temp_dir()
+                .join(format!("zi-navigation-{}", uuid::Uuid::new_v4()))
+                .join("planner.sqlite3");
+            self.draft
+                .as_mut()
+                .unwrap()
+                .body
+                .push_str("\n未保存导航验证");
+            self.query = "整理".into();
+            self.focus_editor = true;
+        } else {
+            assert!(self.calendar && self.week_view == week && self.has_unsaved());
+            assert_eq!(self.query, "整理");
+            assert_eq!(self.selected, NaiveDate::from_ymd_opt(2026, 10, 2).unwrap());
+            assert!(
+                self.draft
+                    .as_ref()
+                    .unwrap()
+                    .body
+                    .ends_with("未保存导航验证")
+            );
+            assert!(self.pending.is_none() && !self.path.exists());
+            if phase == 1 {
+                let (rect, clip) = self.preview_overview_rect.unwrap();
+                assert!(
+                    clip.contains_rect(rect),
+                    "overview not visible: {rect:?} {clip:?}"
+                );
+            } else {
+                let (rect, clip) = self.preview_title_rect.unwrap();
+                assert!(
+                    clip.contains_rect(rect),
+                    "editor not visible: {rect:?} {clip:?}"
+                );
+                println!(
+                    "PASS calendar navigation: actual footer clicks return to overview and editor; unsaved body, date, query preserved; no database created; week={week}"
+                );
+            }
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_reminder_opened(&self) -> bool {
         !self.alarm_open
             && self.calendar
@@ -34,7 +84,7 @@ impl State {
             .store(false, std::sync::atomic::Ordering::Release);
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
+        let _overview = ui.horizontal(|ui| {
             ui.heading(if self.calendar {
                 "万年历与日程"
             } else {
@@ -60,6 +110,10 @@ impl State {
                 }
             });
         });
+        #[cfg(feature = "ui-preview")]
+        {
+            self.preview_overview_rect = Some((_overview.response.rect, ui.clip_rect()));
+        }
         ui.label(
             RichText::new("记录留在本机 · 点击保存后持久保留 · 支持搜索、置顶与回收站恢复").weak(),
         );
@@ -167,7 +221,8 @@ impl State {
                 .inner_margin(16.0)
                 .show(ui, |ui| self.editor_ui(ui));
             if self.focus_editor {
-                editor.response.scroll_to_me(Some(egui::Align::Min));
+                self.page_scroll_offset =
+                    Some((editor.response.rect.top() - _overview.response.rect.top()).max(0.0));
             }
         } else if width < 860.0 && self.calendar {
             self.calendar_list_ui(ui);
@@ -176,7 +231,8 @@ impl State {
                 .inner_margin(16.0)
                 .show(ui, |ui| self.editor_ui(ui));
             if self.focus_editor {
-                editor.response.scroll_to_me(Some(egui::Align::Min));
+                self.page_scroll_offset =
+                    Some((editor.response.rect.top() - _overview.response.rect.top()).max(0.0));
             }
         } else {
             ui.columns(2, |cols| {
@@ -187,9 +243,13 @@ impl State {
                 } else {
                     self.list_ui(&mut cols[0]);
                 }
-                egui::Frame::group(cols[1].style())
+                let editor = egui::Frame::group(cols[1].style())
                     .inner_margin(16.0)
                     .show(&mut cols[1], |ui| self.editor_ui(ui));
+                if self.focus_editor {
+                    self.page_scroll_offset =
+                        Some((editor.response.rect.top() - _overview.response.rect.top()).max(0.0));
+                }
             });
         }
         self.focus_editor = false;

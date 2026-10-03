@@ -8,6 +8,15 @@ pub(super) enum Action {
     Convert,
 }
 impl State {
+    /// Consume a page navigation request before rendering the outer scroll area.
+    pub fn take_page_navigation(&mut self) -> Option<f32> {
+        if std::mem::take(&mut self.focus_overview) {
+            self.page_scroll_offset = None;
+            Some(0.0)
+        } else {
+            self.page_scroll_offset.take()
+        }
+    }
     pub fn editor_open(&self) -> bool {
         self.draft.is_some()
     }
@@ -49,6 +58,26 @@ impl State {
         let mut discard = false;
         let mut duplicate = false;
         let mut convert = false;
+        if self.calendar {
+            ui.horizontal(|ui| {
+                for (index, label) in ["返回日程视图", "查看当前编辑"].into_iter().enumerate()
+                {
+                    let response = ui.add_enabled(external_enabled, egui::Button::new(label));
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.preview_navigation_rects[index] =
+                            Some((response.rect, ui.clip_rect()));
+                    }
+                    if response.clicked() {
+                        self.focus_overview = index == 0;
+                        self.focus_editor = index == 1;
+                    }
+                    response.on_hover_text(
+                        "只移动页面位置，保留草稿、筛选、日期和提醒状态；不会自动保存。",
+                    );
+                }
+            });
+        }
         ui.horizontal(|ui| {
             let response =
                 ui.add_enabled(available, egui::Button::new("保存到本机").selected(dirty));

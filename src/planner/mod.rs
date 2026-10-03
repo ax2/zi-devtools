@@ -303,6 +303,12 @@ pub struct State {
     #[cfg(feature = "ui-preview")]
     pub preview_snooze_rects: [Option<egui::Rect>; 3],
     focus_editor: bool,
+    focus_overview: bool,
+    page_scroll_offset: Option<f32>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_navigation_rects: [Option<(egui::Rect, egui::Rect)>; 2],
+    #[cfg(feature = "ui-preview")]
+    pub preview_overview_rect: Option<(egui::Rect, egui::Rect)>,
     editor_action: Option<(String, actions::Action)>,
     #[cfg(feature = "ui-preview")]
     pub preview_convert_rect: Option<(egui::Rect, egui::Rect)>,
@@ -514,6 +520,12 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_snooze_rects: [None; 3],
             focus_editor: false,
+            focus_overview: false,
+            page_scroll_offset: None,
+            #[cfg(feature = "ui-preview")]
+            preview_navigation_rects: [None; 2],
+            #[cfg(feature = "ui-preview")]
+            preview_overview_rect: None,
             editor_action: None,
             #[cfg(feature = "ui-preview")]
             preview_convert_rect: None,

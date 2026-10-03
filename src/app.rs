@@ -384,6 +384,17 @@ impl DevToolsApp {
         self.planner.preview_week_smoke(phase);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_planner_navigation_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) = self.planner.preview_navigation_rects[index].unwrap();
+        assert!(clip.contains_rect(rect), "navigation button clipped");
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_planner_navigation_smoke(&mut self, phase: u8, week: bool) {
+        self.page = Page::Calendar;
+        self.planner.preview_navigation_smoke(phase, week);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_week_scroll_position(&self, index: usize) -> egui::Pos2 {
         self.planner.preview_week_scroll_position(index)
     }
@@ -3873,9 +3884,11 @@ impl eframe::App for DevToolsApp {
                     self.tasks_page(ui);
                 }
                 Page::Notes | Page::Calendar => {
-                    egui::ScrollArea::vertical()
-                        .id_salt("planner-page")
-                        .show(ui, |ui| self.planner.ui(ui));
+                    let mut scroll = egui::ScrollArea::vertical().id_salt("planner-page");
+                    if let Some(offset) = self.planner.take_page_navigation() {
+                        scroll = scroll.vertical_scroll_offset(offset);
+                    }
+                    scroll.show(ui, |ui| self.planner.ui(ui));
                     let save_shortcut = !self.launcher_open
                         && self.handoff.is_none()
                         && !self.workspace_exit_confirm
