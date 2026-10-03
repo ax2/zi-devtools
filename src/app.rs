@@ -384,6 +384,15 @@ impl DevToolsApp {
         self.planner.preview_week_smoke(phase);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_week_scroll_position(&self, index: usize) -> egui::Pos2 {
+        self.planner.preview_week_scroll_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_week_scroll_smoke(&mut self, phase: u8) {
+        self.page = Page::Calendar;
+        self.planner.preview_week_scroll_smoke(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_convert_position(&self) -> egui::Pos2 {
         let (rect, clip) = self
             .planner

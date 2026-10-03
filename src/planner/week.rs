@@ -1,5 +1,15 @@
 use super::*;
 
+#[cfg(feature = "ui-preview")]
+#[derive(Clone, Copy)]
+pub(super) struct ColumnPreview {
+    viewport: egui::Rect,
+    offset: f32,
+    first: usize,
+    painted: usize,
+    card: Option<(egui::Rect, egui::Rect)>,
+}
+
 fn start(day: NaiveDate) -> NaiveDate {
     day - Duration::days(i64::from(day.weekday().num_days_from_monday()))
 }
@@ -119,7 +129,7 @@ impl State {
         {
             self.preview_week_rects[2] = None;
         }
-        egui::ScrollArea::horizontal()
+        let _horizontal = egui::ScrollArea::horizontal()
             .id_salt("planner-week-horizontal")
             .show(ui, |ui| {
                 ui.horizontal_top(|ui| {
@@ -160,60 +170,103 @@ impl State {
                                     if changed {
                                         area = area.vertical_scroll_offset(0.0);
                                     }
-                                    area.show_rows(ui, 54.0, column.len().max(1), |ui, range| {
-                                        if column.is_empty() {
-                                            ui.small(if valid {
-                                                "暂无安排"
-                                            } else {
-                                                "不可选择"
-                                            });
-                                            return;
-                                        }
-                                        for index in range {
-                                            let row = column[index];
-                                            let item = &self.items[row.index];
-                                            let schedule = item.schedule.as_ref().unwrap();
-                                            let detail = if schedule.all_day {
-                                                "全天".into()
-                                            } else if row.at.date() != day {
-                                                "跨天延续".into()
-                                            } else {
-                                                row.at.format("%H:%M").to_string()
-                                            };
-                                            let response = listing::record_row(
-                                                ui,
-                                                &format!(
-                                                    "{}{}",
-                                                    if item.pinned { "★ " } else { "" },
-                                                    item.title
-                                                ),
-                                                &detail,
-                                                self.draft
-                                                    .as_ref()
-                                                    .is_some_and(|draft| draft.id == item.id),
-                                            )
-                                            .on_hover_text(format!(
-                                                "{}\n{}\n{}{}",
-                                                item.title,
-                                                schedule.range_label(row.at),
-                                                schedule.rule_label(),
-                                                if schedule.done { " · 已完成" } else { "" }
-                                            ));
+                                    #[cfg(feature = "ui-preview")]
+                                    let mut preview = ColumnPreview {
+                                        viewport: egui::Rect::NOTHING,
+                                        offset: 0.0,
+                                        first: 0,
+                                        painted: 0,
+                                        card: None,
+                                    };
+                                    let _column = area.show_rows(
+                                        ui,
+                                        54.0,
+                                        column.len().max(1),
+                                        |ui, range| {
                                             #[cfg(feature = "ui-preview")]
-                                            if offset == 0 && index == 0 {
-                                                self.preview_week_rects[2] =
-                                                    Some((response.rect, ui.clip_rect()));
+                                            {
+                                                preview.first = range.start;
+                                                preview.painted = range.len();
                                             }
-                                            if response.clicked() {
-                                                open = Some((item.id.clone(), row.at, day));
+                                            if column.is_empty() {
+                                                ui.small(if valid {
+                                                    "暂无安排"
+                                                } else {
+                                                    "不可选择"
+                                                });
+                                                return;
                                             }
-                                        }
-                                    });
+                                            for index in range {
+                                                let row = column[index];
+                                                let item = &self.items[row.index];
+                                                let schedule = item.schedule.as_ref().unwrap();
+                                                let detail = if schedule.all_day {
+                                                    "全天".into()
+                                                } else if row.at.date() != day {
+                                                    "跨天延续".into()
+                                                } else {
+                                                    row.at.format("%H:%M").to_string()
+                                                };
+                                                let response = listing::record_row(
+                                                    ui,
+                                                    &format!(
+                                                        "{}{}",
+                                                        if item.pinned { "★ " } else { "" },
+                                                        item.title
+                                                    ),
+                                                    &detail,
+                                                    self.draft
+                                                        .as_ref()
+                                                        .is_some_and(|draft| draft.id == item.id),
+                                                )
+                                                .on_hover_text(format!(
+                                                    "{}\n{}\n{}{}",
+                                                    item.title,
+                                                    schedule.range_label(row.at),
+                                                    schedule.rule_label(),
+                                                    if schedule.done {
+                                                        " · 已完成"
+                                                    } else {
+                                                        ""
+                                                    }
+                                                ));
+                                                #[cfg(feature = "ui-preview")]
+                                                if preview.card.is_none()
+                                                    && ui.clip_rect().contains_rect(response.rect)
+                                                {
+                                                    preview.card =
+                                                        Some((response.rect, ui.clip_rect()));
+                                                }
+                                                #[cfg(feature = "ui-preview")]
+                                                if offset == 0 && index == 0 {
+                                                    self.preview_week_rects[2] =
+                                                        Some((response.rect, ui.clip_rect()));
+                                                }
+                                                if response.clicked() {
+                                                    open = Some((item.id.clone(), row.at, day));
+                                                }
+                                            }
+                                        },
+                                    );
+                                    #[cfg(feature = "ui-preview")]
+                                    {
+                                        preview.viewport =
+                                            _column.inner_rect.intersect(ui.clip_rect());
+                                        preview.offset = _column.state.offset.y;
+                                        self.preview_week_columns[offset] = Some(preview);
+                                    }
                                 });
                             });
                     }
                 });
             });
+        #[cfg(feature = "ui-preview")]
+        {
+            self.preview_week_horizontal = Some((
+                _horizontal.inner_rect.intersect(ui.clip_rect()),
+                _horizontal.state.offset.x,
+            ));
+        }
         if let Some(day) = day_selection {
             self.select_date(day);
         }
@@ -228,6 +281,88 @@ impl State {
 
 #[cfg(feature = "ui-preview")]
 impl State {
+    pub fn preview_week_scroll_position(&self, index: usize) -> egui::Pos2 {
+        let rect = match index {
+            0 => {
+                self.preview_week_columns[0]
+                    .expect("first column rendered")
+                    .viewport
+            }
+            1 => {
+                self.preview_week_horizontal
+                    .expect("horizontal area rendered")
+                    .0
+            }
+            2 => {
+                let (rect, clip) = self.preview_week_columns[6]
+                    .expect("last column rendered")
+                    .card
+                    .expect("last column card visible");
+                assert!(clip.contains_rect(rect));
+                rect
+            }
+            _ => unreachable!(),
+        };
+        assert!(rect.is_positive());
+        rect.center()
+    }
+    pub fn preview_week_scroll_smoke(&mut self, phase: u8) {
+        match phase {
+            0 => {
+                self.preview_week();
+                self.path = std::env::temp_dir()
+                    .join(format!("zi-week-scroll-{}", uuid::Uuid::new_v4()))
+                    .join("planner.sqlite3");
+                let monday = start(self.selected);
+                let mut items = Vec::new();
+                for day in 0..7 {
+                    for number in 0..80 {
+                        let mut item = Item::new(Some(monday + Duration::days(day)));
+                        item.title = format!("滚动验证 · 周{} · {number:03}", day + 1);
+                        item.revision = 1;
+                        let schedule = item.schedule.as_mut().unwrap();
+                        schedule.start = schedule.start.date().and_hms_opt(0, 0, 0).unwrap()
+                            + Duration::minutes(number * 10);
+                        schedule.remind = false;
+                        items.push(item);
+                    }
+                }
+                self.replace_items(items);
+                self.draft = None;
+            }
+            1 => {
+                let column = self.preview_week_columns[0].expect("first column rendered");
+                assert!(
+                    column.offset > 600.0 && column.first > 0,
+                    "vertical wheel did not reach later events: offset={}, first={}, painted={}, rows={}, viewport={:?}",
+                    column.offset,
+                    column.first,
+                    column.painted,
+                    self.week_cache.columns[0].len(),
+                    column.viewport
+                );
+                assert!(column.painted <= 8, "dense column painted too many rows");
+            }
+            2 => {
+                let (viewport, offset) = self.preview_week_horizontal.unwrap();
+                assert!(offset > 100.0, "horizontal wheel did not move the week");
+                let position = self.preview_week_scroll_position(2);
+                assert!(viewport.contains(position), "last day is not visible");
+            }
+            3 => {
+                assert_eq!(self.items.len(), 560);
+                assert!(self.items.iter().all(|item| item.revision == 1));
+                let draft = self.draft.as_ref().expect("last day card opens record");
+                assert!(draft.title.starts_with("滚动验证 · 周7"));
+                assert_eq!(self.selected.weekday(), chrono::Weekday::Sun);
+                assert!(!self.has_unsaved() && self.pending.is_none() && !self.path.exists());
+                println!(
+                    "PASS dense week UI: 560 events, actual vertical and horizontal wheel, virtualized later rows, last day card click, no database created"
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
     pub fn preview_week(&mut self) {
         self.preview_agenda(false);
         let mut carry = self.items[2].clone();

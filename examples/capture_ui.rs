@@ -435,6 +435,40 @@ impl eframe::App for Capture {
                 modifiers: egui::Modifiers::NONE,
             });
         }
+        if std::env::args().nth(3).as_deref() == Some("week-scroll-smoke") {
+            if (25..45).contains(&self.frames) || (50..70).contains(&self.frames) {
+                let index = usize::from(self.frames >= 50);
+                input.events.push(egui::Event::PointerMoved(
+                    self.app.preview_week_scroll_position(index),
+                ));
+            }
+            if matches!(self.frames, 25 | 50) {
+                let horizontal = self.frames == 50;
+                let pos = self
+                    .app
+                    .preview_week_scroll_position(usize::from(horizontal));
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: if horizontal {
+                        egui::vec2(-2000.0, 0.0)
+                    } else {
+                        egui::vec2(0.0, -2000.0)
+                    },
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if matches!(self.frames, 75 | 76) {
+                let pos = self.app.preview_week_scroll_position(2);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames == 75,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         let actions_mode = std::env::args().nth(3);
         if matches!(
             actions_mode.as_deref(),
@@ -806,6 +840,26 @@ impl eframe::App for Capture {
             return;
         }
 
+        if smoke_mode.as_deref() == Some("week-scroll-smoke") {
+            if self.frames == 0 {
+                self.app.preview_week_scroll_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 45 {
+                self.app.preview_week_scroll_smoke(1);
+            }
+            if self.frames == 70 {
+                self.app.preview_week_scroll_smoke(2);
+            }
+            if self.frames >= 95 {
+                self.app.preview_week_scroll_smoke(3);
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some("week-smoke" | "week-small-smoke")

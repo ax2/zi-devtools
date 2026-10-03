@@ -325,6 +325,10 @@ pub struct State {
     #[cfg(feature = "ui-preview")]
     pub preview_week_rects: [Option<(egui::Rect, egui::Rect)>; 3],
     #[cfg(feature = "ui-preview")]
+    preview_week_columns: [Option<week::ColumnPreview>; 7],
+    #[cfg(feature = "ui-preview")]
+    preview_week_horizontal: Option<(egui::Rect, f32)>,
+    #[cfg(feature = "ui-preview")]
     pub preview_recurrence_rects: [Option<(egui::Rect, egui::Rect)>; 2],
     #[cfg(feature = "ui-preview")]
     pub preview_interval_rect: Option<(egui::Rect, egui::Rect)>,
@@ -441,6 +445,10 @@ impl State {
             preview_agenda_rect: None,
             #[cfg(feature = "ui-preview")]
             preview_week_rects: [None; 3],
+            #[cfg(feature = "ui-preview")]
+            preview_week_columns: [None; 7],
+            #[cfg(feature = "ui-preview")]
+            preview_week_horizontal: None,
             #[cfg(feature = "ui-preview")]
             preview_recurrence_rects: [None; 2],
             #[cfg(feature = "ui-preview")]

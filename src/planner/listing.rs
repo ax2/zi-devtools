@@ -137,8 +137,16 @@ pub(super) fn record_row(
             .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     child.spacing_mut().item_spacing.y = 2.0;
-    child.add(egui::Label::new(title).truncate());
-    child.add(egui::Label::new(egui::RichText::new(detail).small().weak()).truncate());
+    child.add(
+        egui::Label::new(egui::RichText::new(title).color(visuals.fg_stroke.color)).truncate(),
+    );
+    let detail_text = egui::RichText::new(detail).small();
+    let detail_text = if selected {
+        detail_text.color(visuals.fg_stroke.color)
+    } else {
+        detail_text.weak()
+    };
+    child.add(egui::Label::new(detail_text).truncate());
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), title)
     });

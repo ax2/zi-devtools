@@ -118,9 +118,13 @@ impl DevToolsApp {
                 }
             });
             ui.label(
-                RichText::new(format!("Stage 79  ·  v{}", env!("CARGO_PKG_VERSION")))
-                    .size(11.0)
-                    .color(p.muted),
+                RichText::new(format!(
+                    "Stage {}  ·  v{}",
+                    env!("CARGO_PKG_VERSION_MINOR"),
+                    env!("CARGO_PKG_VERSION")
+                ))
+                .size(11.0)
+                .color(p.muted),
             );
         });
     }
