@@ -290,6 +290,7 @@ pub struct State {
     pub preview_list_rows: usize,
     #[cfg(feature = "ui-preview")]
     pub preview_list_start: usize,
+    list_cache: listing::Cache,
     list_pinned: bool,
     list_sort: listing::ListSort,
     alarm_open: bool,
@@ -479,6 +480,7 @@ impl State {
             preview_list_rows: 0,
             #[cfg(feature = "ui-preview")]
             preview_list_start: 0,
+            list_cache: listing::Cache::default(),
             list_pinned: false,
             list_sort: listing::ListSort::default(),
             alarm_open: false,
@@ -769,7 +771,7 @@ impl State {
                         self.error = false;
                     }
                     Ok(Reply::IcsImported(items, count)) => {
-                        self.items = items;
+                        self.replace_items(items);
                         self.loaded = true;
                         self.draft = None;
                         self.original = None;
@@ -796,7 +798,7 @@ impl State {
                         self.error = false;
                     }
                     Ok(Reply::Restored(items)) => {
-                        self.items = items;
+                        self.replace_items(items);
                         self.draft = None;
                         self.original = None;
                         self.date_text.clear();
@@ -820,7 +822,7 @@ impl State {
                         self.error = false;
                     }
                     Ok(Reply::Loaded(items)) => {
-                        self.items = items;
+                        self.replace_items(items);
                         self.loaded = true;
                         self.error = false;
                         self.message = if self.saving.is_some() {

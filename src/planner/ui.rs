@@ -26,7 +26,7 @@ impl State {
         let s = item.schedule.as_mut().unwrap();
         s.start = Local::now().naive_local() + Duration::seconds(3);
         s.minutes = 0;
-        self.items = vec![item];
+        self.replace_items(vec![item]);
         self.shown.clear();
         self.alarms.clear();
         self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
@@ -380,6 +380,9 @@ impl State {
     }
 
     fn list_ui(&mut self, ui: &mut egui::Ui) {
+        if !self.calendar && self.list_sort == listing::ListSort::Updated {
+            self.list_sort = listing::ListSort::Default;
+        }
         let query = self.query.trim().to_lowercase();
         ui.horizontal_wrapped(|ui| {
             let pin = ui.checkbox(&mut self.list_pinned, "只看置顶");
@@ -913,7 +916,7 @@ impl State {
                     item.revision = 0;
                     store::save(&self.path, item).unwrap();
                 }
-                self.items = store::load(&self.path).unwrap();
+                self.replace_items(store::load(&self.path).unwrap());
                 self.edit(self.items.iter().find(|i| i.trash).unwrap().clone());
                 self.request_purge(true).unwrap();
             }
@@ -957,6 +960,7 @@ impl State {
         self.agenda_cache = Default::default();
         self.trash = false;
         self.loaded = true;
+        self.list_cache.invalidate();
         self.items.clear();
         self.calendar = calendar;
         self.select_date(NaiveDate::from_ymd_opt(2026, 10, 2).unwrap());

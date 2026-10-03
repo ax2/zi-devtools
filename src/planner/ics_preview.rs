@@ -62,6 +62,7 @@ impl State {
                 store::save(&self.path, note).unwrap();
                 // Keep the known calendar first for fixture construction.
                 let loaded = store::load(&self.path).unwrap();
+                self.list_cache.invalidate();
                 self.items = loaded
                     .iter()
                     .filter(|i| i.schedule.is_some())

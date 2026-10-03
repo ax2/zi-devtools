@@ -15,9 +15,53 @@ impl ListSort {
         }
     }
 }
+#[derive(PartialEq, Eq)]
+struct QueryKey {
+    query: String,
+    calendar: bool,
+    trash: bool,
+    pinned: bool,
+    selected: NaiveDate,
+    sort: ListSort,
+}
+#[derive(Default)]
+pub(super) struct Cache {
+    key: Option<QueryKey>,
+    rows: Vec<usize>,
+    #[cfg(any(test, feature = "ui-preview"))]
+    pub builds: usize,
+}
+impl Cache {
+    pub(super) fn invalidate(&mut self) {
+        self.key = None;
+        self.rows.clear();
+    }
+}
 impl State {
-    pub(super) fn listed_indices(&self) -> Vec<usize> {
-        let query = self.query.trim().to_lowercase();
+    pub(super) fn replace_items(&mut self, items: Vec<Item>) {
+        self.items = items;
+        self.list_cache.invalidate();
+    }
+    pub(super) fn listed_indices(&mut self) -> Vec<usize> {
+        let key = QueryKey {
+            query: self.query.trim().to_lowercase(),
+            calendar: self.calendar,
+            trash: self.trash,
+            pinned: self.list_pinned,
+            selected: self.selected,
+            sort: self.list_sort,
+        };
+        if self.list_cache.key.as_ref() != Some(&key) {
+            self.list_cache.rows = self.build_list_indices(&key.query);
+            self.list_cache.key = Some(key);
+            #[cfg(any(test, feature = "ui-preview"))]
+            {
+                self.list_cache.builds += 1;
+            }
+        }
+        self.list_cache.rows.clone()
+    }
+    fn build_list_indices(&self, query: &str) -> Vec<usize> {
         let mut rows: Vec<_> = self
             .items
             .iter()
@@ -29,7 +73,7 @@ impl State {
                     && (query.is_empty()
                         || format!("{} {}", i.title, i.body)
                             .to_lowercase()
-                            .contains(&query))
+                            .contains(query))
                     && (!self.calendar
                         || self.trash
                         || !query.is_empty()
@@ -39,13 +83,22 @@ impl State {
             })
             .map(|(index, _)| index)
             .collect();
-        rows.sort_by(|&a, &b| {
+        let titles: HashMap<_, _> = if self.list_sort == ListSort::Title {
+            rows.iter()
+                .map(|&n| (n, self.items[n].title.to_lowercase()))
+                .collect()
+        } else {
+            HashMap::new()
+        };
+        rows.sort_by(|&a_index, &b_index| {
+            let a = a_index;
+            let b = b_index;
             let a = &self.items[a];
             let b = &self.items[b];
             b.pinned
                 .cmp(&a.pinned)
                 .then_with(|| match self.list_sort {
-                    ListSort::Title => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+                    ListSort::Title => titles[&a_index].cmp(&titles[&b_index]),
                     ListSort::Default if self.calendar => a
                         .schedule
                         .as_ref()
@@ -148,6 +201,70 @@ impl State {
 mod tests {
     use super::*;
     use crate::planner::tests::{event, fixture};
+    #[test]
+    fn large_query_repaints_reuse_indices_instead_of_rescanning_bodies() {
+        let mut s = State::new(fixture());
+        s.pending = None;
+        s.loaded = true;
+        s.replace_items(
+            (0..2000)
+                .map(|n| {
+                    let mut item = Item::new(None);
+                    item.title = format!("备忘 {n:04}");
+                    item.body = "abcdefgh".repeat(1024) + " NEEDLE";
+                    item
+                })
+                .collect(),
+        );
+        s.query = "needle".into();
+        s.list_sort = ListSort::Title;
+        let start = Instant::now();
+        let expected = s.listed_indices();
+        let scan = start.elapsed();
+        assert_eq!(expected.len(), 2000);
+        let builds = s.list_cache.builds;
+        let start = Instant::now();
+        for _ in 0..100 {
+            assert_eq!(s.listed_indices(), expected);
+        }
+        let repaint = start.elapsed();
+        assert_eq!(s.list_cache.builds, builds);
+        println!(
+            "2000 records / 16 MiB bodies: first scan+sort {scan:?}, 100 cached lookups {repaint:?}; one build"
+        );
+    }
+    #[test]
+    fn unchanged_query_reuses_result_and_same_revision_replacement_invalidates() {
+        let mut s = State::new(fixture());
+        s.pending = None;
+        s.loaded = true;
+        let mut item = Item::new(None);
+        item.title = "旧标题".into();
+        item.body = "正文里的关键字".into();
+        s.replace_items(vec![item.clone()]);
+        s.query = "关键字".into();
+        assert_eq!(s.listed_indices(), vec![0]);
+        let builds = s.list_cache.builds;
+        for _ in 0..100 {
+            assert_eq!(s.listed_indices(), vec![0]);
+        }
+        assert_eq!(s.list_cache.builds, builds);
+        item.body = "新的正文".into();
+        s.replace_items(vec![item]);
+        assert!(s.listed_indices().is_empty());
+        assert_eq!(s.list_cache.builds, builds + 1);
+        s.query.clear();
+        assert_eq!(s.listed_indices(), vec![0]);
+        assert_eq!(s.list_cache.builds, builds + 2);
+        s.list_pinned = true;
+        assert!(s.listed_indices().is_empty());
+        s.list_pinned = false;
+        s.trash = true;
+        assert!(s.listed_indices().is_empty());
+        s.trash = false;
+        s.calendar = true;
+        assert!(s.listed_indices().is_empty());
+    }
     #[test]
     fn list_filters_searches_and_orders_without_touching_unsaved_draft() {
         let mut s = State::new(fixture());

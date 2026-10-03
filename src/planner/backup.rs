@@ -304,7 +304,7 @@ impl State {
                 .unwrap();
                 self.draft = None;
                 self.original = None;
-                self.items = current;
+                self.replace_items(current);
                 self.read_backup(self.path.with_file_name("backup.json"))
                     .unwrap();
             }

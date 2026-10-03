@@ -151,7 +151,7 @@ impl State {
         };
         s.clamp_missing_day = !yearly;
         s.remind = false;
-        self.items = vec![item.clone()];
+        self.replace_items(vec![item.clone()]);
         self.edit(item);
         self.select_date(
             NaiveDate::from_ymd_opt(
@@ -174,7 +174,7 @@ impl State {
                 item.revision = 0;
                 item.schedule.as_mut().unwrap().clamp_missing_day = false;
                 store::save(&self.path, item).unwrap();
-                self.items = store::load(&self.path).unwrap();
+                self.replace_items(store::load(&self.path).unwrap());
                 self.edit(self.items[0].clone());
                 self.focus_editor = false;
             }

@@ -13,7 +13,7 @@ impl State {
                 .clone();
             item.title = "资料整理与长篇备忘 · 固定保存操作".into();
             item.body = "记录资料和想法，编辑完成后保存到本机。\n".repeat(1000);
-            self.items = vec![item.clone()];
+            self.replace_items(vec![item.clone()]);
             self.edit(item);
             self.focus_editor = false;
         }
@@ -33,7 +33,7 @@ impl State {
                 let mut item = self.items[0].clone();
                 item.revision = 0;
                 store::save(&self.path, item).unwrap();
-                self.items = store::load(&self.path).unwrap();
+                self.replace_items(store::load(&self.path).unwrap());
                 self.edit(self.items[0].clone());
                 self.focus_editor = false;
             }

@@ -93,7 +93,7 @@ impl State {
                 s.minutes = 0;
                 s.repeat = Repeat::Once;
                 store::save(&self.path, item).unwrap();
-                self.items = store::load(&self.path).unwrap();
+                self.replace_items(store::load(&self.path).unwrap());
                 self.edit(self.items[0].clone());
                 self.alarms = vec![(
                     self.items[0].id.clone(),
