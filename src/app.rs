@@ -370,6 +370,17 @@ impl DevToolsApp {
         self.planner.preview_purge_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_listing_position(&self, index: usize) -> egui::Pos2 {
+        self.planner.preview_list_rects[index]
+            .expect("list control rendered")
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_listing_smoke(&mut self, phase: u8) {
+        self.page = Page::Notes;
+        self.planner.preview_listing_smoke(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_snooze_position(&self, index: usize) -> egui::Pos2 {
         self.planner.preview_snooze_rects[index]
             .expect("snooze control rendered")
@@ -502,6 +513,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            270..=273 => {
+                self.page = Page::Notes;
+                self.planner.preview_listing(scene >= 272);
+            }
             266..=269 => {
                 self.page = Page::Home;
                 self.planner.preview_snooze(scene >= 268);

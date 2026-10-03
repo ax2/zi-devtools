@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 270] = [
+const NAMES: [&str; 274] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -280,6 +280,10 @@ const NAMES: [&str; 270] = [
     "planner-snooze-light",
     "planner-snooze-editing-dark",
     "planner-snooze-editing-light",
+    "planner-list-many-dark",
+    "planner-list-many-light",
+    "planner-list-pinned-dark",
+    "planner-list-pinned-light",
 ];
 
 struct Capture {
@@ -317,6 +321,37 @@ impl eframe::App for Capture {
                 pos,
                 button: egui::PointerButton::Primary,
                 pressed: matches!(self.frames, 25 | 35 | 45),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if std::env::args().nth(3).as_deref() == Some("listing-smoke")
+            && matches!(self.frames, 25 | 26 | 35 | 36 | 45 | 46 | 55 | 56 | 75 | 76)
+        {
+            let index = if self.frames >= 75 {
+                3
+            } else if self.frames >= 55 || self.frames < 35 {
+                0
+            } else if self.frames >= 45 {
+                2
+            } else {
+                1
+            };
+            let pos = self.app.preview_listing_position(index);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 25 | 35 | 45 | 55 | 75),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if std::env::args().nth(3).as_deref() == Some("listing-smoke") && self.frames == 95 {
+            input
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(400.0, 440.0)));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -2000.0),
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -641,6 +676,43 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("listing-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 270, self.fixture.clone());
+                self.app.preview_listing_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 640.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 30 {
+                self.app.preview_listing_smoke(1);
+            }
+            if self.frames == 70 {
+                self.app.preview_listing_smoke(2);
+            }
+            if self.frames == 90 {
+                self.app.preview_listing_smoke(3);
+            }
+            if self.frames == 95 {
+                self.auto_minimize_smoke_at = Some(Instant::now());
+            }
+            if self.frames == 96
+                && self
+                    .auto_minimize_smoke_at
+                    .is_some_and(|at| at.elapsed() < Duration::from_secs(3))
+            {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames >= 110 {
+                self.app.preview_listing_smoke(4);
+                std::process::exit(0);
+            }
+            assert!(self.started.elapsed() < Duration::from_secs(30));
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+
         if smoke_mode.as_deref() == Some("snooze-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 266, self.fixture.clone());
@@ -1485,7 +1557,7 @@ impl eframe::App for Capture {
                 || (254..=255).contains(&self.scene)
             {
                 egui::vec2(980.0, 760.0)
-            } else if (230..=231).contains(&self.scene) || (260..=269).contains(&self.scene) {
+            } else if (230..=231).contains(&self.scene) || (260..=273).contains(&self.scene) {
                 egui::vec2(980.0, 640.0)
             } else if (96..=99).contains(&self.scene)
                 || (234..=237).contains(&self.scene)

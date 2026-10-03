@@ -19,6 +19,7 @@ mod ics_ui;
 mod interval;
 #[cfg(test)]
 mod interval_tests;
+mod listing;
 mod recurrence;
 mod reminder_actions;
 mod store;
@@ -283,6 +284,14 @@ pub struct State {
     last_tick: Instant,
     shown: HashSet<(String, NaiveDateTime)>,
     alarms: Vec<(String, NaiveDateTime)>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_list_rects: [Option<egui::Rect>; 4],
+    #[cfg(feature = "ui-preview")]
+    pub preview_list_rows: usize,
+    #[cfg(feature = "ui-preview")]
+    pub preview_list_start: usize,
+    list_pinned: bool,
+    list_sort: listing::ListSort,
     alarm_open: bool,
     snooze_minutes: u16,
     #[cfg(feature = "ui-preview")]
@@ -464,6 +473,14 @@ impl State {
             last_tick: Instant::now() - std::time::Duration::from_secs(2),
             shown: HashSet::new(),
             alarms: Vec::new(),
+            #[cfg(feature = "ui-preview")]
+            preview_list_rects: [None; 4],
+            #[cfg(feature = "ui-preview")]
+            preview_list_rows: 0,
+            #[cfg(feature = "ui-preview")]
+            preview_list_start: 0,
+            list_pinned: false,
+            list_sort: listing::ListSort::default(),
             alarm_open: false,
             snooze_minutes: 10,
             #[cfg(feature = "ui-preview")]

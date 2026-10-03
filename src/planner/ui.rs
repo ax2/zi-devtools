@@ -381,33 +381,51 @@ impl State {
 
     fn list_ui(&mut self, ui: &mut egui::Ui) {
         let query = self.query.trim().to_lowercase();
-        let matches: Vec<_> = self
-            .items
-            .iter()
-            .filter(|i| {
-                i.trash == self.trash
-                    && i.schedule.is_some() == self.calendar
-                    && (query.is_empty()
-                        || format!("{} {}", i.title, i.body)
-                            .to_lowercase()
-                            .contains(&query))
-                    && (!self.calendar
-                        || self.trash
-                        || !query.is_empty()
-                        || i.schedule
-                            .as_ref()
-                            .is_some_and(|s| s.covering(self.selected).is_some()))
-            })
-            .map(|i| {
-                (
-                    i.id.clone(),
-                    i.title.clone(),
-                    i.pinned,
-                    i.updated,
-                    i.schedule.clone(),
-                )
-            })
-            .collect();
+        ui.horizontal_wrapped(|ui| {
+            let pin = ui.checkbox(&mut self.list_pinned, "只看置顶");
+            #[cfg(feature = "ui-preview")]
+            {
+                self.preview_list_rects[0] = Some(pin.rect);
+            }
+            let _ = pin;
+            let sort = egui::ComboBox::from_id_salt("planner-list-sort")
+                .selected_text(self.list_sort.label(self.calendar))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.list_sort,
+                        listing::ListSort::Default,
+                        if self.calendar {
+                            "时间顺序"
+                        } else {
+                            "最近更新"
+                        },
+                    );
+                    if self.calendar {
+                        ui.selectable_value(
+                            &mut self.list_sort,
+                            listing::ListSort::Updated,
+                            "最近更新",
+                        );
+                    }
+                    let title = ui.selectable_value(
+                        &mut self.list_sort,
+                        listing::ListSort::Title,
+                        "标题顺序",
+                    );
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.preview_list_rects[2] = Some(title.rect);
+                    }
+                    let _ = title;
+                });
+            #[cfg(feature = "ui-preview")]
+            {
+                self.preview_list_rects[1] = Some(sort.response.rect);
+            }
+            let _ = sort;
+            ui.small("置顶优先");
+        });
+        let matches = self.listed_indices();
         ui.strong(format!(
             "{} · {} 条",
             if self.trash {
@@ -428,12 +446,26 @@ impl State {
         egui::ScrollArea::vertical()
             .id_salt("planner-list")
             .max_height(if self.calendar { 240.0 } else { 530.0 })
-            .show(ui, |ui| {
+            .show_rows(ui, 54.0, matches.len().max(1), |ui, rows| {
+                #[cfg(feature = "ui-preview")]
+                {
+                    self.preview_list_rows = rows.len();
+                    self.preview_list_start = rows.start;
+                }
                 if matches.is_empty() {
                     ui.add_space(18.0);
                     ui.label(RichText::new("这里还没有记录。新建一条，或更换搜索条件。").weak());
+                    return;
                 }
-                for (id, title, pin, updated, schedule) in matches {
+                for row in rows {
+                    let item = &self.items[matches[row]];
+                    let (id, title, pin, updated, schedule) = (
+                        item.id.clone(),
+                        item.title.clone(),
+                        item.pinned,
+                        item.updated,
+                        item.schedule.clone(),
+                    );
                     let detail = if let Some(s) = schedule {
                         let occurrence = if query.is_empty() && !self.trash {
                             s.covering(self.selected).unwrap_or(s.start)
@@ -454,23 +486,27 @@ impl State {
                             .unwrap_or_default()
                     };
                     let selected = self.draft.as_ref().is_some_and(|i| i.id == id);
-                    if ui
-                        .add_sized(
-                            [ui.available_width(), 54.0],
-                            egui::Button::new(format!(
-                                "{}{title}\n{detail}",
-                                if pin { "★ " } else { "" }
-                            ))
-                            .selected(selected),
-                        )
-                        .clicked()
+                    let row_response = ui
+                        .push_id(&id, |ui| {
+                            listing::record_row(
+                                ui,
+                                &format!("{}{title}", if pin { "★ " } else { "" }),
+                                &detail,
+                                selected,
+                            )
+                        })
+                        .inner;
+                    #[cfg(feature = "ui-preview")]
+                    if row == 0 {
+                        self.preview_list_rects[3] = Some(row_response.rect);
+                    }
+                    if row_response.clicked()
                         && self.pending.is_none()
                         && self.may_leave()
                         && let Some(item) = self.items.iter().find(|i| i.id == id).cloned()
                     {
                         self.edit(item);
                     }
-                    ui.add_space(4.0);
                 }
             });
     }
@@ -914,6 +950,8 @@ impl State {
         self.file_operation = false;
         self.export_review = None;
         self.backup_review = None;
+        self.list_pinned = false;
+        self.list_sort = listing::ListSort::default();
         self.agenda_days = 1;
         self.agenda_done = false;
         self.agenda_cache = Default::default();
