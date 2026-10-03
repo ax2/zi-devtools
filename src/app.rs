@@ -302,6 +302,23 @@ impl DevToolsApp {
         self.planner.preview_interval_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_actions_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) = match index {
+            0 => self.planner.preview_recurrence_rects[1],
+            1 => self.planner.preview_discard_rect,
+            2 => self.planner.preview_title_rect,
+            _ => unreachable!(),
+        }
+        .expect("editor action control rendered");
+        assert!(clip.contains_rect(rect), "editor action control clipped");
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_actions_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Notes;
+        self.planner.preview_actions_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_cutoff_position(&self, index: usize) -> egui::Pos2 {
         let (rect, clip) = if index == 2 {
             self.planner.preview_recurrence_rects[1]
@@ -474,6 +491,15 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            256..=265 => {
+                let calendar = (258..=259).contains(&scene) || (262..=265).contains(&scene);
+                self.page = if calendar {
+                    Page::Calendar
+                } else {
+                    Page::Notes
+                };
+                self.planner.preview_actions(calendar, scene >= 264);
+            }
             252..=255 => {
                 self.page = Page::Calendar;
                 self.planner.preview_cutoff();
@@ -3710,6 +3736,17 @@ impl eframe::App for DevToolsApp {
             });
         self.sidebar(ctx);
         self.handoff_bar(ctx);
+        if matches!(self.page, Page::Notes | Page::Calendar) && self.planner.editor_open() {
+            let enabled =
+                !self.launcher_open && self.handoff.is_none() && !self.workspace_exit_confirm;
+            egui::TopBottomPanel::bottom("planner-editor-actions")
+                .frame(
+                    egui::Frame::new()
+                        .fill(self.colors.panel)
+                        .inner_margin(egui::Margin::symmetric(24, 10)),
+                )
+                .show(ctx, |ui| self.planner.editor_actions_ui(ui, enabled));
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(self.colors.bg).inner_margin(24.0))
             .show(ctx, |ui| match self.page {
@@ -3720,6 +3757,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("planner-page")
                         .show(ui, |ui| self.planner.ui(ui));
+                    let save_shortcut = !self.launcher_open
+                        && self.handoff.is_none()
+                        && !self.workspace_exit_confirm
+                        && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::S));
+                    self.planner.finish_editor_actions(save_shortcut);
                     let page = if self.planner.calendar {
                         Page::Calendar
                     } else {

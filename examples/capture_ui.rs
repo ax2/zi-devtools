@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 256] = [
+const NAMES: [&str; 266] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -266,6 +266,16 @@ const NAMES: [&str; 256] = [
     "planner-cutoff-light",
     "planner-cutoff-compact-dark",
     "planner-cutoff-compact-light",
+    "planner-actions-memo-dark",
+    "planner-actions-memo-light",
+    "planner-actions-calendar-dark",
+    "planner-actions-calendar-light",
+    "planner-actions-memo-min-dark",
+    "planner-actions-memo-min-light",
+    "planner-actions-calendar-min-dark",
+    "planner-actions-calendar-min-light",
+    "planner-actions-error-min-dark",
+    "planner-actions-error-min-light",
 ];
 
 struct Capture {
@@ -287,6 +297,45 @@ struct Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        let actions_mode = std::env::args().nth(3);
+        if matches!(
+            actions_mode.as_deref(),
+            Some("actions-smoke" | "actions-min-smoke")
+        ) {
+            if matches!(self.frames, 25 | 26 | 55 | 56) {
+                let pos = self
+                    .app
+                    .preview_actions_position(if self.frames >= 55 { 1 } else { 2 });
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(self.frames, 25 | 55),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 30 {
+                input.events.push(egui::Event::Text("新增".into()));
+                input.modifiers = egui::Modifiers::CTRL;
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::S,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::CTRL,
+                });
+            }
+            if self.frames == 45 {
+                input
+                    .events
+                    .push(egui::Event::PointerMoved(egui::pos2(320.0, 180.0)));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -2000.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         let cutoff_mode = std::env::args().nth(3);
         if matches!(
             cutoff_mode.as_deref(),
@@ -569,6 +618,52 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("actions-smoke" | "actions-min-smoke")
+        ) {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 256, self.fixture.clone());
+                self.app.preview_actions_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(
+                    if smoke_mode.as_deref() == Some("actions-min-smoke") {
+                        egui::vec2(980.0, 640.0)
+                    } else {
+                        egui::vec2(1280.0, 900.0)
+                    },
+                ));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 40 && !self.app.preview_actions_smoke(1) {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames == 45 {
+                self.auto_minimize_smoke_at = Some(Instant::now());
+            }
+            if self.frames == 46
+                && self
+                    .auto_minimize_smoke_at
+                    .is_some_and(|at| at.elapsed() < Duration::from_secs(3))
+            {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames == 50 {
+                self.app.preview_actions_smoke(2);
+            }
+            if self.frames >= 70 {
+                self.app.preview_actions_smoke(3);
+                std::process::exit(0);
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(40),
+                "actions smoke timed out"
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some("cutoff-smoke" | "cutoff-compact-smoke")
@@ -1341,7 +1436,7 @@ impl eframe::App for Capture {
                 || (254..=255).contains(&self.scene)
             {
                 egui::vec2(980.0, 760.0)
-            } else if (230..=231).contains(&self.scene) {
+            } else if (230..=231).contains(&self.scene) || (260..=265).contains(&self.scene) {
                 egui::vec2(980.0, 640.0)
             } else if (96..=99).contains(&self.scene)
                 || (234..=237).contains(&self.scene)
@@ -1368,7 +1463,8 @@ impl eframe::App for Capture {
         }
         if ((206..=207).contains(&self.scene)
             || (244..=245).contains(&self.scene)
-            || (254..=255).contains(&self.scene))
+            || (254..=255).contains(&self.scene)
+            || (262..=265).contains(&self.scene))
             && self.frames == 6
         {
             self.app.preview_planner_editor();
@@ -1378,7 +1474,8 @@ impl eframe::App for Capture {
         self.frames += 1;
         let scroll_settled = !((206..=207).contains(&self.scene)
             || (244..=245).contains(&self.scene)
-            || (254..=255).contains(&self.scene))
+            || (254..=255).contains(&self.scene)
+            || (262..=265).contains(&self.scene))
             || self
                 .auto_minimize_smoke_at
                 .is_some_and(|at| at.elapsed() >= Duration::from_secs(1));

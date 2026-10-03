@@ -1,4 +1,7 @@
 //! Local, explicitly saved notes and calendar events. No network or OS scheduler.
+mod actions;
+#[cfg(feature = "ui-preview")]
+mod actions_preview;
 mod agenda;
 mod backup;
 mod backup_ui;
@@ -281,6 +284,7 @@ pub struct State {
     alarms: Vec<(String, NaiveDateTime)>,
     alarm_open: bool,
     focus_editor: bool,
+    editor_action: Option<(String, actions::Action)>,
     #[cfg(feature = "ui-preview")]
     pub preview_delivered: std::sync::Arc<std::sync::atomic::AtomicBool>,
     #[cfg(feature = "ui-preview")]
@@ -301,6 +305,12 @@ pub struct State {
     pub preview_ics_rects: [Option<egui::Rect>; 4],
     #[cfg(feature = "ui-preview")]
     pub preview_cutoff_rects: [Option<(egui::Rect, egui::Rect)>; 2],
+    #[cfg(feature = "ui-preview")]
+    pub preview_discard_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_title_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    preview_action_y: Option<(f32, f32)>,
 }
 impl State {
     /// Receive a snapshot in memory. Persistence still requires the Save action.
@@ -410,6 +420,12 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_cutoff_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
+            preview_discard_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_title_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_action_y: None,
+            #[cfg(feature = "ui-preview")]
             preview_delivered: Default::default(),
             path,
             items: Vec::new(),
@@ -446,6 +462,7 @@ impl State {
             alarms: Vec::new(),
             alarm_open: false,
             focus_editor: false,
+            editor_action: None,
         };
         state.reload();
         state
@@ -606,7 +623,14 @@ impl State {
                         }
                     ),
                     "%Y-%m-%d %H:%M",
-                )?;
+                )
+                .map_err(|_| {
+                    anyhow::anyhow!(if s.all_day {
+                        "开始日期格式应为 YYYY-MM-DD"
+                    } else {
+                        "开始日期和时间格式应为 YYYY-MM-DD HH:MM"
+                    })
+                })?;
                 ensure!(
                     s.all_day || Local.from_local_datetime(&start).single().is_some(),
                     "该本地时间不存在或存在夏令时歧义，请选择其他时间"
@@ -621,7 +645,10 @@ impl State {
                     )
                 };
                 s.reminder_time = if s.all_day {
-                    Some(NaiveTime::parse_from_str(self.time_text.trim(), "%H:%M")?)
+                    Some(
+                        NaiveTime::parse_from_str(self.time_text.trim(), "%H:%M")
+                            .map_err(|_| anyhow::anyhow!("提醒钟点格式应为 HH:MM"))?,
+                    )
                 } else {
                     None
                 };
@@ -637,7 +664,14 @@ impl State {
                             }
                         ),
                         "%Y-%m-%d %H:%M",
-                    )?;
+                    )
+                    .map_err(|_| {
+                        anyhow::anyhow!(if s.all_day {
+                            "结束日期格式应为 YYYY-MM-DD"
+                        } else {
+                            "结束日期和时间格式应为 YYYY-MM-DD HH:MM"
+                        })
+                    })?;
                     s.end = Some(if s.all_day {
                         end.checked_add_signed(Duration::days(1))
                             .ok_or_else(|| anyhow::anyhow!("结束日期无效"))?

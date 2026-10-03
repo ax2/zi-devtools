@@ -484,8 +484,6 @@ impl State {
             return;
         };
         let dirty = self.has_unsaved();
-        let mut save = false;
-        let mut discard = false;
         let mut convert = false;
         let mut trash = false;
         let mut purge = false;
@@ -508,12 +506,14 @@ impl State {
         ui.add_space(10.0);
         ui.add_enabled_ui(self.pending.is_none() && self.loaded, |ui| {
             ui.label("标题");
-            ui.add(
+            let title_control=ui.add(
                 egui::TextEdit::singleline(&mut item.title)
                     .desired_width(f32::INFINITY)
                     .hint_text("写下一个清晰的标题")
                     .char_limit(120),
             );
+            #[cfg(feature="ui-preview")] {self.preview_title_rect=Some((title_control.rect,ui.clip_rect()));}
+            let _=title_control;
             ui.add_space(8.0);
             if let Some(s) = &mut item.schedule {
                 let was_all_day = s.all_day;
@@ -674,11 +674,6 @@ impl State {
             });
             ui.add_space(10.0);
             ui.horizontal_wrapped(|ui| {
-                let save_button = ui.button("保存到本机");
-                #[cfg(feature = "ui-preview")]
-                { self.preview_recurrence_rects[1] = Some((save_button.rect, ui.clip_rect())); }
-                save = save_button.clicked();
-                discard = ui.button("放弃编辑").clicked();
                 if ui.button("复制全文").clicked() {
                     ui.ctx()
                         .copy_text(format!("{}\n\n{}", item.title, item.body));
@@ -717,12 +712,7 @@ impl State {
             }
         });
         self.draft = Some(item.clone());
-        if discard {
-            // Explicit discard also discards unsaved date/time fields.
-            self.discard();
-        } else if save {
-            self.save_draft();
-        } else if trash {
+        if trash {
             item.trash = !item.trash;
             self.launch(Some(item));
         } else if purge {
