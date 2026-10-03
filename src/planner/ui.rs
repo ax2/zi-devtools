@@ -523,7 +523,6 @@ impl State {
             return;
         };
         let dirty = self.has_unsaved();
-        let mut convert = false;
         let mut trash = false;
         let mut purge = false;
         let mut export = false;
@@ -720,14 +719,6 @@ impl State {
                 export = ui
                     .add_enabled(!item.trash, egui::Button::new("导出正文…"))
                     .clicked();
-                if item.schedule.is_none() {
-                    convert = ui
-                        .add_enabled(
-                            !dirty && item.revision > 0 && !item.trash,
-                            egui::Button::new("转为日程 →"),
-                        )
-                        .clicked();
-                }
             });
             ui.add_space(10.0);
             trash = ui
@@ -764,14 +755,6 @@ impl State {
                 self.message = error.to_string();
                 self.error = true;
             }
-        } else if convert {
-            let mut event = Item::new(Some(self.selected));
-            event.title = item.title;
-            event.body = item.body;
-            self.calendar = true;
-            self.edit(event);
-            self.message = "已复制成日程草稿，原备忘保留；设置时间后保存即可。".into();
-            self.error = false;
         }
     }
 

@@ -23,7 +23,7 @@ fn copy_as_draft(source: &Item) -> Item {
     copy
 }
 impl State {
-    pub(super) fn duplicate_draft(&mut self) -> Result<()> {
+    pub(super) fn saved_copy_source(&self) -> Result<&Item> {
         ensure!(
             self.loaded && self.pending.is_none(),
             "正在读写本地记录，请稍后重试"
@@ -44,7 +44,10 @@ impl State {
             source.revision > 0 && !source.trash,
             "请先保存或从回收站恢复这条记录"
         );
-        let copy = copy_as_draft(source);
+        Ok(source)
+    }
+    pub(super) fn duplicate_draft(&mut self) -> Result<()> {
+        let copy = copy_as_draft(self.saved_copy_source()?);
         copy.validate()?;
         let event = copy.schedule.is_some();
         self.edit(copy);

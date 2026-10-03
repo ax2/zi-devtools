@@ -5,6 +5,7 @@ mod actions_preview;
 mod agenda;
 mod backup;
 mod backup_ui;
+mod convert;
 #[cfg(feature = "ui-preview")]
 mod cutoff_preview;
 #[cfg(test)]
@@ -301,6 +302,8 @@ pub struct State {
     focus_editor: bool,
     editor_action: Option<(String, actions::Action)>,
     #[cfg(feature = "ui-preview")]
+    pub preview_convert_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
     pub preview_duplicate_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
     preview_duplicate_source: Option<Item>,
@@ -494,6 +497,8 @@ impl State {
             preview_snooze_rects: [None; 3],
             focus_editor: false,
             editor_action: None,
+            #[cfg(feature = "ui-preview")]
+            preview_convert_rect: None,
             #[cfg(feature = "ui-preview")]
             preview_duplicate_rect: None,
             #[cfg(feature = "ui-preview")]

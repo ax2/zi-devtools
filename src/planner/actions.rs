@@ -5,6 +5,7 @@ pub(super) enum Action {
     Save,
     Discard,
     Duplicate,
+    Convert,
 }
 impl State {
     pub fn editor_open(&self) -> bool {
@@ -47,6 +48,7 @@ impl State {
         let mut save = false;
         let mut discard = false;
         let mut duplicate = false;
+        let mut convert = false;
         ui.horizontal(|ui| {
             let response =
                 ui.add_enabled(available, egui::Button::new("保存到本机").selected(dirty));
@@ -76,6 +78,21 @@ impl State {
                 self.preview_duplicate_rect = Some((copy.rect, ui.clip_rect()));
             }
             copy.on_hover_text("复制已保存内容为新草稿，不自动保存；日程副本默认关闭提醒。");
+            let response = ui.add_enabled(
+                available && !dirty && revision > 0 && !in_trash,
+                egui::Button::new(if is_event {
+                    "复制为备忘"
+                } else {
+                    "复制为日程"
+                }),
+            );
+            convert = response.clicked();
+            #[cfg(feature = "ui-preview")]
+            {
+                self.preview_convert_rect = Some((response.rect, ui.clip_rect()));
+            }
+            response
+                .on_hover_text("只复制标题和正文为新草稿，原记录保留；不会自动保存或迁移提醒。");
             ui.separator();
             ui.label(status);
             ui.add(
@@ -110,6 +127,8 @@ impl State {
             self.queue_editor_action(Action::Discard);
         } else if duplicate {
             self.queue_editor_action(Action::Duplicate);
+        } else if convert {
+            self.queue_editor_action(Action::Convert);
         }
     }
     pub fn finish_editor_actions(&mut self, save_shortcut: bool) {
@@ -123,6 +142,12 @@ impl State {
             match action {
                 Action::Save => self.save_draft(),
                 Action::Discard => self.discard(),
+                Action::Convert => {
+                    if let Err(error) = self.convert_draft() {
+                        self.message = error.to_string();
+                        self.error = true;
+                    }
+                }
                 Action::Duplicate => {
                     if let Err(error) = self.duplicate_draft() {
                         self.message = error.to_string();
@@ -182,6 +207,28 @@ mod tests {
         let replacement_id = state.draft.as_ref().unwrap().id.clone();
         state.finish_editor_actions(false);
         assert_eq!(state.draft.as_ref().unwrap().id, replacement_id);
+        assert_eq!(store::load(&path).unwrap().len(), 1);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn conversion_action_rechecks_input_and_modal_after_queue() {
+        let path = fixture();
+        let mut state = State::new(path.clone());
+        wait_state(&mut state);
+        state.edit(event());
+        state.save_draft();
+        wait_state(&mut state);
+        let id = state.draft.as_ref().unwrap().id.clone();
+        state.queue_editor_action(Action::Convert);
+        state.draft.as_mut().unwrap().title = "同帧修改".into();
+        state.finish_editor_actions(false);
+        assert_eq!(state.draft.as_ref().unwrap().id, id);
+        assert!(state.has_unsaved());
+        state.discard();
+        state.queue_editor_action(Action::Convert);
+        state.purge_review = Some(vec![event()]);
+        state.finish_editor_actions(false);
+        assert_eq!(state.draft.as_ref().unwrap().id, id);
         assert_eq!(store::load(&path).unwrap().len(), 1);
         std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }

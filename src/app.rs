@@ -370,6 +370,35 @@ impl DevToolsApp {
         self.planner.preview_purge_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_convert_position(&self) -> egui::Pos2 {
+        let (rect, clip) = self
+            .planner
+            .preview_convert_rect
+            .expect("convert control rendered");
+        assert!(clip.contains_rect(rect));
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_convert_smoke(&mut self, phase: u8, calendar: bool) -> bool {
+        if phase == 0 {
+            self.page = if calendar {
+                Page::Calendar
+            } else {
+                Page::Notes
+            };
+        } else {
+            assert_eq!(
+                self.page,
+                if calendar {
+                    Page::Notes
+                } else {
+                    Page::Calendar
+                }
+            );
+        }
+        self.planner.preview_convert_smoke(phase, calendar)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_duplicate_position(&self) -> egui::Pos2 {
         let (rect, clip) = self
             .planner
@@ -530,6 +559,14 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            278..=281 => {
+                self.page = if scene < 280 {
+                    Page::Notes
+                } else {
+                    Page::Calendar
+                };
+                self.planner.preview_convert(scene < 280);
+            }
             274..=277 => {
                 self.page = if scene >= 276 {
                     Page::Calendar
