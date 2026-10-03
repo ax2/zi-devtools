@@ -370,6 +370,17 @@ impl DevToolsApp {
         self.planner.preview_purge_smoke(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_snooze_position(&self, index: usize) -> egui::Pos2 {
+        self.planner.preview_snooze_rects[index]
+            .expect("snooze control rendered")
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_snooze_smoke(&mut self, phase: u8) -> bool {
+        self.page = Page::Home;
+        self.planner.preview_snooze_smoke(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_reminder_click_position(&self) -> Option<egui::Pos2> {
         self.planner
             .preview_open_reminder_rect
@@ -491,6 +502,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            266..=269 => {
+                self.page = Page::Home;
+                self.planner.preview_snooze(scene >= 268);
+            }
             256..=265 => {
                 let calendar = (258..=259).contains(&scene) || (262..=265).contains(&scene);
                 self.page = if calendar {

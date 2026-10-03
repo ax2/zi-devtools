@@ -20,6 +20,7 @@ mod interval;
 #[cfg(test)]
 mod interval_tests;
 mod recurrence;
+mod reminder_actions;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -283,6 +284,9 @@ pub struct State {
     shown: HashSet<(String, NaiveDateTime)>,
     alarms: Vec<(String, NaiveDateTime)>,
     alarm_open: bool,
+    snooze_minutes: u16,
+    #[cfg(feature = "ui-preview")]
+    pub preview_snooze_rects: [Option<egui::Rect>; 3],
     focus_editor: bool,
     editor_action: Option<(String, actions::Action)>,
     #[cfg(feature = "ui-preview")]
@@ -461,6 +465,9 @@ impl State {
             shown: HashSet::new(),
             alarms: Vec::new(),
             alarm_open: false,
+            snooze_minutes: 10,
+            #[cfg(feature = "ui-preview")]
+            preview_snooze_rects: [None; 3],
             focus_editor: false,
             editor_action: None,
         };

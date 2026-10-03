@@ -741,6 +741,9 @@ impl State {
             return false;
         }
         let mut open = true;
+        let mut snooze_minutes = self.snooze_minutes;
+        #[cfg(feature = "ui-preview")]
+        let mut snooze_rects = self.preview_snooze_rects;
         let mut action = None;
         let mut selected = None;
         #[cfg(feature = "ui-preview")]
@@ -789,12 +792,25 @@ impl State {
                                 let editing = self.draft.as_ref().is_some_and(|i| &i.id == id)
                                     && self.has_unsaved();
                                 ui.add_enabled_ui(self.pending.is_none() && !editing, |ui| {
-                                    ui.horizontal(|ui| {
+                                    ui.horizontal_wrapped(|ui| {
                                         if ui.button("已知晓").clicked() {
-                                            action = Some((id.clone(), *at, 0));
+                                            action = Some((id.clone(), *at, reminder_actions::ReminderAction::Acknowledge));
                                         }
-                                        if ui.button("10 分钟后提醒").clicked() {
-                                            action = Some((id.clone(), *at, 10));
+                                        let combo = egui::ComboBox::from_id_salt("snooze-duration")
+                                            .selected_text(match snooze_minutes { 60=>"1 小时".into(),120=>"2 小时".into(),1440=>"1 天".into(),_=>format!("{snooze_minutes} 分钟") })
+                                            .show_ui(ui, |ui| {
+                                                for (minutes, label) in [(5,"5 分钟"),(10,"10 分钟"),(30,"30 分钟"),(60,"1 小时"),(120,"2 小时"),(1440,"1 天")] {
+                                                    let option = ui.selectable_value(&mut snooze_minutes, minutes, label);
+                                                    #[cfg(feature="ui-preview")] if minutes == 30 { snooze_rects[1] = Some(option.rect); }
+                                                    let _ = option;
+                                                }
+                                            });
+                                        #[cfg(feature="ui-preview")] {snooze_rects[0] = Some(combo.response.rect);}
+                                        let _ = combo;
+                                        let snooze = ui.button("稍后提醒").on_hover_text("从点击时刻开始延后，只处理这次提醒；其他重复次数仍按原规则提醒。");
+                                        #[cfg(feature="ui-preview")] {snooze_rects[2] = Some(snooze.rect);}
+                                        if snooze.clicked() {
+                                            action = Some((id.clone(), *at, reminder_actions::ReminderAction::Snooze(snooze_minutes)));
                                         }
                                     });
                                 });
@@ -809,6 +825,11 @@ impl State {
                 }
             });
         self.alarm_open = open;
+        self.snooze_minutes = snooze_minutes;
+        #[cfg(feature = "ui-preview")]
+        {
+            self.preview_snooze_rects = snooze_rects;
+        }
         #[cfg(feature = "ui-preview")]
         {
             self.preview_open_reminder_rect = open_rect;
@@ -822,18 +843,11 @@ impl State {
                 }
             }
         }
-        if let Some((id, at, minutes)) = action
-            && let Some(mut item) = self.items.iter().find(|i| i.id == id).cloned()
+        if let Some((id, at, action)) = action
+            && let Err(error) = self.respond_reminder(&id, at, action, Local::now())
         {
-            if let Some(s) = &mut item.schedule {
-                if minutes == 0 {
-                    s.handled = Some(at);
-                    s.snooze = None;
-                } else {
-                    s.snooze = Some((at, Local::now().timestamp() + minutes * 60));
-                }
-            }
-            self.launch(Some(item));
+            self.message = error.to_string();
+            self.error = true;
         }
         false
     }
