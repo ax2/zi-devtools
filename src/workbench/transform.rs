@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum Operation {
+pub(super) enum Operation {
     #[default]
     Trim,
     Lower,
@@ -29,7 +29,7 @@ impl Operation {
         Self::ToBool,
         Self::SelectColumns,
     ];
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Trim => "去除首尾空白",
             Self::Lower => "转为小写",
@@ -48,11 +48,11 @@ impl Operation {
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Proposal {
-    data: Dataset,
-    changed: usize,
-    examples: Vec<(String, String)>,
-    description: String,
+pub(super) struct Proposal {
+    pub(super) data: Dataset,
+    pub(super) changed: usize,
+    pub(super) examples: Vec<(String, String)>,
+    pub(super) description: String,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -84,7 +84,12 @@ impl State {
     }
 }
 
-fn propose(data: &Dataset, column: usize, operation: Operation, value: &str) -> Result<Proposal> {
+pub(super) fn propose(
+    data: &Dataset,
+    column: usize,
+    operation: Operation,
+    value: &str,
+) -> Result<Proposal> {
     let header = data
         .headers
         .get(column)
@@ -201,7 +206,7 @@ fn convert(cell: &Value, operation: Operation) -> Result<Value> {
     Ok(Value::Number(number))
 }
 
-fn select_columns(data: &Dataset, keep: &[bool]) -> Result<Proposal> {
+pub(super) fn select_columns(data: &Dataset, keep: &[bool]) -> Result<Proposal> {
     if keep.len() != data.headers.len() || !keep.iter().any(|v| *v) {
         bail!("至少保留一列");
     }
@@ -288,6 +293,7 @@ impl DataState {
         self.transform.force_open = true;
     }
     fn refresh_transformed_view(&mut self) {
+        self.workflow.invalidate();
         self.output.clear();
         if let Some(data) = &self.dataset {
             self.visible = data.view(&self.query, self.sort, self.descending);

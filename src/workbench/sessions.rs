@@ -44,18 +44,20 @@ impl DataState {
         self.parse_job.phase.active()
             || self.join.job.phase.active()
             || self.sqlite_export.job.phase.active()
+            || self.workflow.job.phase.active()
     }
     pub fn has_content(&self) -> bool {
         !self.input.is_empty()
             || self.dataset.is_some()
             || !self.output.is_empty()
             || self.join.has_content()
+            || self.workflow.has_content()
     }
 
     pub fn snapshot(&self) -> Result<Vec<u8>> {
         anyhow::ensure!(
             !self.busy(),
-            "请等待当前实例的解析、合并或数据库另存任务结束再保存"
+            "请等待当前实例的解析、合并、操作流程或数据库另存任务结束再保存"
         );
         self.validate_saved()?;
         let bytes = serde_json::to_vec(self)?;
@@ -246,6 +248,11 @@ impl Workspace {
                         "表格另存 SQLite",
                         true,
                     ),
+                    instance
+                        .state
+                        .workflow
+                        .job
+                        .snapshot("pipeline", "操作流程预览", true),
                 ]
                 .into_iter()
                 .flatten()
@@ -278,6 +285,18 @@ impl Workspace {
                 .is_some_and(|r| r.generation == generation)
         {
             instance.state.sqlite_export.cancel();
+        }
+    }
+    pub fn cancel_workflow(&mut self, id: &str, generation: u64) {
+        if let Some(instance) = self.instances.iter_mut().find(|i| i.id == id)
+            && instance
+                .state
+                .workflow
+                .job
+                .snapshot("pipeline", "", true)
+                .is_some_and(|r| r.generation == generation)
+        {
+            instance.state.workflow.cancel();
         }
     }
     pub fn poll(&mut self) {

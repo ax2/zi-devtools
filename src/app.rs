@@ -626,6 +626,14 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            298..=299 => {
+                self.page = Page::Data;
+                self.data_state.preview_workflow();
+            }
+            296..=297 => {
+                self.page = Page::Library;
+                self.library_query = "备忘".into();
+            }
             294..=295 => {
                 self.page = Page::Library;
                 self.library_query = "表格另存".into();
@@ -1939,6 +1947,8 @@ impl DevToolsApp {
             self.data_state.show_transform();
         } else if e.id == "data-sqlite-export" {
             self.data_state.show_sqlite_export();
+        } else if e.id == "pipeline" {
+            self.data_state.show_workflow();
         } else if matches!(
             e.id.as_str(),
             "screen-recorder-audio-mix"

@@ -3,6 +3,8 @@ mod join;
 pub mod sessions;
 mod sqlite_export;
 mod transform;
+pub mod workflow;
+mod workflow_ui;
 
 use anyhow::{Context, Result, anyhow, bail};
 use eframe::egui::{self, RichText};
@@ -237,6 +239,8 @@ pub struct DataState {
     pub parse_job: Job,
     #[serde(skip)]
     sqlite_export: sqlite_export::State,
+    #[serde(skip)]
+    workflow: workflow_ui::State,
 }
 impl DataState {
     pub fn take_sqlite_open_request(&mut self) -> Option<PathBuf> {
@@ -296,6 +300,7 @@ impl DataState {
         self.parse_job.begin();
         self.message.clear();
         self.join.invalidate();
+        self.workflow.invalidate();
         self.dataset = None;
         self.transform = Default::default();
         self.output.clear();
@@ -336,6 +341,7 @@ impl DataState {
         }
         self.poll_join();
         self.sqlite_export.poll();
+        self.poll_workflow();
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         heading(
@@ -411,6 +417,7 @@ impl DataState {
         });
         self.transform_ui(ui);
         self.join_ui(ui, ctx);
+        self.workflow_ui(ui);
         if let Some(data) = &self.dataset {
             ui.add_space(14.0);
             let mut changed = false;

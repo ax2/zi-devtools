@@ -368,6 +368,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "file-intake" => Page::Intake,
             "data" => Page::Data,
             "data-sqlite-export" => Page::Data,
+            "pipeline" => Page::Data,
             "workspace-sessions" => Page::Data,
             "data-transform" => Page::Data,
             "csv-merge" => Page::Data,
@@ -524,6 +525,9 @@ mod tests {
             ("django报错", "django-trace"),
             ("颜文字", "symbol-library"),
             ("生成字符画", "ascii-art"),
+            ("回收站", "memos"),
+            ("延后", "calendar-planner"),
+            ("每月", "calendar-planner"),
         ];
         let preferences = Preferences::default();
         for (query, expected) in queries {
