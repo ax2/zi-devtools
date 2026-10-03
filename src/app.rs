@@ -593,6 +593,7 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            286..=287 => self.preview_event_handoff_scene(),
             282..=285 => {
                 self.page = Page::Calendar;
                 self.planner.preview_week();

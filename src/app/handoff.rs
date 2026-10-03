@@ -9,6 +9,7 @@ enum Target {
     Before,
     After,
     Memo,
+    Event,
 }
 impl Target {
     fn label(self) -> &'static str {
@@ -20,6 +21,7 @@ impl Target {
             Self::Before => "文本对比 · 左侧原文",
             Self::After => "文本对比 · 右侧新文",
             Self::Memo => "备忘录 · 新建草稿",
+            Self::Event => "万年历 / 日程 · 新建草稿",
         }
     }
     fn all() -> Vec<Self> {
@@ -34,6 +36,7 @@ impl Target {
                 Self::Before,
                 Self::After,
                 Self::Memo,
+                Self::Event,
             ])
             .collect()
     }
@@ -47,6 +50,8 @@ pub(super) struct Transfer {
     target: Target,
     error: String,
     new_data_instance: bool,
+    #[cfg(feature = "ui-preview")]
+    preview_rects: [Option<egui::Rect>; 2],
 }
 impl Transfer {
     pub(super) fn new(source: String, text: &str) -> anyhow::Result<Self> {
@@ -63,6 +68,8 @@ impl Transfer {
             target: Target::Tool(ToolKind::Json),
             error: String::new(),
             new_data_instance: true,
+            #[cfg(feature = "ui-preview")]
+            preview_rects: [None; 2],
         })
     }
     fn apply(
@@ -72,7 +79,7 @@ impl Transfer {
         diff: &mut DiffState,
     ) -> anyhow::Result<(Page, Option<ToolKind>)> {
         match self.target {
-            Target::Memo => anyhow::bail!("备忘草稿需通过资料入口接收"),
+            Target::Memo | Target::Event => anyhow::bail!("备忘 / 日程草稿需通过资料入口接收"),
             Target::Tool(kind) => {
                 tools.select(kind);
                 tools.input.clone_from(&self.text);
@@ -189,12 +196,14 @@ impl DevToolsApp {
                 ui.monospace(&transfer.preview);
             });
             ui.separator();
-            ui.add(egui::TextEdit::singleline(&mut transfer.query).hint_text("搜索目标，例如 JSON、Base64、对比、备忘录"));
+            ui.add(egui::TextEdit::singleline(&mut transfer.query).hint_text("搜索目标，例如 JSON、对比、备忘录、日程"));
             egui::ScrollArea::vertical().id_salt("handoff-targets").max_height(160.0).show(ui, |ui| {
                 let query = transfer.query.trim().to_lowercase();
                 let mut count = 0;
                 for target in Target::all().into_iter().filter(|t| t.label().to_lowercase().contains(&query)) {
-                    ui.selectable_value(&mut transfer.target, target, target.label());
+                    let _response = ui.selectable_value(&mut transfer.target, target, target.label());
+                    #[cfg(feature = "ui-preview")]
+                    if target == Target::Event { transfer.preview_rects[0] = Some(_response.rect); }
                     count += 1;
                 }
                 if count == 0 { ui.label("没有匹配的目标，请调整关键词"); }
@@ -202,12 +211,18 @@ impl DevToolsApp {
             ui.separator();
             ui.label(format!("目标：{}", transfer.target.label()));
             let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
+            if transfer.target == Target::Event {
+                ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date()));
+            }
             if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
-            ui.small(if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
+            ui.small(if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
             if !transfer.error.is_empty() { ui.colored_label(self.colors.red, &transfer.error); }
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
-                apply = ui.button(if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}).clicked();
+                let response = ui.button(if transfer.target == Target::Event {"创建日程草稿"} else if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"});
+                apply = response.clicked();
+                #[cfg(feature = "ui-preview")]
+                { transfer.preview_rects[1] = Some(response.rect); }
             });
         });
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
@@ -221,7 +236,11 @@ impl DevToolsApp {
     }
     fn apply_handoff(&mut self) {
         if let Some(transfer) = self.handoff.as_ref() {
-            let result = if transfer.target == Target::Memo {
+            let result = if transfer.target == Target::Event {
+                self.planner
+                    .receive_event_text(&transfer.source, &transfer.text)
+                    .map(|_| (Page::Calendar, None))
+            } else if transfer.target == Target::Memo {
                 self.planner
                     .receive_text(&transfer.source, &transfer.text)
                     .map(|_| (Page::Notes, None))
@@ -259,6 +278,40 @@ impl DevToolsApp {
                 }
                 Err(error) => self.handoff.as_mut().unwrap().error = error.to_string(),
             }
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_event_handoff_position(&self, index: usize) -> egui::Pos2 {
+        self.handoff.as_ref().unwrap().preview_rects[index]
+            .unwrap()
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_event_handoff_scene(&mut self) {
+        self.preview_event_handoff_smoke(0);
+        self.handoff.as_mut().unwrap().target = Target::Event;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_event_handoff_smoke(&mut self, phase: u8) {
+        if phase == 0 {
+            self.preview_memo_handoff(false);
+            let transfer = self.handoff.as_mut().unwrap();
+            transfer.target = Target::Tool(ToolKind::Json);
+            transfer.query = "日程".into();
+        } else {
+            assert!(self.handoff.is_none() && self.page == Page::Calendar);
+            let source = self.tool_state.output.clone();
+            self.planner.preview_incoming_event_assert(&source);
+            let mut transfer = Transfer::new("another".into(), "must not overwrite").unwrap();
+            transfer.target = Target::Event;
+            self.handoff = Some(transfer);
+            self.apply_handoff();
+            assert!(!self.handoff.as_ref().unwrap().error.is_empty());
+            self.planner.preview_incoming_event_assert(&source);
+            self.handoff = None;
+            println!(
+                "PASS event handoff: actual target selection and create click; full source preserved; unsaved event, selected date at 09:00, reminder off; second handoff rejected; no database write"
+            );
         }
     }
     #[cfg(feature = "ui-preview")]

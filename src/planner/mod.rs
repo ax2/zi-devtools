@@ -18,6 +18,7 @@ mod ics_preview;
 #[cfg(test)]
 mod ics_tests;
 mod ics_ui;
+mod incoming;
 mod interval;
 #[cfg(test)]
 mod interval_tests;
@@ -350,36 +351,6 @@ pub struct State {
     preview_action_y: Option<(f32, f32)>,
 }
 impl State {
-    /// Receive a snapshot in memory. Persistence still requires the Save action.
-    pub fn receive_text(&mut self, source: &str, text: &str) -> Result<()> {
-        ensure!(
-            self.loaded && self.pending.is_none(),
-            "备忘录正在加载或保存，请稍后重试"
-        );
-        ensure!(
-            !self.has_unsaved(),
-            "请先保存或放弃备忘 / 日程的当前编辑，再接收结果"
-        );
-        ensure!(
-            !text.is_empty() && text.len() <= MAX_BODY,
-            "备忘正文需要 1 字节至 128 KiB，请先缩小结果范围"
-        );
-        let mut item = Item::new(None);
-        item.title = format!("来自 {source}")
-            .chars()
-            .filter(|c| !c.is_control())
-            .take(120)
-            .collect();
-        item.body = text.to_owned();
-        item.validate()?;
-        self.edit(item);
-        self.calendar = false;
-        self.trash = false;
-        self.query.clear();
-        self.message = "结果已填入新备忘草稿；点击保存后才会保留到本机。".into();
-        self.error = false;
-        Ok(())
-    }
     pub fn transfer_text(&self) -> Option<(String, &str)> {
         self.draft.as_ref().filter(|item| !item.trash).map(|item| {
             (
