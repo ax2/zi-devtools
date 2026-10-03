@@ -472,7 +472,10 @@ enum Reply {
 }
 #[derive(Default)]
 pub(super) struct State {
+    #[cfg(feature = "ui-preview")]
+    pub(super) preview_rects: [Option<(egui::Rect, egui::Rect)>; 4],
     pub(super) reveal: bool,
+    scroll_until: Option<std::time::Instant>,
     pub(super) job: Job,
     review: Option<Review>,
     receiver: Option<Receiver<Reply>>,
@@ -500,6 +503,10 @@ impl State {
         self.reveal = true;
     }
     pub(super) fn ui(&mut self, ui: &mut egui::Ui, data: Option<&Dataset>, visible: &[usize]) {
+        if self.reveal {
+            self.scroll_until =
+                Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
+        }
         let panel = egui::CollapsingHeader::new("另存为 SQLite")
             .id_salt("sqlite-export")
             .open(self.reveal.then_some(true))
@@ -528,7 +535,12 @@ impl State {
                         {
                             self.path = path.display().to_string();
                         }
-                        if ui.button("预览保存…").clicked()
+                        let preview = ui.button("预览保存…");
+                        #[cfg(feature = "ui-preview")]
+                        {
+                            self.preview_rects[0] = Some((preview.rect, ui.clip_rect()));
+                        }
+                        if preview.clicked()
                             && let Some(data) = data
                         {
                             let all = (0..data.rows.len()).collect::<Vec<_>>();
@@ -567,13 +579,29 @@ impl State {
                 }
                 if let Some(receipt) = &self.receipt {
                     ui.label(format!("上次保存：{}", receipt.path.display()));
-                    if ui.button("用 SQLite 浏览器查看…").clicked() {
+                    let open = ui.button("用 SQLite 浏览器查看…");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.preview_rects[3] = Some((open.rect, ui.clip_rect()));
+                    }
+                    if open.clicked() {
                         self.open_request = Some(receipt.path.clone());
                     }
                 }
             });
-        if self.reveal {
-            panel.header_response.scroll_to_me(Some(egui::Align::Min));
+        if self
+            .scroll_until
+            .is_some_and(|until| std::time::Instant::now() < until)
+        {
+            if let Some(body) = &panel.body_response {
+                body.scroll_to_me(Some(egui::Align::Max));
+            } else {
+                panel.header_response.scroll_to_me(Some(egui::Align::Min));
+            }
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(16));
+        } else {
+            self.scroll_until = None;
         }
         self.reveal = false;
         let mut action = 0;
@@ -594,8 +622,15 @@ impl State {
                 ui.label("仅创建新文件；目标已存在时拒绝保存。文件生成前可取消，成功后保留文件。");
                 ui.small("请选择 NTFS 等支持硬链接的磁盘。其他格式的磁盘可能无法保存，详情见使用说明。");
                 ui.horizontal(|ui| {
-                    if ui.button("返回编辑").clicked() { action = 1; }
-                    if ui.button("确认保存新文件").clicked() { action = 2; }
+                    let back = ui.button("返回编辑");
+                    let confirm = ui.button("确认保存新文件");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.preview_rects[1] = Some((back.rect, ui.clip_rect()));
+                        self.preview_rects[2] = Some((confirm.rect, ui.clip_rect()));
+                    }
+                    if back.clicked() { action = 1; }
+                    if confirm.clicked() { action = 2; }
                 });
             });
             if response.should_close() {
@@ -612,6 +647,41 @@ impl State {
     pub(super) fn cancel(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);
         self.job.cancelling();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_check(&self, phase: u8) -> bool {
+        match phase {
+            1 => {
+                assert!(self.review.is_none());
+                assert!(!Path::new(&self.path).exists());
+            }
+            2 => {
+                assert!(self.review.is_some());
+                assert!(!Path::new(&self.path).exists());
+            }
+            3 => {
+                if self.job.phase.active() {
+                    return false;
+                }
+                assert!(matches!(self.job.phase, Phase::Done), "{}", self.status);
+                let receipt = self.receipt.as_ref().unwrap();
+                assert_eq!(receipt.rows, 2);
+                assert!(self.open_request.is_none());
+                let conn =
+                    Connection::open_with_flags(&receipt.path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                        .unwrap();
+                let actual: (String, i64) = conn
+                    .query_row(
+                        "SELECT \"编号\", \"启用\" FROM \"本地资料\" ORDER BY rowid LIMIT 1",
+                        [],
+                        |r| Ok((r.get(0)?, r.get(1)?)),
+                    )
+                    .unwrap();
+                assert_eq!(actual, ("001".into(), 1));
+            }
+            _ => panic!("invalid SQLite preview phase"),
+        }
+        true
     }
     pub(super) fn poll(&mut self) {
         let reply = self.receiver.as_ref().and_then(|rx| match rx.try_recv() {
@@ -634,6 +704,7 @@ impl State {
                 self.job
                     .finish(Phase::Done, format!("已另存 {} 行", receipt.rows));
                 self.receipt = Some(receipt);
+                self.reveal = true;
             }
             Reply::Cancelled => {
                 self.status = "已取消，未发布新文件".into();

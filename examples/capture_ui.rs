@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 292] = [
+const NAMES: [&str; 294] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -302,6 +302,8 @@ const NAMES: [&str; 292] = [
     "handoff-discovery-light",
     "sqlite-export-review-dark",
     "sqlite-export-review-light",
+    "sqlite-export-review-small-dark",
+    "sqlite-export-review-small-light",
 ];
 
 struct Capture {
@@ -319,10 +321,47 @@ struct Capture {
     auto_minimize_recording_at: Option<Instant>,
     auto_minimize_smoke_stop_requested: bool,
     quick_smoke_phase: u8,
+    sqlite_input_frame: Option<usize>,
+}
+impl Capture {
+    fn sqlite_click_waiting(&self) -> bool {
+        let seconds = match self.frames {
+            20 => 1,
+            40 => 3,
+            60 => 5,
+            90 => 8,
+            _ => 0,
+        };
+        self.started.elapsed() < Duration::from_secs(seconds)
+    }
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("sqlite-export-smoke") {
+            let click = match self.frames {
+                20 => Some((1, true)),
+                21 => Some((1, false)),
+                40 => Some((0, true)),
+                41 => Some((0, false)),
+                60 => Some((2, true)),
+                61 => Some((2, false)),
+                90 => Some((3, true)),
+                91 => Some((3, false)),
+                _ => None,
+            };
+            if let Some((index, pressed)) = click.filter(|_| !self.sqlite_click_waiting()) {
+                self.sqlite_input_frame = Some(self.frames);
+                let pos = self.app.preview_sqlite_position(index);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("snooze-smoke")
             && matches!(self.frames, 25 | 26 | 35 | 36 | 45 | 46)
         {
@@ -844,6 +883,39 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("sqlite-export-smoke") {
+            assert!(self.started.elapsed() < Duration::from_secs(35));
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 0, self.fixture.clone());
+                self.app.preview_sqlite_smoke(0, &self.fixture);
+            }
+            self.app.update(ctx, frame);
+            if matches!(self.frames, 20 | 40 | 60 | 90)
+                && self.sqlite_input_frame != Some(self.frames)
+            {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames == 30 {
+                self.app.preview_sqlite_smoke(1, &self.fixture);
+            }
+            if self.frames == 50 {
+                self.app.preview_sqlite_smoke(2, &self.fixture);
+            }
+            if self.frames == 80 && !self.app.preview_sqlite_smoke(3, &self.fixture) {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            if self.frames >= 115 && self.app.preview_sqlite_smoke(4, &self.fixture) {
+                println!(
+                    "PASS native back/preview/confirm/open, independent SQLite values, source and unrelated instance preserved"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some("convert-event-smoke" | "convert-memo-smoke")
@@ -1870,7 +1942,10 @@ impl eframe::App for Capture {
                 || (274..=279).contains(&self.scene)
             {
                 egui::vec2(980.0, 760.0)
-            } else if (230..=231).contains(&self.scene) || (260..=273).contains(&self.scene) {
+            } else if (230..=231).contains(&self.scene)
+                || (260..=273).contains(&self.scene)
+                || (292..=293).contains(&self.scene)
+            {
                 egui::vec2(980.0, 640.0)
             } else if (96..=99).contains(&self.scene)
                 || (234..=237).contains(&self.scene)
@@ -2069,6 +2144,7 @@ fn main() -> Result<(), eframe::Error> {
                 auto_minimize_recording_at: None,
                 auto_minimize_smoke_stop_requested: false,
                 quick_smoke_phase: 0,
+                sqlite_input_frame: None,
             }))
         }),
     )

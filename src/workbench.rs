@@ -255,6 +255,22 @@ impl DataState {
             .preview_review(&data, &self.visible, path);
         self.dataset = Some(data);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sqlite_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) =
+            self.sqlite_export.preview_rects[index].expect("SQLite control rendered");
+        assert!(
+            clip.contains_rect(rect),
+            "SQLite control must be visible: {rect:?} / {clip:?}"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sqlite_check(&self, phase: u8) -> bool {
+        assert!(self.input.contains("本地资料") && self.input.contains("001"));
+        assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 2);
+        self.sqlite_export.preview_check(phase)
+    }
     pub fn import_text(&mut self, text: String, format: DataFormat, tsv: bool) -> Result<()> {
         if self.receiver.is_some() {
             bail!("数据工作台正在解析，请稍后重试");

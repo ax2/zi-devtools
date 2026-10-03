@@ -575,6 +575,39 @@ impl DevToolsApp {
         self.preview_panel_frames = 0;
         self.open_quick(ctx);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sqlite_position(&self, index: usize) -> egui::Pos2 {
+        self.data_state.preview_sqlite_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sqlite_smoke(&mut self, phase: u8, fixture: &std::path::Path) -> bool {
+        match phase {
+            0 => {
+                self.data_state.input = "unrelated existing work".into();
+                self.data_state.create("SQLite 导出验证").unwrap();
+                self.data_state
+                    .preview_sqlite_export(fixture.parent().unwrap().join("本地资料.sqlite"));
+                self.page = Page::Data;
+                true
+            }
+            1..=3 => {
+                assert_eq!(self.page, Page::Data);
+                self.data_state.preview_sqlite_check(phase)
+            }
+            4 => {
+                assert_eq!(self.page, Page::SqliteBrowser);
+                assert_eq!(self.data_state.instances.len(), 2);
+                assert_eq!(
+                    self.data_state.instances[0].state.input,
+                    "unrelated existing work"
+                );
+                assert_eq!(self.data_state.instances[1].name, "SQLite 导出验证");
+                assert!(self.data_state.input.contains("001"));
+                self.sqlite_browser.preview_saved_export_ready()
+            }
+            _ => panic!("invalid SQLite smoke phase"),
+        }
+    }
     /// Only compiled for the isolated screenshot fixture, never a production entry point.
     #[cfg(feature = "ui-preview")]
     pub fn preview_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: PathBuf) {
@@ -593,7 +626,7 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
-            290..=291 => {
+            290..=293 => {
                 self.page = Page::Data;
                 self.data_state
                     .preview_sqlite_export(fixture.parent().unwrap().join("本地资料.sqlite"));

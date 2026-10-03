@@ -365,6 +365,17 @@ impl Default for State {
 }
 
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_saved_export_ready(&self) -> bool {
+        if self.receiver.is_some() {
+            return false;
+        }
+        let data = self.data.as_ref().expect("saved SQLite page loaded");
+        assert_eq!(data.table, "本地资料");
+        assert_eq!(data.rows.len(), 2);
+        assert_eq!(data.columns.len(), 4);
+        true
+    }
     pub fn open_path(&mut self, path: PathBuf) -> Result<()> {
         ensure!(self.receiver.is_none(), "SQLite浏览器正在读取，请稍后重试");
         self.path = path.to_str().context("数据库路径不是有效Unicode")?.into();
