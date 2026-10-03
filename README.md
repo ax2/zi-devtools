@@ -17,7 +17,7 @@ v0.80.0 / Stage 80：改善日程导航、选中行可读性与结果接力的�
 - [数据工作实例](docs/work-instances.md)：命名多实例、独立后台结果、主动保存/恢复快照。跨工具项目空间、通用结果对象、自动保存和通用授权写入仍在规划中。
 - [MCP HTTP 认证](docs/mcp-inspector.md)：临时 Bearer，可主动保存到 Windows 凭据管理器；公共客户端 OAuth 为实验性功能，含发现、PKCE、开放注册、手动刷新、可选自动续期及主动撤销。官方 SDK 的八组合成链路已验证；独立真实授权服务、系统浏览器完整登录和隐藏/休眠恢复仍未完成验收，不承诺任意服务兼容。
 
-![Zi DevTools 工具首页](docs/images/workspace.png)
+![Zi DevTools v0.80 开始页合成界面预览](docs/images/workspace-v80.webp)
 
 主要能力：
 
