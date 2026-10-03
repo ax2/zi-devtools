@@ -208,4 +208,4 @@ flowchart TD
 - 对键盘操作、125%/150%/200% 缩放、窄窗口、深浅主题、屏幕阅读器做专项验证；截图通过不代替交互验证。
 - 写操作覆盖预览后外部修改、符号链接/路径变化、磁盘满、文件占用、崩溃、部分完成、撤销冲突；恢复失败明确显示，不能默默覆盖后来修改。
 
-这些建议与 [平台路线](platform-roadmap.md)、[工具清单](tools.md) 中已有的 pipeline/workflow-builder/plugin-sdk 等规划关联。本次不把建议标为 implemented，也不变更发布版本；拆分进入具体开发轮次时再更新唯一清单与验收范围。
+这些建议与 [平台路线](platform-roadmap.md)、[工具清单](tools.md) 中已有的 pipeline/workflow-builder/plugin-sdk 等规划关联。[可保存操作流程设计](workflow-design.md)进一步明确入口、定义与运行分离、现有模块适配、类型契约、取消、授权和完整验收要求。本次不把建议标为 implemented，也不变更发布版本；拆分进入具体开发轮次时再更新唯一清单与验收范围。
