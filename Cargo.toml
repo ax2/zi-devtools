@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.6"
+version = "0.82.0-dev.7"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -15,6 +15,7 @@ path = "src/main.rs"
 ab_glyph = "0.2.32"
 anyhow = "1.0"
 base64 = "0.22"
+chrono-tz = "=0.10.4"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 lunar_rust = "=1.0.1"
 ical = { version = "=0.11.0", default-features = false, features = ["property"] }
@@ -67,8 +68,6 @@ wasapi = "0.24.0"
 [build-dependencies]
 winresource = "0.1"
 
-[dev-dependencies]
-chrono-tz = "0.8.6"
 
 [profile.release]
 lto = "thin"

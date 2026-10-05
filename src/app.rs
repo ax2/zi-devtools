@@ -193,6 +193,7 @@ pub struct DevToolsApp {
     config_text: String,
     tool_state: ToolState,
     calculator: crate::calculator::State,
+    clock: crate::clock::State,
     prefix: commands::Prefix,
     http_state: HttpWorkbenchState,
     diff_state: DiffState,
@@ -641,6 +642,10 @@ impl DevToolsApp {
             310..=313 => {
                 self.page = Page::Calculator;
                 self.calculator.preview_fixture();
+            }
+            326..=341 => {
+                self.page = Page::Clock;
+                self.clock.preview_fixture((scene - 326) / 2);
             }
             320..=325 => {
                 self.page = Page::Commands;
@@ -1210,6 +1215,18 @@ impl DevToolsApp {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_position(&self, index: usize) -> egui::Pos2 {
+        self.clock.rects[index].center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_done(&mut self) -> bool {
+        self.clock.preview_done()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_check(&mut self, phase: u8) {
+        self.clock.preview_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_calculator_position(&self) -> egui::Pos2 {
         self.calculator.preview_input_position()
     }
@@ -1601,6 +1618,7 @@ impl DevToolsApp {
             sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
             calculator: Default::default(),
+            clock: Default::default(),
             prefix: Default::default(),
             symbols: Default::default(),
             ascii_art: Default::default(),
@@ -3787,12 +3805,18 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.clock.poll(Instant::now(), chrono::Utc::now()) {
+            self.quick_open = false;
+            restore_main_window(self.window_handle, ctx);
+        }
         if self.planner.poll(ctx) {
             self.quick_open = false;
             restore_main_window(self.window_handle, ctx);
         }
-        self.planner_active
-            .store(self.planner.needs_clock(), Ordering::Release);
+        self.planner_active.store(
+            self.planner.needs_clock() || self.clock.needs_clock(),
+            Ordering::Release,
+        );
         self.mcp.tick(ctx);
         if self.recorder.poll() {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -3905,6 +3929,7 @@ impl eframe::App for DevToolsApp {
             if self.data_state.has_work()
                 || self.planner.has_unsaved()
                 || self.prefix.has_work(&self.preferences.command_bindings)
+                || self.clock.has_work()
             {
                 self.workspace_exit_confirm = true;
                 restore_main_window(self.window_handle, ctx);
@@ -3929,7 +3954,8 @@ impl eframe::App for DevToolsApp {
             && self.tray.is_none()
             && (self.data_state.has_work()
                 || self.planner.has_unsaved()
-                || self.prefix.has_work(&self.preferences.command_bindings))
+                || self.prefix.has_work(&self.preferences.command_bindings)
+                || self.clock.has_work())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.workspace_exit_confirm = true;
@@ -3940,7 +3966,9 @@ impl eframe::App for DevToolsApp {
                 ui.heading("退出前保留工作");
                 ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
+                if self.clock.has_work(){ui.label("时钟工作台当前只在运行会话保存；完全退出会清空计时器、闹钟和分段。");}
                 ui.horizontal_wrapped(|ui| {
+                    if self.clock.has_work() && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
@@ -4184,6 +4212,20 @@ impl eframe::App for DevToolsApp {
                         .id_salt("ascii-codes-page")
                         .show(ui, |ui| self.ascii_codes.ui(ui));
                 }
+                Page::Clock => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("clock-workbench-page")
+                        .show(ui, |ui| {
+                            self.clock.ui(
+                                ui,
+                                catalog()
+                                    .iter()
+                                    .find(|e| e.id == "clock-workbench")
+                                    .and_then(|e| e.version.as_deref())
+                                    .unwrap_or("未声明"),
+                            )
+                        });
+                }
                 Page::Calculator => {
                     egui::ScrollArea::vertical()
                         .id_salt("calculator-page")
@@ -4348,6 +4390,7 @@ impl eframe::App for DevToolsApp {
         self.handoff_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
+        self.clock.notice_ui(ctx);
         if self.planner.reminder_ui(ctx) {
             self.navigate(Page::Calendar, None);
         }

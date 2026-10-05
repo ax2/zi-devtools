@@ -461,6 +461,11 @@ impl DevToolsApp {
                 assert_eq!(self.page, Page::Commands);
                 assert!(!self.prefix.active);
             }
+            8 => {
+                assert_eq!(self.page, Page::Clock);
+                self.page = Page::Commands;
+                self.prefix.open();
+            }
             _ => panic!("unknown phase"),
         }
     }

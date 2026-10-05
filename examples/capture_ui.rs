@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 326] = [
+const NAMES: [&str; 342] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -336,6 +336,22 @@ const NAMES: [&str; 326] = [
     "profile-import-small-light",
     "profile-conflict-dark",
     "profile-conflict-light",
+    "clock-world-dark",
+    "clock-world-light",
+    "clock-stopwatch-dark",
+    "clock-stopwatch-light",
+    "clock-timers-dark",
+    "clock-timers-light",
+    "clock-alarms-dark",
+    "clock-alarms-light",
+    "clock-focus-dark",
+    "clock-focus-light",
+    "clock-world-small-dark",
+    "clock-world-small-light",
+    "clock-timers-small-dark",
+    "clock-timers-small-light",
+    "clock-alarms-small-dark",
+    "clock-alarms-small-light",
 ];
 
 struct Capture {
@@ -372,6 +388,26 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("clock-smoke") {
+            let index = match self.frames {
+                20 | 21 | 40 | 41 => Some(0),
+                30 | 31 => Some(1),
+                60 | 61 => Some(2),
+                70 | 71 => Some(3),
+                _ => None,
+            };
+            if let Some(index) = index {
+                let pos = self.app.preview_clock_position(index);
+                assert!(pos.is_finite());
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 10 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("profile-smoke") {
             input.focused = true;
             if let Some(v) = input.viewports.get_mut(&input.viewport_id) {
@@ -491,6 +527,7 @@ impl eframe::App for Capture {
                 20 => Some(egui::Key::R),
                 30 => Some(egui::Key::O),
                 50 => Some(egui::Key::C),
+                62 => Some(egui::Key::T),
                 65 | 82 => Some(egui::Key::C),
                 70 => Some(egui::Key::Z),
                 86 => Some(egui::Key::Escape),
@@ -510,6 +547,7 @@ impl eframe::App for Capture {
                 21 => Some(egui::Key::R),
                 31 => Some(egui::Key::O),
                 51 => Some(egui::Key::C),
+                63 => Some(egui::Key::T),
                 66 | 83 => Some(egui::Key::C),
                 71 => Some(egui::Key::Z),
                 87 => Some(egui::Key::Escape),
@@ -1150,6 +1188,31 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("clock-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 328, self.fixture.clone());
+                self.app.preview_clock_check(0);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                50 => self.app.preview_clock_check(1),
+                65 => self.app.preview_clock_check(2),
+                75 => self.app.preview_clock_check(3),
+                _ if self.frames >= 150 => {
+                    if self.app.preview_clock_done() {
+                        std::process::exit(0);
+                    }
+                    assert!(
+                        self.started.elapsed() < Duration::from_secs(20),
+                        "clock timer did not complete in real time"
+                    );
+                }
+                _ => {}
+            };
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("profile-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 314, self.fixture.clone());
@@ -1207,6 +1270,7 @@ impl eframe::App for Capture {
                 25 => self.app.preview_prefix_check(1),
                 40 => self.app.preview_prefix_check(2),
                 60 => self.app.preview_prefix_check(3),
+                63 => self.app.preview_prefix_check(8),
                 66 => self.app.preview_prefix_check(6),
                 68 => self.app.preview_prefix_check(0),
                 80 => self.app.preview_prefix_check(4),
@@ -2356,6 +2420,7 @@ impl eframe::App for Capture {
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)
                 || (322..=323).contains(&self.scene)
+                || (336..=341).contains(&self.scene)
             {
                 egui::vec2(980.0, 640.0)
             } else if (302..=303).contains(&self.scene) {

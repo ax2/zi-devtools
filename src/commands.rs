@@ -19,6 +19,7 @@ pub struct Command {
 pub fn tool_command(id: &str, title: &str) -> Command {
     let sequence = match id {
         "advanced-calculator" => "C",
+        "clock-workbench" => "T",
         "json" => "J",
         "data" => "D",
         "memos" => "N",
