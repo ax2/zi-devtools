@@ -1,3 +1,4 @@
+mod profile_ui;
 use super::*;
 use crate::commands::{Action, Command, Match};
 
@@ -12,6 +13,10 @@ pub(super) struct Prefix {
     selected: String,
     input: String,
     notice: String,
+    pub(super) files: crate::commands::profile::Files,
+    merge: bool,
+    #[cfg(feature = "ui-preview")]
+    profile_rects: [egui::Rect; 3],
     #[cfg(feature = "ui-preview")]
     rects: [egui::Rect; 6],
 }
@@ -28,6 +33,10 @@ impl Default for Prefix {
             selected: String::new(),
             input: String::new(),
             notice: String::new(),
+            files: Default::default(),
+            merge: true,
+            #[cfg(feature = "ui-preview")]
+            profile_rects: [egui::Rect::NOTHING; 3],
             #[cfg(feature = "ui-preview")]
             rects: [egui::Rect::NOTHING; 6],
         }
@@ -80,6 +89,12 @@ impl DevToolsApp {
 
     fn binding_editor(&mut self, ui: &mut egui::Ui) {
         let defaults = self.default_commands();
+        self.prefix
+            .draft
+            .get_or_insert_with(|| self.preferences.command_bindings.clone());
+        if self.binding_profiles(ui, &defaults) {
+            return;
+        }
         let draft = self
             .prefix
             .draft
@@ -253,6 +268,77 @@ impl DevToolsApp {
                 }
             });
         ui.small("空序列表示取消绑定；重复或前缀冲突会阻止保存。恢复默认和放弃修改都可先检查再保存。旧录屏直接热键继续可用。");
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_profile_fixture(&mut self, conflict: bool) {
+        self.prefix.draft = Some(crate::commands::Bindings::from([(
+            "open:memos".into(),
+            "Q N".into(),
+        )]));
+        self.prefix.files.review = Some(crate::commands::Bindings::from([(
+            "open:json".into(),
+            if conflict { "R" } else { "Q J" }.into(),
+        )]));
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_profile_position(&self, index: usize) -> egui::Pos2 {
+        self.prefix.profile_rects[index].center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_profile_check(&mut self, phase: u8, folder: &std::path::Path) {
+        let path = folder.join("profile-fixture.json");
+        match phase {
+            0 => {
+                self.page = Page::Commands;
+                self.prefix.draft = Some(crate::commands::Bindings::from([(
+                    "open:memos".into(),
+                    "Q N".into(),
+                )]));
+                let profile = crate::commands::Bindings::from([("open:json".into(), "Q J".into())]);
+                crate::commands::profile::save_new(&profile, &path).unwrap();
+                self.prefix.files.read(path).unwrap();
+            }
+            1 => {
+                assert!(self.prefix.files.review.is_some());
+                assert!(self.preferences.command_bindings.is_empty());
+            }
+            2 => {
+                assert!(self.prefix.files.review.is_none());
+                assert_eq!(self.prefix.draft.as_ref().unwrap()["open:memos"], "Q N");
+                self.prefix.files.read(path).unwrap();
+            }
+            3 => {
+                assert!(!self.prefix.merge);
+                assert!(self.prefix.files.review.is_some());
+            }
+            4 => {
+                assert!(self.prefix.files.review.is_none());
+                assert_eq!(self.prefix.draft.as_ref().unwrap().len(), 1);
+                assert!(self.preferences.command_bindings.is_empty());
+            }
+            5 => {
+                assert_eq!(self.preferences.command_bindings["open:json"], "Q J");
+                self.prefix
+                    .files
+                    .save(
+                        self.prefix.draft.clone().unwrap(),
+                        folder.join("profile-export.json"),
+                    )
+                    .unwrap();
+            }
+            6 => {
+                assert!(!self.prefix.files.busy());
+                assert!(self.prefix.files.message.contains("已另存"));
+                assert_eq!(
+                    crate::commands::profile::load(&folder.join("profile-export.json")).unwrap(),
+                    self.preferences.command_bindings
+                );
+                println!(
+                    "PASS profile: background import, native cancel/replace/confirm/save, explicit export roundtrip preserves live bindings"
+                );
+            }
+            _ => panic!("unknown phase"),
+        }
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_binding_fixture(&mut self) {

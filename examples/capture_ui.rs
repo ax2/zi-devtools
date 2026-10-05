@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 320] = [
+const NAMES: [&str; 326] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -330,6 +330,12 @@ const NAMES: [&str; 320] = [
     "binding-editor-light",
     "binding-editor-small-dark",
     "binding-editor-small-light",
+    "profile-import-dark",
+    "profile-import-light",
+    "profile-import-small-dark",
+    "profile-import-small-light",
+    "profile-conflict-dark",
+    "profile-conflict-light",
 ];
 
 struct Capture {
@@ -366,6 +372,29 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("profile-smoke") {
+            input.focused = true;
+            if let Some(v) = input.viewports.get_mut(&input.viewport_id) {
+                v.focused = Some(true);
+            }
+            let pos = match self.frames {
+                20 | 21 => Some(self.app.preview_profile_position(1)),
+                40 | 41 => Some(self.app.preview_profile_position(2)),
+                50 | 51 => Some(self.app.preview_profile_position(0)),
+                70 | 71 => Some(self.app.preview_binding_position(3)),
+                _ => None,
+            };
+            if let Some(pos) = pos {
+                assert!(pos.is_finite());
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 10 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("bindings-smoke") {
             input.focused = true;
             if let Some(v) = input.viewports.get_mut(&input.viewport_id) {
@@ -1121,6 +1150,28 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("profile-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 314, self.fixture.clone());
+                self.app.preview_profile_check(0, &self.folder);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                15 => self.app.preview_profile_check(1, &self.folder),
+                25 => self.app.preview_profile_check(2, &self.folder),
+                45 => self.app.preview_profile_check(3, &self.folder),
+                55 => self.app.preview_profile_check(4, &self.folder),
+                75 => self.app.preview_profile_check(5, &self.folder),
+                100 => {
+                    self.app.preview_profile_check(6, &self.folder);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("bindings-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 314, self.fixture.clone());
@@ -2304,6 +2355,7 @@ impl eframe::App for Capture {
             let size = if (308..=309).contains(&self.scene)
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)
+                || (322..=323).contains(&self.scene)
             {
                 egui::vec2(980.0, 640.0)
             } else if (302..=303).contains(&self.scene) {

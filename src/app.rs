@@ -642,6 +642,10 @@ impl DevToolsApp {
                 self.page = Page::Calculator;
                 self.calculator.preview_fixture();
             }
+            320..=325 => {
+                self.page = Page::Commands;
+                self.preview_profile_fixture(scene >= 324);
+            }
             316..=319 => {
                 self.page = Page::Commands;
                 self.preview_binding_fixture();
@@ -3871,6 +3875,10 @@ impl eframe::App for DevToolsApp {
         if self.intake.busy() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
+        self.prefix.files.poll();
+        if self.prefix.files.busy() {
+            ctx.request_repaint_after(Duration::from_millis(50));
+        }
         self.receive_drop(ctx);
         self.quick_panel(ctx);
         self.quick_active.store(self.quick_open, Ordering::Release);
@@ -3894,7 +3902,10 @@ impl eframe::App for DevToolsApp {
         }
 
         if self.tray_exit_requested.swap(false, Ordering::AcqRel) {
-            if self.data_state.has_work() || self.planner.has_unsaved() {
+            if self.data_state.has_work()
+                || self.planner.has_unsaved()
+                || self.prefix.has_work(&self.preferences.command_bindings)
+            {
                 self.workspace_exit_confirm = true;
                 restore_main_window(self.window_handle, ctx);
             } else {
@@ -3916,7 +3927,9 @@ impl eframe::App for DevToolsApp {
         if ctx.input(|input| input.viewport().close_requested())
             && !self.quit_requested
             && self.tray.is_none()
-            && (self.data_state.has_work() || self.planner.has_unsaved())
+            && (self.data_state.has_work()
+                || self.planner.has_unsaved()
+                || self.prefix.has_work(&self.preferences.command_bindings))
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.workspace_exit_confirm = true;
@@ -3926,10 +3939,12 @@ impl eframe::App for DevToolsApp {
                 ui.set_max_width(620.0);
                 ui.heading("退出前保留工作");
                 ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
+                ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 ui.horizontal_wrapped(|ui| {
+                    if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
