@@ -646,6 +646,12 @@ impl DevToolsApp {
                 self.quick_open = false;
                 None
             }
+            Some(Action::ScreenshotCapture) => {
+                self.prefix.active = false;
+                self.quick_open = false;
+                self.images.request_screenshot_capture();
+                None
+            }
             None => None,
         }
     }

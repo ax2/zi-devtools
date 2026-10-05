@@ -396,6 +396,27 @@ impl Capture {
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        if std::env::args().nth(3).as_deref() == Some("screenshot-overlay-smoke") {
+            input.focused = true;
+            if let Some(viewport) = input.viewports.get_mut(&input.viewport_id) {
+                viewport.focused = Some(true);
+            }
+            if let Some((key, pressed)) = match self.frames {
+                5 => Some((egui::Key::S, true)),
+                6 => Some((egui::Key::S, false)),
+                8 => Some((egui::Key::C, true)),
+                9 => Some((egui::Key::C, false)),
+                _ => None,
+            } {
+                input.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         input.events.push(egui::Event::PointerGone);
         if std::env::args().nth(3).as_deref() == Some("clock-audio-smoke") {
             let index = match self.frames {
@@ -1235,6 +1256,74 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("screenshot-overlay-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 348, self.fixture.clone());
+                self.app.preview_prefix_check(0);
+                self.quick_smoke_phase = 1;
+            }
+            self.app.update(ctx, frame);
+            let delta = self
+                .frames
+                .saturating_sub(self.sqlite_input_frame.unwrap_or(self.frames));
+            match self.quick_smoke_phase {
+                1 | 3 | 5 if self.app.preview_screenshot_overlay_active() => {
+                    self.app.preview_screenshot_overlay_check(0);
+                    self.sqlite_input_frame = Some(self.frames);
+                    if self.quick_smoke_phase == 1 {
+                        self.app.preview_screenshot_overlay_key(27, 1);
+                        self.quick_smoke_phase = 2;
+                    } else if self.quick_smoke_phase == 3 {
+                        self.quick_smoke_phase = 4;
+                    } else {
+                        self.app.preview_screenshot_overlay_key(13, 28);
+                        self.quick_smoke_phase = 6;
+                    }
+                }
+                2 if delta >= 10 && !self.app.preview_screenshot_busy() => {
+                    self.app.preview_screenshot_overlay_check(1);
+                    self.app.preview_screenshot_overlay_check(3);
+                    self.app.preview_screenshot_capture_start();
+                    self.quick_smoke_phase = 3;
+                }
+                4 => {
+                    match delta {
+                        10 => self.app.preview_screenshot_overlay_pointer(200, 200, 0),
+                        20 => self.app.preview_screenshot_overlay_pointer(1200, 200, 1),
+                        30 => self.app.preview_screenshot_overlay_pointer(1200, 900, 1),
+                        40 => self.app.preview_screenshot_overlay_pointer(750, 900, 1),
+                        50 => self.app.preview_screenshot_overlay_pointer(750, 650, 1),
+                        60 => self.app.preview_screenshot_overlay_pointer(200, 650, 1),
+                        70 => self.app.preview_screenshot_overlay_pointer(200, 650, 2),
+                        _ => {}
+                    }
+                    if delta >= 90 && !self.app.preview_screenshot_busy() {
+                        self.app.preview_screenshot_overlay_check(2);
+                        self.app.preview_screenshot_overlay_check(3);
+                        self.app.preview_screenshot_capture_start();
+                        self.quick_smoke_phase = 5;
+                    }
+                }
+                6 if delta >= 15 && !self.app.preview_screenshot_busy() => {
+                    self.app.preview_screenshot_overlay_check(4);
+                    self.app.preview_screenshot_overlay_check(3);
+                    println!(
+                        "PASS synthetic S C dispatch and native primary-display overlay: root cloaked, child visible/uncloaked at physical monitor bounds; Esc retains old work; targeted Win32 mouse-message concave alpha crop; root restored; Enter full-screen source bytes preserved; unique overlays destroyed; no desktop pixels saved"
+                    );
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(30),
+                "overlay smoke timeout phase {} frame {}",
+                self.quick_smoke_phase,
+                self.frames
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("screenshot-desktop-smoke") {
             match zi_devtools::image_tools::verify_screenshot_capture() {
                 Ok((width, height)) => println!(
@@ -1246,6 +1335,66 @@ impl eframe::App for Capture {
                 }
             }
             std::process::exit(0);
+        }
+        #[cfg(windows)]
+        if smoke_mode.as_deref() == Some("screenshot-overlay-capture") {
+            if self.frames == 0 {
+                self.app.preview_screenshot_overlay_prepare(ctx, self.scene);
+            }
+            self.app.update(ctx, frame);
+            if self.frames >= 24 {
+                use eframe::glow::HasContext;
+                let [w, h] = self.app.preview_screenshot_overlay_dimensions();
+                assert!(w > 0 && h > 0 && i64::from(w) * i64::from(h) <= 8_000_000);
+                let gl = frame.gl().unwrap();
+                let mut viewport = [0; 4];
+                unsafe {
+                    gl.get_parameter_i32_slice(eframe::glow::VIEWPORT, &mut viewport);
+                }
+                assert_eq!(
+                    &viewport[2..],
+                    &[w, h],
+                    "read only the rendered child framebuffer"
+                );
+                let mut pixels = vec![0u8; w as usize * h as usize * 4];
+                unsafe {
+                    gl.read_pixels(
+                        0,
+                        0,
+                        w,
+                        h,
+                        eframe::glow::RGBA,
+                        eframe::glow::UNSIGNED_BYTE,
+                        eframe::glow::PixelPackData::Slice(Some(&mut pixels)),
+                    );
+                }
+                let mut flipped = Vec::with_capacity(pixels.len());
+                for row in pixels.chunks_exact(w as usize * 4).rev() {
+                    flipped.extend_from_slice(row);
+                }
+                let file = fs::File::create(
+                    self.folder
+                        .join(format!("screenshot-overlay-{}.png", self.scene)),
+                )
+                .unwrap();
+                let mut encoder = png::Encoder::new(file, w as u32, h as u32);
+                encoder.set_color(png::ColorType::Rgba);
+                encoder.set_depth(png::BitDepth::Eight);
+                encoder
+                    .write_header()
+                    .unwrap()
+                    .write_image_data(&flipped)
+                    .unwrap();
+                println!("Captured native child framebuffer: {w}x{h}");
+                std::process::exit(0);
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "child framebuffer capture timeout"
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
         }
         #[cfg(windows)]
         if smoke_mode.as_deref() == Some("clock-window-capture") {

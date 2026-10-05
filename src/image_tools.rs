@@ -100,6 +100,36 @@ pub struct State {
     pending: Option<mpsc::Receiver<Result<Job, String>>>,
 }
 impl State {
+    pub fn screenshot_capture_active(&self) -> bool {
+        self.screenshot.capture_active()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_overlay_fixture(&mut self, ctx: &egui::Context, index: usize) {
+        self.screenshot.preview_overlay_fixture(ctx, index);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_overlay_active(&self) -> bool {
+        self.screenshot.preview_overlay_active()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_overlay_dimensions(&self) -> [i32; 2] {
+        self.screenshot.preview_overlay_dimensions()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_overlay_key(&self, key: u32, scan: u32) {
+        self.screenshot.preview_overlay_key(key, scan);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_overlay_pointer(&self, x: i32, y: i32, kind: u8) {
+        self.screenshot.preview_overlay_pointer(x, y, kind);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_overlay_check(&self, phase: u8) {
+        self.screenshot.preview_overlay_check(phase);
+    }
+    pub fn request_screenshot_capture(&mut self) {
+        self.screenshot.request_capture();
+    }
     pub fn active_tool_id(&self) -> &'static str {
         match self.mode {
             Mode::Single => "image-tools",
@@ -111,6 +141,19 @@ impl State {
     }
     pub fn poll_screenshot(&mut self, ctx: &egui::Context) {
         self.screenshot.poll(ctx);
+    }
+    pub fn take_screenshot_capture_request(&mut self) -> bool {
+        self.screenshot.take_capture_request()
+    }
+    pub fn start_screenshot_capture(&mut self, ctx: &egui::Context, root: Option<isize>) {
+        self.screenshot.start_desktop_capture(ctx, root);
+    }
+    pub fn screenshot_capture_failed(&mut self) {
+        self.screenshot
+            .capture_failed("无法隐藏工作台，未读取桌面；请重试。");
+    }
+    pub fn screenshot_overlay_ui(&mut self, ctx: &egui::Context) -> bool {
+        self.screenshot.overlay_ui(ctx)
     }
     pub fn screenshot_busy(&self) -> bool {
         self.screenshot.busy()

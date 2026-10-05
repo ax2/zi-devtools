@@ -257,6 +257,50 @@ pub struct DevToolsApp {
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_overlay_prepare(&mut self, ctx: &egui::Context, index: usize) {
+        self.preview_scene(
+            ctx,
+            348 + index % 2,
+            std::path::PathBuf::from("synthetic.txt"),
+        );
+        assert!(hide_main_window(self.window_handle));
+        self.images.preview_overlay_fixture(ctx, index);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_capture_start(&mut self) {
+        self.images.request_screenshot_capture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_busy(&self) -> bool {
+        self.images.screenshot_busy()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_overlay_active(&self) -> bool {
+        self.images.preview_overlay_active()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_overlay_dimensions(&self) -> [i32; 2] {
+        self.images.preview_overlay_dimensions()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_overlay_key(&self, key: u32, scan: u32) {
+        self.images.preview_overlay_key(key, scan);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_overlay_pointer(&self, x: i32, y: i32, kind: u8) {
+        self.images.preview_overlay_pointer(x, y, kind);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_overlay_check(&self, phase: u8) {
+        self.images.preview_overlay_check(phase);
+        if phase == 0 {
+            assert!(main_window_cloaked(self.window_handle));
+        }
+        if matches!(phase, 1 | 2 | 4) {
+            assert!(!main_window_cloaked(self.window_handle));
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_backup_click_position(&self, index: usize) -> Option<egui::Pos2> {
         self.planner.preview_backup_rects[index].map(|r| r.center())
     }
@@ -3972,6 +4016,21 @@ impl eframe::App for DevToolsApp {
         }
         self.prefix.files.poll();
         self.images.poll_screenshot(ctx);
+        if self.images.take_screenshot_capture_request() {
+            self.quick_open = false;
+            if hide_main_window(self.window_handle) {
+                self.images
+                    .start_screenshot_capture(ctx, self.window_handle);
+            } else {
+                self.images.screenshot_capture_failed();
+            }
+        }
+        if self.images.screenshot_overlay_ui(ctx) {
+            self.page = Page::Images;
+            self.images.show_screenshot();
+            self.quick_open = false;
+            restore_main_window(self.window_handle, ctx);
+        }
         if self.prefix.files.busy() {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
@@ -4063,7 +4122,9 @@ impl eframe::App for DevToolsApp {
         }
 
         #[cfg(windows)]
-        if self.quick_open && main_window_cloaked(self.window_handle) {
+        if (self.quick_open || self.images.screenshot_capture_active())
+            && main_window_cloaked(self.window_handle)
+        {
             return;
         }
 

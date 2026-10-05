@@ -8,6 +8,11 @@ use std::{
     sync::{Arc, mpsc},
 };
 
+#[cfg(windows)]
+mod overlay;
+#[cfg(all(windows, feature = "ui-preview"))]
+mod overlay_preview;
+
 const MAX_POINTS: usize = 2048;
 
 #[cfg(all(windows, feature = "ui-preview"))]
@@ -141,7 +146,8 @@ fn save_png(path: &Path, image: &RgbaImage) -> Result<usize> {
 }
 
 enum Job {
-    Source(RgbaImage),
+    #[cfg(windows)]
+    Desktop(RgbaImage, crate::recorder::DisplayInfo),
     Output(RgbaImage),
     Saved(usize),
 }
@@ -151,10 +157,14 @@ pub struct State {
     output: Option<Arc<RgbaImage>>,
     texture: Option<egui::TextureHandle>,
     preview: Option<egui::TextureHandle>,
-    points: Vec<[f32; 2]>,
+    gesture: Gesture,
     freehand: bool,
-    drawing: bool,
-    overflow: bool,
+    capture_requested: bool,
+    capture_inflight: bool,
+    restore_requested: bool,
+    #[cfg(windows)]
+    overlay: Option<overlay::Overlay>,
+    next_overlay_id: u64,
     dirty: bool,
     message: String,
     pending: Option<mpsc::Receiver<Result<Job, String>>>,
@@ -162,8 +172,80 @@ pub struct State {
     canvas: Option<egui::Rect>,
 }
 impl State {
+    pub fn capture_active(&self) -> bool {
+        self.capture_requested || self.capture_inflight || self.selecting()
+    }
+    pub fn request_capture(&mut self) {
+        if !self.busy() {
+            self.capture_requested = true;
+            self.message = "正在隐藏工作台并捕获桌面…".into();
+        }
+    }
+    pub fn take_capture_request(&mut self) -> bool {
+        std::mem::take(&mut self.capture_requested)
+    }
+    pub fn capture_failed(&mut self, message: &str) {
+        self.message = message.into();
+        self.restore_requested = true;
+    }
+    #[cfg(windows)]
+    pub fn start_desktop_capture(&mut self, ctx: &egui::Context, root: Option<isize>) {
+        self.capture_inflight = true;
+        self.task(ctx, move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let root = root.ok_or_else(|| anyhow::anyhow!("工作台窗口不可用"))?;
+            ensure!(root_is_hidden(root), "工作台在捕获前已恢复，请重新截图");
+            let display = crate::recorder::primary_display()?;
+            crate::recorder::validate_display(&display)?;
+            let captured = crate::recorder_ui::capture_display_snapshot(&display)?;
+            ensure!(
+                root_is_hidden(root),
+                "工作台在捕获中恢复，本次画面未采用，请重试"
+            );
+            let bytes = captured.pixels.iter().flat_map(|p| p.to_array()).collect();
+            let image = RgbaImage::from_raw(display.width, display.height, bytes)
+                .ok_or_else(|| anyhow::anyhow!("捕获尺寸无效"))?;
+            Ok(Job::Desktop(image, display))
+        });
+    }
+    fn selecting(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.overlay.is_some()
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    pub fn overlay_ui(&mut self, ctx: &egui::Context) -> bool {
+        #[cfg(windows)]
+        if let Some(mut overlay) = self.overlay.take() {
+            match overlay.ui(ctx) {
+                Some(overlay::Outcome::Selected(points)) => {
+                    self.texture = Some(texture(ctx, "screenshot-source", &overlay.source));
+                    self.source = Some(overlay.source.clone());
+                    self.output = None;
+                    self.preview = None;
+                    self.gesture = Gesture::default();
+                    self.gesture.points = points.clone();
+                    self.freehand = overlay.freehand();
+                    let source = overlay.source.clone();
+                    self.message = "正在生成透明预览…".into();
+                    self.task(ctx, move || crop(&source, &points).map(Job::Output));
+                    self.restore_requested = true;
+                }
+                Some(overlay::Outcome::Cancelled(message)) => {
+                    self.message = message;
+                    self.restore_requested = true;
+                }
+                None => self.overlay = Some(overlay),
+            }
+        }
+        std::mem::take(&mut self.restore_requested)
+    }
     pub fn busy(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.capture_requested || self.selecting()
     }
     pub fn has_work(&self) -> bool {
         self.busy() || (self.output.is_some() && self.dirty)
@@ -179,7 +261,7 @@ impl State {
         });
         self.source = Some(Arc::new(image.clone()));
         self.texture = Some(texture(ctx, "screenshot-fixture-source", &image));
-        self.points = vec![
+        self.gesture.points = vec![
             [100., 80.],
             [690., 80.],
             [690., 280.],
@@ -188,7 +270,7 @@ impl State {
             [100., 190.],
         ];
         self.freehand = true;
-        let output = crop(&image, &self.points).expect("synthetic screenshot mask");
+        let output = crop(&image, &self.gesture.points).expect("synthetic screenshot mask");
         self.preview = Some(texture(ctx, "screenshot-fixture-alpha", &output));
         self.output = Some(Arc::new(output));
         self.dirty = true;
@@ -216,14 +298,22 @@ impl State {
             Err(_) => Err("后台任务异常结束".into()),
         };
         self.pending = None;
+        let was_capture = std::mem::take(&mut self.capture_inflight);
         match result {
-            Ok(Job::Source(image)) => {
-                self.texture = Some(texture(ctx, "screenshot-source", &image));
-                self.source = Some(Arc::new(image));
-                self.output = None;
-                self.preview = None;
-                self.points.clear();
-                self.message = "桌面静态画面已捕获。拖动选择；松开闭合。Esc 清除选区。".into();
+            #[cfg(windows)]
+            Ok(Job::Desktop(image, display)) => {
+                if let Some(next) = self.next_overlay_id.checked_add(1) {
+                    self.next_overlay_id = next;
+                    self.overlay = Some(overlay::Overlay::new(
+                        next,
+                        display,
+                        image,
+                        self.freehand,
+                        ctx,
+                    ));
+                } else {
+                    self.capture_failed("选择层编号耗尽，请保存后重新打开程序。");
+                }
             }
             Ok(Job::Output(image)) => {
                 self.dirty = true;
@@ -235,38 +325,24 @@ impl State {
                 self.dirty = false;
                 self.message = format!("已保存 PNG：{:.1} KiB", bytes as f64 / 1024.)
             }
-            Err(error) => self.message = format!("操作失败：{error}"),
+            Err(error) => {
+                self.message = format!("操作失败：{error}");
+                self.restore_requested |= was_capture;
+            }
         }
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll(ui.ctx());
         ui.heading("截图与透明套索 · 开发中");
         ui.label(
-            "主动捕获屏幕后，在下方真实静态画面上拖动选区；自由轮廓外透明，另存不会覆盖已有文件。",
+            "捕获后在全屏实景上拖动选区；取消保留旧工作，确认后在此预览透明 PNG。原始画面也可在下方重选。",
         );
-        let busy = self.pending.is_some();
+        let busy = self.busy();
         ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal_wrapped(|ui| {
                 #[cfg(windows)]
                 if ui.button("捕获主屏幕").clicked() {
-                    self.message = "正在捕获当前桌面…".into();
-                    self.task(ui.ctx(), || {
-                        let display = crate::recorder::primary_display()?;
-                        crate::recorder::validate_display(&display)?;
-                        let captured = crate::recorder_ui::capture_display_snapshot(&display)?;
-                        let bytes: Vec<u8> = captured
-                            .pixels
-                            .iter()
-                            .flat_map(|pixel| pixel.to_array())
-                            .collect();
-                        let image = RgbaImage::from_raw(
-                            captured.size[0] as u32,
-                            captured.size[1] as u32,
-                            bytes,
-                        )
-                        .ok_or_else(|| anyhow::anyhow!("捕获尺寸无效"))?;
-                        Ok(Job::Source(image))
-                    });
+                    self.request_capture();
                 }
                 let changed = ui
                     .selectable_value(&mut self.freehand, false, "矩形")
@@ -274,16 +350,16 @@ impl State {
                     | ui.selectable_value(&mut self.freehand, true, "自由轮廓")
                         .changed();
                 if changed {
-                    self.points.clear();
+                    self.gesture.points.clear();
                     self.output = None;
                     self.preview = None;
-                    self.drawing = false;
+                    self.gesture.drawing = false;
                 }
                 if ui.button("重新选择").clicked() {
-                    self.points.clear();
+                    self.gesture.points.clear();
                     self.output = None;
                     self.preview = None;
-                    self.drawing = false;
+                    self.gesture.drawing = false;
                 }
                 if let Some(output) = self.output.clone()
                     && ui.button("另存透明 PNG…").clicked()
@@ -314,59 +390,23 @@ impl State {
             self.canvas = Some(rect);
         }
         if !busy {
-            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.points.clear();
-                self.output = None;
-                self.preview = None;
-                self.drawing = false;
-            }
             if response.drag_started() {
-                self.points.clear();
                 self.output = None;
                 self.preview = None;
-                self.drawing = true;
-                self.overflow = false;
-                if let Some(pos) = ui.input(|input| input.pointer.press_origin()) {
-                    let p = [
-                        ((pos.x - rect.left()) / scale).clamp(0., size.x),
-                        ((pos.y - rect.top()) / scale).clamp(0., size.y),
-                    ];
-                    self.points.push(p);
-                    if !self.freehand {
-                        self.points.push(p);
-                    }
-                }
             }
-            if self.drawing
-                && let Some(pos) = response.interact_pointer_pos()
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.gesture.points.clear();
+                self.output = None;
+                self.preview = None;
+                self.gesture.drawing = false;
+            }
+            if self
+                .gesture
+                .update(ui, &response, rect, size, self.freehand)
             {
-                let p = [
-                    ((pos.x - rect.left()) / scale).clamp(0., size.x),
-                    ((pos.y - rect.top()) / scale).clamp(0., size.y),
-                ];
-                if self.freehand {
-                    if self
-                        .points
-                        .last()
-                        .is_none_or(|last| (last[0] - p[0]).hypot(last[1] - p[1]) >= 2.)
-                    {
-                        if self.points.len() < MAX_POINTS {
-                            self.points.push(p);
-                        } else {
-                            self.overflow = true;
-                        }
-                    }
-                } else if self.points.is_empty() {
-                    self.points.push(p);
-                    self.points.push(p);
-                } else {
-                    self.points[1] = p;
-                }
-            }
-            if response.drag_stopped() && self.drawing {
-                self.drawing = false;
-                let points = polygon(&self.points, self.freehand);
-                if self.overflow {
+                self.gesture.drawing = false;
+                let points = polygon(&self.gesture.points, self.freehand);
+                if self.gesture.overflow {
                     self.message = "轮廓超过2048点，请缩短轮廓重新选择。".into();
                 } else {
                     self.message = "正在生成透明预览…".into();
@@ -374,7 +414,7 @@ impl State {
                 }
             }
         }
-        let path: Vec<Pos2> = polygon(&self.points, self.freehand)
+        let path: Vec<Pos2> = polygon(&self.gesture.points, self.freehand)
             .iter()
             .map(|p| rect.min + egui::vec2(p[0], p[1]) * scale)
             .collect();
@@ -419,6 +459,148 @@ impl State {
         }
     }
 }
+
+#[cfg(windows)]
+fn root_is_hidden(root: isize) -> bool {
+    use windows_sys::Win32::{
+        Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute},
+        UI::WindowsAndMessaging::{GetWindowThreadProcessId, IsWindow},
+    };
+    let hwnd = root as windows_sys::Win32::Foundation::HWND;
+    let mut owner = 0;
+    let mut cloak = 0u32;
+    unsafe {
+        IsWindow(hwnd) != 0
+            && GetWindowThreadProcessId(hwnd, &mut owner) != 0
+            && owner == std::process::id()
+            && DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED as u32, &mut cloak as *mut _ as _, 4) == 0
+            && cloak != 0
+    }
+}
+
+#[derive(Default)]
+struct Gesture {
+    points: Vec<[f32; 2]>,
+    drawing: bool,
+    overflow: bool,
+}
+impl Gesture {
+    fn update(
+        &mut self,
+        ui: &egui::Ui,
+        response: &egui::Response,
+        rect: egui::Rect,
+        size: egui::Vec2,
+        freehand: bool,
+    ) -> bool {
+        let scale_x = rect.width() / size.x;
+        let scale_y = rect.height() / size.y;
+        if response.drag_started() {
+            self.points.clear();
+            self.drawing = true;
+            self.overflow = false;
+            if let Some(pos) = ui.input(|input| input.pointer.press_origin()) {
+                let p = [
+                    ((pos.x - rect.left()) / scale_x).clamp(0., size.x),
+                    ((pos.y - rect.top()) / scale_y).clamp(0., size.y),
+                ];
+                self.points.push(p);
+                if !freehand {
+                    self.points.push(p);
+                }
+            }
+        }
+        if self.drawing && freehand {
+            // Keep queued movement between rendered frames; a fast curve must not become a chord.
+            ui.input(|input| {
+                let start = if response.drag_started() {
+                    input
+                        .events
+                        .iter()
+                        .position(|e| {
+                            matches!(
+                                e,
+                                egui::Event::PointerButton {
+                                    button: egui::PointerButton::Primary,
+                                    pressed: true,
+                                    ..
+                                }
+                            )
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                for event in &input.events[start..] {
+                    let pos = match event {
+                        egui::Event::PointerMoved(pos)
+                        | egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            ..
+                        } => Some(*pos),
+                        _ => None,
+                    };
+                    if let Some(pos) = pos {
+                        self.push_sample([
+                            ((pos.x - rect.left()) / scale_x).clamp(0., size.x),
+                            ((pos.y - rect.top()) / scale_y).clamp(0., size.y),
+                        ]);
+                    }
+                    if self.overflow
+                        || matches!(
+                            event,
+                            egui::Event::PointerButton {
+                                button: egui::PointerButton::Primary,
+                                pressed: false,
+                                ..
+                            }
+                        )
+                    {
+                        break;
+                    }
+                }
+            });
+        }
+        if self.drawing
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let p = [
+                ((pos.x - rect.left()) / scale_x).clamp(0., size.x),
+                ((pos.y - rect.top()) / scale_y).clamp(0., size.y),
+            ];
+            if freehand {
+                self.push_sample(p);
+            } else if self.points.is_empty() {
+                self.points.push(p);
+                self.points.push(p);
+            } else {
+                self.points[1] = p;
+            }
+        }
+
+        if response.drag_stopped() && self.drawing {
+            self.drawing = false;
+            true
+        } else {
+            false
+        }
+    }
+    fn push_sample(&mut self, p: [f32; 2]) {
+        if self
+            .points
+            .last()
+            .is_none_or(|last| (last[0] - p[0]).hypot(last[1] - p[1]) >= 2.)
+        {
+            if self.points.len() < MAX_POINTS {
+                self.points.push(p);
+            } else {
+                self.overflow = true;
+            }
+        }
+    }
+}
+
 fn polygon(points: &[[f32; 2]], freehand: bool) -> Vec<[f32; 2]> {
     if !freehand && points.len() == 2 {
         let (a, b) = (points[0], points[1]);
@@ -441,6 +623,76 @@ fn texture(ctx: &egui::Context, name: &str, image: &RgbaImage) -> egui::TextureH
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn queued_freehand_movement_keeps_concave_shape_between_frames() {
+        let ctx = egui::Context::default();
+        let image = RgbaImage::from_pixel(300, 200, image::Rgba([10, 20, 30, 255]));
+        let mut state = State {
+            texture: Some(texture(&ctx, "queued-pointer-test", &image)),
+            source: Some(Arc::new(image)),
+            freehand: true,
+            ..Default::default()
+        };
+        let frame = |state: &mut State, events: Vec<egui::Event>| {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        Pos2::ZERO,
+                        egui::vec2(900., 800.),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| state.ui(ui));
+                },
+            );
+        };
+        frame(&mut state, vec![]);
+        let origin = state.canvas.unwrap().min;
+        let start = origin + egui::vec2(10., 10.);
+        frame(
+            &mut state,
+            vec![
+                egui::Event::PointerMoved(start),
+                egui::Event::PointerButton {
+                    pos: start,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        let mut events: Vec<_> = [
+            [100., 10.],
+            [100., 120.],
+            [50., 120.],
+            [50., 60.],
+            [10., 60.],
+        ]
+        .into_iter()
+        .map(|p| egui::Event::PointerMoved(origin + egui::vec2(p[0], p[1])))
+        .collect();
+        events.push(egui::Event::PointerButton {
+            pos: origin + egui::vec2(10., 60.),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        frame(&mut state, events);
+        for _ in 0..100 {
+            frame(&mut state, vec![]);
+            if state.pending.is_none() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let output = state.output.as_ref().unwrap();
+        assert_eq!(output.dimensions(), (90, 110));
+        assert_eq!(output.get_pixel(15, 80)[3], 0);
+        assert_eq!(output.get_pixel(80, 80)[3], 255);
+        assert_eq!(state.gesture.points.len(), 6);
+    }
     #[test]
     fn inactive_save_completion_and_failure_preserve_exit_protection() {
         let ctx = egui::Context::default();
@@ -539,7 +791,7 @@ mod tests {
             state.output.is_some(),
             "{} points {:?}",
             state.message,
-            state.points
+            state.gesture.points
         );
         assert_eq!(state.output.as_ref().unwrap().dimensions(), (80, 60));
         frame(
@@ -552,7 +804,7 @@ mod tests {
                 modifiers: egui::Modifiers::NONE,
             }],
         );
-        assert!(state.output.is_none() && state.points.is_empty());
+        assert!(state.output.is_none() && state.gesture.points.is_empty());
     }
     #[test]
     fn concave_alpha_and_png_roundtrip() {

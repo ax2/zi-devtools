@@ -7,6 +7,7 @@ pub enum Action {
     RecordStart,
     RecordPause,
     RecordStop,
+    ScreenshotCapture,
 }
 #[derive(Clone, Debug)]
 pub struct Command {
@@ -48,6 +49,12 @@ pub fn controls() -> Vec<Command> {
             Action::RecordPause,
         ),
         ("recorder:stop", "结束录屏", "R E", Action::RecordStop),
+        (
+            "screenshot:capture",
+            "快速截图",
+            "S C",
+            Action::ScreenshotCapture,
+        ),
     ]
     .into_iter()
     .map(|(id, title, sequence, action)| Command {
@@ -184,6 +191,12 @@ pub fn resolve(commands: &[Command], sequence: &str) -> Match {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn resolved_id<'a>(commands: &'a [Command], sequence: &str) -> Option<&'a str> {
+        match resolve(commands, sequence) {
+            Match::Run(index) => Some(&commands[index].id),
+            _ => None,
+        }
+    }
     #[test]
     fn malformed_and_excessive_settings_have_bounded_diagnostics_and_search_survives() {
         let defaults = controls();
@@ -230,7 +243,10 @@ mod tests {
         assert_eq!(resolve(&effective, "C"), Match::Invalid);
         assert_eq!(resolve(&effective, "Q A"), Match::Invalid);
         defaults.push(tool_command("disabled-plugin", "已启用插件"));
-        assert_eq!(resolve(&configured(&defaults, &b).0, "Q A"), Match::Run(5));
+        assert_eq!(
+            resolved_id(&configured(&defaults, &b).0, "Q A"),
+            Some("open:disabled-plugin")
+        );
         b.insert("search".into(), "Z".into());
         b.insert("open:advanced-calculator".into(), "K A".into());
         let (effective, errors) = configured(&defaults, &b);
@@ -243,8 +259,12 @@ mod tests {
         let mut commands = controls();
         commands.push(tool_command("advanced-calculator", "计算器"));
         assert_eq!(resolve(&commands, "R"), Match::Pending);
-        assert_eq!(resolve(&commands, "R E"), Match::Run(3));
-        assert_eq!(resolve(&commands, "C"), Match::Run(4));
+        assert_eq!(resolved_id(&commands, "R E"), Some("recorder:stop"));
+        assert_eq!(
+            resolved_id(&commands, "C"),
+            Some("open:advanced-calculator")
+        );
+        assert_eq!(resolved_id(&commands, "S C"), Some("screenshot:capture"));
         assert_eq!(resolve(&commands, "J"), Match::Invalid);
         let mut ids = std::collections::HashSet::new();
         let mut sequences = std::collections::HashSet::new();

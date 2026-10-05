@@ -41,11 +41,15 @@ fn available_named_path(folder: &Path, stem: &str) -> PathBuf {
 }
 
 fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
+    place_capture_overlay(display, "选择录制区域 · Esc 取消").map(|_| ())
+}
+
+pub(crate) fn place_capture_overlay(display: &DisplayInfo, title: &str) -> anyhow::Result<bool> {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         FindWindowExW, GetWindowRect, GetWindowThreadProcessId, SWP_NOACTIVATE, SWP_NOZORDER,
         SetWindowPos,
     };
-    let title: Vec<u16> = "选择录制区域 · Esc 取消\0".encode_utf16().collect();
+    let title: Vec<u16> = format!("{title}\0").encode_utf16().collect();
     let mut window = std::ptr::null_mut();
     loop {
         window = unsafe {
@@ -57,7 +61,7 @@ fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
             )
         };
         if window.is_null() {
-            return Ok(());
+            return Ok(false);
         }
         let mut owner = 0;
         unsafe { GetWindowThreadProcessId(window, &mut owner) };
@@ -80,7 +84,7 @@ fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
         display.width as i32,
         display.height as i32,
     ) {
-        return Ok(());
+        return Ok(true);
     }
     if unsafe {
         SetWindowPos(
@@ -96,7 +100,7 @@ fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
     {
         anyhow::bail!("定位框选窗口失败：{}", std::io::Error::last_os_error());
     }
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(windows)]
