@@ -20,6 +20,7 @@ pub fn tool_command(id: &str, title: &str) -> Command {
     let sequence = match id {
         "advanced-calculator" => "C",
         "clock-workbench" => "T",
+        "screenshot-workbench" => "S F",
         "json" => "J",
         "data" => "D",
         "memos" => "N",

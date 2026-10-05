@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 348] = [
+const NAMES: [&str; 350] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -358,6 +358,8 @@ const NAMES: [&str; 348] = [
     "clock-audio-quiet-small-light",
     "clock-audio-failure-dark",
     "clock-audio-failure-light",
+    "screenshot-lasso-dark",
+    "screenshot-lasso-light",
 ];
 
 struct Capture {
@@ -1233,6 +1235,18 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("screenshot-desktop-smoke") {
+            match zi_devtools::image_tools::verify_screenshot_capture() {
+                Ok((width, height)) => println!(
+                    "PASS actual eframe-DPI desktop capture {width}x{height}, concave alpha and in-memory PNG roundtrip; no desktop pixels saved"
+                ),
+                Err(error) => {
+                    eprintln!("SCREENSHOT_CAPTURE_FAILED: {error:#}");
+                    std::process::exit(2);
+                }
+            }
+            std::process::exit(0);
+        }
         #[cfg(windows)]
         if smoke_mode.as_deref() == Some("clock-window-capture") {
             if self.frames == 0 {

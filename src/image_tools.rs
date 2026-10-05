@@ -2,6 +2,11 @@
 mod batch;
 mod editor;
 mod metadata;
+mod screenshot;
+#[cfg(all(windows, feature = "ui-preview"))]
+pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
+    screenshot::verify_capture()
+}
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
 use image::{
@@ -71,6 +76,7 @@ enum Mode {
     Batch,
     Metadata,
     Editor,
+    Screenshot,
 }
 
 #[derive(Default)]
@@ -79,6 +85,7 @@ pub struct State {
     batch: batch::State,
     metadata: metadata::State,
     editor: editor::State,
+    screenshot: screenshot::State,
     input: String,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -93,6 +100,32 @@ pub struct State {
     pending: Option<mpsc::Receiver<Result<Job, String>>>,
 }
 impl State {
+    pub fn active_tool_id(&self) -> &'static str {
+        match self.mode {
+            Mode::Single => "image-tools",
+            Mode::Batch => "image-batch",
+            Mode::Metadata => "image-metadata",
+            Mode::Editor => "image-crop-annotate",
+            Mode::Screenshot => "screenshot-workbench",
+        }
+    }
+    pub fn poll_screenshot(&mut self, ctx: &egui::Context) {
+        self.screenshot.poll(ctx);
+    }
+    pub fn screenshot_busy(&self) -> bool {
+        self.screenshot.busy()
+    }
+    pub fn screenshot_has_work(&self) -> bool {
+        self.screenshot.has_work()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_screenshot_fixture(&mut self, ctx: &egui::Context) {
+        self.mode = Mode::Screenshot;
+        self.screenshot.preview_fixture(ctx);
+    }
+    pub fn show_screenshot(&mut self) {
+        self.mode = Mode::Screenshot;
+    }
     pub fn show_batch(&mut self) {
         self.mode = Mode::Batch;
     }
@@ -292,12 +325,14 @@ impl State {
             ui.selectable_value(&mut self.mode, Mode::Batch, "批量处理");
             ui.selectable_value(&mut self.mode, Mode::Metadata, "元数据检查");
             ui.selectable_value(&mut self.mode, Mode::Editor, "裁剪与标注");
+            ui.selectable_value(&mut self.mode, Mode::Screenshot, "截图与透明套索");
         });
         ui.add_space(10.0);
         match self.mode {
             Mode::Batch => return self.batch.ui(ui),
             Mode::Metadata => return self.metadata.ui(ui),
             Mode::Editor => return self.editor.ui(ui),
+            Mode::Screenshot => return self.screenshot.ui(ui),
             Mode::Single => {}
         }
         self.poll(ui.ctx());

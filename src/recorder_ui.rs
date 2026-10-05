@@ -100,7 +100,7 @@ fn place_selection_overlay(display: &DisplayInfo) -> anyhow::Result<()> {
 }
 
 #[cfg(windows)]
-fn capture_display_snapshot(display: &DisplayInfo) -> anyhow::Result<egui::ColorImage> {
+pub(crate) fn capture_display_snapshot(display: &DisplayInfo) -> anyhow::Result<egui::ColorImage> {
     use anyhow::{bail, ensure};
     use windows_sys::Win32::Graphics::Gdi::{
         BI_RGB, BITMAPINFO, BitBlt, CAPTUREBLT, CreateCompatibleBitmap, CreateCompatibleDC,

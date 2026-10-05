@@ -639,6 +639,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            348..=349 => {
+                self.page = Page::Images;
+                self.images.preview_screenshot_fixture(ctx);
+            }
             310..=313 => {
                 self.page = Page::Calculator;
                 self.calculator.preview_fixture();
@@ -2070,7 +2074,9 @@ impl DevToolsApp {
         if matches!(e.page, Page::Notes | Page::Calendar) {
             self.planner.calendar = e.page == Page::Calendar;
         }
-        if e.id == "image-crop-annotate" {
+        if e.id == "screenshot-workbench" {
+            self.images.show_screenshot();
+        } else if e.id == "image-crop-annotate" {
             self.images.show_editor();
         } else if e.id == "image-metadata" {
             self.images.show_metadata();
@@ -3965,6 +3971,7 @@ impl eframe::App for DevToolsApp {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         self.prefix.files.poll();
+        self.images.poll_screenshot(ctx);
         if self.prefix.files.busy() {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
@@ -4000,6 +4007,7 @@ impl eframe::App for DevToolsApp {
                 || self.prefix.has_work(&self.preferences.command_bindings)
                 || self.clock.has_work()
                 || self.clock.saving()
+                || self.images.screenshot_has_work()
             {
                 self.workspace_exit_confirm = true;
                 restore_main_window(self.window_handle, ctx);
@@ -4026,7 +4034,8 @@ impl eframe::App for DevToolsApp {
                 || self.planner.has_unsaved()
                 || self.prefix.has_work(&self.preferences.command_bindings)
                 || self.clock.has_work()
-                || self.clock.saving())
+                || self.clock.saving()
+                || self.images.screenshot_has_work())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.workspace_exit_confirm = true;
@@ -4039,15 +4048,17 @@ impl eframe::App for DevToolsApp {
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
                 ui.horizontal_wrapped(|ui| {
+                    if self.images.screenshot_has_work() && ui.button("返回截图保存").clicked() {self.workspace_exit_confirm=false;self.page=Page::Images;self.images.show_screenshot();}
                     if (self.clock.has_work() || self.clock.saving()) && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
                 if self.data_state.has_active_tasks() || self.planner.saving() { ui.label("正在处理任务，请等待完成，或从后台任务取消可取消的操作后退出。"); }
+                if self.images.screenshot_has_work() { ui.label("截图结果未保存会在退出后丢失；截图后台任务进行中需等待完成。"); }
             });
         }
 

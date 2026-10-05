@@ -376,6 +376,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "calendar-planner" => Page::Calendar,
             "advanced-calculator" => Page::Calculator,
             "clock-workbench" => Page::Clock,
+            "screenshot-workbench" => Page::Images,
             "unified-shortcuts" => Page::Commands,
             "global-launcher" => Page::Settings,
             "file-intake" => Page::Intake,

@@ -294,6 +294,7 @@ impl DevToolsApp {
                     None if matches!(self.page, Page::Java | Page::Django) => {
                         e.id == self.frameworks.selected.id()
                     }
+                    None if self.page == Page::Images => e.id == self.images.active_tool_id(),
                     None => true,
                 }
         });
