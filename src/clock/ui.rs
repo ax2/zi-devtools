@@ -8,11 +8,12 @@ impl State {
         let before = persistence::Snapshot::capture(self, now, utc, persistence::Policy::Pause);
         ui.heading("时钟工作台");
         ui.label(format!("v{version} · 开发中"));
-        ui.small("隐藏托盘继续计时。可主动开启本机保存，重启先预览再恢复；未开启时完全退出清空。声音与独立小窗继续开发。");
+        ui.small("隐藏托盘继续计时。可主动开启本机保存，重启先预览再恢复；未开启时完全退出清空。声音可在下方启用，独立小窗继续开发。");
         if let Some(mut storage) = self.storage.take() {
             storage.ui(self, ui);
             self.storage = Some(storage);
         }
+        self.audio.ui(ui);
         ui.horizontal_wrapped(|ui| {
             for (tab, title) in [
                 (Tab::World, "世界时钟"),
@@ -418,10 +419,14 @@ impl State {
         let mut snooze = None;
         egui::Window::new("时钟提醒")
             .id(egui::Id::new("clock-notices"))
+            .default_pos(egui::pos2(
+                (ctx.screen_rect().right() - 440.0).max(16.0),
+                120.0,
+            ))
             .collapsible(false)
             .resizable(true)
             .show(ctx, |ui| {
-                ui.label("提醒保持至确认；本轮暂不播放声音。");
+                ui.label("提醒保持至确认；声音遵循当前声音和免打扰设置。");
                 egui::ScrollArea::vertical()
                     .max_height(300.0)
                     .show(ui, |ui| {

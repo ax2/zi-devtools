@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 342] = [
+const NAMES: [&str; 348] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -352,6 +352,12 @@ const NAMES: [&str; 342] = [
     "clock-timers-small-light",
     "clock-alarms-small-dark",
     "clock-alarms-small-light",
+    "clock-audio-dark",
+    "clock-audio-light",
+    "clock-audio-quiet-small-dark",
+    "clock-audio-quiet-small-light",
+    "clock-audio-failure-dark",
+    "clock-audio-failure-light",
 ];
 
 struct Capture {
@@ -388,6 +394,25 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("clock-audio-smoke") {
+            let index = match self.frames {
+                20 | 21 => Some(0),
+                30 | 31 => Some(1),
+                50 | 51 | 70 | 71 => Some(3),
+                _ => None,
+            };
+            if let Some(index) = index {
+                let pos = self.app.preview_clock_audio_position(index);
+                assert!(pos.is_finite());
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 10 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if matches!(
             std::env::args().nth(3).as_deref(),
             Some("clock-save-smoke" | "clock-restore-smoke")
@@ -1207,6 +1232,39 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("clock-audio-smoke") {
+            if self.frames == 0 {
+                self.app.preview_clock_audio_prepare();
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                25 => {
+                    self.app.preview_clock_audio_check(0);
+                }
+                40 => {
+                    assert!(self.app.preview_clock_audio_check(1));
+                }
+                60 => {
+                    self.app.preview_clock_audio_check(2);
+                }
+                80 => {
+                    self.app.preview_clock_audio_check(3);
+                }
+                _ if self.frames >= 90 => {
+                    if self.app.preview_clock_audio_check(4) {
+                        std::process::exit(0);
+                    }
+                }
+                _ => {}
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(25),
+                "audio UI test timeout"
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if matches!(
             smoke_mode.as_deref(),
             Some("clock-save-smoke" | "clock-restore-smoke")
@@ -2474,6 +2532,7 @@ impl eframe::App for Capture {
                 || (318..=319).contains(&self.scene)
                 || (322..=323).contains(&self.scene)
                 || (336..=341).contains(&self.scene)
+                || (344..=345).contains(&self.scene)
             {
                 egui::vec2(980.0, 640.0)
             } else if (302..=303).contains(&self.scene) {
@@ -2649,6 +2708,16 @@ fn mp4_track_durations(data: &[u8]) -> Vec<([u8; 4], f64)> {
     result
 }
 fn main() -> Result<(), eframe::Error> {
+    if std::env::args().nth(3).as_deref() == Some("clock-audio-device-smoke") {
+        if let Err(error) = zi_devtools::clock::verify_audio_device() {
+            eprintln!("AUDIO_DEVICE_FAILED: {error}");
+            std::process::exit(2);
+        }
+        println!(
+            "PASS actual default WASAPI render: short tone queued, buffer drained and stream stopped (audibility not verified)"
+        );
+        return Ok(());
+    }
     let folder = PathBuf::from(std::env::args().nth(1).expect("capture output directory"));
     fs::create_dir_all(&folder).unwrap();
     let folder = folder.canonicalize().unwrap();

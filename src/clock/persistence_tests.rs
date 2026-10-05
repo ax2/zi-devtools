@@ -1,4 +1,87 @@
 use super::*;
+#[test]
+fn legacy_schema1_requires_confirmation_and_keeps_exact_backup_on_migration() {
+    let dir = dir();
+    let path = dir.join("clock.json");
+    let (s, now, utc) = fixture();
+    let mut legacy = Snapshot::capture(&s, now, utc, Policy::Pause);
+    legacy.schema = 1;
+    legacy.tool_version = "0.2.0".into();
+    legacy.audio = None;
+    let raw = serde_json::to_vec_pretty(&legacy).unwrap();
+    assert!(
+        serde_json::from_slice::<serde_json::Value>(&raw)
+            .unwrap()
+            .get("audio")
+            .is_none()
+    );
+    fs::write(&path, &raw).unwrap();
+    let (_, hash) = read(&path).unwrap().unwrap();
+    let mut r = State::default();
+    legacy.restore(&mut r, now, utc, Policy::Pause).unwrap();
+    assert_eq!(r.audio.settings, audio::Settings::default());
+    assert_eq!(fs::read(&path).unwrap(), raw);
+    r.audio.settings.enabled = true;
+    r.audio.settings.volume = 23;
+    let current = Snapshot::capture(&r, now, utc, Policy::Pause);
+    write(&path, &current, Some(hash)).unwrap();
+    let backup = fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains(".schema1-")
+        })
+        .unwrap();
+    assert_eq!(fs::read(backup).unwrap(), raw);
+    let snap = read(&path).unwrap().unwrap().0;
+    assert_eq!(snap.schema, 2);
+    let mut restored = State::default();
+    snap.restore(&mut restored, now, utc, Policy::Pause)
+        .unwrap();
+    assert!(restored.audio.settings.enabled);
+    assert_eq!(restored.audio.settings.volume, 23);
+    fs::remove_dir_all(dir).unwrap();
+}
+#[test]
+fn migration_refuses_inconsistent_backup_and_invalid_audio_without_mutating_live_data() {
+    let dir = dir();
+    let path = dir.join("clock.json");
+    let (s, now, utc) = fixture();
+    let good = Snapshot::capture(&s, now, utc, Policy::Pause);
+    let mut old = good.clone();
+    old.schema = 1;
+    old.audio = None;
+    old.tool_version = "0.2.0".into();
+    let raw = serde_json::to_vec_pretty(&old).unwrap();
+    fs::write(&path, &raw).unwrap();
+    let hash = read(&path).unwrap().unwrap().1;
+    let digest = hash.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let backup = dir.join(format!("clock.json.schema1-{digest}.backup.json"));
+    fs::write(&backup, b"user edited backup").unwrap();
+    assert!(write(&path, &good, Some(hash)).is_err());
+    assert_eq!(fs::read(&path).unwrap(), raw);
+    assert_eq!(fs::read(&backup).unwrap(), b"user edited backup");
+    for field in [0, 1, 2] {
+        let mut invalid = good.clone();
+        match field {
+            0 => invalid.audio = None,
+            1 => invalid.audio.as_mut().unwrap().volume = 101,
+            _ => invalid.audio.as_mut().unwrap().quiet_start = 1440,
+        };
+        let mut state = State::default();
+        assert!(
+            invalid
+                .restore(&mut state, now, utc, Policy::Pause)
+                .is_err()
+        );
+        assert!(state.timers.is_empty());
+        assert_eq!(state.audio.settings, audio::Settings::default());
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
 fn fixture() -> (State, Instant, DateTime<Utc>) {
     let now = Instant::now();
     let utc = "2026-10-06T08:00:00Z".parse().unwrap();
@@ -126,7 +209,7 @@ fn invalid_snapshots_do_not_modify_current_state() {
     let good = Snapshot::capture(&s, now, utc, Policy::Pause);
     let mut invalid = Vec::new();
     let mut x = good.clone();
-    x.schema = 2;
+    x.schema = 3;
     invalid.push(x);
     let mut x = good.clone();
     x.zones = vec!["Unknown/Zone".into()];

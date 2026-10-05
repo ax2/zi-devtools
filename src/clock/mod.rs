@@ -1,3 +1,8 @@
+mod audio;
+#[cfg(feature = "ui-preview")]
+pub fn verify_audio_device() -> anyhow::Result<()> {
+    audio::verify_device()
+}
 mod persistence;
 mod ui;
 use chrono::{DateTime, Days, LocalResult, NaiveDateTime, NaiveTime, TimeZone, Utc};
@@ -204,6 +209,8 @@ pub enum Tab {
     Focus,
 }
 pub struct State {
+    audio: audio::State,
+    pending_audio: bool,
     storage: Option<persistence::Storage>,
     pub tab: Tab,
     pub zones: Vec<Tz>,
@@ -231,6 +238,8 @@ impl Default for State {
     fn default() -> Self {
         let zone = chrono_tz::Asia::Shanghai;
         Self {
+            audio: audio::State::default(),
+            pending_audio: false,
             storage: None,
             tab: Tab::World,
             zones: vec![
@@ -266,6 +275,65 @@ impl Default for State {
 }
 impl State {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_audio_prepare(&mut self) {
+        self.audio.preview_fake();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_audio_position(&self, index: usize) -> egui::Pos2 {
+        self.audio.rects[index].center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_audio_check(&mut self, phase: u8) -> bool {
+        match phase {
+            0 => {
+                assert!(self.audio.settings.enabled);
+            }
+            1 => {
+                if self.audio.busy() {
+                    return false;
+                }
+                assert_eq!(self.audio.preview_attempts(), 1);
+                assert!(self.audio.error.is_empty());
+            }
+            2 => {
+                assert!(self.audio.settings.muted);
+                self.timer_seconds = 1;
+                self.add_timer().unwrap();
+                self.add_timer().unwrap();
+                let now = Instant::now();
+                for t in &mut self.timers {
+                    t.toggle(now);
+                }
+                assert!(self.poll(now + Duration::from_secs(2), Utc::now()));
+                assert_eq!(self.notices.len(), 2);
+                assert_eq!(self.audio.preview_attempts(), 1);
+            }
+            3 => {
+                assert!(!self.audio.settings.muted);
+                self.audio.preview_fail();
+                let now = Instant::now();
+                self.add_timer().unwrap();
+                self.timers[2].toggle(now);
+                assert!(self.poll(now + Duration::from_secs(2), Utc::now()));
+            }
+            4 => {
+                if self.audio.busy() {
+                    return false;
+                }
+                assert_eq!(self.notices.len(), 3);
+                assert_eq!(self.audio.preview_attempts(), 2);
+                assert!(!self.audio.error.is_empty());
+                assert!(!self.poll(Instant::now(), Utc::now()));
+                assert_eq!(self.audio.preview_attempts(), 2);
+                println!(
+                    "PASS clock audio UI: enable/preview/mute/unmute, muted simultaneous reminders retained, device failure retained and no retry"
+                );
+            }
+            _ => panic!("unknown audio preview phase"),
+        }
+        true
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_storage_prepare(&mut self, saving: bool) {
         let storage = self.storage.take();
         *self = Self::default();
@@ -293,6 +361,7 @@ impl State {
     }
     pub fn new(path: std::path::PathBuf, ctx: egui::Context) -> Self {
         Self {
+            audio: audio::State::new(ctx.clone()),
             storage: Some(persistence::Storage::new(path, ctx)),
             ..Self::default()
         }
@@ -359,13 +428,15 @@ impl State {
         Ok(())
     }
     pub fn needs_clock(&self) -> bool {
-        self.stopwatch.running()
+        self.audio.busy()
+            || self.stopwatch.running()
             || self.timers.iter().any(Timer::running)
             || self.alarms.iter().any(|a| a.enabled || a.snooze.is_some())
             || self.focus.timer.running()
     }
     pub fn has_work(&self) -> bool {
-        self.storage.as_ref().is_some_and(|s| s.has_work())
+        self.audio.settings != audio::Settings::default()
+            || self.storage.as_ref().is_some_and(|s| s.has_work())
             || !self.timers.is_empty()
             || !self.alarms.is_empty()
             || !self.notices.is_empty()
@@ -379,6 +450,7 @@ impl State {
         self.notices.push(Notice { source, title });
     }
     pub fn poll(&mut self, now: Instant, utc: DateTime<Utc>) -> bool {
+        self.audio.tick();
         let mut fresh = Vec::new();
         for timer in &mut self.timers {
             if timer.poll(now) {
@@ -421,6 +493,10 @@ impl State {
         }
         if changed {
             self.changed();
+        }
+        if changed || self.pending_audio {
+            self.pending_audio = false;
+            self.audio.alert(utc, false);
         }
         changed
     }
@@ -473,6 +549,20 @@ impl State {
             4 => Tab::Focus,
             _ => Tab::World,
         };
+        if index >= 8 {
+            self.audio.preview_fake();
+            if index >= 9 {
+                self.audio.settings.enabled = true;
+                self.audio.settings.quiet = true;
+                self.audio.settings.quiet_start = 0;
+                self.audio.settings.quiet_end = 0;
+                self.audio.settings.volume = 23;
+                self.audio.settings.tone = audio::Tone::Soft;
+            }
+            if index == 10 {
+                self.audio.error = "合成设备失败示例：声音播放失败，应用内提醒仍保留。".into();
+            }
+        }
         match self.tab {
             Tab::Stopwatch => {
                 self.stopwatch.accumulated = Duration::from_millis(125432);

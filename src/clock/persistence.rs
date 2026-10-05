@@ -117,6 +117,8 @@ pub(super) struct Snapshot {
     completed: u32,
     phase: u8,
     notices: Vec<NoticeData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    audio: Option<audio::Settings>,
 }
 fn millis(duration: Duration) -> u64 {
     duration.as_millis().min(u64::MAX as u128) as u64
@@ -131,8 +133,9 @@ fn name(value: &str) -> Result<()> {
 impl Snapshot {
     pub(super) fn capture(s: &State, now: Instant, utc: DateTime<Utc>, policy: Policy) -> Self {
         Self {
-            schema: 1,
-            tool_version: "0.2.0".into(),
+            schema: 2,
+            tool_version: "0.3.0".into(),
+            audio: Some(s.audio.settings.clone()),
             saved_at: utc,
             policy,
             tab: match s.tab {
@@ -184,7 +187,18 @@ impl Snapshot {
         }
     }
     fn validate(&self) -> Result<()> {
-        ensure!(self.schema == 1, "不支持此时钟文件版本，保留原文件");
+        ensure!(
+            [1, 2].contains(&self.schema),
+            "不支持此时钟文件版本，保留原文件"
+        );
+        ensure!(
+            match self.schema {
+                1 => self.audio.is_none(),
+                2 => self.audio.as_ref().is_some_and(audio::Settings::valid),
+                _ => false,
+            },
+            "声音设置与保存格式不一致或越界"
+        );
         ensure!(
             !self.tool_version.is_empty()
                 && self.tool_version.len() <= 64
@@ -261,6 +275,8 @@ impl Snapshot {
         policy: Policy,
     ) -> Result<()> {
         self.validate()?;
+        s.audio.restore(self.audio.clone().unwrap_or_default());
+        s.pending_audio = false;
         let elapsed = utc
             .signed_duration_since(self.saved_at)
             .num_milliseconds()
@@ -338,6 +354,7 @@ impl Snapshot {
                     source: Source::Timer(t.id),
                     title: format!("{}：离线期间计时结束", t.name),
                 });
+                s.pending_audio = true;
             }
         }
         if s.focus.timer.finished
@@ -348,6 +365,7 @@ impl Snapshot {
                 source: Source::Focus,
                 title: "专注阶段在离线期间结束，请选择下一阶段".into(),
             });
+            s.pending_audio = true;
         }
         s.next_id = self
             .timers
@@ -420,7 +438,7 @@ impl Drop for WriteLock {
         let _ = fs::remove_file(&self.0);
     }
 }
-fn read(path: &Path) -> Result<Option<(Snapshot, Hash)>> {
+fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
     let meta = match fs::symlink_metadata(path) {
         Ok(m) => m,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -435,10 +453,50 @@ fn read(path: &Path) -> Result<Option<(Snapshot, Hash)>> {
         .take(LIMIT + 1)
         .read_to_end(&mut bytes)?;
     ensure!(bytes.len() as u64 <= LIMIT, "时钟文件超过512KiB");
+    Ok(Some(bytes))
+}
+fn read(path: &Path) -> Result<Option<(Snapshot, Hash)>> {
+    let Some(bytes) = read_bytes(path)? else {
+        return Ok(None);
+    };
     let snapshot: Snapshot =
         serde_json::from_slice(&bytes).context("无法解析时钟文件，保留原文件")?;
     snapshot.validate()?;
     Ok(Some((snapshot, Sha256::digest(&bytes).into())))
+}
+fn backup_schema1(path: &Path, hash: Hash) -> Result<()> {
+    let bytes = read_bytes(path)?.context("旧版保存记录已不存在")?;
+    let actual: Hash = Sha256::digest(&bytes).into();
+    ensure!(actual == hash, "旧版记录在迁移前被修改，请重新读取");
+    let digest = hash.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let backup = path.with_file_name(format!(
+        "{}.schema1-{digest}.backup.json",
+        path.file_name()
+            .context("时钟路径无文件名")?
+            .to_string_lossy()
+    ));
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&backup)
+    {
+        Ok(mut file) => {
+            let result = file.write_all(&bytes).and_then(|()| file.sync_all());
+            drop(file);
+            if result.is_err() {
+                let _ = fs::remove_file(&backup);
+            }
+            result.context("无法保留旧版快照，原记录未替换")?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            ensure!(
+                read_bytes(&backup)?.as_ref() == Some(&bytes),
+                "已有旧版备份不一致，原记录未替换"
+            );
+        }
+        Err(error) => return Err(error).context("无法保留旧版快照，原记录未替换"),
+    }
+    Ok(())
 }
 fn write(path: &Path, snapshot: &Snapshot, expected: Option<Hash>) -> Result<Hash> {
     snapshot.validate()?;
@@ -451,6 +509,12 @@ fn write(path: &Path, snapshot: &Snapshot, expected: Option<Hash>) -> Result<Has
         current.as_ref().map(|(_, h)| *h) == expected,
         "保存文件被其他进程修改，请重新读取并确认"
     );
+    if let Some((old, hash)) = &current
+        && old.schema == 1
+        && snapshot.schema == 2
+    {
+        backup_schema1(path, *hash)?;
+    }
     let bytes = serde_json::to_vec_pretty(snapshot)?;
     ensure!(bytes.len() as u64 <= LIMIT, "时钟内容超过512KiB");
     if let Some(parent) = path.parent() {
@@ -732,6 +796,7 @@ impl Storage {
             if let Some(snapshot)=self.pending.clone() {
                 ui.label(format!("待恢复：{} · {}计时器 / {}闹钟 / {}分段 · {}提醒",snapshot.saved_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S"),snapshot.timers.len(),snapshot.alarms.len(),snapshot.laps.len(),snapshot.notices.len()));
                 ui.small("恢复会替换当前时钟会话，请先确认；不会修改备忘、日程或系统时间。");
+                if snapshot.schema == 1 {ui.small("确认后保存将升级格式，并在同目录保留旧文件的校验备份；旧版程序需要从该备份恢复。");}
                 let restore=ui.add_enabled(!self.busy(),egui::Button::new("恢复此记录并启用保存"));
                 #[cfg(feature="ui-preview")]{self.rects[1]=restore.rect;}
                 if restore.clicked() {

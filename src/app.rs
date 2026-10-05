@@ -643,7 +643,7 @@ impl DevToolsApp {
                 self.page = Page::Calculator;
                 self.calculator.preview_fixture();
             }
-            326..=341 => {
+            326..=347 => {
                 self.page = Page::Clock;
                 self.clock.preview_fixture((scene - 326) / 2);
             }
@@ -1217,6 +1217,19 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_clock_position(&self, index: usize) -> egui::Pos2 {
         self.clock.rects[index].center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_audio_prepare(&mut self) {
+        self.page = Page::Clock;
+        self.clock.preview_audio_prepare();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_audio_position(&self, index: usize) -> egui::Pos2 {
+        self.clock.preview_audio_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_audio_check(&mut self, phase: u8) -> bool {
+        self.clock.preview_audio_check(phase)
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_clock_storage_prepare(&mut self, saving: bool) {
