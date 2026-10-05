@@ -422,6 +422,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "mcp-server" => Page::KnowledgeMcp,
             "mcp-export" => Page::KnowledgeMcp,
             "screen-recorder" => Page::Recorder,
+            "recorder-tutorial" => Page::Recorder,
             "screen-recorder-multimonitor" => Page::Recorder,
             "screen-recorder-audio-mix" => Page::Recorder,
             "screen-recorder-audio-gain" => Page::Recorder,

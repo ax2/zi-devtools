@@ -683,6 +683,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            350..=353 => {
+                self.page = Page::Recorder;
+                self.recorder.preview_tutorial_fixture(scene >= 352);
+            }
             348..=349 => {
                 self.page = Page::Images;
                 self.images.preview_screenshot_fixture(ctx);
@@ -2115,11 +2119,16 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
+        if e.page == Page::Recorder {
+            self.recorder.select_entry(&e.id);
+        }
         if matches!(e.page, Page::Notes | Page::Calendar) {
             self.planner.calendar = e.page == Page::Calendar;
         }
         if e.id == "screenshot-workbench" {
             self.images.show_screenshot();
+        } else if e.id == "recorder-tutorial" {
+            self.recorder.show_tutorial();
         } else if e.id == "image-crop-annotate" {
             self.images.show_editor();
         } else if e.id == "image-metadata" {
@@ -4294,9 +4303,19 @@ impl eframe::App for DevToolsApp {
                     let previous_auto_minimize = self.recorder.auto_minimize();
                     let previous_auto_stop = self.recorder.auto_stop_minutes();
                     let previous_quality = self.recorder.quality();
+                    let footer_height = if self.recorder.has_output_file() {
+                        160.0
+                    } else {
+                        130.0
+                    };
+                    let height = (ui.available_height() - footer_height).max(120.0);
                     egui::ScrollArea::vertical()
                         .id_salt("recorder-page")
+                        .max_height(height)
+                        .auto_shrink([false, false])
                         .show(ui, |ui| self.recorder.ui(ui, self.tray.is_some()));
+                    ui.separator();
+                    self.recorder.controls_ui(ui, self.tray.is_some());
                     if self.recorder.auto_minimize() != previous_auto_minimize
                         || self.recorder.auto_stop_minutes() != previous_auto_stop
                         || self.recorder.quality() != previous_quality

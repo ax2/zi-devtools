@@ -1,4 +1,5 @@
 //! Local monitor capture. Encoding stays on a worker thread.
+pub mod tutorial;
 use anyhow::{Context as _, Result, anyhow, bail};
 use crossbeam_channel::{Receiver, unbounded};
 use std::{
@@ -219,6 +220,7 @@ pub struct Session {
     pub pause: Arc<PauseClock>,
     pub levels: Arc<AtomicU32>,
     pub events: Receiver<Event>,
+    pub tutorial: Arc<tutorial::Control>,
     #[cfg(test)]
     pub(crate) interrupt_for_test: Arc<AtomicU32>,
     worker: Option<thread::JoinHandle<()>>,
@@ -226,6 +228,7 @@ pub struct Session {
 struct RecordingSignals {
     pause: Arc<PauseClock>,
     levels: Arc<AtomicU32>,
+    tutorial: Arc<tutorial::Control>,
     #[cfg(test)]
     interrupt_for_test: Arc<AtomicU32>,
 }
@@ -285,19 +288,36 @@ struct Capture {
     flipped: Vec<u8>,
     pause: Arc<PauseClock>,
     last_frame_elapsed: Option<Duration>,
+    source: Vec<u8>,
+    composed: Vec<u8>,
+    effects: tutorial::Compositor,
+    tutorial: Arc<tutorial::Control>,
+    origin: [i32; 2],
+}
+
+pub struct CaptureFlags {
+    region: Region,
+    path: PathBuf,
+    audio: AudioMode,
+    quality: RecordingQuality,
+    pause: Arc<PauseClock>,
+    tutorial: Arc<tutorial::Control>,
+    origin: [i32; 2],
 }
 type CaptureError = Box<dyn std::error::Error + Send + Sync>;
 impl GraphicsCaptureApiHandler for Capture {
-    type Flags = (
-        Region,
-        PathBuf,
-        AudioMode,
-        RecordingQuality,
-        Arc<PauseClock>,
-    );
+    type Flags = CaptureFlags;
     type Error = CaptureError;
     fn new(ctx: Context<Self::Flags>) -> std::result::Result<Self, Self::Error> {
-        let (region, path, audio, quality, pause) = ctx.flags;
+        let CaptureFlags {
+            region,
+            path,
+            audio,
+            quality,
+            pause,
+            tutorial,
+            origin,
+        } = ctx.flags;
         let encoder = VideoEncoder::new(
             VideoSettingsBuilder::new(region.width, region.height)
                 .sub_type(VideoSettingsSubType::H264)
@@ -315,6 +335,11 @@ impl GraphicsCaptureApiHandler for Capture {
             flipped: Vec::new(),
             pause,
             last_frame_elapsed: None,
+            source: Vec::new(),
+            composed: Vec::new(),
+            effects: tutorial::Compositor::default(),
+            tutorial,
+            origin,
         })
     }
     fn on_frame_arrived(
@@ -323,6 +348,7 @@ impl GraphicsCaptureApiHandler for Capture {
         _control: InternalCaptureControl,
     ) -> std::result::Result<(), Self::Error> {
         let Some(elapsed) = self.pause.elapsed_since(self.started) else {
+            self.effects.suspend();
             return Ok(());
         };
         if self
@@ -337,13 +363,11 @@ impl GraphicsCaptureApiHandler for Capture {
         }
         let buffer = frame.buffer_crop(r.x, r.y, r.x + r.width, r.y + r.height)?;
         let pixels = buffer.as_nopadding_buffer(&mut self.scratch);
-        let stride = r.width as usize * 4;
-        self.flipped.resize(pixels.len(), 0);
-        for row in 0..r.height as usize {
-            self.flipped[row * stride..(row + 1) * stride].copy_from_slice(
-                &pixels[(r.height as usize - 1 - row) * stride..(r.height as usize - row) * stride],
-            );
-        }
+        self.source.clear();
+        self.source.extend_from_slice(pixels);
+        #[cfg(feature = "ui-preview")]
+        self.tutorial.copy_preview_source(&mut self.source);
+        self.compose_frame(elapsed)?;
         let timestamp = elapsed.as_nanos().saturating_div(100).min(i64::MAX as u128) as i64;
         self.encoder
             .as_mut()
@@ -354,14 +378,48 @@ impl GraphicsCaptureApiHandler for Capture {
     }
 }
 impl Capture {
+    fn compose_frame(&mut self, elapsed: Duration) -> Result<()> {
+        let r = self.region;
+        let settings = self.tutorial.snapshot();
+        let pixels = if settings.active() {
+            self.effects.render(
+                &self.source,
+                [r.width, r.height],
+                settings,
+                self.tutorial.pointer(self.origin, r),
+                elapsed,
+                &mut self.composed,
+            )?;
+            &self.composed
+        } else {
+            self.effects.idle(elapsed);
+            &self.source
+        };
+        let stride = r.width as usize * 4;
+        self.flipped.resize(pixels.len(), 0);
+        for row in 0..r.height as usize {
+            self.flipped[row * stride..(row + 1) * stride].copy_from_slice(
+                &pixels[(r.height as usize - 1 - row) * stride..(r.height as usize - row) * stride],
+            );
+        }
+        Ok(())
+    }
     fn keep_video_alive(&mut self, elapsed: Duration) -> Result<()> {
+        let interval = if self.tutorial.snapshot().active() {
+            33
+        } else {
+            250
+        };
         if self.flipped.is_empty()
             || self
                 .last_frame_elapsed
-                .is_some_and(|last| elapsed.saturating_sub(last) < Duration::from_millis(250))
+                .is_some_and(|last| elapsed.saturating_sub(last) < Duration::from_millis(interval))
         {
             return Ok(());
         }
+        // Recompose from the retained raw frame: static desktops still show cursor effects
+        // and changes to live controls; do not repeatedly zoom the previous output.
+        self.compose_frame(elapsed)?;
         let timestamp = elapsed.as_nanos().saturating_div(100).min(i64::MAX as u128) as i64;
         self.encoder
             .as_mut()
@@ -456,6 +514,76 @@ pub fn start_on_display(
     quality: RecordingQuality,
     display: DisplayInfo,
 ) -> Result<Session> {
+    start_with_tutorial(
+        region,
+        output,
+        audio,
+        gains,
+        quality,
+        display,
+        tutorial::Settings::default(),
+    )
+}
+pub fn start_with_tutorial(
+    region: Region,
+    output: PathBuf,
+    audio: AudioMode,
+    gains: AudioGains,
+    quality: RecordingQuality,
+    display: DisplayInfo,
+    settings: tutorial::Settings,
+) -> Result<Session> {
+    settings.validate()?;
+    if settings.active() && u64::from(region.width) * u64::from(region.height) > 16_000_000 {
+        bail!("教程效果录制区域最多1600万像素");
+    }
+    let tutorial = Arc::new(tutorial::Control::new(
+        u64::from(region.width) * u64::from(region.height) <= 16_000_000,
+    ));
+    tutorial.set(settings)?;
+    start_controlled(
+        region,
+        output,
+        display,
+        CaptureOptions {
+            audio,
+            gains,
+            quality,
+        },
+        tutorial,
+    )
+}
+#[cfg(feature = "ui-preview")]
+pub fn preview_start_controlled(
+    region: Region,
+    output: PathBuf,
+    display: DisplayInfo,
+    tutorial: Arc<tutorial::Control>,
+) -> Result<Session> {
+    start_controlled(
+        region,
+        output,
+        display,
+        CaptureOptions {
+            audio: AudioMode::None,
+            gains: AudioGains::default(),
+            quality: RecordingQuality::Detailed,
+        },
+        tutorial,
+    )
+}
+fn start_controlled(
+    region: Region,
+    output: PathBuf,
+    display: DisplayInfo,
+    options: CaptureOptions,
+    tutorial: Arc<tutorial::Control>,
+) -> Result<Session> {
+    let CaptureOptions {
+        audio,
+        gains,
+        quality,
+    } = options;
     validate_request_for_display(region, &output, &display)?;
     if gains.system > 200 || gains.microphone > 200 {
         bail!("音量增益必须在 0–200% 之间");
@@ -469,6 +597,7 @@ pub fn start_on_display(
     let stop = Arc::new(AtomicBool::new(false));
     let pause = Arc::new(PauseClock::default());
     let levels = Arc::new(AtomicU32::new(0));
+    let tutorial_worker = tutorial.clone();
     let stop_worker = stop.clone();
     let pause_worker = pause.clone();
     let levels_worker = levels.clone();
@@ -480,6 +609,7 @@ pub fn start_on_display(
         let signals = RecordingSignals {
             pause: pause_worker,
             levels: levels_worker,
+            tutorial: tutorial_worker,
             #[cfg(test)]
             interrupt_for_test: interrupt_worker,
         };
@@ -510,6 +640,7 @@ pub fn start_on_display(
         pause,
         levels,
         events,
+        tutorial,
         #[cfg(test)]
         interrupt_for_test,
         worker: Some(worker),
@@ -625,13 +756,15 @@ fn record_to_temp(
         MinimumUpdateIntervalSettings::Custom(Duration::from_millis(33)),
         DirtyRegionSettings::Default,
         ColorFormat::Bgra8,
-        (
+        CaptureFlags {
             region,
-            output.to_path_buf(),
-            options.audio,
-            options.quality,
-            signals.pause.clone(),
-        ),
+            path: output.to_path_buf(),
+            audio: options.audio,
+            quality: options.quality,
+            pause: signals.pause.clone(),
+            tutorial: signals.tutorial.clone(),
+            origin: [display.x, display.y],
+        },
     );
     let control = match Capture::start_free_threaded(settings) {
         Ok(control) => control,
@@ -681,11 +814,16 @@ fn record_to_temp(
             warnings.push(format!("维持视频时间线失败：{error:#}"));
             break;
         }
-        thread::sleep(Duration::from_millis(if audio_timeline.is_some() {
-            10
-        } else {
-            80
-        }));
+        if signals.pause.is_paused() {
+            callback.lock().effects.suspend();
+        }
+        thread::sleep(Duration::from_millis(
+            if audio_timeline.is_some() || signals.tutorial.snapshot().active() {
+                10
+            } else {
+                80
+            },
+        ));
     }
     if control.is_finished() && !stop.load(Ordering::Acquire) && warnings.is_empty() {
         warnings.push("画面采集意外结束".to_owned());

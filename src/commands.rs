@@ -7,6 +7,8 @@ pub enum Action {
     RecordStart,
     RecordPause,
     RecordStop,
+    RecordZoom,
+    RecordEffectsOff,
     ScreenshotCapture,
 }
 #[derive(Clone, Debug)]
@@ -29,6 +31,7 @@ pub fn tool_command(id: &str, title: &str) -> Command {
         "files" => "F",
         "image-tools" => "G",
         "screen-recorder" => "R O",
+        "recorder-tutorial" => "R T",
         _ => "",
     };
     Command {
@@ -49,6 +52,18 @@ pub fn controls() -> Vec<Command> {
             Action::RecordPause,
         ),
         ("recorder:stop", "结束录屏", "R E", Action::RecordStop),
+        (
+            "recorder:zoom",
+            "开关录屏鼠标聚焦放大",
+            "R Z",
+            Action::RecordZoom,
+        ),
+        (
+            "recorder:effects-off",
+            "关闭录屏教程效果",
+            "R X",
+            Action::RecordEffectsOff,
+        ),
         (
             "screenshot:capture",
             "快速截图",
@@ -265,6 +280,8 @@ mod tests {
             Some("open:advanced-calculator")
         );
         assert_eq!(resolved_id(&commands, "S C"), Some("screenshot:capture"));
+        assert_eq!(resolved_id(&commands, "R Z"), Some("recorder:zoom"));
+        assert_eq!(resolved_id(&commands, "R X"), Some("recorder:effects-off"));
         assert_eq!(resolve(&commands, "J"), Match::Invalid);
         let mut ids = std::collections::HashSet::new();
         let mut sequences = std::collections::HashSet::new();

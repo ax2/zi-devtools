@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.12"
+version = "0.82.0-dev.13"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -57,6 +57,10 @@ ui-preview = []
 
 [[example]]
 name = "capture_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "tutorial_recording"
 required-features = ["ui-preview"]
 
 [target.'cfg(windows)'.dependencies]

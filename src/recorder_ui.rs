@@ -1,6 +1,7 @@
 use crate::recorder::{
     self, AudioGains, AudioMode, DisplayInfo, Event, RecordingQuality, Region, Session,
 };
+mod tutorial_ui;
 use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
 use std::{
     path::{Path, PathBuf},
@@ -192,6 +193,7 @@ pub(crate) fn capture_display_snapshot(display: &DisplayInfo) -> anyhow::Result<
 }
 
 pub struct RecorderState {
+    entry_id: String,
     displays_loaded: bool,
     displays: Vec<DisplayInfo>,
     display: Option<DisplayInfo>,
@@ -203,6 +205,9 @@ pub struct RecorderState {
     audio: AudioMode,
     gains: AudioGains,
     quality: RecordingQuality,
+    tutorial: recorder::tutorial::Settings,
+    tutorial_preview: tutorial_ui::Preview,
+    tutorial_open_requested: bool,
     size_preview_minutes: u16,
     countdown_seconds: u64,
     countdown_deadline: Option<Instant>,
@@ -220,11 +225,14 @@ pub struct RecorderState {
     last_file: Option<PathBuf>,
     #[cfg(feature = "ui-preview")]
     preview_levels: Option<(u8, u8)>,
+    #[cfg(feature = "ui-preview")]
+    preview_tutorial_scroll: bool,
 }
 
 impl Default for RecorderState {
     fn default() -> Self {
         Self {
+            entry_id: "screen-recorder".into(),
             displays_loaded: false,
             displays: Vec::new(),
             display: None,
@@ -236,6 +244,9 @@ impl Default for RecorderState {
             audio: AudioMode::None,
             gains: AudioGains::default(),
             quality: RecordingQuality::default(),
+            tutorial: recorder::tutorial::Settings::default(),
+            tutorial_preview: tutorial_ui::Preview::default(),
+            tutorial_open_requested: false,
             size_preview_minutes: 5,
             countdown_seconds: 3,
             countdown_deadline: None,
@@ -253,11 +264,22 @@ impl Default for RecorderState {
             last_file: None,
             #[cfg(feature = "ui-preview")]
             preview_levels: None,
+            #[cfg(feature = "ui-preview")]
+            preview_tutorial_scroll: false,
         }
     }
 }
 
 impl RecorderState {
+    pub fn active_tool_id(&self) -> &str {
+        &self.entry_id
+    }
+    pub fn select_entry(&mut self, id: &str) {
+        self.entry_id = id.into();
+    }
+    pub fn has_output_file(&self) -> bool {
+        self.last_file.is_some()
+    }
     pub fn quality(&self) -> RecordingQuality {
         self.quality
     }
@@ -639,13 +661,14 @@ impl RecorderState {
             return;
         };
         self.last_file = None;
-        match recorder::start_on_display(
+        match recorder::start_with_tutorial(
             region,
             PathBuf::from(self.output.trim()),
             self.audio,
             self.gains,
             self.quality,
             display,
+            self.tutorial,
         ) {
             Ok(session) => {
                 self.session = Some(session);
@@ -862,6 +885,7 @@ impl RecorderState {
             ));
         });
         ui.small("按目标码率、声音和时长推算；静止画面文件可能远小于估算值，保存后显示实际大小。此值不是文件上限。");
+        self.tutorial_ui(ui);
         if self.audio != AudioMode::None {
             ui.add_enabled_ui(!busy, |ui| {
                 if matches!(
@@ -974,6 +998,10 @@ impl RecorderState {
         if !tray_available {
             ui.small("托盘不可用，录制时主窗口保持显示");
         }
+    }
+
+    pub fn controls_ui(&mut self, ui: &mut egui::Ui, tray_available: bool) {
+        let busy = self.session.is_some() || self.countdown_deadline.is_some();
         ui.add_space(16.0);
         ui.horizontal(|ui| {
             if ui
@@ -1040,11 +1068,15 @@ impl RecorderState {
         });
         ui.add_space(10.0);
         if !self.status.is_empty() {
-            ui.label(RichText::new(&self.status).color(if self.error {
-                Color32::from_rgb(220, 70, 75)
-            } else {
-                Color32::from_rgb(80, 160, 110)
-            }));
+            ui.add(
+                egui::Label::new(RichText::new(&self.status).color(if self.error {
+                    Color32::from_rgb(220, 70, 75)
+                } else {
+                    Color32::from_rgb(80, 160, 110)
+                }))
+                .truncate(),
+            )
+            .on_hover_text(&self.status);
         }
         if let Some(path) = &self.last_file {
             ui.horizontal(|ui| {
@@ -1062,7 +1094,10 @@ impl RecorderState {
                         }
                     }
                 }
-                ui.small(path.display().to_string());
+                ui.add(
+                    egui::Label::new(RichText::new(path.display().to_string()).small()).truncate(),
+                )
+                .on_hover_text(path.display().to_string());
             });
         }
         ui.add_space(12.0);

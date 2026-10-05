@@ -652,6 +652,18 @@ impl DevToolsApp {
                 self.images.request_screenshot_capture();
                 None
             }
+            Some(Action::RecordZoom) => {
+                self.recorder.toggle_tutorial_zoom();
+                self.prefix.active = false;
+                self.quick_open = false;
+                None
+            }
+            Some(Action::RecordEffectsOff) => {
+                self.recorder.disable_tutorial_effects();
+                self.prefix.active = false;
+                self.quick_open = false;
+                None
+            }
             None => None,
         }
     }
