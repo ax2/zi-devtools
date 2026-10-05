@@ -195,6 +195,7 @@ pub struct DevToolsApp {
     calculator: crate::calculator::State,
     clock: crate::clock::State,
     updates: crate::updates::State,
+    delta_update: crate::updates::delta_ui::State,
     prefix: commands::Prefix,
     http_state: HttpWorkbenchState,
     diff_state: DiffState,
@@ -684,6 +685,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            358..=361 => {
+                self.page = Page::DeltaUpdate;
+                self.delta_update.preview_fixture(scene >= 360);
+            }
             354..=357 => {
                 self.page = Page::Updates;
                 self.preferences.updates = Default::default();
@@ -1740,6 +1745,7 @@ impl DevToolsApp {
             ascii_codes: Default::default(),
             calculator: Default::default(),
             updates: Default::default(),
+            delta_update: Default::default(),
             clock: crate::clock::State::new(preferences_path.with_file_name("clock.json"),cc.egui_ctx.clone()),
             prefix: Default::default(),
             symbols: Default::default(),
@@ -4081,6 +4087,7 @@ impl eframe::App for DevToolsApp {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         self.updates.poll();
+        self.delta_update.poll(ctx);
         let now = chrono::Utc::now().timestamp();
         if self.updates.automatic_due(&self.preferences.updates, now) {
             self.check_updates(ctx, true);
@@ -4140,6 +4147,7 @@ impl eframe::App for DevToolsApp {
                 || self.prefix.has_work(&self.preferences.command_bindings)
                 || self.clock.has_work()
                 || self.clock.saving()
+                || self.delta_update.has_work()
                 || self.images.screenshot_has_work()
             {
                 self.workspace_exit_confirm = true;
@@ -4168,6 +4176,7 @@ impl eframe::App for DevToolsApp {
                 || self.prefix.has_work(&self.preferences.command_bindings)
                 || self.clock.has_work()
                 || self.clock.saving()
+                || self.delta_update.has_work()
                 || self.images.screenshot_has_work())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -4181,16 +4190,18 @@ impl eframe::App for DevToolsApp {
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
                 ui.horizontal_wrapped(|ui| {
+                    if self.delta_update.has_work() && ui.button("返回更新包工作台").clicked() {self.workspace_exit_confirm=false;self.page=Page::DeltaUpdate;}
                     if self.images.screenshot_has_work() && ui.button("返回截图保存").clicked() {self.workspace_exit_confirm=false;self.page=Page::Images;self.images.show_screenshot();}
                     if (self.clock.has_work() || self.clock.saving()) && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
                 if self.data_state.has_active_tasks() || self.planner.saving() { ui.label("正在处理任务，请等待完成，或从后台任务取消可取消的操作后退出。"); }
+                if self.delta_update.has_work() { ui.label("更新包或重建结果未保存会丢失；后台任务请等待完成或返回取消后退出。"); }
                 if self.images.screenshot_has_work() { ui.label("截图结果未保存会在退出后丢失；截图后台任务进行中需等待完成。"); }
             });
         }
@@ -4322,6 +4333,11 @@ impl eframe::App for DevToolsApp {
                 }
                 Page::Network => {
                     egui::ScrollArea::vertical().show(ui, |ui| self.network_page(ui, ctx));
+                }
+                Page::DeltaUpdate => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("delta-update-page")
+                        .show(ui, |ui| self.delta_update.ui(ui, ctx));
                 }
                 Page::Updates => {
                     egui::ScrollArea::vertical()

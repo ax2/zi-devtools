@@ -1,4 +1,7 @@
 //! Bounded, anonymous release discovery. Installation is deliberately separate.
+pub mod delta;
+pub mod delta_files;
+pub mod delta_ui;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::{

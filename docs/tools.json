@@ -1,5 +1,5 @@
 {
-  "version": "0.82.0-dev.14",
+  "version": "0.82.0-dev.15",
   "updated": "2026-10-06",
   "tools": [
     {
@@ -3198,18 +3198,34 @@
     {
       "id": "app-delta-update",
       "name": "增量更新与回滚",
-      "status": "planned",
+      "status": "in-progress",
       "category": "效率与系统",
       "priority": "P1",
-      "scope": "从指定源版本构建差分，校验源摘要、签名清单及目标摘要，暂存重建、退出后替换和回滚；失败自动切换完整包。EXE 便携版与 MSI 采用分别验证的升级路径，不混用安装所有权",
-      "tool_version": "0.0.0",
+      "scope": "开发版提供本机内容分块差分包生成、自检重建、源/目标/压缩内容SHA-256核验、差分无优势时压缩完整内容、后台取消和无覆盖另存新文件。未签名，不联网、不自动替换/执行；下载、签名、退出替换、回滚及EXE/MSI正式升级仍未实现。",
+      "tool_version": "0.1.0",
       "version_history": [
         {
           "version": "0.0.0",
           "date": "2026-10-05",
           "changes": "登记需求与验收范围，尚未实现。"
+        },
+        {
+          "version": "0.1.0",
+          "date": "2026-10-06",
+          "changes": "首版本机有界内容分块差分/完整内容压缩、摘要验证、自检重建、后台取消与无覆盖另存；真实下载安装与签名回滚待实现。"
         }
-      ]
+      ],
+      "discovery": {
+        "label": "更新包生成与重建",
+        "summary": "本机生成差分或完整内容包，核对后另存重建文件",
+        "category": "文件与系统",
+        "keywords": "delta patch update reconstruct 增量 差分 更新 重建",
+        "aliases": [
+          "增量更新",
+          "差分包",
+          "更新包重建"
+        ]
+      }
     },
     {
       "id": "advanced-calculator",
