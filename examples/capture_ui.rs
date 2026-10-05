@@ -361,6 +361,7 @@ const NAMES: [&str; 348] = [
 ];
 
 struct Capture {
+    clock_window_handle: isize,
     app: DevToolsApp,
     folder: PathBuf,
     fixture: PathBuf,
@@ -1232,6 +1233,138 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        #[cfg(windows)]
+        if smoke_mode.as_deref() == Some("clock-window-capture") {
+            if self.frames == 0 {
+                self.app.preview_clock_window_prepare(ctx, self.scene);
+            }
+            self.app.update(ctx, frame);
+            if self.frames >= 24 {
+                use eframe::glow::HasContext;
+                let [w, h] = self.app.preview_clock_window_dimensions();
+                assert!(w > 0 && h > 0 && i64::from(w) * i64::from(h) <= 8_000_000);
+                let gl = frame.gl().unwrap();
+                let mut viewport = [0; 4];
+                unsafe {
+                    gl.get_parameter_i32_slice(eframe::glow::VIEWPORT, &mut viewport);
+                }
+                assert_eq!(
+                    &viewport[2..],
+                    &[w, h],
+                    "read only the rendered child framebuffer"
+                );
+                let mut pixels = vec![0u8; w as usize * h as usize * 4];
+                unsafe {
+                    gl.read_pixels(
+                        0,
+                        0,
+                        w,
+                        h,
+                        eframe::glow::RGBA,
+                        eframe::glow::UNSIGNED_BYTE,
+                        eframe::glow::PixelPackData::Slice(Some(&mut pixels)),
+                    );
+                }
+                let mut flipped = Vec::with_capacity(pixels.len());
+                for row in pixels.chunks_exact(w as usize * 4).rev() {
+                    flipped.extend_from_slice(row);
+                }
+                let file =
+                    fs::File::create(self.folder.join(format!("clock-child-{}.png", self.scene)))
+                        .unwrap();
+                let mut encoder = png::Encoder::new(file, w as u32, h as u32);
+                encoder.set_color(png::ColorType::Rgba);
+                encoder.set_depth(png::BitDepth::Eight);
+                encoder
+                    .write_header()
+                    .unwrap()
+                    .write_image_data(&flipped)
+                    .unwrap();
+                println!("Captured native child framebuffer: {w}x{h}");
+                std::process::exit(0);
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "child framebuffer capture timeout"
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
+        #[cfg(windows)]
+        if smoke_mode.as_deref() == Some("clock-window-smoke") {
+            if self.frames == 0 {
+                self.app.preview_clock_window_prepare(ctx, 4);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                20 => {
+                    self.clock_window_handle = self.app.preview_clock_window_check(ctx, 0);
+                }
+                30 => self.app.preview_clock_window_click(4),
+                40 => {
+                    self.app.preview_clock_window_check(ctx, 1);
+                    self.app.preview_clock_window_key(32, 57);
+                }
+                50 => {
+                    self.app.preview_clock_window_check(ctx, 2);
+                    self.app.preview_clock_window_click(0);
+                }
+                65 => {
+                    self.app.preview_clock_window_check(ctx, 3);
+                    self.app.preview_clock_window_click(1);
+                }
+                90 => {
+                    self.app.preview_clock_window_check(ctx, 4);
+                    self.app.preview_clock_window_key(27, 1);
+                }
+                115 => {
+                    self.app.preview_clock_window_check(ctx, 5);
+                    self.app.preview_clock_window_click(2);
+                }
+                135 => self.app.preview_clock_window_click(4),
+                155 => {
+                    self.clock_window_handle = self.app.preview_clock_window_check(ctx, 6);
+                    self.app.preview_clock_window_click(3);
+                }
+                180 => {
+                    assert_eq!(
+                        unsafe {
+                            windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(
+                                self.clock_window_handle as _,
+                            )
+                        },
+                        0,
+                        "closed child HWND still alive"
+                    );
+                    self.app.preview_clock_window_check(ctx, 7);
+                }
+                205 => {
+                    self.clock_window_handle = self.app.preview_clock_window_check(ctx, 8);
+                    self.app.preview_clock_window_click(3);
+                }
+                230 => {
+                    assert_eq!(
+                        unsafe {
+                            windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(
+                                self.clock_window_handle as _,
+                            )
+                        },
+                        0
+                    );
+                    self.app.preview_clock_window_check(ctx, 9);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(30),
+                "child smoke timeout"
+            );
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("clock-audio-smoke") {
             if self.frames == 0 {
                 self.app.preview_clock_audio_prepare();
@@ -2741,6 +2874,7 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(move |cc| {
             Ok(Box::new(Capture {
+                clock_window_handle: 0,
                 app: DevToolsApp::new(cc, config, false),
                 folder,
                 fixture,

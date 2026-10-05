@@ -1224,6 +1224,43 @@ impl DevToolsApp {
         self.clock.preview_audio_prepare();
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_window_prepare(&mut self, ctx: &egui::Context, index: usize) {
+        self.set_theme(
+            ctx,
+            if index % 2 == 1 {
+                Theme::Light
+            } else {
+                Theme::Dark
+            },
+        );
+        self.page = Page::Clock;
+        self.clock.preview_window_prepare(ctx, index);
+    }
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub fn preview_clock_window_dimensions(&self) -> [i32; 2] {
+        self.clock.preview_window_dimensions()
+    }
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub fn preview_clock_window_click(&self, index: usize) {
+        self.clock.preview_window_click(index);
+    }
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub fn preview_clock_window_key(&self, key: u32, scan: u32) {
+        self.clock.preview_window_key(key, scan);
+    }
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub fn preview_clock_window_check(&mut self, ctx: &egui::Context, phase: u8) -> isize {
+        let handle = self.clock.preview_window_check(ctx, phase);
+        if phase == 0 {
+            self.hide_to_tray(ctx);
+            assert!(self.preview_hidden());
+        }
+        if phase == 6 {
+            assert!(!self.preview_hidden());
+        }
+        handle
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_clock_audio_position(&self, index: usize) -> egui::Pos2 {
         self.clock.preview_audio_position(index)
     }
@@ -3933,6 +3970,10 @@ impl eframe::App for DevToolsApp {
         }
         self.receive_drop(ctx);
         self.quick_panel(ctx);
+        if self.clock.window_ui(ctx) {
+            self.page = Page::Clock;
+            restore_main_window(self.window_handle, ctx);
+        }
         self.quick_active.store(self.quick_open, Ordering::Release);
         let model = Navigation::new(
             self.entries("")

@@ -5,6 +5,7 @@ pub fn verify_audio_device() -> anyhow::Result<()> {
 }
 mod persistence;
 mod ui;
+mod windows;
 use chrono::{DateTime, Days, LocalResult, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use eframe::egui;
@@ -209,6 +210,7 @@ pub enum Tab {
     Focus,
 }
 pub struct State {
+    windows: windows::Windows,
     audio: audio::State,
     pending_audio: bool,
     storage: Option<persistence::Storage>,
@@ -238,6 +240,7 @@ impl Default for State {
     fn default() -> Self {
         let zone = chrono_tz::Asia::Shanghai;
         Self {
+            windows: windows::Windows::default(),
             audio: audio::State::default(),
             pending_audio: false,
             storage: None,
@@ -428,14 +431,16 @@ impl State {
         Ok(())
     }
     pub fn needs_clock(&self) -> bool {
-        self.audio.busy()
+        self.windows.active()
+            || self.audio.busy()
             || self.stopwatch.running()
             || self.timers.iter().any(Timer::running)
             || self.alarms.iter().any(|a| a.enabled || a.snooze.is_some())
             || self.focus.timer.running()
     }
     pub fn has_work(&self) -> bool {
-        self.audio.settings != audio::Settings::default()
+        self.windows.active()
+            || self.audio.settings != audio::Settings::default()
             || self.storage.as_ref().is_some_and(|s| s.has_work())
             || !self.timers.is_empty()
             || !self.alarms.is_empty()

@@ -134,7 +134,7 @@ impl Snapshot {
     pub(super) fn capture(s: &State, now: Instant, utc: DateTime<Utc>, policy: Policy) -> Self {
         Self {
             schema: 2,
-            tool_version: "0.3.0".into(),
+            tool_version: "0.4.0".into(),
             audio: Some(s.audio.settings.clone()),
             saved_at: utc,
             policy,
@@ -267,7 +267,7 @@ impl Snapshot {
         }
         Ok(())
     }
-    fn restore(
+    pub(super) fn restore(
         &self,
         s: &mut State,
         now: Instant,
@@ -275,6 +275,7 @@ impl Snapshot {
         policy: Policy,
     ) -> Result<()> {
         self.validate()?;
+        s.windows.clear();
         s.audio.restore(self.audio.clone().unwrap_or_default());
         s.pending_audio = false;
         let elapsed = utc
@@ -795,7 +796,7 @@ impl Storage {
             ui.small("秒表始终暂停恢复；闹钟按日历时间补一次提醒。系统时间回拨时，继续模式不会增加保存的剩余时长。");
             if let Some(snapshot)=self.pending.clone() {
                 ui.label(format!("待恢复：{} · {}计时器 / {}闹钟 / {}分段 · {}提醒",snapshot.saved_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S"),snapshot.timers.len(),snapshot.alarms.len(),snapshot.laps.len(),snapshot.notices.len()));
-                ui.small("恢复会替换当前时钟会话，请先确认；不会修改备忘、日程或系统时间。");
+                ui.small("恢复会替换当前时钟会话并关闭已有时钟小窗，请先确认；不会修改备忘、日程或系统时间。");
                 if snapshot.schema == 1 {ui.small("确认后保存将升级格式，并在同目录保留旧文件的校验备份；旧版程序需要从该备份恢复。");}
                 let restore=ui.add_enabled(!self.busy(),egui::Button::new("恢复此记录并启用保存"));
                 #[cfg(feature="ui-preview")]{self.rects[1]=restore.rect;}

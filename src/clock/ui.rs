@@ -8,7 +8,7 @@ impl State {
         let before = persistence::Snapshot::capture(self, now, utc, persistence::Policy::Pause);
         ui.heading("时钟工作台");
         ui.label(format!("v{version} · 开发中"));
-        ui.small("隐藏托盘继续计时。可主动开启本机保存，重启先预览再恢复；未开启时完全退出清空。声音可在下方启用，独立小窗继续开发。");
+        ui.small("隐藏托盘继续计时。可主动开启本机保存，重启先预览再恢复。声音可在下方启用；小窗与工作台同步，可置顶或全屏。");
         if let Some(mut storage) = self.storage.take() {
             storage.ui(self, ui);
             self.storage = Some(storage);
@@ -26,6 +26,17 @@ impl State {
             }
         });
         ui.separator();
+        let target = match self.tab {
+            Tab::World => self.zones.first().copied().map(windows::Target::World),
+            Tab::Stopwatch => Some(windows::Target::Stopwatch),
+            Tab::Focus => Some(windows::Target::Focus),
+            _ => None,
+        };
+        if let Some(target) = target {
+            if ui.button("打开独立小窗 ↗").clicked() {
+                self.open_window(target, ui.ctx());
+            }
+        }
         match self.tab {
             Tab::World => self.world_ui(ui, utc),
             Tab::Stopwatch => {
@@ -114,9 +125,13 @@ impl State {
                     }
                 });
                 let mut remove = None;
+                let mut open_window = None;
                 for t in &mut self.timers {
                     egui::Frame::group(ui.style()).show(ui, |ui| {
                         ui.label(&t.name);
+                        if ui.small_button("独立小窗 ↗").clicked() {
+                            open_window = Some(t.id);
+                        }
                         ui.label(
                             egui::RichText::new(countdown_text(t.remaining(now)))
                                 .size(30.0)
@@ -159,6 +174,9 @@ impl State {
                         });
                     });
                     ui.add_space(6.0);
+                }
+                if let Some(id) = open_window {
+                    self.open_window(windows::Target::Timer(id), ui.ctx());
                 }
                 if let Some(id) = remove {
                     self.timers.retain(|t| t.id != id);
@@ -337,6 +355,7 @@ impl State {
         }
         let projected = utc + chrono::Duration::minutes(self.meeting.into());
         let mut remove = None;
+        let mut open_window = None;
         for (index, zone) in self.zones.iter().enumerate() {
             let dt = projected.with_timezone(zone);
             egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -351,6 +370,9 @@ impl State {
                     ));
                     if ui.small_button("移除").clicked() {
                         remove = Some(index);
+                    }
+                    if ui.small_button("独立小窗 ↗").clicked() {
+                        open_window = Some(*zone);
                     }
                 });
                 ui.label(
@@ -406,6 +428,9 @@ impl State {
         if let Some(index) = remove {
             self.zones.remove(index);
         }
+        if let Some(zone) = open_window {
+            self.open_window(windows::Target::World(zone), ui.ctx());
+        }
         ui.small(format!(
             "内置时区数据 {}；不联网校时，时间来自本机。会议偏移只改变对照，不设置闹钟。",
             chrono_tz::IANA_TZDB_VERSION
@@ -458,7 +483,7 @@ impl State {
     }
 }
 
-fn zone_label(zone: Tz) -> String {
+pub(super) fn zone_label(zone: Tz) -> String {
     let city = match zone.name() {
         "Asia/Shanghai" => "北京 / 上海",
         "Asia/Tokyo" => "东京",
