@@ -45,6 +45,7 @@ pub mod tools;
 pub mod tools_advanced;
 pub mod tools_extra;
 pub mod tray;
+pub mod updates;
 pub mod vector_index;
 pub mod workbench;
 

@@ -9,6 +9,7 @@ use std::{
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub updates: crate::updates::Policy,
     pub command_bindings: crate::commands::Bindings,
     pub light: bool,
     pub hotkey: crate::hotkey::Setting,
@@ -22,6 +23,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            updates: Default::default(),
             command_bindings: Default::default(),
             light: false,
             hotkey: Default::default(),

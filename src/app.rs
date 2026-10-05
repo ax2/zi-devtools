@@ -194,6 +194,7 @@ pub struct DevToolsApp {
     tool_state: ToolState,
     calculator: crate::calculator::State,
     clock: crate::clock::State,
+    updates: crate::updates::State,
     prefix: commands::Prefix,
     http_state: HttpWorkbenchState,
     diff_state: DiffState,
@@ -683,6 +684,11 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            354..=357 => {
+                self.page = Page::Updates;
+                self.preferences.updates = Default::default();
+                self.updates.preview_fixture(scene >= 356);
+            }
             350..=353 => {
                 self.page = Page::Recorder;
                 self.recorder.preview_tutorial_fixture(scene >= 352);
@@ -1733,6 +1739,7 @@ impl DevToolsApp {
             sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
             calculator: Default::default(),
+            updates: Default::default(),
             clock: crate::clock::State::new(preferences_path.with_file_name("clock.json"),cc.egui_ctx.clone()),
             prefix: Default::default(),
             symbols: Default::default(),
@@ -3360,8 +3367,58 @@ impl DevToolsApp {
             });
     }
 
+    fn check_updates(&mut self, ctx: &egui::Context, automatic: bool) {
+        let mut next = self.preferences.clone();
+        next.updates.last_attempt = Some(chrono::Utc::now().timestamp());
+        let saved = next.save(&self.preferences_path);
+        if saved.is_ok() {
+            self.preferences = next;
+        }
+        if !automatic || saved.is_ok() {
+            self.updates.begin(self.preferences.updates.channel, ctx);
+        }
+        if saved.is_err() {
+            self.updates.message = if automatic {
+                "无法保存检查时间，已跳过自动检查；可以手动重试。"
+            } else {
+                "本次检查时间未能保存，检查仍可继续。"
+            }
+            .into();
+            if automatic {
+                self.preferences.updates.automatic = false;
+            }
+        }
+    }
+
+    fn updates_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let (policy, check) = self.updates.ui(ui, &self.preferences.updates);
+        if let Some(policy) = policy {
+            let mut next = self.preferences.clone();
+            next.updates = policy;
+            match next.save(&self.preferences_path) {
+                Ok(()) => {
+                    if self.preferences.updates.channel != next.updates.channel {
+                        self.updates.clear_result();
+                    }
+                    self.preferences = next;
+                    self.updates.message.clear();
+                }
+                Err(_) => {
+                    self.updates.message = "设置未能保存，原设置仍生效。".into();
+                }
+            }
+        }
+        if check {
+            self.check_updates(ctx, false);
+        }
+    }
+
     fn settings_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.heading(RichText::new("设置").size(28.0));
+        if ui.button("程序更新 · 版本与发布说明").clicked() {
+            self.page = Page::Updates;
+            self.visit("app-update-check");
+        }
         ui.label(RichText::new("使用 Zi DevTools 独立的配置与状态目录").color(self.colors.muted));
         ui.add_space(20.0);
         egui::Frame::new()
@@ -4023,6 +4080,14 @@ impl eframe::App for DevToolsApp {
         if self.intake.busy() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
+        self.updates.poll();
+        let now = chrono::Utc::now().timestamp();
+        if self.updates.automatic_due(&self.preferences.updates, now) {
+            self.check_updates(ctx, true);
+        }
+        if self.preferences.updates.automatic {
+            ctx.request_repaint_after(Duration::from_secs(30));
+        }
         self.prefix.files.poll();
         self.images.poll_screenshot(ctx);
         if self.images.take_screenshot_capture_request() {
@@ -4257,6 +4322,11 @@ impl eframe::App for DevToolsApp {
                 }
                 Page::Network => {
                     egui::ScrollArea::vertical().show(ui, |ui| self.network_page(ui, ctx));
+                }
+                Page::Updates => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("updates-page")
+                        .show(ui, |ui| self.updates_page(ui, ctx));
                 }
                 Page::Settings => {
                     egui::ScrollArea::vertical()

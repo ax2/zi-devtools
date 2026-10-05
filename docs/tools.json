@@ -1,5 +1,5 @@
 {
-  "version": "0.82.0-dev.13",
+  "version": "0.82.0-dev.14",
   "updated": "2026-10-06",
   "tools": [
     {
@@ -3166,18 +3166,34 @@
     {
       "id": "app-update-check",
       "name": "程序更新检查",
-      "status": "planned",
+      "status": "in-progress",
       "category": "效率与系统",
       "priority": "P1",
-      "scope": "手动检查与可关闭的定期检查，稳定/预览频道分开；显示版本、大小、说明、最低系统要求与工具变更；离线不阻塞启动，不自动安装",
-      "tool_version": "0.0.0",
+      "scope": "手动检查 GitHub 稳定/预览版、后台请求、版本比较、附件大小和发布说明；用户开启后每24小时检查，默认关闭。未实现自动下载安装、最低系统要求清单、工具变更差异、签名与增量回滚。",
+      "tool_version": "0.1.0",
       "version_history": [
         {
           "version": "0.0.0",
           "date": "2026-10-05",
           "changes": "登记需求与验收范围，尚未实现。"
+        },
+        {
+          "version": "0.1.0",
+          "date": "2026-10-06",
+          "changes": "首版后台发布检查、频道选择、SemVer 比较与默认关闭的24小时检查；安装及增量回滚待实现。"
         }
-      ]
+      ],
+      "discovery": {
+        "label": "程序更新",
+        "summary": "查看稳定版、预览版及附件大小，按需开启定期检查",
+        "category": "文件与系统",
+        "keywords": "update release version 更新 升级 版本",
+        "aliases": [
+          "更新检查",
+          "检查更新",
+          "软件更新"
+        ]
+      }
     },
     {
       "id": "app-delta-update",

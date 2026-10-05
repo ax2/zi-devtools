@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.82.0-dev.13"
+version = "0.82.0-dev.14"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -5590,6 +5590,7 @@ dependencies = [
  "rfd",
  "rusqlite",
  "scraper",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml_ng",
