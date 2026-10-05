@@ -3,9 +3,16 @@ use chrono::{Datelike, Timelike};
 use eframe::egui;
 impl State {
     pub fn ui(&mut self, ui: &mut egui::Ui, version: &str) {
+        let now = Instant::now();
+        let utc = Utc::now();
+        let before = persistence::Snapshot::capture(self, now, utc, persistence::Policy::Pause);
         ui.heading("时钟工作台");
         ui.label(format!("v{version} · 开发中"));
-        ui.small("当前保存在运行会话；隐藏托盘继续计时，完全退出清空。保存恢复、声音与独立小窗继续开发。");
+        ui.small("隐藏托盘继续计时。可主动开启本机保存，重启先预览再恢复；未开启时完全退出清空。声音与独立小窗继续开发。");
+        if let Some(mut storage) = self.storage.take() {
+            storage.ui(self, ui);
+            self.storage = Some(storage);
+        }
         ui.horizontal_wrapped(|ui| {
             for (tab, title) in [
                 (Tab::World, "世界时钟"),
@@ -18,8 +25,6 @@ impl State {
             }
         });
         ui.separator();
-        let now = Instant::now();
-        let utc = Utc::now();
         match self.tab {
             Tab::World => self.world_ui(ui, utc),
             Tab::Stopwatch => {
@@ -116,19 +121,17 @@ impl State {
                                 .size(30.0)
                                 .monospace(),
                         );
-                        ui.add(
-                            egui::ProgressBar::new(
-                                (1.0 - t.remaining(now).as_secs_f32() / t.cycle.as_secs_f32())
-                                    .clamp(0.0, 1.0),
-                            )
-                            .text(if t.finished {
-                                "已结束"
-                            } else if t.running() {
-                                "计时中"
-                            } else {
-                                "已暂停 / 未开始"
-                            }),
-                        );
+                        ui.add(egui::ProgressBar::new(
+                            (1.0 - t.remaining(now).as_secs_f32() / t.cycle.as_secs_f32())
+                                .clamp(0.0, 1.0),
+                        ));
+                        ui.small(if t.finished {
+                            "已结束"
+                        } else if t.running() {
+                            "计时中"
+                        } else {
+                            "已暂停 / 未开始"
+                        });
                         ui.horizontal_wrapped(|ui| {
                             let toggle = ui.add_enabled(
                                 !t.finished,
@@ -281,6 +284,9 @@ impl State {
                 });
                 ui.small("每4次专注进入长休息；新设置在重置或下一阶段生效。下一阶段需主动开始。");
             }
+        }
+        if before != persistence::Snapshot::capture(self, now, utc, persistence::Policy::Pause) {
+            self.changed();
         }
         if !self.message.is_empty() {
             ui.colored_label(ui.visuals().warn_fg_color, &self.message);
@@ -438,9 +444,11 @@ impl State {
             });
         if let Some(source) = dismiss {
             self.notices.retain(|n| n.source != source);
+            self.changed();
         }
         if let Some(source) = snooze {
             self.snooze(source, Utc::now());
+            self.changed();
         }
     }
 }

@@ -1,7 +1,7 @@
+mod persistence;
 mod ui;
 use chrono::{DateTime, Days, LocalResult, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
-#[cfg(feature = "ui-preview")]
 use eframe::egui;
 use std::time::{Duration, Instant};
 #[derive(Default)]
@@ -98,7 +98,7 @@ impl Timer {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Source {
     Timer(u64),
     Alarm(u64),
@@ -204,6 +204,7 @@ pub enum Tab {
     Focus,
 }
 pub struct State {
+    storage: Option<persistence::Storage>,
     pub tab: Tab,
     pub zones: Vec<Tz>,
     pub zone_query: String,
@@ -230,6 +231,7 @@ impl Default for State {
     fn default() -> Self {
         let zone = chrono_tz::Asia::Shanghai;
         Self {
+            storage: None,
             tab: Tab::World,
             zones: vec![
                 zone,
@@ -263,6 +265,52 @@ impl Default for State {
     }
 }
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_storage_prepare(&mut self, saving: bool) {
+        let storage = self.storage.take();
+        *self = Self::default();
+        self.storage = storage;
+        if saving {
+            self.tab = Tab::Timers;
+            self.stopwatch.accumulated = Duration::from_millis(1234);
+            self.stopwatch.laps = vec![Duration::from_millis(500)];
+            self.timer_seconds = 600;
+            self.add_timer().unwrap();
+            self.timers[0].toggle(Instant::now());
+            self.timer_seconds = 300;
+            self.add_timer().unwrap();
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_storage_ready(&self, phase: u8) -> bool {
+        self.storage
+            .as_ref()
+            .is_some_and(|s| s.preview_ready(phase, self))
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_storage_position(&self, index: usize) -> egui::Pos2 {
+        self.storage.as_ref().unwrap().rects[index].center()
+    }
+    pub fn new(path: std::path::PathBuf, ctx: egui::Context) -> Self {
+        Self {
+            storage: Some(persistence::Storage::new(path, ctx)),
+            ..Self::default()
+        }
+    }
+    pub fn saving(&self) -> bool {
+        self.storage.as_ref().is_some_and(|s| s.busy())
+    }
+    pub fn persistence_tick(&mut self, now: Instant, utc: DateTime<Utc>) {
+        if let Some(mut storage) = self.storage.take() {
+            storage.tick(self, now, utc);
+            self.storage = Some(storage);
+        }
+    }
+    fn changed(&mut self) {
+        if let Some(storage) = &mut self.storage {
+            storage.dirty = true;
+        }
+    }
     fn id(&mut self) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -317,7 +365,8 @@ impl State {
             || self.focus.timer.running()
     }
     pub fn has_work(&self) -> bool {
-        !self.timers.is_empty()
+        self.storage.as_ref().is_some_and(|s| s.has_work())
+            || !self.timers.is_empty()
             || !self.alarms.is_empty()
             || !self.notices.is_empty()
             || self.stopwatch.elapsed(Instant::now()) > Duration::ZERO
@@ -370,6 +419,9 @@ impl State {
         for (source, title) in fresh {
             self.notify(source, title);
         }
+        if changed {
+            self.changed();
+        }
         changed
     }
     pub fn snooze(&mut self, source: Source, utc: DateTime<Utc>) {
@@ -411,7 +463,9 @@ pub fn duration_text(duration: Duration) -> String {
 #[cfg(feature = "ui-preview")]
 impl State {
     pub fn preview_fixture(&mut self, index: usize) {
+        let storage = self.storage.take();
         *self = Self::default();
+        self.storage = storage;
         self.tab = match index {
             1 => Tab::Stopwatch,
             2 | 6 => Tab::Timers,

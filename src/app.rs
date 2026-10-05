@@ -1219,6 +1219,19 @@ impl DevToolsApp {
         self.clock.rects[index].center()
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_storage_prepare(&mut self, saving: bool) {
+        self.clock.preview_storage_prepare(saving);
+        self.page = Page::Clock;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_storage_ready(&self, phase: u8) -> bool {
+        self.clock.preview_storage_ready(phase)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clock_storage_position(&self, index: usize) -> egui::Pos2 {
+        self.clock.preview_storage_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_clock_done(&mut self) -> bool {
         self.clock.preview_done()
     }
@@ -1618,7 +1631,7 @@ impl DevToolsApp {
             sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
             calculator: Default::default(),
-            clock: Default::default(),
+            clock: crate::clock::State::new(preferences_path.with_file_name("clock.json"),cc.egui_ctx.clone()),
             prefix: Default::default(),
             symbols: Default::default(),
             ascii_art: Default::default(),
@@ -3805,6 +3818,8 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.clock
+            .persistence_tick(Instant::now(), chrono::Utc::now());
         if self.clock.poll(Instant::now(), chrono::Utc::now()) {
             self.quick_open = false;
             restore_main_window(self.window_handle, ctx);
@@ -3930,6 +3945,7 @@ impl eframe::App for DevToolsApp {
                 || self.planner.has_unsaved()
                 || self.prefix.has_work(&self.preferences.command_bindings)
                 || self.clock.has_work()
+                || self.clock.saving()
             {
                 self.workspace_exit_confirm = true;
                 restore_main_window(self.window_handle, ctx);
@@ -3955,7 +3971,8 @@ impl eframe::App for DevToolsApp {
             && (self.data_state.has_work()
                 || self.planner.has_unsaved()
                 || self.prefix.has_work(&self.preferences.command_bindings)
-                || self.clock.has_work())
+                || self.clock.has_work()
+                || self.clock.saving())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.workspace_exit_confirm = true;
@@ -3966,13 +3983,13 @@ impl eframe::App for DevToolsApp {
                 ui.heading("退出前保留工作");
                 ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
-                if self.clock.has_work(){ui.label("时钟工作台当前只在运行会话保存；完全退出会清空计时器、闹钟和分段。");}
+                if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
                 ui.horizontal_wrapped(|ui| {
-                    if self.clock.has_work() && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
+                    if (self.clock.has_work() || self.clock.saving()) && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });

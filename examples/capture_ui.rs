@@ -388,6 +388,25 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if matches!(
+            std::env::args().nth(3).as_deref(),
+            Some("clock-save-smoke" | "clock-restore-smoke")
+        ) && self.quick_smoke_phase > 0
+            && matches!(self.frames, 40 | 41)
+        {
+            let saving = std::env::args().nth(3).as_deref() == Some("clock-save-smoke");
+            let pos = self
+                .app
+                .preview_clock_storage_position(if saving { 0 } else { 1 });
+            assert!(pos.is_finite());
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frames == 40,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if std::env::args().nth(3).as_deref() == Some("clock-smoke") {
             let index = match self.frames {
                 20 | 21 | 40 | 41 => Some(0),
@@ -1188,6 +1207,40 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("clock-save-smoke" | "clock-restore-smoke")
+        ) {
+            let saving = smoke_mode.as_deref() == Some("clock-save-smoke");
+            if self.frames == 0 {
+                self.app.preview_clock_storage_prepare(saving);
+            }
+            self.app.update(ctx, frame);
+            if self.quick_smoke_phase == 0
+                && self
+                    .app
+                    .preview_clock_storage_ready(if saving { 0 } else { 2 })
+            {
+                self.quick_smoke_phase = 1;
+                self.frames = 10;
+            }
+            if self.frames >= 60
+                && self
+                    .app
+                    .preview_clock_storage_ready(if saving { 1 } else { 3 })
+            {
+                std::process::exit(0);
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(25),
+                "clock storage native timed out"
+            );
+            if self.quick_smoke_phase > 0 {
+                self.frames += 1;
+            }
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("clock-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 328, self.fixture.clone());
