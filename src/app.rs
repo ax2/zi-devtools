@@ -1,3 +1,4 @@
+mod commands;
 mod handoff;
 mod launcher;
 mod navigation;
@@ -191,6 +192,8 @@ pub struct DevToolsApp {
     config_view: Option<(String, String)>,
     config_text: String,
     tool_state: ToolState,
+    calculator: crate::calculator::State,
+    prefix: commands::Prefix,
     http_state: HttpWorkbenchState,
     diff_state: DiffState,
     network_state: NetworkState,
@@ -610,6 +613,15 @@ impl DevToolsApp {
     }
     /// Only compiled for the isolated screenshot fixture, never a production entry point.
     #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_position(&self, index: usize) -> egui::Pos2 {
+        self.data_state.preview_workflow_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_check(&mut self, phase: u8) -> bool {
+        self.data_state.preview_workflow_check(phase)
+    }
+
+    #[cfg(feature = "ui-preview")]
     pub fn preview_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: PathBuf) {
         let light = scene % 2 == 1 || scene == 8;
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
@@ -626,6 +638,25 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            310..=313 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_fixture();
+            }
+            314..=315 => {
+                self.page = Page::Commands;
+            }
+            306..=307 => {
+                self.page = Page::Data;
+                self.data_state.preview_workflow_empty(true);
+            }
+            308..=309 => {
+                self.page = Page::Data;
+                self.data_state.preview_workflow_empty(false);
+            }
+            304..=305 => {
+                self.page = Page::Data;
+                self.data_state.preview_workflow_empty(false);
+            }
             300..=303 => {
                 self.page = Page::Data;
                 self.data_state.preview_workflow_import();
@@ -1169,6 +1200,15 @@ impl DevToolsApp {
             }
         }
     }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_calculator_position(&self) -> egui::Pos2 {
+        self.calculator.preview_input_position()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_calculator_check(&self, phase: u8) {
+        self.calculator.preview_check(phase);
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_keyboard_fixture(&mut self) {
         if self.plugins.store.packages.is_empty() {
@@ -1552,6 +1592,8 @@ impl DevToolsApp {
             directory_compare: Default::default(),
             sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
+            calculator: Default::default(),
+            prefix: Default::default(),
             symbols: Default::default(),
             ascii_art: Default::default(),
             knowledge_sources: crate::knowledge_sources::State::new(crate::knowledge_sources::default_path()),
@@ -3770,7 +3812,11 @@ impl eframe::App for DevToolsApp {
         let hotkey_events: Vec<_> = self.hotkey.events.try_iter().collect();
         for event in hotkey_events {
             match event {
-                crate::hotkey::Event::Triggered => self.open_quick(ctx),
+                crate::hotkey::Event::Triggered => {
+                    self.open_quick(ctx);
+                    self.prefix.open();
+                    self.quick_focus = true;
+                }
                 crate::hotkey::Event::Configured(setting, result) => match result {
                     Ok(()) => {
                         self.hotkey_status = if setting.enabled {
@@ -3873,16 +3919,17 @@ impl eframe::App for DevToolsApp {
         }
         if self.workspace_exit_confirm {
             egui::Modal::new(egui::Id::new("workspace-exit-confirm")).show(ctx, |ui| {
+                ui.set_max_width(620.0);
                 ui.heading("退出前保留工作");
-                ui.label("数据工作实例、备忘录和日程的编辑需要手动保存。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
-                ui.horizontal(|ui| {
+                ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
+                ui.horizontal_wrapped(|ui| {
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.operation_pending() && !self.planner.saving(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-                if self.data_state.operation_pending() || self.planner.saving() { ui.label("正在保存或恢复，请等待完成后退出。"); }
+                if self.data_state.has_active_tasks() || self.planner.saving() { ui.label("正在处理任务，请等待完成，或从后台任务取消可取消的操作后退出。"); }
             });
         }
 
@@ -4117,6 +4164,25 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("ascii-codes-page")
                         .show(ui, |ui| self.ascii_codes.ui(ui));
+                }
+                Page::Calculator => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("calculator-page")
+                        .show(ui, |ui| {
+                            self.calculator.ui(
+                                ui,
+                                catalog()
+                                    .iter()
+                                    .find(|entry| entry.id == "advanced-calculator")
+                                    .and_then(|entry| entry.version.as_deref())
+                                    .unwrap_or("未声明"),
+                            )
+                        });
+                }
+                Page::Commands => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("commands-page")
+                        .show(ui, |ui| self.commands_page(ui, ctx));
                 }
                 Page::Symbols => {
                     egui::ScrollArea::vertical()

@@ -394,6 +394,7 @@ fn model_tool(endpoint: &str, protocol: Protocol) -> Result<PluginTool> {
     loopback_endpoint(endpoint, protocol)?;
     Ok(PluginTool {
         id: "knowledge-answer".into(),
+        version: None,
         name: "本机知识问答".into(),
         description: String::new(),
         category: "知识与检索".into(),

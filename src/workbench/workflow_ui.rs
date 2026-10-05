@@ -1,5 +1,8 @@
 use super::{workflow::*, *};
 
+#[cfg(feature = "ui-preview")]
+mod preview;
+
 pub(super) struct State {
     definition: Definition,
     proposal: Option<Preview>,
@@ -11,6 +14,8 @@ pub(super) struct State {
     error: String,
     reveal: bool,
     scroll_until: Option<std::time::Instant>,
+    #[cfg(feature = "ui-preview")]
+    buttons: [Option<(egui::Rect, egui::Rect)>; 5],
 }
 impl Default for State {
     fn default() -> Self {
@@ -29,6 +34,8 @@ impl Default for State {
             error: String::new(),
             reveal: false,
             scroll_until: None,
+            #[cfg(feature = "ui-preview")]
+            buttons: [None; 5],
         }
     }
 }
@@ -39,7 +46,7 @@ impl Drop for State {
 }
 impl State {
     pub(super) fn has_content(&self) -> bool {
-        !self.definition.steps.is_empty()
+        !self.definition.steps.is_empty() || self.files.review.is_some()
     }
     pub(super) fn invalidate(&mut self) {
         self.proposal = None;
@@ -168,6 +175,7 @@ impl DataState {
 
     fn apply_workflow(&mut self) -> Result<()> {
         ensure_not_busy(self)?;
+        anyhow::ensure!(self.dataset.is_some(), "请先解析表格");
         anyhow::ensure!(
             self.dataset == self.workflow.source,
             "来源已变化，请重新预览"
@@ -180,10 +188,12 @@ impl DataState {
     }
 
     pub(super) fn workflow_ui(&mut self, ui: &mut egui::Ui) {
-        let Some(data) = self.dataset.as_ref() else {
-            return;
-        };
-        let headers = data.headers.clone();
+        let has_input = self.dataset.is_some();
+        let headers = self
+            .dataset
+            .as_ref()
+            .map(|data| data.headers.clone())
+            .unwrap_or_default();
         let schemas = step_schemas(&headers, &self.workflow.definition.steps);
         let running = self.workflow.job.phase.active();
         let active = running
@@ -205,7 +215,11 @@ impl DataState {
             .open(scroll.then_some(true))
             .default_open(!self.workflow.definition.steps.is_empty())
             .show(ui, |ui| {
-                ui.label("按顺序处理上次解析的全部行，包含筛选隐藏的行；先预览，再主动应用。");
+                if has_input {
+                    ui.label("按顺序处理上次解析的全部行，包含筛选隐藏的行；先预览，再主动应用。");
+                } else {
+                    ui.label("先读取已有流程或建立步骤，列名可手动填写。载入并解析表格后才能预览和应用。");
+                }
                 ui.small(
                     "可另存流程文件供下次使用；只含步骤与参数，不含原表或授权。实例快照不含流程。",
                 );
@@ -220,6 +234,8 @@ impl DataState {
                         .auto_shrink([false, false])
                         .min_scrolled_height(if self.workflow.definition.steps.is_empty() {
                             20.0
+                        } else if !has_input {
+                            240.0
                         } else {
                             180.0
                         })
@@ -262,10 +278,11 @@ impl DataState {
                                                     .add(
                                                         egui::TextEdit::singleline(column)
                                                             .char_limit(256)
+                                                            .hint_text("填写列名")
                                                             .desired_width(150.0),
                                                     )
                                                     .changed();
-                                                egui::ComboBox::from_id_salt("column-picker")
+                                                if !available.is_empty() { egui::ComboBox::from_id_salt("column-picker")
                                                     .selected_text("选择列")
                                                     .show_ui(ui, |ui| {
                                                         for name in available {
@@ -277,7 +294,7 @@ impl DataState {
                                                                 )
                                                                 .changed();
                                                         }
-                                                    });
+                                                    }); }
                                                 egui::ComboBox::from_id_salt("operation")
                                                     .selected_text(label(*operation))
                                                     .show_ui(ui, |ui| {
@@ -309,6 +326,18 @@ impl DataState {
                                         }
                                         Step::SelectColumns { columns } => {
                                             ui.label("选择保留列（沿用原列顺序）");
+                                            if !has_input || columns.iter().any(|name| !available.contains(name)) {
+                                                let mut remove_column = None;
+                                                for (index, name) in columns.iter_mut().enumerate() {
+                                                    if has_input && available.contains(name) { continue; }
+                                                    ui.horizontal_wrapped(|ui| {
+                                                        changed |= ui.add(egui::TextEdit::singleline(name).char_limit(256).hint_text("填写列名").desired_width(180.0)).changed();
+                                                        if ui.button("移除列名").clicked() { remove_column = Some(index); }
+                                                    });
+                                                }
+                                                if let Some(index) = remove_column { columns.remove(index); changed = true; }
+                                                if !has_input && ui.add_enabled(columns.len() < 128, egui::Button::new("添加列名")).clicked() { columns.push(String::new()); changed = true; }
+                                            }
                                             ui.horizontal_wrapped(|ui| {
                                                 for name in available {
                                                     let mut selected = columns.contains(name);
@@ -326,7 +355,7 @@ impl DataState {
                                                 .iter()
                                                 .filter(|c| !available.contains(c))
                                                 .collect();
-                                            if !missing.is_empty() {
+                                            if has_input && !missing.is_empty() {
                                                 ui.colored_label(
                                                     ui.visuals().error_fg_color,
                                                     format!("当前表缺少：{missing:?}"),
@@ -384,12 +413,14 @@ impl DataState {
                 self.workflow_file_buttons(ui);
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
-                    start = ui
+                    let preview = ui
                         .add_enabled(
-                            !active && !self.busy() && !self.workflow.definition.steps.is_empty(),
+                            has_input && !active && !self.busy() && !self.workflow.definition.steps.is_empty(),
                             primary(ui, "预览全部步骤"),
-                        )
-                        .clicked();
+                        );
+                    #[cfg(feature = "ui-preview")]
+                    { self.workflow.buttons[2] = Some((preview.rect, ui.clip_rect())); }
+                    start = preview.clicked();
                     if ui
                         .add_enabled(running, egui::Button::new("取消预览"))
                         .clicked()
@@ -402,19 +433,22 @@ impl DataState {
                         ui.ctx()
                             .request_repaint_after(std::time::Duration::from_millis(30));
                     }
-                    apply = ui
+                    let apply_button = ui
                         .add_enabled(
-                            !active && !self.busy() && self.workflow.proposal.is_some(),
+                            has_input && !active && !self.busy() && self.workflow.proposal.is_some(),
                             primary(ui, "应用流程结果"),
-                        )
-                        .clicked();
-                    if ui
+                        );
+                    #[cfg(feature = "ui-preview")]
+                    { self.workflow.buttons[3] = Some((apply_button.rect, ui.clip_rect())); }
+                    apply = apply_button.clicked();
+                    let undo = ui
                         .add_enabled(
                             !active && !self.busy() && self.can_undo_transform(),
                             egui::Button::new("撤销最近一次表格修改"),
-                        )
-                        .clicked()
-                    {
+                        );
+                    #[cfg(feature = "ui-preview")]
+                    { self.workflow.buttons[4] = Some((undo.rect, ui.clip_rect())); }
+                    if undo.clicked() {
                         self.undo_transform();
                     }
                 });
@@ -557,10 +591,16 @@ impl DataState {
                     }
                 });
             ui.horizontal_wrapped(|ui| {
-                cancel = ui.button("取消，保留当前步骤").clicked();
-                confirm = ui
-                    .add_enabled(!self.busy(), egui::Button::new("确认替换流程步骤"))
-                    .clicked();
+                let cancel_button = ui.button("取消，保留当前步骤");
+                let confirm_button =
+                    ui.add_enabled(!self.busy(), egui::Button::new("确认替换流程步骤"));
+                #[cfg(feature = "ui-preview")]
+                {
+                    self.workflow.buttons[0] = Some((cancel_button.rect, ui.clip_rect()));
+                    self.workflow.buttons[1] = Some((confirm_button.rect, ui.clip_rect()));
+                }
+                cancel = cancel_button.clicked();
+                confirm = confirm_button.clicked();
             });
         });
         if confirm {
@@ -610,7 +650,15 @@ fn step_schemas(headers: &[String], steps: &[Step]) -> Vec<Vec<String>> {
                     current[index] = name.into();
                 }
             }
-            Step::SelectColumns { columns } if !columns.is_empty() => {
+            Step::SelectColumns { columns }
+                if !columns.is_empty()
+                    && columns.iter().all(|column| current.contains(column))
+                    && columns
+                        .iter()
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .len()
+                        == columns.len() =>
+            {
                 current.retain(|c| columns.contains(c));
             }
             _ => {}
@@ -675,6 +723,105 @@ mod tests {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
         }
+    }
+    #[test]
+    fn definition_loads_without_input_and_survives_later_parsing() {
+        let definition = fixture().workflow.definition.clone();
+        let path =
+            std::env::temp_dir().join(format!("zi-flow-empty-{}.json", uuid::Uuid::new_v4()));
+        let mut state = DataState {
+            input: "编号,数量\n001,2".into(),
+            ..Default::default()
+        };
+        let input = state.input.clone();
+        state
+            .workflow
+            .files
+            .save(definition.clone(), path.clone())
+            .unwrap();
+        wait_files(&mut state);
+        state.workflow.files.read(path.clone()).unwrap();
+        wait_files(&mut state);
+        assert!(state.dataset.is_none());
+        state.confirm_workflow_import().unwrap();
+        assert_eq!(state.workflow.definition, definition);
+        assert_eq!(state.input, input);
+        assert!(state.start_workflow().is_err());
+        assert!(state.apply_workflow().is_err());
+        assert!(!state.busy());
+        state.format = DataFormat::Csv;
+        state.parse();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.busy() {
+            state.poll();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert_eq!(state.workflow.definition, definition);
+        assert_eq!(state.input, input);
+        assert_eq!(state.dataset.as_ref().unwrap().rows[0][1], "2");
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        assert_eq!(state.dataset.as_ref().unwrap().rows[0][1], "2");
+        state.apply_workflow().unwrap();
+        assert_eq!(
+            state.dataset.as_ref().unwrap().rows[0][1],
+            serde_json::json!(2)
+        );
+        assert_eq!(state.input, input);
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn inactive_file_tasks_block_exit_and_pending_import_blocks_silent_close() {
+        let definition = fixture().workflow.definition.clone();
+        let path =
+            std::env::temp_dir().join(format!("zi-flow-owner-{}.json", uuid::Uuid::new_v4()));
+        let db =
+            std::env::temp_dir().join(format!("zi-flow-owner-{}.sqlite3", uuid::Uuid::new_v4()));
+        let mut workspace = sessions::Workspace::new(db.clone());
+        let owner = workspace.create("读取流程").unwrap();
+        workspace
+            .workflow
+            .files
+            .save(definition.clone(), path.clone())
+            .unwrap();
+        assert!(workspace.has_active_tasks());
+        assert!(workspace.close(&owner, true).is_err());
+        wait_files(&mut workspace);
+        workspace.workflow.files.read(path.clone()).unwrap();
+        let other = workspace.create("其他编辑").unwrap();
+        workspace.input = "保留其他实例输入".into();
+        assert!(!workspace.busy());
+        assert!(workspace.has_active_tasks());
+        let row = workspace
+            .snapshots()
+            .into_iter()
+            .find(|row| row.key == "workflow-file" && row.instance.as_deref() == Some(&owner))
+            .unwrap();
+        assert_eq!(row.instance_name.as_deref(), Some("读取流程"));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while workspace.has_active_tasks() {
+            workspace.poll();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert_eq!(workspace.active_id(), other);
+        assert_eq!(workspace.input, "保留其他实例输入");
+        assert!(workspace.workflow.files.review.is_none());
+        assert!(workspace.close(&owner, false).is_err());
+        workspace.select(&owner).unwrap();
+        assert!(workspace.input.is_empty());
+        assert!(workspace.dataset.is_none());
+        assert!(workspace.workflow.definition.steps.is_empty());
+        assert_eq!(workspace.workflow.files.review, Some(definition.clone()));
+        assert!(workspace.has_content());
+        workspace.confirm_workflow_import().unwrap();
+        assert_eq!(workspace.workflow.definition, definition);
+        assert!(workspace.dataset.is_none());
+        assert!(!db.exists(), "no automatic workspace persistence");
+        workspace.close(&owner, true).unwrap();
+        assert_eq!(workspace.input, "保留其他实例输入");
+        std::fs::remove_file(path).unwrap();
     }
     #[test]
     fn saved_flow_requires_import_confirmation_and_never_applies_to_source() {
@@ -820,6 +967,15 @@ mod tests {
         assert_eq!(
             step_schemas(&["old".into(), "other".into()], &steps),
             vec![vec!["old", "other"], vec!["new", "other"], vec!["new"]]
+        );
+        assert_eq!(
+            step_schemas(
+                &["old".into()],
+                &[Step::SelectColumns {
+                    columns: vec!["missing".into()]
+                }]
+            ),
+            vec![vec!["old"], vec!["old"]]
         );
     }
     #[test]

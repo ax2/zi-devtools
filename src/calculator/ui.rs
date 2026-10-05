@@ -1,0 +1,249 @@
+use super::{Angle, Value, evaluate, valid_variable};
+use eframe::egui::{self, RichText};
+use std::collections::BTreeMap;
+
+pub struct State {
+    pub expression: String,
+    degrees: bool,
+    variables: BTreeMap<String, Value>,
+    history: Vec<(String, Value)>,
+    message: String,
+    #[cfg(feature = "ui-preview")]
+    input_rect: Option<(egui::Rect, egui::Rect)>,
+}
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            expression: "0.1 + 0.2".into(),
+            degrees: false,
+            variables: BTreeMap::new(),
+            history: Vec::new(),
+            message: String::new(),
+            #[cfg(feature = "ui-preview")]
+            input_rect: None,
+        }
+    }
+}
+impl State {
+    fn preview(&self) -> Result<(Option<String>, Value), String> {
+        let angle = if self.degrees {
+            Angle::Degrees
+        } else {
+            Angle::Radians
+        };
+        if let Some((name, expression)) = self.expression.split_once('=') {
+            let name = name.trim();
+            if !valid_variable(name) {
+                return Err("变量名需以英文字母开头，最多 32 字符；pi/e/ans 保留".into());
+            }
+            if !self.variables.contains_key(name) && self.variables.len() >= 64 {
+                return Err("变量最多 64 个（含 ans）".into());
+            }
+            Ok((
+                Some(name.into()),
+                evaluate(expression.trim(), &self.variables, angle)?,
+            ))
+        } else {
+            Ok((None, evaluate(&self.expression, &self.variables, angle)?))
+        }
+    }
+    fn commit(&mut self) -> Result<(), String> {
+        let (name, value) = self.preview()?;
+        if let Some(name) = name {
+            self.variables.insert(name, value);
+        }
+        self.variables.insert("ans".into(), value);
+        self.history.insert(0, (self.expression.clone(), value));
+        self.history.truncate(100);
+        self.message = "已固定结果；ans 可引用上一次结果".into();
+        Ok(())
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui, version: &str) {
+        ui.heading("全能计算器");
+        ui.label(format!(
+            "v{version} · 开发中：精确表达式 / 科学函数 / 程序员运算 / 单位 / 变量与历史"
+        ));
+        ui.small("精确模式采用 i128 有理数；科学函数为近似实数。历史仅保留在本次运行内存中。");
+        ui.add_space(12.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.label("三角函数角度");
+            ui.selectable_value(&mut self.degrees, false, "弧度 RAD");
+            ui.selectable_value(&mut self.degrees, true, "角度 DEG");
+        });
+        let input = ui.add(
+            egui::TextEdit::singleline(&mut self.expression)
+                .char_limit(2048)
+                .font(egui::TextStyle::Monospace)
+                .desired_width(f32::INFINITY)
+                .hint_text("输入算式，Enter 固定结果；例如 price = 19.90"),
+        );
+        #[cfg(feature = "ui-preview")]
+        {
+            self.input_rect = Some((input.rect, ui.clip_rect()));
+        }
+        if self.expression.len() > 2048 {
+            ui.colored_label(
+                ui.visuals().error_fg_color,
+                "表达式超过 2048 字节；请缩短输入",
+            );
+        }
+        let result = self.preview();
+        egui::Frame::group(ui.style())
+            .inner_margin(16.0)
+            .show(ui, |ui| match &result {
+                Ok((name, value)) => {
+                    ui.label(RichText::new(value.display()).size(30.0).strong());
+                    ui.small(match value {
+                        Value::Exact(..) => "精确值 · 有限小数或最简分数",
+                        Value::Approx(_) => "近似值 · 浮点计算，约 12 位显示精度",
+                    });
+                    if let Some(name) = name {
+                        ui.small(format!("预览赋值：{name}；固定结果后才保存变量"));
+                    }
+                    if let Ok(n) = value.integer() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.monospace(format!("HEX {n:#x}"));
+                            ui.monospace(format!("OCT {n:#o}"));
+                            ui.monospace(format!("BIN {n:#b}"));
+                        });
+                        ui.small("位运算采用有符号 128 位补码，左移溢出位丢弃");
+                    }
+                }
+                Err(error) => {
+                    ui.colored_label(ui.visuals().error_fg_color, error);
+                }
+            });
+        let enter = (input.has_focus() || input.lost_focus())
+            && ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none());
+        let mut commit = enter;
+        ui.horizontal_wrapped(|ui| {
+            commit |= ui
+                .add_enabled(result.is_ok(), egui::Button::new("固定结果 · Enter"))
+                .clicked();
+            if ui
+                .add_enabled(result.is_ok(), egui::Button::new("复制结果"))
+                .clicked()
+            {
+                if let Ok((_, v)) = result {
+                    ui.ctx().copy_text(v.display());
+                }
+            }
+            if ui.button("复制算式").clicked() {
+                ui.ctx().copy_text(self.expression.clone());
+            }
+            if ui.button("清空输入").clicked() {
+                self.expression.clear();
+                self.message.clear();
+                input.request_focus();
+            }
+        });
+        if commit {
+            if let Err(error) = self.commit() {
+                self.message = error;
+            }
+            if enter {
+                input.request_focus();
+            }
+        }
+        if !self.message.is_empty() {
+            ui.small(&self.message);
+        }
+        ui.add_space(10.0);
+        ui.collapsing("输入说明与示例",|ui| {
+            ui.label("运算：+ - * / ^ % & | << >> ~；幂右结合，-2^2 = -4。输入需显式 *。");
+            ui.label("函数：sin cos tan sqrt ln log10 exp abs floor ceil round min max xor；常量 pi/e。");
+            ui.label("进制：0xff / 0b1010 / 0o17；科学计数法 1e-3；变量 price=19.90，后续 price*3。");
+            ui.label("单位：mm/cm/m/km/in/ft/mi，mg/g/kg/lb，ms/s/min/h/day，B/KB/MB/GB/KiB/MiB/GiB，C/F/K。单位区分大小写。");
+            ui.horizontal_wrapped(|ui| { for example in ["0.1+0.2","(128+64)*3","sin(30)","0xff & 0x0f","5 km -> m","25 C -> F","1 GiB -> MB","price = 19.90"] { if ui.button(example).clicked() { self.expression=example.into(); input.request_focus(); } } });
+            ui.small("矩阵、复数、方程、绘图、日期计算、可选历史持久化及跨工具接力尚未实现。");
+        });
+        ui.collapsing(format!("变量（{}）", self.variables.len()), |ui| {
+            for (name, v) in &self.variables {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(name).clicked() {
+                        self.expression = name.clone();
+                        input.request_focus();
+                    }
+                    ui.monospace(v.display());
+                });
+            }
+            if ui.button("清空所有变量").clicked() {
+                self.variables.clear();
+            }
+        });
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label(format!("本次历史（{} / 100）", self.history.len()));
+            if ui.button("清空历史").clicked() {
+                self.history.clear();
+            }
+        });
+        for (expression, value) in &self.history {
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("复用").clicked() {
+                    self.expression = expression.clone();
+                    input.request_focus();
+                }
+                ui.monospace(expression);
+                ui.label(format!("= {}", value.display()));
+                if ui.small_button("复制").clicked() {
+                    ui.ctx().copy_text(value.display());
+                }
+            });
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_fixture(&mut self) {
+        self.expression = "price = 19.90".into();
+        self.commit().unwrap();
+        self.expression = "price * 3".into();
+        self.commit().unwrap();
+        self.expression = "25 C -> F".into();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_input_position(&self) -> egui::Pos2 {
+        let (rect, clip) = self.input_rect.expect("input rendered");
+        assert!(clip.contains(rect.center()));
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_check(&self, phase: u8) {
+        assert_eq!(
+            self.history.len(),
+            3,
+            "expression={} message={}",
+            self.expression,
+            self.message
+        );
+        assert_eq!(self.variables["ans"].display(), "0.3");
+        if phase == 1 {
+            assert!(self.expression.contains("1/0"));
+            assert!(self.preview().is_err());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn preview_does_not_mutate_variables_and_errors_do_not_replace_ans_or_history() {
+        let mut state = State {
+            expression: "price = 19.90".into(),
+            ..State::default()
+        };
+        assert_eq!(state.preview().unwrap().1.display(), "19.9");
+        assert!(state.variables.is_empty());
+        state.commit().unwrap();
+        state.expression = "price*3".into();
+        state.commit().unwrap();
+        assert_eq!(state.variables["ans"].display(), "59.7");
+        state.expression = "bad = 1/0".into();
+        assert!(state.commit().is_err());
+        assert!(!state.variables.contains_key("bad"));
+        assert_eq!(state.history.len(), 2);
+        assert_eq!(state.variables["ans"].display(), "59.7");
+        state.expression = "ans+0.3".into();
+        assert_eq!(state.preview().unwrap().1.display(), "60");
+    }
+}

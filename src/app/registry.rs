@@ -12,6 +12,7 @@ struct CatalogDocument {
 #[derive(Deserialize)]
 struct Definition {
     id: String,
+    tool_version: String,
     status: String,
     discovery: Option<Discovery>,
 }
@@ -28,6 +29,7 @@ struct Discovery {
 #[derive(Clone)]
 pub(super) struct ToolEntry {
     pub id: String,
+    pub version: Option<String>,
     pub title: String,
     pub description: String,
     pub category: String,
@@ -85,6 +87,7 @@ impl ToolEntry {
             .map(normalized)
             .collect();
         Self {
+            version: None,
             search: Arc::new(SearchText {
                 id: normalized(&id),
                 title,
@@ -104,7 +107,7 @@ impl ToolEntry {
     }
 
     pub fn plugin(id: String, tool: &crate::plugins::PluginTool) -> Self {
-        Self::new(
+        let mut entry = Self::new(
             id,
             Discovery {
                 label: tool.name.clone(),
@@ -116,7 +119,9 @@ impl ToolEntry {
             Page::Plugins,
             None,
             false,
-        )
+        );
+        entry.version.clone_from(&tool.version);
+        entry
     }
 
     pub fn score(&self, query: &str) -> Option<u32> {
@@ -241,13 +246,15 @@ pub(super) fn catalog() -> &'static [ToolEntry] {
                 let discovery = definition
                     .discovery
                     .expect("visible tool discovery metadata");
-                Some(ToolEntry::new(
+                let mut entry = ToolEntry::new(
                     definition.id,
                     discovery,
                     page,
                     kind,
                     definition.status == "in-progress",
-                ))
+                );
+                entry.version = Some(definition.tool_version);
+                Some(entry)
             })
             .collect()
     })
@@ -297,6 +304,8 @@ pub(super) enum Page {
     Tasks,
     Notes,
     Calendar,
+    Calculator,
+    Commands,
     Services,
     SmallTools,
     EncodingTools,
@@ -364,6 +373,8 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "task-center" => Page::Tasks,
             "memos" => Page::Notes,
             "calendar-planner" => Page::Calendar,
+            "advanced-calculator" => Page::Calculator,
+            "unified-shortcuts" => Page::Commands,
             "global-launcher" => Page::Settings,
             "file-intake" => Page::Intake,
             "data" => Page::Data,
@@ -431,6 +442,7 @@ mod tests {
         let mut ids = std::collections::HashSet::new();
         for definition in document.tools {
             assert!(ids.insert(definition.id.clone()));
+            assert!(crate::plugins::valid_tool_version(&definition.tool_version));
             if definition.status == "implemented" {
                 assert!(route(&definition.id).is_some(), "{}", definition.id);
             }
@@ -458,6 +470,7 @@ mod tests {
                     .any(|e| e.id == kind.id() && e.kind == Some(kind))
             );
         }
+        assert!(catalog().iter().all(|entry| entry.version.is_some()));
         for tool in crate::framework::Tool::ALL {
             assert!(catalog().iter().any(|e| e.id == tool.id()));
         }
@@ -553,6 +566,7 @@ mod tests {
     fn ranking_keeps_exact_matches_above_favorites_and_filters_plugins() {
         let plugin = crate::plugins::PluginTool {
             id: "helper".into(),
+            version: Some("1.2.3".into()),
             name: "JSON Helper".into(),
             description: "处理 JSON 文本".into(),
             category: "数据与格式".into(),
@@ -566,6 +580,7 @@ mod tests {
             },
         };
         let entry = ToolEntry::plugin("plugin:test/helper".into(), &plugin);
+        assert_eq!(entry.version.as_deref(), Some("1.2.3"));
         let mut preferences = Preferences::default();
         preferences.favorites.push(entry.id.clone());
         preferences.visit(&entry.id);

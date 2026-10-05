@@ -1,6 +1,6 @@
 {
-  "version": "0.82.0-dev.2",
-  "updated": "2026-10-05",
+  "version": "0.82.0-dev.4",
+  "updated": "2026-10-06",
   "tools": [
     {
       "id": "json",
@@ -20,7 +20,15 @@
           "json校验",
           "压缩json"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "base64",
@@ -38,7 +46,15 @@
           "base64解码",
           "base64编码"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "url",
@@ -53,7 +69,15 @@
         "category": "网络与接口",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "sha256",
@@ -68,7 +92,15 @@
         "category": "文本与编码",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "timestamp",
@@ -87,7 +119,15 @@
           "shijianchuo",
           "sjc"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "uuid",
@@ -102,7 +142,15 @@
         "category": "时间与生成",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "jwt",
@@ -117,7 +165,15 @@
         "category": "网络与接口",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "regex",
@@ -132,7 +188,15 @@
         "category": "文本与编码",
         "keywords": "regex match 正则 匹配",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "number",
@@ -147,7 +211,15 @@
         "category": "时间与生成",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "ascii-codes",
@@ -165,7 +237,15 @@
           "ascii码表",
           "查ascii"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "symbol-library",
@@ -184,7 +264,15 @@
           "颜文字",
           "表情字符"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "ascii-art",
@@ -202,7 +290,15 @@
           "生成字符画",
           "文字画"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "qr",
@@ -222,7 +318,15 @@
           "erweima",
           "ewm"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "color",
@@ -237,7 +341,15 @@
         "category": "时间与生成",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "text-stats",
@@ -252,7 +364,15 @@
         "category": "文本与编码",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "html-escape",
@@ -267,7 +387,15 @@
         "category": "文本与编码",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "text-escape",
@@ -282,7 +410,15 @@
         "category": "文本与编码",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "case-convert",
@@ -297,7 +433,15 @@
         "category": "文本与编码",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "yaml",
@@ -312,7 +456,15 @@
         "category": "数据与格式",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "hex",
@@ -327,7 +479,15 @@
         "category": "文本与编码",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "lines",
@@ -346,7 +506,15 @@
           "删除重复行",
           "行排序"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "url-inspect",
@@ -361,7 +529,15 @@
         "category": "网络与接口",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "cidr",
@@ -376,7 +552,15 @@
         "category": "网络与接口",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "data",
@@ -396,7 +580,15 @@
           "表格筛选",
           "处理表格"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "files",
@@ -411,7 +603,15 @@
         "category": "文件与系统",
         "keywords": "hash checksum file 文件 摘要",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "http",
@@ -426,7 +626,15 @@
         "category": "网络与接口",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "diff",
@@ -444,7 +652,15 @@
           "文本对比",
           "比较两段文字"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "network",
@@ -459,7 +675,15 @@
         "category": "网络与接口",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "services",
@@ -477,7 +701,15 @@
           "启动服务",
           "管理本地服务"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "json-path",
@@ -495,7 +727,15 @@
           "提取json字段",
           "json字段提取"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "json-diff",
@@ -513,7 +753,15 @@
           "比较两个json",
           "json对比"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "data-schema",
@@ -528,7 +776,15 @@
         "category": "数据与格式",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "data-transform",
@@ -547,7 +803,15 @@
           "表格去空格",
           "修改列类型"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "csv-merge",
@@ -566,7 +830,15 @@
           "合并csv",
           "关联两张表"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "checksum-manifest",
@@ -581,7 +853,15 @@
         "category": "文件与系统",
         "keywords": "checksum sha256 sums manifest verify 文件 校验 清单",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "disk-inspector",
@@ -600,7 +880,15 @@
           "查看大文件",
           "哪个目录最大"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "duplicate-files",
@@ -619,7 +907,15 @@
           "重复文件",
           "文件去重检查"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "file-compare",
@@ -638,7 +934,15 @@
           "目录对比",
           "文件夹差异"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "cron",
@@ -653,7 +957,15 @@
         "category": "时间与生成",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "random",
@@ -668,7 +980,15 @@
         "category": "时间与生成",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "sql-format",
@@ -676,7 +996,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "方言选择与格式化，不连接数据库"
+      "scope": "方言选择与格式化，不连接数据库",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "json-schema",
@@ -684,7 +1012,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "本地 schema、错误字段路径、引用限制"
+      "scope": "本地 schema、错误字段路径、引用限制",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "log-viewer",
@@ -692,7 +1028,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "大文件流式读取、级别筛选、时间定位和多行事件"
+      "scope": "大文件流式读取、级别筛选、时间定位和多行事件",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "sqlite",
@@ -711,7 +1055,15 @@
           "查看sqlite",
           "数据库浏览"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "http-collections",
@@ -719,7 +1071,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "请求集合、环境变量、导入导出脱敏"
+      "scope": "请求集合、环境变量、导入导出脱敏",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "curl-import",
@@ -727,7 +1087,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "解析请求命令，不执行 shell，认证字段脱敏"
+      "scope": "解析请求命令，不执行 shell，认证字段脱敏",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "tls-inspect",
@@ -735,7 +1103,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "证书链、有效期与主机名验证，只读连接"
+      "scope": "证书链、有效期与主机名验证，只读连接",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "encoding-detect",
@@ -754,7 +1130,15 @@
           "转换文件编码",
           "乱码修复"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "file-rename",
@@ -762,7 +1146,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "规则预览、冲突检查、操作记录与撤销"
+      "scope": "规则预览、冲突检查、操作记录与撤销",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "image-tools",
@@ -785,7 +1177,15 @@
           "tupian",
           "tpys"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "image-batch",
@@ -804,7 +1204,15 @@
           "批量转webp",
           "多张图片转换"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "image-crop-annotate",
@@ -823,7 +1231,15 @@
           "图片裁剪",
           "图片标注"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "image-metadata",
@@ -838,7 +1254,15 @@
         "category": "文件与系统",
         "keywords": "image metadata exif gps icc xmp privacy 图片 元数据 隐私 清理",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "markdown",
@@ -856,7 +1280,15 @@
           "预览markdown",
           "markdown预览"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "unicode",
@@ -874,7 +1306,15 @@
           "不可见字符",
           "检查隐藏字符"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "escape-suite",
@@ -882,7 +1322,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "Unicode、HTML 实体与 shell 引号的明确方言"
+      "scope": "Unicode、HTML 实体与 shell 引号的明确方言",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "time-zone",
@@ -890,7 +1338,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "多时区比较、夏令时边界与批量时间转换"
+      "scope": "多时区比较、夏令时边界与批量时间转换",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "regex-replace",
@@ -898,7 +1354,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "批量替换预览、捕获组引用与匹配限额"
+      "scope": "批量替换预览、捕获组引用与匹配限额",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "jwt-verify",
@@ -906,7 +1370,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P3",
-      "scope": "显式算法白名单和本地公钥，不接受任意算法"
+      "scope": "显式算法白名单和本地公钥，不接受任意算法",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "crypto",
@@ -914,7 +1386,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P3",
-      "scope": "明确算法参数、测试向量、密钥仅内存"
+      "scope": "明确算法参数、测试向量、密钥仅内存",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "pipeline",
@@ -922,7 +1402,7 @@
       "status": "in-progress",
       "category": "扩展工具",
       "priority": "P1",
-      "scope": "开发中：数据工作台1–32步列转换/选列、按列名绑定、后台完整预览、步骤报告及错误定位、取消、实例任务归属、来源复核后显式应用与最近一次表格撤销；独立JSON流程文件另存不覆盖、后台读取后预览确认替换步骤，可用于新的输入表，不自动执行；文件限256KiB、严格版本/字段校验，保存失败保留步骤，不含原表或授权。实例快照仍不包含步骤。流程库搜索、完整中间结果查看、文件写步骤、图片/插件/MCP/Agent统一执行仍待实现",
+      "scope": "开发中：无已解析表格时可建立/编辑/读取流程、填写列名及保留列，解析后才可预览/应用，定义跨解析保留；1–32步列转换/选列、按列名绑定、后台完整预览、步骤报告及错误定位、取消、实例任务归属、来源复核后显式应用与最近一次表格撤销；未匹配保留列可编辑或移除，非法投影不改变预测列结构；独立JSON流程文件另存不覆盖、后台读取后预览确认替换步骤，可用于新的输入表，不自动执行；文件限256KiB、严格版本/字段校验，保存失败保留步骤，不含原表或授权。实例快照仍不包含步骤。流程库搜索、完整中间结果查看、文件写步骤、图片/插件/MCP/Agent统一执行仍待实现",
       "discovery": {
         "label": "操作流程",
         "summary": "把选列、清洗和类型转换按顺序连续预览，再应用结果。可保存流程文件，下次读取确认后重用；原始输入保留。开发中。",
@@ -933,7 +1413,15 @@
           "连续转换",
           "表格流程"
         ]
-      }
+      },
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "file-search",
@@ -941,7 +1429,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P3",
-      "scope": "限定目录、类型过滤、取消、隐私目录排除"
+      "scope": "限定目录、类型过滤、取消、隐私目录排除",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "pdf-text",
@@ -949,7 +1445,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P3",
-      "scope": "文本型 PDF 分页提取与检索；OCR 单独评估"
+      "scope": "文本型 PDF 分页提取与检索；OCR 单独评估",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "openapi",
@@ -957,7 +1461,15 @@
       "status": "planned",
       "category": "扩展工具",
       "priority": "P3",
-      "scope": "本地规范校验、生成请求草稿与敏感字段标记"
+      "scope": "本地规范校验、生成请求草稿与敏感字段标记",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "plugins",
@@ -975,7 +1487,15 @@
           "安装插件",
           "插件管理"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "integrations",
@@ -990,7 +1510,15 @@
         "category": "扩展与集成",
         "keywords": "Ollama Codex Docker Python Node 软件",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "model-profiles",
@@ -998,7 +1526,15 @@
       "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "已支持命名连接档案、工具级系统凭据、OpenAI/Ollama 模型发现与列表连接检查；通用提供商配置及生成能力验证待补"
+      "scope": "已支持命名连接档案、工具级系统凭据、OpenAI/Ollama 模型发现与列表连接检查；通用提供商配置及生成能力验证待补",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "model-chat",
@@ -1006,7 +1542,15 @@
       "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON 流式、客户端取消、成功会话 Markdown/JSON 导出、JSON 预览确认恢复、有界 UTF-8 文本附件及显式保存的本地命名会话库；真实模型兼容性、PDF/Word/图片与更完整会话管理待补"
+      "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON 流式、客户端取消、成功会话 Markdown/JSON 导出、JSON 预览确认恢复、有界 UTF-8 文本附件及显式保存的本地命名会话库；真实模型兼容性、PDF/Word/图片与更完整会话管理待补",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "model-compare",
@@ -1014,7 +1558,15 @@
       "status": "planned",
       "category": "AI 与模型",
       "priority": "P2",
-      "scope": "同一问题多模型运行、延迟/成本/输出并排比较，可导出评测记录"
+      "scope": "同一问题多模型运行、延迟/成本/输出并排比较，可导出评测记录",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "prompt-library",
@@ -1022,7 +1574,15 @@
       "status": "in-progress",
       "category": "AI 与模型",
       "priority": "P1",
-      "scope": "受支持文本插件已有本地命名模板、最多 20 个修订、标签搜索、变量填写与展开预览、相邻修订差异；正文可跨工具填入，同工具可明确应用模型/流式/多轮参数。真实模型端到端与完整交互验收待补"
+      "scope": "受支持文本插件已有本地命名模板、最多 20 个修订、标签搜索、变量填写与展开预览、相邻修订差异；正文可跨工具填入，同工具可明确应用模型/流式/多轮参数。真实模型端到端与完整交互验收待补",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "token-budget",
@@ -1030,7 +1590,15 @@
       "status": "planned",
       "category": "AI 与模型",
       "priority": "P2",
-      "scope": "按模型 tokenizer 统计与估算区分，显示截断位置和预算"
+      "scope": "按模型 tokenizer 统计与估算区分，显示截断位置和预算",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "structured-output",
@@ -1038,7 +1606,15 @@
       "status": "planned",
       "category": "AI 与模型",
       "priority": "P2",
-      "scope": "JSON Schema 校验、失败字段解释与可选修复，不静默改写"
+      "scope": "JSON Schema 校验、失败字段解释与可选修复，不静默改写",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "embedding-playground",
@@ -1053,7 +1629,15 @@
         "category": "AI 与模型",
         "keywords": "embedding ollama vector cosine euclidean 向量 相似度 距离 模型",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "model-benchmark",
@@ -1061,7 +1645,15 @@
       "status": "planned",
       "category": "AI 与模型",
       "priority": "P2",
-      "scope": "首 Token、吞吐、峰值内存和固定数据集重复测试"
+      "scope": "首 Token、吞吐、峰值内存和固定数据集重复测试",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "ollama-manager",
@@ -1069,7 +1661,15 @@
       "status": "planned",
       "category": "AI 与模型",
       "priority": "P2",
-      "scope": "模型下载进度/取消、删除确认、磁盘占用；不自动下载大文件"
+      "scope": "模型下载进度/取消、删除确认、磁盘占用；不自动下载大文件",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "mcp-connections",
@@ -1077,7 +1677,15 @@
       "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "本机 stdio 可显式保持同一进程、连续操作、手动断开和闲置超时；Stage 77新增 2025 Streamable HTTP 会话；失效会话重新初始化且不重放原操作通过夹具；官方 SDK 1.31.0 的 JSON/SSE 互操作通过；2026 协议、认证、心跳及第三方兼容性待完善"
+      "scope": "本机 stdio 可显式保持同一进程、连续操作、手动断开和闲置超时；Stage 77新增 2025 Streamable HTTP 会话；失效会话重新初始化且不重放原操作通过夹具；官方 SDK 1.31.0 的 JSON/SSE 互操作通过；2026 协议、认证、心跳及第三方兼容性待完善",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "mcp-inspector",
@@ -1095,7 +1703,15 @@
           "调试mcp",
           "mcp调试"
         ]
-      }
+      },
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "mcp-permissions",
@@ -1103,7 +1719,15 @@
       "status": "in-progress",
       "category": "MCP 与 Agent",
       "priority": "P1",
-      "scope": "本机 stdio 调试台短会话与持续连接按 EXE/参数及工具完整定义保存禁止或受限只读直接调用规则，默认逐次确认；本机 Agent 自动调用只接受已直接许可且完整声明低影响只读的工具，每次调用前复核身份、定义和权限。高影响工具仍需调试台逐次手动确认；跨客户端审计待实现"
+      "scope": "本机 stdio 调试台短会话与持续连接按 EXE/参数及工具完整定义保存禁止或受限只读直接调用规则，默认逐次确认；本机 Agent 自动调用只接受已直接许可且完整声明低影响只读的工具，每次调用前复核身份、定义和权限。高影响工具仍需调试台逐次手动确认；跨客户端审计待实现",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "screen-recorder",
@@ -1124,7 +1748,15 @@
           "luping",
           "lp"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "screen-recorder-multimonitor",
@@ -1139,7 +1771,15 @@
         "category": "文件与系统",
         "keywords": "monitor display multi screen 录屏 显示器 多屏 选屏",
         "aliases": []
-      }
+      },
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "screen-recorder-audio-mix",
@@ -1154,7 +1794,15 @@
         "category": "文件与系统",
         "keywords": "audio mix system microphone 声音 麦克风 录屏 混音",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "screen-recorder-audio-gain",
@@ -1169,7 +1817,15 @@
         "category": "文件与系统",
         "keywords": "audio gain volume system microphone 声音 音量 麦克风 录屏",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "screen-recorder-audio-meter",
@@ -1184,7 +1840,15 @@
         "category": "文件与系统",
         "keywords": "audio meter peak system microphone 声音 电平 静音 麦克风 录屏",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "screen-recorder-long-audio",
@@ -1192,7 +1856,15 @@
       "status": "in-progress",
       "category": "文件与系统",
       "priority": "P2",
-      "scope": "主屏 60 秒麦克风单路与双声源、120 秒双声源含 3 秒暂停的 MP4 音画轨同步已实测；受控音频及画面中断后短片段封装已验证；更长时间、不同声卡时钟和真实热拔插仍待验收"
+      "scope": "主屏 60 秒麦克风单路与双声源、120 秒双声源含 3 秒暂停的 MP4 音画轨同步已实测；受控音频及画面中断后短片段封装已验证；更长时间、不同声卡时钟和真实热拔插仍待验收",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "mcp-export",
@@ -1207,7 +1879,15 @@
         "category": "MCP 与 Agent",
         "keywords": "mcp client codex configuration toml json export 客户端 配置 接入",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "mcp-server",
@@ -1222,7 +1902,15 @@
         "category": "MCP 与 Agent",
         "keywords": "mcp server agent codex knowledge rag search 本机 知识库 检索",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "agent-runner",
@@ -1237,7 +1925,15 @@
         "category": "MCP 与 Agent",
         "keywords": "agent ollama mcp 只读 白名单 计划 批准",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "agent-codex",
@@ -1245,7 +1941,15 @@
       "status": "planned",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "检测版本与能力，使用独立工作目录、流式事件、取消和审批桥接；不复用私有会话库"
+      "scope": "检测版本与能力，使用独立工作目录、流式事件、取消和审批桥接；不复用私有会话库",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "agent-claude",
@@ -1253,7 +1957,15 @@
       "status": "planned",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "可选 CLI 适配、结构化事件和退出码；未安装时清晰提示"
+      "scope": "可选 CLI 适配、结构化事件和退出码；未安装时清晰提示",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "agent-replay",
@@ -1268,7 +1980,15 @@
         "category": "MCP 与 Agent",
         "keywords": "agent json 记录 导入 回放 查看 审计",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "workflow-builder",
@@ -1276,7 +1996,15 @@
       "status": "planned",
       "category": "MCP 与 Agent",
       "priority": "P2",
-      "scope": "串联本地工具/模型/MCP，类型校验、分支、重试与断点恢复"
+      "scope": "串联本地工具/模型/MCP，类型校验、分支、重试与断点恢复",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "agent-scheduler",
@@ -1284,7 +2012,15 @@
       "status": "planned",
       "category": "MCP 与 Agent",
       "priority": "P3",
-      "scope": "计划任务/目录变化触发、重入保护与权限复核，明确后台运行状态"
+      "scope": "计划任务/目录变化触发、重入保护与权限复核，明确后台运行状态",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "rag-sources",
@@ -1299,7 +2035,15 @@
         "category": "知识与检索",
         "keywords": "rag knowledge document source vault markdown pdf docx 知识 文档 来源 目录",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-ingestion",
@@ -1314,7 +2058,15 @@
         "category": "知识与检索",
         "keywords": "rag ingestion pdf docx markdown html txt chunk 解析 分块",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-index",
@@ -1329,7 +2081,15 @@
         "category": "知识与检索",
         "keywords": "rag index fts sqlite 全文 索引 增量 重建",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-vectors",
@@ -1344,7 +2104,15 @@
         "category": "知识与检索",
         "keywords": "rag vectors semantic embedding ollama 向量 索引 语义 检索",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-keyword-search",
@@ -1362,7 +2130,15 @@
           "搜索文档",
           "全文搜索"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-search",
@@ -1377,7 +2153,15 @@
         "category": "知识与检索",
         "keywords": "rag hybrid search rrf keyword semantic 混合 检索 融合 排名 来源",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-answer",
@@ -1395,7 +2179,15 @@
           "向文档提问",
           "知识库问答"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "rag-eval",
@@ -1410,7 +2202,15 @@
         "category": "知识与检索",
         "keywords": "rag eval evaluation recall citation benchmark 评测 召回 引用 回归",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "anythingllm",
@@ -1418,7 +2218,15 @@
       "status": "planned",
       "category": "知识与检索",
       "priority": "P2",
-      "scope": "通过官方 API 查询选定工作区，不直读其私有数据库，连接错误可诊断"
+      "scope": "通过官方 API 查询选定工作区，不直读其私有数据库，连接错误可诊断",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "obsidian-vault",
@@ -1426,7 +2234,15 @@
       "status": "planned",
       "category": "知识与检索",
       "priority": "P2",
-      "scope": "用户选择 vault 后只读检索、双链解析、显式写回预览与冲突处理"
+      "scope": "用户选择 vault 后只读检索、双链解析、显式写回预览与冲突处理",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "ocr-documents",
@@ -1434,7 +2250,15 @@
       "status": "planned",
       "category": "知识与检索",
       "priority": "P3",
-      "scope": "可选本地 OCR 引擎、语言包管理、页面坐标与可搜索文本导出"
+      "scope": "可选本地 OCR 引擎、语言包管理、页面坐标与可搜索文本导出",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "browser-clipper",
@@ -1452,7 +2276,15 @@
           "保存网页",
           "收集对话"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "plugin-updates",
@@ -1460,7 +2292,15 @@
       "status": "planned",
       "category": "插件平台",
       "priority": "P1",
-      "scope": "版本约束、更新差异、权限增量确认、失败回滚与可信来源校验"
+      "scope": "版本约束、更新差异、权限增量确认、失败回滚与可信来源校验",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "plugin-sdk",
@@ -1468,7 +2308,15 @@
       "status": "planned",
       "category": "插件平台",
       "priority": "P2",
-      "scope": "版本化 JSON-RPC 协议、进程树退出、超时取消、输出限额；隔离能力按系统验证"
+      "scope": "版本化 JSON-RPC 协议、进程树退出、超时取消、输出限额；隔离能力按系统验证",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "plugin-market",
@@ -1476,7 +2324,15 @@
       "status": "planned",
       "category": "插件平台",
       "priority": "P2",
-      "scope": "签名/摘要、来源、兼容性、更新说明；远程发现与执行授权分离"
+      "scope": "签名/摘要、来源、兼容性、更新说明；远程发现与执行授权分离",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "plugin-settings",
@@ -1484,7 +2340,15 @@
       "status": "in-progress",
       "category": "插件平台",
       "priority": "P1",
-      "scope": "已接入 Windows 凭据管理器、地址/模型设置及跨工具命名档案，支持模型列表连接检查；待补通用设置 schema"
+      "scope": "已接入 Windows 凭据管理器、地址/模型设置及跨工具命名档案，支持模型列表连接检查；待补通用设置 schema",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "plugin-health",
@@ -1492,7 +2356,15 @@
       "status": "planned",
       "category": "插件平台",
       "priority": "P2",
-      "scope": "依赖检测、崩溃记录、慢调用、禁用原因和可脱敏诊断包"
+      "scope": "依赖检测、崩溃记录、慢调用、禁用原因和可脱敏诊断包",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "global-launcher",
@@ -1507,7 +2379,20 @@
         "category": "文件与系统",
         "keywords": "快捷键 热键 launcher hotkey tray 托盘",
         "aliases": []
-      }
+      },
+      "tool_version": "1.1.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-05",
+          "changes": "系统前缀改为默认快捷指令面板，K 返回搜索；托盘仍直接打开搜索/收藏/最近。"
+        }
+      ]
     },
     {
       "id": "command-collections",
@@ -1515,7 +2400,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P2",
-      "scope": "按任务保存常用工具组合、固定顺序、导入导出与配置迁移"
+      "scope": "按任务保存常用工具组合、固定顺序、导入导出与配置迁移",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "clipboard-actions",
@@ -1523,7 +2416,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P3",
-      "scope": "用户触发后识别 JSON/URL/文件，预览转换动作；不后台采集剪贴板"
+      "scope": "用户触发后识别 JSON/URL/文件，预览转换动作；不后台采集剪贴板",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "docker-panel",
@@ -1531,7 +2432,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P2",
-      "scope": "容器与镜像只读概览、日志；启动停止清理需显式操作"
+      "scope": "容器与镜像只读概览、日志；启动停止清理需显式操作",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "git-workbench",
@@ -1539,7 +2448,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P2",
-      "scope": "状态/差异/分支查看，写入前预览，不自动提交私有文件"
+      "scope": "状态/差异/分支查看，写入前预览，不自动提交私有文件",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "parquet-workbench",
@@ -1547,7 +2464,15 @@
       "status": "planned",
       "category": "本地数据",
       "priority": "P2",
-      "scope": "schema、分页预览、过滤与 CSV/JSON 导出，控制内存上限"
+      "scope": "schema、分页预览、过滤与 CSV/JSON 导出，控制内存上限",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "java-trace",
@@ -1565,7 +2490,15 @@
           "java异常分析",
           "java报错"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-trace",
@@ -1583,7 +2516,15 @@
           "django报错",
           "python异常分析"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "java-thread-dump",
@@ -1598,7 +2539,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "java-dependencies",
@@ -1613,7 +2562,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "java-environment",
@@ -1628,7 +2585,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "java-gc-log",
@@ -1643,7 +2608,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "java-jfr",
@@ -1658,7 +2631,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "spring-config",
@@ -1673,7 +2654,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "spring-actuator",
@@ -1688,7 +2677,15 @@
         "category": "Java 与 JVM",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-environment",
@@ -1703,7 +2700,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-migrations",
@@ -1718,7 +2723,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-sql",
@@ -1733,7 +2746,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-urls",
@@ -1748,7 +2769,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-drf",
@@ -1763,7 +2792,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "django-checks",
@@ -1778,7 +2815,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "celery-diagnostics",
@@ -1793,7 +2838,15 @@
         "category": "Python 与 Django",
         "keywords": "",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "file-intake",
@@ -1808,7 +2861,15 @@
         "category": "文件与系统",
         "keywords": "导入 文件 CSV JSON 日志 drop import",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "task-center",
@@ -1823,7 +2884,15 @@
         "category": "文件与系统",
         "keywords": "task job progress cancel 后台 任务 进度 取消",
         "aliases": []
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "workspace-sessions",
@@ -1842,7 +2911,15 @@
           "保存数据草稿",
           "多份数据"
         ]
-      }
+      },
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "artifact-hub",
@@ -1850,7 +2927,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P1",
-      "scope": "文本/JSON/表格/图片/文件集合的版本化结果、来源引用及兼容下一步；大文件按引用或流处理；新建、追加与替换明确区分"
+      "scope": "文本/JSON/表格/图片/文件集合的版本化结果、来源引用及兼容下一步；大文件按引用或流处理；新建、追加与替换明确区分",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "task-runtime",
@@ -1858,7 +2943,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P1",
-      "scope": "跨工具 RunId、进度/取消/提交/部分完成与结果定位；页面关闭不影响任务管理，恢复与重试按操作能力验证；开发版先完成数据实例归属，尚未统一所有执行器"
+      "scope": "跨工具 RunId、进度/取消/提交/部分完成与结果定位；页面关闭不影响任务管理，恢复与重试按操作能力验证；开发版先完成数据实例归属，尚未统一所有执行器",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "operation-permissions",
@@ -1866,7 +2959,15 @@
       "status": "planned",
       "category": "效率与系统",
       "priority": "P1",
-      "scope": "用户可按本次/项目/配方授权文件及数据库操作；预览目标/差异/冲突，提交前复核版本，适用时备份/事务/回收站，外部程序隔离按实测说明"
+      "scope": "用户可按本次/项目/配方授权文件及数据库操作；预览目标/差异/冲突，提交前复核版本，适用时备份/事务/回收站，外部程序隔离按实测说明",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "memos",
@@ -1892,7 +2993,15 @@
           "备忘备份",
           "日程备份"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "calendar-planner",
@@ -1922,7 +3031,15 @@
           "日历文件",
           "周视图"
         ]
-      }
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
     },
     {
       "id": "planner-interop",
@@ -1930,7 +3047,15 @@
       "status": "planned",
       "category": "日常工具",
       "priority": "P2",
-      "scope": "农历生日重复、ICS 时区、COUNT 次数和例外扩展、系统通知与退出后的系统任务提醒；周视图、全天与结束时间、基础 ICS 文件交换、重复截止与 UNTIL 已归入现有日程入口"
+      "scope": "农历生日重复、ICS 时区、COUNT 次数和例外扩展、系统通知与退出后的系统任务提醒；周视图、全天与结束时间、基础 ICS 文件交换、重复截止与 UNTIL 已归入现有日程入口",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "memo-library",
@@ -1938,7 +3063,15 @@
       "status": "planned",
       "category": "日常工具",
       "priority": "P2",
-      "scope": "标签、多文件批量导入导出，以及主动将备忘送往知识库；单文件正文交换、完整备忘/日程 JSON 备份恢复、核心结果互传和回收站永久清理已归入备忘录入口"
+      "scope": "标签、多文件批量导入导出，以及主动将备忘送往知识库；单文件正文交换、完整备忘/日程 JSON 备份恢复、核心结果互传和回收站永久清理已归入备忘录入口",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     },
     {
       "id": "data-sqlite-export",
@@ -1957,7 +3090,210 @@
           "JSON转SQLite",
           "表格存数据库"
         ]
+      },
+      "tool_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-05",
+          "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        }
+      ]
+    },
+    {
+      "id": "recorder-tutorial",
+      "name": "教程录屏辅助",
+      "status": "planned",
+      "category": "文件与系统",
+      "priority": "P1",
+      "scope": "局部放大、鼠标跟随/固定焦点、平滑缩放；鼠标高亮与点击波纹、按键显示、画笔/箭头、聚光灯、提词器、章节标记；辅助控件可隐藏，明确哪些效果写入视频，验证混合 DPI、区域边界和音画同步",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "app-update-check",
+      "name": "程序更新检查",
+      "status": "planned",
+      "category": "效率与系统",
+      "priority": "P1",
+      "scope": "手动检查与可关闭的定期检查，稳定/预览频道分开；显示版本、大小、说明、最低系统要求与工具变更；离线不阻塞启动，不自动安装",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "app-delta-update",
+      "name": "增量更新与回滚",
+      "status": "planned",
+      "category": "效率与系统",
+      "priority": "P1",
+      "scope": "从指定源版本构建差分，校验源摘要、签名清单及目标摘要，暂存重建、退出后替换和回滚；失败自动切换完整包。EXE 便携版与 MSI 采用分别验证的升级路径，不混用安装所有权",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "advanced-calculator",
+      "name": "全能计算器",
+      "status": "in-progress",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "开发版已接入有界精确 i128 有理数表达式、优先级与右结合幂、科学函数及弧度/角度、进制与有符号 128 位位运算、长度/质量/时间/存储/温度转换、变量/ans 与 100 条内存历史、结果复制和表达式复用；矩阵、复数、方程、绘图、日期时间、持久历史与结果接力尚未实现",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        },
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "接入计算器工作台：精确表达式、科学函数、进制位运算、单位、变量与内存历史；边界验收进行中。"
+        }
+      ],
+      "discovery": {
+        "label": "全能计算器（开发中）",
+        "summary": "精确表达式、科学函数、单位与进制计算，变量和历史复用",
+        "category": "时间与生成",
+        "keywords": "calculator scientific decimal fraction unit programmer 计算器 计算 科学 单位 转换 精确 小数 分数",
+        "aliases": [
+          "计算器",
+          "算式",
+          "单位换算",
+          "科学计算",
+          "jisuanqi",
+          "jsq"
+        ]
       }
+    },
+    {
+      "id": "explorer-menu",
+      "name": "资源管理器统一右键入口",
+      "status": "planned",
+      "category": "效率与系统",
+      "priority": "P1",
+      "scope": "文件/文件夹/空白处统一 Zi DevTools 菜单，按文件类型与多选限制显示适用操作；工具先预览再执行。当前用户安装、更新、修复及卸载；支持 EXE 主动注册和 MSI 安装选项，核验路径转义、单实例转发及 Windows 11 新旧菜单兼容",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "clock-workbench",
+      "name": "全功能时钟",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "数字/模拟时钟、多时区会议对照、秒表/分段、并行计时器、闹钟/重复/稍后提醒、番茄钟、桌面置顶小窗；与日程共享提醒引擎，正确处理睡眠/恢复/夏令时；退出后提醒需明确选择常驻或系统任务",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "screenshot-workbench",
+      "name": "截图与透明套索",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "全屏/窗口/矩形/自由手绘闭合轮廓/多边形选区；桌面实景及放大镜，轮廓编辑、抗锯齿 alpha 掩膜透明 PNG，标注/打码/固定截图/复制/另存；跨屏混合 DPI、撤销与原图保留，长截图和 OCR 后续独立验收",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "unified-shortcuts",
+      "name": "统一前缀快捷键",
+      "status": "in-progress",
+      "category": "效率与系统",
+      "priority": "P1",
+      "scope": "开发版已接入共用稳定命令 ID，现有可配置系统前缀唤起默认键序列面板；C 计算器、J JSON、D 数据、N 备忘、A 日程、F 文件、G 图片、R O 录屏、R S/P/E 开始/暂停/结束，K 回到全工具搜索；序列只在聚焦面板处理，8 秒无操作超时、失焦/Esc 收起，旧录屏直接热键保留。逐工具自定义序列、导入导出、更多动作及物理跨应用验收待续",
+      "tool_version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        },
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "接入统一命令目录与默认前缀键序列，保留全工具搜索及紧急录屏直接键；自定义序列等继续开发。"
+        }
+      ],
+      "discovery": {
+        "label": "统一快捷指令（开发中）",
+        "summary": "前缀加键序列打开工具、控制录屏，K 搜索全部工具",
+        "category": "文件与系统",
+        "keywords": "shortcut prefix sequence command hotkey 快捷键 前缀 指令 命令",
+        "aliases": [
+          "统一快捷键",
+          "快捷指令",
+          "前缀快捷键"
+        ]
+      }
+    },
+    {
+      "id": "super-clipboard",
+      "name": "超级剪贴板",
+      "status": "planned",
+      "category": "工作台",
+      "priority": "P1",
+      "scope": "主动开启历史采集，文本/富文本/图片/文件引用，搜索/收藏/标签/分组、连续复制合并与多项粘贴、去格式/去重/模板变量、工具结果接力与来源链；按应用排除、暂停、保留期和一键清空，不宣称能可靠自动识别所有密码",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-workflows",
+      "name": "剪贴板数据工作流",
+      "status": "planned",
+      "category": "效率与系统",
+      "priority": "P2",
+      "scope": "把多次复制整理成表格/JSON/备忘/日程草稿，图片 OCR 与翻译需选择本机或远程模型；每步预览、类型转换/来源追踪/撤销、贴入目标前确认；大文件只保留引用并复核存在性，不后台自动上传",
+      "tool_version": "0.0.0",
+      "version_history": [
+        {
+          "version": "0.0.0",
+          "date": "2026-10-05",
+          "changes": "登记需求与验收范围，尚未实现。"
+        }
+      ]
     }
   ],
   "plugin_examples": [

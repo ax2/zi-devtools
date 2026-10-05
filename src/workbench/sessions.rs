@@ -164,6 +164,9 @@ impl Workspace {
     pub fn operation_pending(&self) -> bool {
         self.receiver.is_some()
     }
+    pub fn has_active_tasks(&self) -> bool {
+        self.operation_pending() || self.instances.iter().any(|instance| instance.state.busy())
+    }
     pub fn modal_open(&self) -> bool {
         self.save_confirm || self.close_confirm.is_some() || self.delete_confirm.is_some()
     }

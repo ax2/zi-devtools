@@ -597,10 +597,15 @@ impl DevToolsApp {
                             }
                         });
                     });
+                    let version = entry
+                        .version
+                        .as_deref()
+                        .map_or_else(|| "版本未声明".to_owned(), |version| format!("v{version}"));
+                    let description = format!("{version}  ·  {}", entry.description);
                     let detail = if query.trim().is_empty() {
-                        entry.description.clone()
+                        description.clone()
                     } else {
-                        format!("{}  ·  {}", entry.match_hint(query), entry.description)
+                        format!("{}  ·  {description}", entry.match_hint(query))
                     };
                     ui.allocate_ui_with_layout(
                         egui::vec2(
@@ -616,7 +621,7 @@ impl DevToolsApp {
                                 )
                                 .truncate(),
                             )
-                            .on_hover_text(&entry.description);
+                            .on_hover_text(&description);
                         },
                     );
                 });

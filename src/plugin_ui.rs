@@ -1631,6 +1631,7 @@ mod tests {
         crate::credentials::save(&cleanup.0, "synthetic-fixture-token").unwrap();
         let tool = plugins::PluginTool {
             id: "request".into(),
+            version: None,
             name: "Fixture".into(),
             description: String::new(),
             category: "AI 与模型".into(),

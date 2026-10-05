@@ -38,6 +38,9 @@ pub struct Manifest {
 #[serde(deny_unknown_fields)]
 pub struct PluginTool {
     pub id: String,
+    /// Independent tool revision; old manifests remain readable without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     pub name: String,
     pub description: String,
     pub category: String,
@@ -118,6 +121,10 @@ pub fn parse(bytes: &[u8]) -> Result<Manifest> {
     for t in &m.tools {
         ensure!(valid_id(&t.id) && ids.insert(&t.id), "工具 ID 无效或重复");
         ensure!(
+            t.version.as_deref().is_none_or(valid_tool_version),
+            "工具版本需为 major.minor.patch，不能有前导零"
+        );
+        ensure!(
             !t.name.trim().is_empty()
                 && t.name.len() <= 128
                 && t.description.len() <= 1024
@@ -169,6 +176,17 @@ pub fn parse(bytes: &[u8]) -> Result<Manifest> {
         }
     }
     Ok(m)
+}
+
+pub(crate) fn valid_tool_version(version: &str) -> bool {
+    let parts: Vec<_> = version.split('.').collect();
+    parts.len() == 3
+        && parts.iter().all(|part| {
+            !part.is_empty()
+                && (part.len() == 1 || !part.starts_with('0'))
+                && part.bytes().all(|c| c.is_ascii_digit())
+                && part.parse::<u32>().is_ok()
+        })
 }
 #[derive(Clone)]
 pub struct Installed {
@@ -620,6 +638,32 @@ mod tests {
         assert!(endpoint("http://127.0.0.1:11434/api/chat").is_ok());
         assert!(endpoint("https://api.example.com/v1/chat/completions").is_ok());
         assert!(parse(&vec![b' '; 256 * 1024 + 1]).is_err());
+    }
+
+    #[test]
+    fn independent_tool_versions_preserve_legacy_manifests_and_reject_invalid_metadata() {
+        let mut document: Value = serde_json::from_slice(DEMO).unwrap();
+        // Historical manifests must not acquire invented version information.
+        document["tools"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("version");
+        assert!(
+            parse(&serde_json::to_vec(&document).unwrap())
+                .unwrap()
+                .tools[0]
+                .version
+                .is_none()
+        );
+        for version in ["0.0.0", "0.1.0", "12.34.56"] {
+            document["tools"][0]["version"] = Value::String(version.into());
+            let manifest = parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+            assert_eq!(manifest.tools[0].version.as_deref(), Some(version));
+        }
+        for version in ["", "1.0", "01.2.3", "1.2.3\n", "1.2.-1", "4294967296.0.0"] {
+            document["tools"][0]["version"] = Value::String(version.into());
+            assert!(parse(&serde_json::to_vec(&document).unwrap()).is_err());
+        }
     }
     #[test]
     fn template_substitution_is_structural() {

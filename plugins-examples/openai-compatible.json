@@ -19,7 +19,8 @@
         "type": "http",
         "url": "http://127.0.0.1:1234/v1/models",
         "method": "GET"
-      }
+      },
+      "version": "0.1.0"
     },
     {
       "id": "chat",
@@ -48,7 +49,8 @@
           "stream": false
         },
         "response_pointer": "/choices/0/message/content"
-      }
+      },
+      "version": "0.1.0"
     }
   ]
 }

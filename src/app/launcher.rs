@@ -2,6 +2,7 @@ use super::*;
 
 impl DevToolsApp {
     pub(super) fn open_quick(&mut self, ctx: &egui::Context) {
+        self.prefix.active = false;
         self.quick_open = true;
         self.quick_active.store(true, Ordering::Release);
         self.quick_focus = true;
@@ -263,6 +264,24 @@ impl DevToolsApp {
                     });
                     ui.add_space(14.0);
                     self.quick_recorder_controls(ui);
+                    if self.prefix.active {
+                        if self.quick_focus {
+                            panel.send_viewport_cmd(egui::ViewportCommand::Focus);
+                            panel.memory_mut(|memory| {
+                                if let Some(id) = memory.focused() {
+                                    memory.surrender_focus(id);
+                                }
+                            });
+                            self.quick_focus = false;
+                        }
+                        chosen = self.prefix_ui(ui, panel);
+                        return;
+                    }
+                    if ui.small_button("前缀快捷指令 →").clicked() {
+                        self.prefix.open();
+                        self.quick_focus = true;
+                        return;
+                    }
                     let response = ui.add_sized(
                         [ui.available_width(), 38.0],
                         egui::TextEdit::singleline(&mut self.launcher_query)

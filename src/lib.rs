@@ -5,6 +5,8 @@ pub mod agent_record_library;
 pub mod agent_record_ui;
 pub mod agent_ui;
 pub mod app;
+pub mod calculator;
+pub mod commands;
 pub mod config;
 pub mod dev_tools;
 pub mod diagnostics;

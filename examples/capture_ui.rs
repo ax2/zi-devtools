@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 304] = [
+const NAMES: [&str; 316] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -314,6 +314,18 @@ const NAMES: [&str; 304] = [
     "workflow-import-light",
     "workflow-import-small-dark",
     "workflow-import-small-light",
+    "workflow-empty-dark",
+    "workflow-empty-light",
+    "workflow-empty-import-dark",
+    "workflow-empty-import-light",
+    "workflow-empty-small-dark",
+    "workflow-empty-small-light",
+    "calculator-dark",
+    "calculator-light",
+    "calculator-small-dark",
+    "calculator-small-light",
+    "commands-dark",
+    "commands-light",
 ];
 
 struct Capture {
@@ -332,14 +344,16 @@ struct Capture {
     auto_minimize_smoke_stop_requested: bool,
     quick_smoke_phase: u8,
     sqlite_input_frame: Option<usize>,
+    workflow_input_frame: Option<usize>,
 }
 impl Capture {
-    fn sqlite_click_waiting(&self) -> bool {
+    fn pointer_click_waiting(&self) -> bool {
         let seconds = match self.frames {
             20 => 1,
             40 => 3,
             60 => 5,
             90 => 8,
+            110 => 10,
             _ => 0,
         };
         self.started.elapsed() < Duration::from_secs(seconds)
@@ -348,6 +362,149 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("prefix-smoke") {
+            // This native fixture supplies controlled focus states; it does not
+            // prove Windows foreground acquisition or a physical global hotkey.
+            input.focused = self.frames != 65;
+            if let Some(viewport) = input.viewports.get_mut(&input.viewport_id) {
+                viewport.focused = Some(input.focused);
+            }
+            if self.frames == 82 {
+                input.events.push(egui::Event::Ime(egui::ImeEvent::Enabled));
+            }
+            if self.frames == 84 {
+                input
+                    .events
+                    .push(egui::Event::Ime(egui::ImeEvent::Disabled));
+            }
+            if self.frames == 20 {
+                println!(
+                    "prefix native focus: raw={}, viewport={:?}",
+                    input.focused,
+                    input
+                        .viewports
+                        .get(&input.viewport_id)
+                        .and_then(|v| v.focused)
+                );
+            }
+            let key = match self.frames {
+                20 => Some(egui::Key::R),
+                30 => Some(egui::Key::O),
+                50 => Some(egui::Key::C),
+                65 | 82 => Some(egui::Key::C),
+                70 => Some(egui::Key::Z),
+                86 => Some(egui::Key::Escape),
+                90 => Some(egui::Key::K),
+                _ => None,
+            };
+            if let Some(key) = key {
+                input.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            let released = match self.frames {
+                21 => Some(egui::Key::R),
+                31 => Some(egui::Key::O),
+                51 => Some(egui::Key::C),
+                66 | 83 => Some(egui::Key::C),
+                71 => Some(egui::Key::Z),
+                87 => Some(egui::Key::Escape),
+                91 => Some(egui::Key::K),
+                _ => None,
+            };
+            if let Some(key) = released {
+                input.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("calculator-smoke") {
+            let released = match self.frames {
+                31 | 71 => Some(egui::Key::A),
+                51 | 91 => Some(egui::Key::Enter),
+                _ => None,
+            };
+            if let Some(key) = released {
+                input.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if matches!(self.frames, 20 | 21) {
+                let pos = self.app.preview_calculator_position();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames == 20,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if matches!(self.frames, 30 | 70) {
+                let modifiers = egui::Modifiers {
+                    ctrl: true,
+                    command: true,
+                    ..Default::default()
+                };
+                input.modifiers = modifiers;
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+            if matches!(self.frames, 40 | 80) {
+                input.events.push(egui::Event::Text(
+                    if self.frames == 40 { "0.1+0.2" } else { "1/0" }.into(),
+                ));
+            }
+            if matches!(self.frames, 50 | 90) {
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::Enter,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        if matches!(
+            std::env::args().nth(3).as_deref(),
+            Some("workflow-smoke" | "workflow-light-smoke" | "workflow-small-smoke")
+        ) {
+            let click = match self.frames {
+                20 | 21 => Some((0, self.frames == 20)),
+                40 | 41 => Some((1, self.frames == 40)),
+                60 | 61 => Some((2, self.frames == 60)),
+                90 | 91 => Some((3, self.frames == 90)),
+                110 | 111 => Some((4, self.frames == 110)),
+                _ => None,
+            };
+            if let Some((index, pressed)) = click.filter(|_| !self.pointer_click_waiting()) {
+                self.workflow_input_frame = Some(self.frames);
+                let pos = self.app.preview_workflow_position(index);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("sqlite-export-smoke") {
             let click = match self.frames {
                 20 => Some((1, true)),
@@ -360,7 +517,7 @@ impl eframe::App for Capture {
                 91 => Some((3, false)),
                 _ => None,
             };
-            if let Some((index, pressed)) = click.filter(|_| !self.sqlite_click_waiting()) {
+            if let Some((index, pressed)) = click.filter(|_| !self.pointer_click_waiting()) {
                 self.sqlite_input_frame = Some(self.frames);
                 let pos = self.app.preview_sqlite_position(index);
                 input.events.push(egui::Event::PointerMoved(pos));
@@ -893,6 +1050,112 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("prefix-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 314, self.fixture.clone());
+                self.app.preview_prefix_check(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                25 => self.app.preview_prefix_check(1),
+                40 => self.app.preview_prefix_check(2),
+                60 => self.app.preview_prefix_check(3),
+                66 => self.app.preview_prefix_check(6),
+                68 => self.app.preview_prefix_check(0),
+                80 => self.app.preview_prefix_check(4),
+                83 => self.app.preview_prefix_check(7),
+                84 | 88 => self.app.preview_prefix_check(0),
+                87 => self.app.preview_prefix_check(7),
+                100 => {
+                    self.app.preview_prefix_check(5);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("calculator-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 310, self.fixture.clone());
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 640.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 60 {
+                self.app.preview_calculator_check(0);
+            }
+            if self.frames == 100 {
+                self.app.preview_calculator_check(1);
+                println!(
+                    "PASS calculator native input: exact decimal Enter commit; zero division preserves ans/history"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("workflow-smoke" | "workflow-light-smoke" | "workflow-small-smoke")
+        ) {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(35),
+                "workflow interaction timed out"
+            );
+            if self.frames == 0 {
+                let scene = if smoke_mode.as_deref() == Some("workflow-light-smoke") {
+                    301
+                } else {
+                    300
+                };
+                self.app.preview_scene(ctx, scene, self.fixture.clone());
+                self.app.preview_workflow_check(0);
+                if smoke_mode.as_deref() == Some("workflow-small-smoke") {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                        980.0, 640.0,
+                    )));
+                }
+            }
+            self.app.update(ctx, frame);
+            if matches!(self.frames, 20 | 40 | 60 | 90 | 110)
+                && self.workflow_input_frame != Some(self.frames)
+            {
+                ctx.request_repaint_after(Duration::from_millis(60));
+                return;
+            }
+            match self.frames {
+                30 => {
+                    self.app.preview_workflow_check(1);
+                }
+                50 => {
+                    self.app.preview_workflow_check(2);
+                }
+                80 => {
+                    if !self.app.preview_workflow_check(3) {
+                        ctx.request_repaint_after(Duration::from_millis(60));
+                        return;
+                    }
+                }
+                100 => {
+                    self.app.preview_workflow_check(4);
+                }
+                120 => {
+                    self.app.preview_workflow_check(5);
+                    println!(
+                        "PASS native synthetic pointer cancel/confirm without input, background parse/preview, explicit apply and undo; original input retained"
+                    );
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("sqlite-export-smoke") {
             assert!(self.started.elapsed() < Duration::from_secs(35));
             if self.frames == 0 {
@@ -1943,7 +2206,9 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (302..=303).contains(&self.scene) {
+            let size = if (308..=309).contains(&self.scene) || (312..=313).contains(&self.scene) {
+                egui::vec2(980.0, 640.0)
+            } else if (302..=303).contains(&self.scene) {
                 egui::vec2(760.0, 640.0)
             } else if (282..=283).contains(&self.scene) {
                 egui::vec2(1440.0, 980.0)
@@ -2157,6 +2422,7 @@ fn main() -> Result<(), eframe::Error> {
                 auto_minimize_smoke_stop_requested: false,
                 quick_smoke_phase: 0,
                 sqlite_input_frame: None,
+                workflow_input_frame: None,
             }))
         }),
     )
