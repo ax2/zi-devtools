@@ -54,8 +54,7 @@ fn ordinary(path: &Path) -> Result<()> {
     }
     Ok(())
 }
-pub fn read(path: &Path, patch: bool, cancel: &AtomicBool) -> Result<Vec<u8>> {
-    check(cancel)?;
+pub(super) fn open_regular(path: &Path, limit: usize) -> Result<fs::File> {
     leaf(path)?;
     // Resolve directory aliases (the workspace itself may be a junction), but
     // never accept a linked input file. Operate on the pinned resolved path.
@@ -74,16 +73,21 @@ pub fn read(path: &Path, patch: bool, cancel: &AtomicBool) -> Result<Vec<u8>> {
     }
     let path = path.canonicalize()?;
     ordinary(&path)?;
+    let file = fs::File::open(&path).context("无法读取所选文件")?;
+    ensure!(
+        file.metadata()?.is_file() && file.metadata()?.len() <= limit as u64,
+        "文件类型或大小超出限制"
+    );
+    Ok(file)
+}
+pub fn read(path: &Path, patch: bool, cancel: &AtomicBool) -> Result<Vec<u8>> {
+    check(cancel)?;
     let limit = if patch {
         MAX_FILE + 2 * 1024 * 1024
     } else {
         MAX_FILE
     };
-    let mut file = fs::File::open(&path).context("无法读取所选文件")?;
-    ensure!(
-        file.metadata()?.is_file() && file.metadata()?.len() <= limit as u64,
-        "文件类型或大小超出限制"
-    );
+    let mut file = open_regular(path, limit)?;
     let mut bytes = Vec::new();
     let mut buffer = [0; 65536];
     loop {

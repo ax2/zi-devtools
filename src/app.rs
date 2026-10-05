@@ -685,6 +685,11 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            362..=365 => {
+                self.page = Page::Updates;
+                self.preferences.updates = Default::default();
+                self.updates.preview_verification(scene >= 364);
+            }
             358..=361 => {
                 self.page = Page::DeltaUpdate;
                 self.delta_update.preview_fixture(scene >= 360);

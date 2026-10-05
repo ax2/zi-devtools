@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 362] = [
+const NAMES: [&str; 366] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -372,6 +372,10 @@ const NAMES: [&str; 362] = [
     "delta-package-light",
     "delta-rebuild-dark",
     "delta-rebuild-light",
+    "update-integrity-dark",
+    "update-integrity-light",
+    "update-integrity-failure-dark",
+    "update-integrity-failure-light",
 ];
 
 struct Capture {

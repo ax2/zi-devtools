@@ -2,6 +2,7 @@
 pub mod delta;
 pub mod delta_files;
 pub mod delta_ui;
+pub mod verification;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -189,6 +190,7 @@ pub struct State {
     channel: Channel,
     started: Instant,
     pub message: String,
+    verification: verification::State,
 }
 impl Default for State {
     fn default() -> Self {
@@ -198,6 +200,7 @@ impl Default for State {
             channel: Channel::Stable,
             started: Instant::now(),
             message: String::new(),
+            verification: Default::default(),
         }
     }
 }
@@ -226,6 +229,7 @@ impl State {
         }
     }
     pub fn poll(&mut self) {
+        self.verification.poll();
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
                 Ok(result) => {
@@ -333,6 +337,7 @@ impl State {
                 }
             }
         }
+        self.verification.ui(ui);
         let changed = next.channel != policy.channel || next.automatic != policy.automatic;
         if next.channel != policy.channel {
             next.last_attempt = None;
@@ -341,6 +346,11 @@ impl State {
     }
     pub fn clear_result(&mut self) {
         self.result = None;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_verification(&mut self, failure: bool) {
+        self.result = None;
+        self.verification.preview_fixture(failure);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, offline: bool) {
