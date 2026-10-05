@@ -642,6 +642,10 @@ impl DevToolsApp {
                 self.page = Page::Calculator;
                 self.calculator.preview_fixture();
             }
+            316..=319 => {
+                self.page = Page::Commands;
+                self.preview_binding_fixture();
+            }
             314..=315 => {
                 self.page = Page::Commands;
             }

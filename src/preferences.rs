@@ -6,9 +6,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub command_bindings: crate::commands::Bindings,
     pub light: bool,
     pub hotkey: crate::hotkey::Setting,
     pub favorites: Vec<String>,
@@ -21,6 +22,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            command_bindings: Default::default(),
             light: false,
             hotkey: Default::default(),
             favorites: Vec::new(),
@@ -38,6 +40,18 @@ pub fn path() -> PathBuf {
         .join(".zi-devtools/ui-preferences.json")
 }
 impl Preferences {
+    /// Save before activating, preserving the live state on failure.
+    pub fn save_command_bindings(
+        &mut self,
+        path: &Path,
+        bindings: crate::commands::Bindings,
+    ) -> Result<()> {
+        let mut next = self.clone();
+        next.command_bindings = bindings;
+        next.save(path)?;
+        *self = next;
+        Ok(())
+    }
     pub fn visit(&mut self, id: &str) {
         self.recent.retain(|s| s != id);
         self.recent.insert(0, id.into());
@@ -109,6 +123,27 @@ impl Preferences {
 mod tests {
     use super::*;
     #[test]
+    fn binding_save_is_transactional_and_preserves_other_preferences() {
+        let dir = std::env::temp_dir().join(format!("zi-bindings-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let mut prefs = Preferences::default();
+        prefs.visit("json");
+        let mut bindings = crate::commands::Bindings::new();
+        bindings.insert("open:json".into(), "Q J".into());
+        bindings.insert("open:disabled-plugin".into(), String::new());
+        assert!(prefs.save_command_bindings(&dir, bindings.clone()).is_err());
+        assert!(prefs.command_bindings.is_empty());
+        assert_eq!(prefs.recent, ["json"]);
+        let path = dir.join("preferences.json");
+        prefs
+            .save_command_bindings(&path, bindings.clone())
+            .unwrap();
+        assert_eq!(Preferences::load(&path).command_bindings, bindings);
+        assert_eq!(Preferences::load(&path).recent, ["json"]);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
     fn saves_replace_existing_preferences_and_load_deduplicates() {
         let dir = std::env::temp_dir().join(format!("zi-preferences-{}", uuid::Uuid::new_v4()));
         let path = dir.join("preferences.json");
@@ -143,6 +178,7 @@ mod tests {
     fn old_preferences_migrate_and_usage_stays_bounded() {
         let mut p: Preferences =
             serde_json::from_str(r#"{"light":true,"favorites":["json"]}"#).unwrap();
+        assert!(p.command_bindings.is_empty());
         assert!(p.recent.is_empty());
         assert!(p.recorder_auto_minimize);
         assert_eq!(p.recorder_auto_stop_minutes, 0);

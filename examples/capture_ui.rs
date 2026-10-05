@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 316] = [
+const NAMES: [&str; 320] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -326,6 +326,10 @@ const NAMES: [&str; 316] = [
     "calculator-small-light",
     "commands-dark",
     "commands-light",
+    "binding-editor-dark",
+    "binding-editor-light",
+    "binding-editor-small-dark",
+    "binding-editor-small-light",
 ];
 
 struct Capture {
@@ -362,6 +366,73 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("bindings-smoke") {
+            input.focused = true;
+            if let Some(v) = input.viewports.get_mut(&input.viewport_id) {
+                v.focused = Some(true);
+            }
+            let click = match self.frames {
+                20 | 21 => Some(0),
+                30 | 31 => Some(1),
+                60 | 61 | 90 | 91 => Some(2),
+                70 | 71 | 130 | 131 => Some(3),
+                100 | 101 => Some(4),
+                110 | 111 => Some(5),
+                _ => None,
+            };
+            if let Some(index) = click {
+                let pos = self.app.preview_binding_position(index);
+                assert!(pos.is_finite());
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 10 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            let key = match self.frames {
+                80 | 81 => Some(egui::Key::Q),
+                85 | 86 => Some(egui::Key::A),
+                _ => None,
+            };
+            if let Some(key) = key {
+                input.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: matches!(self.frames, 80 | 85),
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 40 {
+                let modifiers = egui::Modifiers {
+                    ctrl: true,
+                    command: true,
+                    ..Default::default()
+                };
+                input.modifiers = modifiers;
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+            if self.frames == 41 {
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 50 {
+                input.events.push(egui::Event::Text("Q A".into()));
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("prefix-smoke") {
             // This native fixture supplies controlled focus states; it does not
             // prove Windows foreground acquisition or a physical global hotkey.
@@ -1050,6 +1121,30 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("bindings-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 314, self.fixture.clone());
+                self.app.preview_binding_check(0);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                25 => self.app.preview_binding_check(1),
+                65 => self.app.preview_binding_check(2),
+                75 => self.app.preview_binding_check(3),
+                87 => self.app.preview_binding_check(8),
+                95 => self.app.preview_binding_check(4),
+                105 => self.app.preview_binding_check(5),
+                115 => self.app.preview_binding_check(6),
+                135 => {
+                    self.app.preview_binding_check(7);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("prefix-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 314, self.fixture.clone());
@@ -2206,7 +2301,10 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (308..=309).contains(&self.scene) || (312..=313).contains(&self.scene) {
+            let size = if (308..=309).contains(&self.scene)
+                || (312..=313).contains(&self.scene)
+                || (318..=319).contains(&self.scene)
+            {
                 egui::vec2(980.0, 640.0)
             } else if (302..=303).contains(&self.scene) {
                 egui::vec2(760.0, 640.0)
