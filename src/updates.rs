@@ -16,6 +16,15 @@ const REPOSITORY: &str = "https://github.com/ax2/zi-devtools";
 const MAX_RESPONSE: u64 = 2 * 1024 * 1024;
 const INTERVAL: i64 = 24 * 60 * 60;
 
+pub(super) fn size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1048576 {
+        format!("{:.2} KiB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.2} MiB", bytes as f64 / 1048576.0)
+    }
+}
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Channel {
     #[default]
@@ -325,11 +334,7 @@ impl State {
                     }
                     for asset in &report.assets {
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(format!(
-                                "{} · {:.2} MiB",
-                                asset.name,
-                                asset.size as f64 / 1_048_576.0
-                            ));
+                            ui.label(format!("{} · {}", asset.name, size(asset.size)));
                             if asset.name != "SHA256SUMS.txt"
                                 && ui
                                     .add_enabled(

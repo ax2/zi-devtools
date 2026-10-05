@@ -314,18 +314,20 @@ impl State {
         ui.label(egui::RichText::new("下载与保存").strong());
         if let Some(job) = &self.pending {
             let done = job.progress.load(Ordering::Relaxed);
-            ui.add(
-                egui::ProgressBar::new(if job.total == 0 {
-                    0.0
-                } else {
-                    done as f32 / job.total as f32
-                })
-                .text(format!(
-                    "{:.2} / {:.2} MiB",
-                    done as f64 / 1048576.0,
-                    job.total as f64 / 1048576.0
-                )),
-            );
+            if job.total == 0 {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("正在保存新文件…");
+                });
+            } else {
+                ui.add(
+                    egui::ProgressBar::new(done as f32 / job.total as f32).text(format!(
+                        "{} / {}",
+                        super::size(done),
+                        super::size(job.total)
+                    )),
+                );
+            }
             if ui.button("取消后台任务").clicked() {
                 job.cancel.store(true, Ordering::Relaxed);
             }
@@ -344,10 +346,10 @@ impl State {
         }
         if let Some(preview) = &self.preview {
             ui.label(format!(
-                "{} · {} · {:.2} MiB",
+                "{} · {} · {}",
                 preview.version,
                 preview.name,
-                preview.bytes.len() as f64 / 1048576.0
+                super::size(preview.bytes.len() as u64)
             ));
             ui.horizontal_wrapped(|ui| {
                 ui.monospace(&preview.sha256);

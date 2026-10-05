@@ -1,3 +1,4 @@
+use super::size;
 use super::{
     delta::{self, Header, Kind},
     delta_files,
@@ -390,15 +391,6 @@ impl State {
         });
         self.unsaved = false;
         self.message = "合成界面示例；未读取或保存上方示例路径。".into();
-    }
-}
-fn size(bytes: u64) -> String {
-    if bytes < 1024 {
-        format!("{bytes} B")
-    } else if bytes < 1048576 {
-        format!("{:.2} KiB", bytes as f64 / 1024.0)
-    } else {
-        format!("{:.2} MiB", bytes as f64 / 1048576.0)
     }
 }
 fn path_row(ui: &mut egui::Ui, label: &str, value: &mut String) {

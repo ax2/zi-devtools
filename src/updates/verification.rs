@@ -253,10 +253,10 @@ impl State {
                 Ok(verified) => {
                     ui.label(egui::RichText::new("SHA-256校验通过").strong());
                     ui.label(format!(
-                        "{} · {} · {:.2} MiB",
+                        "{} · {} · {}",
                         verified.version,
                         verified.name,
-                        verified.size as f64 / 1_048_576.0
+                        super::size(verified.size)
                     ));
                     ui.horizontal_wrapped(|ui| {
                         ui.monospace(&verified.sha256);
