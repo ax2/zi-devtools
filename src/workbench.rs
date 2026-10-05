@@ -4,6 +4,7 @@ pub mod sessions;
 mod sqlite_export;
 mod transform;
 pub mod workflow;
+mod workflow_files;
 mod workflow_ui;
 
 use anyhow::{Context, Result, anyhow, bail};

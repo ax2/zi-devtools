@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 300] = [
+const NAMES: [&str; 304] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -310,6 +310,10 @@ const NAMES: [&str; 300] = [
     "planner-discovery-light",
     "workflow-preview-dark",
     "workflow-preview-light",
+    "workflow-import-dark",
+    "workflow-import-light",
+    "workflow-import-small-dark",
+    "workflow-import-small-light",
 ];
 
 struct Capture {
@@ -1939,7 +1943,9 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (282..=283).contains(&self.scene) {
+            let size = if (302..=303).contains(&self.scene) {
+                egui::vec2(760.0, 640.0)
+            } else if (282..=283).contains(&self.scene) {
                 egui::vec2(1440.0, 980.0)
             } else if (284..=285).contains(&self.scene)
                 || (244..=245).contains(&self.scene)

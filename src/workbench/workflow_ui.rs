@@ -7,6 +7,7 @@ pub(super) struct State {
     receiver: Option<Receiver<std::result::Result<Preview, String>>>,
     cancel: Arc<AtomicBool>,
     pub(super) job: Job,
+    pub(super) files: workflow_files::State,
     error: String,
     reveal: bool,
     scroll_until: Option<std::time::Instant>,
@@ -24,6 +25,7 @@ impl Default for State {
             receiver: None,
             cancel: Arc::new(AtomicBool::new(false)),
             job: Job::default(),
+            files: workflow_files::State::default(),
             error: String::new(),
             reveal: false,
             scroll_until: None,
@@ -82,6 +84,17 @@ impl DataState {
         self.show_workflow();
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_import(&mut self) {
+        self.preview_workflow();
+        let mut imported = self.workflow.definition.clone();
+        imported.name = "每日资料整理".into();
+        imported.steps.push(Step::SelectColumns {
+            columns: vec!["编号".into(), "名称".into(), "数量".into()],
+        });
+        self.workflow.files.review = Some(imported);
+    }
+
     fn start_workflow(&mut self) -> Result<()> {
         ensure_not_busy(self)?;
         let input = self.dataset.as_ref().context("请先解析表格")?;
@@ -106,6 +119,7 @@ impl DataState {
     }
 
     pub(super) fn poll_workflow(&mut self) {
+        self.workflow.files.poll();
         let reply = self
             .workflow
             .receiver
@@ -171,7 +185,10 @@ impl DataState {
         };
         let headers = data.headers.clone();
         let schemas = step_schemas(&headers, &self.workflow.definition.steps);
-        let active = self.workflow.job.phase.active();
+        let running = self.workflow.job.phase.active();
+        let active = running
+            || self.workflow.files.job.phase.active()
+            || self.workflow.files.review.is_some();
         let mut changed = false;
         let mut start = false;
         let mut apply = false;
@@ -190,7 +207,7 @@ impl DataState {
             .show(ui, |ui| {
                 ui.label("按顺序处理上次解析的全部行，包含筛选隐藏的行；先预览，再主动应用。");
                 ui.small(
-                    "开发中：步骤仅本次运行保留，不包含在工作实例保存中。文件导出仍需另行确认。",
+                    "可另存流程文件供下次使用；只含步骤与参数，不含原表或授权。实例快照不含流程。",
                 );
                 ui.add_enabled_ui(!active, |ui| {
                     changed |= ui
@@ -364,21 +381,22 @@ impl DataState {
                     self.workflow.invalidate();
                     self.workflow.error.clear();
                 }
+                self.workflow_file_buttons(ui);
                 ui.separator();
                 ui.horizontal_wrapped(|ui| {
                     start = ui
                         .add_enabled(
-                            !self.busy() && !self.workflow.definition.steps.is_empty(),
+                            !active && !self.busy() && !self.workflow.definition.steps.is_empty(),
                             primary(ui, "预览全部步骤"),
                         )
                         .clicked();
                     if ui
-                        .add_enabled(active, egui::Button::new("取消预览"))
+                        .add_enabled(running, egui::Button::new("取消预览"))
                         .clicked()
                     {
                         self.workflow.cancel();
                     }
-                    if active {
+                    if running {
                         ui.spinner();
                         ui.label(self.workflow.job.phase.label());
                         ui.ctx()
@@ -386,10 +404,19 @@ impl DataState {
                     }
                     apply = ui
                         .add_enabled(
-                            !self.busy() && self.workflow.proposal.is_some(),
+                            !active && !self.busy() && self.workflow.proposal.is_some(),
                             primary(ui, "应用流程结果"),
                         )
                         .clicked();
+                    if ui
+                        .add_enabled(
+                            !active && !self.busy() && self.can_undo_transform(),
+                            egui::Button::new("撤销最近一次表格修改"),
+                        )
+                        .clicked()
+                    {
+                        self.undo_transform();
+                    }
                 });
                 if !self.workflow.error.is_empty() {
                     ui.colored_label(ui.visuals().error_fg_color, &self.workflow.error);
@@ -419,6 +446,7 @@ impl DataState {
                 }
             });
         self.workflow.reveal = false;
+        self.workflow_import_modal(ui);
         if scroll {
             if let Some(body) = response.body_response {
                 ui.scroll_to_rect(body.rect, Some(egui::Align::Max));
@@ -432,6 +460,130 @@ impl DataState {
         if apply && let Err(error) = self.apply_workflow() {
             self.workflow.error = format!("{error:#}");
         }
+    }
+}
+
+impl DataState {
+    fn workflow_file_buttons(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            let allowed = !self.busy() && self.workflow.files.review.is_none();
+            if ui
+                .add_enabled(
+                    allowed && !self.workflow.definition.steps.is_empty(),
+                    egui::Button::new("保存流程…"),
+                )
+                .clicked()
+            {
+                match self.workflow.definition.validate() {
+                    Err(error) => self.workflow.error = format!("{error:#}"),
+                    Ok(()) => {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_title("另存新的流程文件")
+                            .add_filter("流程 JSON", &["json"])
+                            .set_file_name("表格流程.json")
+                            .save_file()
+                            && let Err(error) = self
+                                .workflow
+                                .files
+                                .save(self.workflow.definition.clone(), path)
+                        {
+                            self.workflow.error = format!("{error:#}");
+                        }
+                    }
+                }
+            }
+            if ui
+                .add_enabled(allowed, egui::Button::new("使用已有流程…"))
+                .clicked()
+                && let Some(path) = rfd::FileDialog::new()
+                    .set_title("选择流程文件，预览后确认")
+                    .add_filter("流程 JSON", &["json"])
+                    .pick_file()
+                && let Err(error) = self.workflow.files.read(path)
+            {
+                self.workflow.error = format!("{error:#}");
+            }
+            if self.workflow.files.job.phase.active() {
+                ui.spinner();
+                ui.label("流程文件处理中…");
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(30));
+            }
+        });
+        if !self.workflow.files.message.is_empty() {
+            ui.label(&self.workflow.files.message);
+        }
+    }
+    fn workflow_import_modal(&mut self, ui: &mut egui::Ui) {
+        let Some(imported) = self.workflow.files.review.clone() else {
+            return;
+        };
+        let mut confirm = false;
+        let mut cancel = false;
+        let response = egui::Modal::new(ui.id().with("workflow-import")).show(ui.ctx(), |ui| {
+            ui.set_max_width((ui.ctx().screen_rect().width() - 48.0).clamp(180.0, 620.0));
+            ui.heading("确认使用流程");
+            ui.label(format!(
+                "{} · {}步，将替换当前{}步",
+                imported.name,
+                imported.steps.len(),
+                self.workflow.definition.steps.len()
+            ));
+            ui.label("仅替换步骤；当前表格与原始输入保留，不自动预览、运行、保存或授权。");
+            egui::ScrollArea::vertical()
+                .max_height(300.0)
+                .show(ui, |ui| {
+                    for (index, step) in imported.steps.iter().enumerate() {
+                        ui.separator();
+                        ui.strong(format!("第{}步", index + 1));
+                        match step {
+                            Step::Column {
+                                column,
+                                operation,
+                                value,
+                            } => {
+                                ui.label(format!("{} · {}", column, label(*operation)));
+                                if matches!(
+                                    operation,
+                                    ColumnOperation::Rename | ColumnOperation::FillNull
+                                ) {
+                                    ui.label(format!("参数：{value}"));
+                                }
+                            }
+                            Step::SelectColumns { columns } => {
+                                ui.label(format!("保留列：{}", columns.join("、")));
+                            }
+                        }
+                    }
+                });
+            ui.horizontal_wrapped(|ui| {
+                cancel = ui.button("取消，保留当前步骤").clicked();
+                confirm = ui
+                    .add_enabled(!self.busy(), egui::Button::new("确认替换流程步骤"))
+                    .clicked();
+            });
+        });
+        if confirm {
+            if let Err(error) = self.confirm_workflow_import() {
+                self.workflow.error = format!("{error:#}");
+            }
+        } else if cancel || response.should_close() {
+            self.workflow.files.review = None;
+        }
+    }
+    fn confirm_workflow_import(&mut self) -> Result<()> {
+        anyhow::ensure!(!self.busy(), "请等待当前实例任务结束再替换流程");
+        if let Some(definition) = &self.workflow.files.review {
+            definition.validate()?;
+        }
+        if let Some(definition) = self.workflow.files.review.take() {
+            self.workflow.invalidate();
+            self.workflow.definition = definition;
+            self.workflow.error.clear();
+            self.workflow.files.message = "流程步骤已载入；尚未预览或应用".into();
+            self.workflow.reveal = true;
+        }
+        Ok(())
     }
 }
 
@@ -470,6 +622,10 @@ fn step_schemas(headers: &[String], steps: &[Step]) -> Vec<Vec<String>> {
 
 fn ensure_not_busy(state: &DataState) -> Result<()> {
     anyhow::ensure!(!state.busy(), "请等待当前实例任务结束");
+    anyhow::ensure!(
+        state.workflow.files.review.is_none(),
+        "请先确认或取消已读取的流程"
+    );
     Ok(())
 }
 fn label(operation: ColumnOperation) -> &'static str {
@@ -511,6 +667,109 @@ mod tests {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
         }
+    }
+    fn wait_files(state: &mut DataState) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.workflow.files.job.phase.active() {
+            state.poll_workflow();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+    #[test]
+    fn saved_flow_requires_import_confirmation_and_never_applies_to_source() {
+        let mut state = fixture();
+        let original = state.dataset.clone();
+        let input = state.input.clone();
+        let current = state.workflow.definition.clone();
+        let mut imported = current.clone();
+        imported.name = "重新使用的流程".into();
+        imported.steps = vec![Step::Column {
+            column: "编号".into(),
+            operation: ColumnOperation::Rename,
+            value: "id".into(),
+        }];
+        let path = std::env::temp_dir().join(format!("zi-flow-ui-{}.json", uuid::Uuid::new_v4()));
+        state
+            .workflow
+            .files
+            .save(imported.clone(), path.clone())
+            .unwrap();
+        assert!(state.busy());
+        assert!(state.snapshot().is_err());
+        wait_files(&mut state);
+        assert_eq!(state.workflow.files.job.phase, Phase::Done);
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        state.workflow.files.read(path.clone()).unwrap();
+        wait_files(&mut state);
+        assert_eq!(state.workflow.definition, current);
+        assert_eq!(state.workflow.files.review, Some(imported.clone()));
+        assert!(state.workflow.proposal.is_some());
+        assert!(state.start_workflow().is_err());
+        assert!(state.apply_workflow().is_err());
+        assert!(state.workflow.files.read(path.clone()).is_err());
+        assert!(
+            state
+                .workflow
+                .files
+                .save(current.clone(), path.clone())
+                .is_err()
+        );
+        // Cancelling the review retains both current steps and their completed preview.
+        state.workflow.files.review = None;
+        assert_eq!(state.workflow.definition, current);
+        assert!(state.workflow.proposal.is_some());
+        state.workflow.files.read(path.clone()).unwrap();
+        wait_files(&mut state);
+        state.parse_job.begin();
+        assert!(state.confirm_workflow_import().is_err());
+        assert_eq!(state.workflow.files.review, Some(imported.clone()));
+        state.parse_job.finish(Phase::Done, "test");
+        state.confirm_workflow_import().unwrap();
+        assert_eq!(state.workflow.definition, imported);
+        assert!(state.workflow.files.review.is_none());
+        assert!(state.workflow.proposal.is_none());
+        assert!(state.workflow.receiver.is_none());
+        assert_eq!(state.dataset, original);
+        assert_eq!(state.input, input);
+        assert!(state.apply_workflow().is_err());
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        assert_eq!(state.dataset, original);
+        state.apply_workflow().unwrap();
+        assert_eq!(state.dataset.as_ref().unwrap().headers[0], "id");
+        state.undo_transform();
+        assert_eq!(state.dataset, original);
+        assert_eq!(state.input, input);
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn failed_flow_file_operations_preserve_current_steps_and_data() {
+        let mut state = fixture();
+        let original = state.dataset.clone();
+        let current = state.workflow.definition.clone();
+        let path =
+            std::env::temp_dir().join(format!("zi-flow-bad-ui-{}.json", uuid::Uuid::new_v4()));
+        std::fs::write(&path, "invalid definition").unwrap();
+        state.workflow.files.read(path.clone()).unwrap();
+        wait_files(&mut state);
+        assert_eq!(state.workflow.files.job.phase, Phase::Failed);
+        assert!(state.workflow.files.review.is_none());
+        state
+            .workflow
+            .files
+            .save(current.clone(), path.clone())
+            .unwrap();
+        wait_files(&mut state);
+        assert_eq!(state.workflow.files.job.phase, Phase::Failed);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "invalid definition"
+        );
+        assert_eq!(state.workflow.definition, current);
+        assert_eq!(state.dataset, original);
+        std::fs::remove_file(path).unwrap();
     }
     #[test]
     fn preview_apply_undo_preserve_input_and_require_explicit_application() {

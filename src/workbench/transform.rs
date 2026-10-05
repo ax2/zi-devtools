@@ -329,6 +329,10 @@ impl DataState {
             self.refresh_transformed_view();
         }
     }
+    pub(super) fn can_undo_transform(&self) -> bool {
+        self.transform.undo.is_some()
+    }
+
     pub(super) fn undo_transform(&mut self) {
         if let Some(previous) = self.transform.undo.take() {
             self.join.invalidate();

@@ -45,6 +45,7 @@ impl DataState {
             || self.join.job.phase.active()
             || self.sqlite_export.job.phase.active()
             || self.workflow.job.phase.active()
+            || self.workflow.files.job.phase.active()
     }
     pub fn has_content(&self) -> bool {
         !self.input.is_empty()
@@ -253,6 +254,11 @@ impl Workspace {
                         .workflow
                         .job
                         .snapshot("pipeline", "操作流程预览", true),
+                    instance.state.workflow.files.job.snapshot(
+                        "workflow-file",
+                        "流程文件保存/读取",
+                        false,
+                    ),
                 ]
                 .into_iter()
                 .flatten()

@@ -13,7 +13,7 @@ impl DevToolsApp {
         let key = if key == "sqlite-export" {
             self.data_state.show_sqlite_export();
             "data"
-        } else if key == "pipeline" {
+        } else if matches!(key, "pipeline" | "workflow-file") {
             self.data_state.show_workflow();
             "data"
         } else {
