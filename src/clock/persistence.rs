@@ -723,7 +723,7 @@ impl Storage {
             ui.colored_label(ui.visuals().warn_fg_color, &self.error);
         }
         egui::CollapsingHeader::new("保存设置 / 读取与恢复预览").default_open(false).open(self.pending.is_some().then_some(true)).show(ui,|ui| {
-            ui.small("主动开启后保存到下列文件：操作后自动保存，运行计时每30秒检查点。故障退出最多丢失最近30秒；完全退出后不弹提醒。");
+            ui.small("主动开启后保存到下列文件：操作后自动保存，运行计时每30秒检查点。故障退出可能丢失上次成功保存后的进度；完全退出后不弹提醒。");
             ui.label(self.path.display().to_string());
             let mut policy=self.policy;
             ui.horizontal_wrapped(|ui| {ui.label("重启倒计时：");ui.selectable_value(&mut policy,Policy::Pause,"按剩余时间暂停恢复");ui.selectable_value(&mut policy,Policy::Continue,"按原到期时间继续（含退出期间）");});
