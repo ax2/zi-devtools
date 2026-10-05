@@ -685,6 +685,11 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            366..=369 => {
+                self.page = Page::Updates;
+                self.preferences.updates = Default::default();
+                self.updates.preview_download(scene >= 368);
+            }
             362..=365 => {
                 self.page = Page::Updates;
                 self.preferences.updates = Default::default();
@@ -4153,6 +4158,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.has_work()
                 || self.clock.saving()
                 || self.delta_update.has_work()
+                || self.updates.download_has_work()
                 || self.images.screenshot_has_work()
             {
                 self.workspace_exit_confirm = true;
@@ -4182,6 +4188,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.has_work()
                 || self.clock.saving()
                 || self.delta_update.has_work()
+                || self.updates.download_has_work()
                 || self.images.screenshot_has_work())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -4195,17 +4202,19 @@ impl eframe::App for DevToolsApp {
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
                 ui.horizontal_wrapped(|ui| {
+                    if self.updates.download_has_work() && ui.button("返回更新下载").clicked() { self.workspace_exit_confirm=false;self.page=Page::Updates; }
                     if self.delta_update.has_work() && ui.button("返回更新包工作台").clicked() {self.workspace_exit_confirm=false;self.page=Page::DeltaUpdate;}
                     if self.images.screenshot_has_work() && ui.button("返回截图保存").clicked() {self.workspace_exit_confirm=false;self.page=Page::Images;self.images.show_screenshot();}
                     if (self.clock.has_work() || self.clock.saving()) && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
                 if self.data_state.has_active_tasks() || self.planner.saving() { ui.label("正在处理任务，请等待完成，或从后台任务取消可取消的操作后退出。"); }
+                if self.updates.download_has_work() { ui.label("下载内容尚未保存或后台任务进行中；请返回保存、丢弃预览，或取消后台任务后退出。"); }
                 if self.delta_update.has_work() { ui.label("更新包或重建结果未保存会丢失；后台任务请等待完成或返回取消后退出。"); }
                 if self.images.screenshot_has_work() { ui.label("截图结果未保存会在退出后丢失；截图后台任务进行中需等待完成。"); }
             });

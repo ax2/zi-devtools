@@ -2,6 +2,7 @@
 pub mod delta;
 pub mod delta_files;
 pub mod delta_ui;
+pub mod download;
 pub mod verification;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
@@ -191,6 +192,7 @@ pub struct State {
     started: Instant,
     pub message: String,
     verification: verification::State,
+    download: download::State,
 }
 impl Default for State {
     fn default() -> Self {
@@ -201,6 +203,7 @@ impl Default for State {
             started: Instant::now(),
             message: String::new(),
             verification: Default::default(),
+            download: Default::default(),
         }
     }
 }
@@ -230,6 +233,7 @@ impl State {
     }
     pub fn poll(&mut self) {
         self.verification.poll();
+        self.download.poll();
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
                 Ok(result) => {
@@ -320,11 +324,23 @@ impl State {
                         );
                     }
                     for asset in &report.assets {
-                        ui.label(format!(
-                            "{} · {:.2} MiB",
-                            asset.name,
-                            asset.size as f64 / 1_048_576.0
-                        ));
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(format!(
+                                "{} · {:.2} MiB",
+                                asset.name,
+                                asset.size as f64 / 1_048_576.0
+                            ));
+                            if asset.name != "SHA256SUMS.txt"
+                                && ui
+                                    .add_enabled(
+                                        !self.download.has_work(),
+                                        egui::Button::new("下载并校验"),
+                                    )
+                                    .clicked()
+                            {
+                                self.download.start(report.clone(), asset.clone(), ui.ctx());
+                            }
+                        });
                     }
                     ui.add_space(8.0);
                     ui.label("发布说明");
@@ -337,7 +353,10 @@ impl State {
                 }
             }
         }
-        self.verification.ui(ui);
+        self.download.ui(ui);
+        egui::CollapsingHeader::new("已有下载文件？离线校验")
+            .default_open(!self.download.has_preview())
+            .show(ui, |ui| self.verification.ui(ui));
         let changed = next.channel != policy.channel || next.automatic != policy.automatic;
         if next.channel != policy.channel {
             next.last_attempt = None;
@@ -346,6 +365,17 @@ impl State {
     }
     pub fn clear_result(&mut self) {
         self.result = None;
+    }
+    pub fn download_has_work(&self) -> bool {
+        self.download.has_work()
+    }
+    pub fn download_busy(&self) -> bool {
+        self.download.busy()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_download(&mut self, failure: bool) {
+        self.result = None;
+        self.download.preview_fixture(failure);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_verification(&mut self, failure: bool) {
@@ -490,6 +520,27 @@ mod tests {
             "public release {} with {} recognized assets",
             report.version,
             report.assets.len()
+        );
+    }
+    #[test]
+    #[ignore = "explicit anonymous public asset download, no save or execution"]
+    fn published_asset_download_passes_integrity() {
+        use std::sync::atomic::{AtomicBool, AtomicU64};
+        let report = fetch(Channel::Stable).unwrap().expect("stable release");
+        let asset = report
+            .assets
+            .iter()
+            .find(|a| a.name.starts_with("ZiDevTools-") && a.name.ends_with(".exe"))
+            .unwrap();
+        let result =
+            download::download(&report, asset, &AtomicBool::new(false), &AtomicU64::new(0))
+                .unwrap();
+        assert_eq!(result.bytes.len() as u64, asset.size);
+        println!(
+            "public asset {} {} bytes SHA256 {}; not saved or executed",
+            result.name,
+            result.bytes.len(),
+            result.sha256
         );
     }
 }

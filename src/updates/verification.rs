@@ -25,7 +25,10 @@ fn names(version: &semver::Version) -> [String; 3] {
     ]
 }
 
-fn checksums(bytes: &[u8], version: &semver::Version) -> Result<BTreeMap<String, String>> {
+pub(super) fn checksums(
+    bytes: &[u8],
+    version: &semver::Version,
+) -> Result<BTreeMap<String, String>> {
     ensure!(version.to_string().len() <= 128, "版本字段超过限制");
     ensure!(bytes.len() <= MAX_SUMS, "摘要清单超过8 KiB限制");
     let text = std::str::from_utf8(bytes)
