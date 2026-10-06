@@ -131,7 +131,7 @@ impl Transfer {
                 self.numeric_rendered = Some(key);
             }
             Err(error) => {
-                self.preview=format!("无法生成此格式：{error}");
+                self.preview = format!("无法生成此格式：{error}");
                 self.text.clear();
                 self.error = error;
                 self.numeric_rendered = Some(key);
