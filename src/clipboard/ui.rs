@@ -655,7 +655,7 @@ impl State {
                                 ui.small("旧记录 · 年份未知");
                             }
                             if let Some(image)=&entry.image {
-                                ui.small(format!("图片 · {}×{} · PNG {:.1}KiB",image.width,image.height,image.png.len() as f64/1048576.0));
+                                ui.small(format!("图片 · {}×{} · PNG {:.1}KiB",image.width,image.height,image.png.len() as f64/1024.0));
                                 if ui.button("查看图片").clicked(){open_image=Some(entry.id);}
                             }
                             if entry.image.is_none() && ui.button("复制").clicked() {
