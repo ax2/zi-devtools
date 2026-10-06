@@ -14,6 +14,7 @@ impl Target {
             Self::Before | Self::After => "diff",
             Self::Memo => "memos",
             Self::Event => "calendar-planner",
+            Self::Calculator => "advanced-calculator",
         };
         catalog()
             .iter()
@@ -77,6 +78,12 @@ pub(super) fn search(query: &str, category: &str) -> Vec<Target> {
 /// Inspect only a bounded snapshot once, not the UI loop. Never run target actions.
 pub(super) fn recommendations(text: &str) -> Vec<Recommendation> {
     let mut suggestions = Vec::new();
+    if NumericTable::read_json(text).is_ok() {
+        suggestions.push(Recommendation {
+            target: Target::Calculator,
+            reason: "完整规范数值类型表格，可确认接收为矩阵A，不执行计算",
+        });
+    }
     if text.len() <= 128 * 1024 {
         if let Ok(value) =
             serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}'))

@@ -276,6 +276,16 @@ impl DataState {
         assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 2);
         self.sqlite_export.preview_check(phase)
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_numeric_export(&self) -> String {
+        let dataset = self
+            .dataset
+            .as_ref()
+            .expect("actual background numeric parsing finished");
+        dataset
+            .export(&self.visible, DataFormat::Json, b',')
+            .unwrap()
+    }
     pub fn import_text(&mut self, text: String, format: DataFormat, tsv: bool) -> Result<()> {
         if self.receiver.is_some() {
             bail!("数据工作台正在解析，请稍后重试");

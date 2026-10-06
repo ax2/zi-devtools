@@ -1,4 +1,5 @@
 //! Bounded expression evaluation; no scripts, file access or network operations.
+pub mod exchange;
 mod matrix;
 mod matrix_ui;
 mod parser;

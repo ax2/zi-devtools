@@ -147,15 +147,15 @@ impl Document {
         data.validate()?;
         Ok(Self {
             format: "zi-devtools-calculator".into(),
-            schema: 1,
-            tool_version: "0.3.0".into(),
+            schema: 2,
+            tool_version: "0.4.0".into(),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.format == "zi-devtools-calculator" && self.schema == 1,
+            self.format == "zi-devtools-calculator" && matches!(self.schema, 1 | 2),
             "不支持的计算工作表格式或版本"
         );
         ensure!(
@@ -219,6 +219,21 @@ mod tests {
         }
     }
     #[test]
+    fn legacy_worksheet_without_typed_cells_remains_readable() {
+        let data = super::super::State::default().snapshot();
+        let mut doc = serde_json::to_value(Document::new(data).unwrap()).unwrap();
+        doc["schema"] = 1.into();
+        doc["tool_version"] = "0.3.0".into();
+        for input in ["a", "b"] {
+            doc["data"]["matrix"][input]
+                .as_object_mut()
+                .unwrap()
+                .remove("typed");
+        }
+        let doc: Document = serde_json::from_value(doc).unwrap();
+        doc.validate().unwrap();
+    }
+    #[test]
     fn exact_values_and_unsolved_drafts_roundtrip_without_execution_or_overwrite() {
         let root = std::env::temp_dir().join(format!("zi-worksheet-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&root).unwrap();
@@ -246,7 +261,7 @@ mod tests {
             assert!(serde_json::from_str::<Value>(text).is_err(), "{text}");
         }
         let mut doc = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
-        doc["schema"] = 2.into();
+        doc["schema"] = 3.into();
         assert!(
             serde_json::from_value::<Document>(doc.clone())
                 .unwrap()

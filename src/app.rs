@@ -688,6 +688,7 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            410..=417 => self.preview_numeric_scene(scene >= 414),
             406..=409 => {
                 self.page = Page::Calculator;
                 self.calculator.preview_sheet_fixture();

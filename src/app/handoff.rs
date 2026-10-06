@@ -1,5 +1,8 @@
 use super::*;
 mod discovery;
+#[cfg(feature = "ui-preview")]
+mod numeric_preview;
+use crate::calculator::exchange::{NumericTable, Representation};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Target {
@@ -11,6 +14,7 @@ enum Target {
     After,
     Memo,
     Event,
+    Calculator,
 }
 impl Target {
     fn label(self) -> &'static str {
@@ -23,6 +27,7 @@ impl Target {
             Self::After => "文本对比 · 右侧新文",
             Self::Memo => "备忘录 · 新建草稿",
             Self::Event => "万年历 / 日程 · 新建草稿",
+            Self::Calculator => "计算器 · 类型表格填入矩阵A",
         }
     }
     fn all() -> Vec<Self> {
@@ -38,12 +43,16 @@ impl Target {
                 Self::After,
                 Self::Memo,
                 Self::Event,
+                Self::Calculator,
             ])
             .collect()
     }
 }
 
 pub(super) struct Transfer {
+    numeric: Option<NumericTable>,
+    representation: Representation,
+    numeric_rendered: Option<(Representation, Target)>,
     source: String,
     text: String,
     preview: String,
@@ -58,6 +67,8 @@ pub(super) struct Transfer {
     #[cfg(feature = "ui-preview")]
     preview_rects: [Option<egui::Rect>; 2],
     #[cfg(feature = "ui-preview")]
+    numeric_mode_rects: [Option<egui::Rect>; 3],
+    #[cfg(feature = "ui-preview")]
     preview_recommendation_rect: Option<egui::Rect>,
 }
 impl Transfer {
@@ -68,6 +79,9 @@ impl Transfer {
             "结果超过 2 MiB，请先缩小范围"
         );
         Ok(Self {
+            numeric: None,
+            representation: Representation::Typed,
+            numeric_rendered: None,
             source,
             text: text.into(),
             preview: text.chars().take(1200).collect(),
@@ -82,8 +96,52 @@ impl Transfer {
             #[cfg(feature = "ui-preview")]
             preview_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
+            numeric_mode_rects: [None; 3],
+            #[cfg(feature = "ui-preview")]
             preview_recommendation_rect: None,
         })
+    }
+    fn numeric(source: String, table: NumericTable) -> anyhow::Result<Self> {
+        let text = table
+            .json(Representation::Typed)
+            .map_err(anyhow::Error::msg)?;
+        let mut transfer = Self::new(source, &text)?;
+        transfer.numeric = Some(table);
+        transfer.target = Target::JsonData;
+        Ok(transfer)
+    }
+    fn refresh_numeric(&mut self) {
+        let Some(table) = &self.numeric else {
+            return;
+        };
+        let key = (self.representation, self.target);
+        if self.numeric_rendered == Some(key) {
+            return;
+        }
+        let result = match self.target {
+            Target::Csv => table.delimited(self.representation, b','),
+            Target::Tsv => table.delimited(self.representation, b'\t'),
+            _ => table.json(self.representation),
+        };
+        match result {
+            Ok(text) => {
+                self.text = text;
+                self.preview = self.text.chars().take(1200).collect();
+                self.error.clear();
+                self.numeric_rendered = Some(key);
+            }
+            Err(error) => {
+                self.preview=format!("无法生成此格式：{error}");
+                self.text.clear();
+                self.error = error;
+                self.numeric_rendered = Some(key);
+            }
+        }
+    }
+    fn compatible(&self) -> bool {
+        !(self.numeric.is_some()
+            && self.representation == Representation::Typed
+            && matches!(self.target, Target::Csv | Target::Tsv))
     }
     fn matching_targets(&mut self) -> Vec<Target> {
         let key = (registry::normalized(&self.query), self.category.clone());
@@ -91,7 +149,15 @@ impl Transfer {
             self.matches = discovery::search(&key.0, &key.1);
             self.matches_key = Some(key);
         }
-        self.matches.clone()
+        self.matches
+            .iter()
+            .copied()
+            .filter(|target| {
+                !(self.numeric.is_some()
+                    && self.representation == Representation::Typed
+                    && matches!(target, Target::Csv | Target::Tsv))
+            })
+            .collect()
     }
     fn apply(
         &self,
@@ -100,7 +166,9 @@ impl Transfer {
         diff: &mut DiffState,
     ) -> anyhow::Result<(Page, Option<ToolKind>)> {
         match self.target {
-            Target::Memo | Target::Event => anyhow::bail!("备忘 / 日程草稿需通过资料入口接收"),
+            Target::Memo | Target::Event | Target::Calculator => {
+                anyhow::bail!("备忘 / 日程草稿需通过资料入口接收")
+            }
             Target::Tool(kind) => {
                 tools.select(kind);
                 tools.input.clone_from(&self.text);
@@ -172,6 +240,41 @@ impl DevToolsApp {
         }
     }
     pub(super) fn handoff_bar(&mut self, ctx: &egui::Context) {
+        if self.page == Page::Calculator {
+            let result = self.calculator.numeric_description();
+            let mut send = false;
+            egui::TopBottomPanel::top("result-handoff").show(ctx, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let response = ui.add_enabled(
+                        result.is_ok() && self.handoff.is_none(),
+                        egui::Button::new("发送数值到工具…"),
+                    );
+                    send = response.clicked();
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.calculator.preview_numeric_send = Some(response.rect);
+                    }
+                    match &result {
+                        Ok(table) => {
+                            ui.small(format!("{table} · 发送时捕获快照，不固定赋值"));
+                        }
+                        Err(error) => {
+                            ui.small(error);
+                        }
+                    }
+                });
+            });
+            if send {
+                match Transfer::numeric(
+                    "计算器结果快照 · v0.4.0".into(),
+                    self.calculator.numeric_result().unwrap(),
+                ) {
+                    Ok(t) => self.handoff = Some(t),
+                    Err(e) => self.toast = Some((e.to_string(), Instant::now())),
+                }
+            }
+            return;
+        }
         let Some((source, text)) = self.handoff_source() else {
             return;
         };
@@ -212,6 +315,15 @@ impl DevToolsApp {
         egui::Modal::new(egui::Id::new("handoff-modal")).show(ctx, |ui| {
             ui.set_width(480.0_f32.min(ctx.screen_rect().width() - 64.0));
             ui.heading("发送结果到工具");
+            if let Some(table)=&transfer.numeric {
+                ui.label(format!("数值快照：{}",table.description()));
+                ui.horizontal_wrapped(|ui| {for (index,mode) in Representation::ALL.into_iter().enumerate() {let response=ui.selectable_value(&mut transfer.representation,mode,mode.label());
+                    #[cfg(feature="ui-preview")] {transfer.numeric_mode_rects[index]=Some(response.rect);}
+                    #[cfg(not(feature="ui-preview"))] {let _=(index,response);}
+                }});
+                ui.small(match transfer.representation {Representation::Typed=>"规范分子/分母字符串与完整f64类型。只有这种JSON表格可以无损送回矩阵。",Representation::Text=>"保留完整数值文本（近似值带≈），JSON/CSV/TSV不再保留数值类型；回传矩阵需保留类型。",Representation::Approximate=>"明确转换为近似f64：大整数、分数可能损失精度；JSON/CSV/TSV无法恢复原精确值。"});
+            }
+            transfer.refresh_numeric();
             ui.label(format!("来源：{} · {} 字节", transfer.source, transfer.text.len()));
             ui.small("预览最多 1200 字符；发送完整快照。此内容仅保留在本次内存中。");
             egui::ScrollArea::vertical().id_salt("handoff-preview").max_height(100.0).show(ui, |ui| {
@@ -254,7 +366,12 @@ impl DevToolsApp {
                 if targets.is_empty() { ui.label("没有匹配的目标，请调整关键词或分类。已选目标仍显示在下方。"); }
             });
             ui.separator();
+            transfer.refresh_numeric();
             ui.label(format!("目标：{}", transfer.target.label()));
+            if transfer.target==Target::Calculator {
+                match NumericTable::read_json(&transfer.text) {Ok(table)=>{ui.label(format!("将替换矩阵A：{}",table.description()));},Err(e)=>{ui.colored_label(self.colors.red,e);}}
+                ui.small("仅接受c1..cN规范数值类型JSON；请先保存或放弃计算器已有工作。保留B、算式和变量，不自动计算；接收后标记未保存。");
+            }
             let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
             if transfer.target == Target::Event {
                 ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date()));
@@ -264,7 +381,7 @@ impl DevToolsApp {
             if !transfer.error.is_empty() { ui.colored_label(self.colors.red, &transfer.error); }
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
-                let response = ui.button(if transfer.target == Target::Event {"创建日程草稿"} else if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"});
+                let response = ui.add_enabled(transfer.compatible(),egui::Button::new(if transfer.target == Target::Event {"创建日程草稿"} else if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}));
                 apply = response.clicked();
                 #[cfg(feature = "ui-preview")]
                 { transfer.preview_rects[1] = Some(response.rect); }
@@ -281,7 +398,16 @@ impl DevToolsApp {
     }
     fn apply_handoff(&mut self) {
         if let Some(transfer) = self.handoff.as_ref() {
-            let result = if transfer.target == Target::Event {
+            if !transfer.compatible() {
+                self.handoff.as_mut().unwrap().error = "类型保留需选择JSON目标".into();
+                return;
+            }
+            let result = if transfer.target == Target::Calculator {
+                self.calculator
+                    .receive_numeric(&transfer.text)
+                    .map(|_| (Page::Calculator, None))
+                    .map_err(anyhow::Error::msg)
+            } else if transfer.target == Target::Event {
                 self.planner
                     .receive_event_text(&transfer.source, &transfer.text)
                     .map(|_| (Page::Calendar, None))

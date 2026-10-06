@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 410] = [
+const NAMES: [&str; 418] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -420,6 +420,14 @@ const NAMES: [&str; 410] = [
     "calculator-sheet-light",
     "calculator-sheet-small-dark",
     "calculator-sheet-small-light",
+    "numeric-handoff-dark",
+    "numeric-handoff-light",
+    "numeric-handoff-small-dark",
+    "numeric-handoff-small-light",
+    "numeric-received-dark",
+    "numeric-received-light",
+    "numeric-received-small-dark",
+    "numeric-received-small-light",
 ];
 
 struct Capture {
@@ -688,6 +696,26 @@ impl eframe::App for Capture {
                     physical_key: None,
                     pressed: false,
                     repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("numeric-smoke") {
+            let index = match self.frames {
+                20 | 21 => Some(4),
+                43 | 44 => Some(1),
+                53 | 54 => Some(2),
+                63 | 64 => Some(0),
+                73 | 74 | 120 | 121 => Some(3),
+                _ => None,
+            };
+            if let Some(index) = index {
+                let pos = self.app.preview_numeric_position(index);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(self.frames, 20 | 43 | 53 | 63 | 73 | 120),
                     modifiers: egui::Modifiers::NONE,
                 });
             }
@@ -1821,6 +1849,32 @@ impl eframe::App for Capture {
                 87 => self.app.preview_prefix_check(7),
                 100 => {
                     self.app.preview_prefix_check(5);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("numeric-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 410, self.fixture.clone());
+                self.app.preview_numeric_smoke(0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 900.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                50 => self.app.preview_numeric_smoke(1),
+                60 => self.app.preview_numeric_smoke(2),
+                70 => self.app.preview_numeric_smoke(3),
+                90 => self.app.preview_numeric_smoke(4),
+                150 => {
+                    self.app.preview_numeric_smoke(5);
+                    println!(
+                        "PASS numeric native handoff: source send, text/approximate/typed selection, new data instance and actual background parse, JSON export typed roundtrip, dirty calculator rejection, native matrix receive without execution, exact i128/fraction and f64 subnormal/negative-zero preserved; synthetic only"
+                    );
                     std::process::exit(0);
                 }
                 _ => {}
@@ -3038,10 +3092,13 @@ impl eframe::App for Capture {
                 || (153..=154).contains(&self.scene)
                 || (400..=403).contains(&self.scene)
                 || (406..=407).contains(&self.scene)
+                || matches!(self.scene, 410 | 411 | 414 | 415)
                 || (280..=281).contains(&self.scene)
                 || (276..=277).contains(&self.scene)
             {
                 egui::vec2(1280.0, 1180.0)
+            } else if matches!(self.scene, 412 | 413 | 416 | 417) {
+                egui::vec2(980.0, 760.0)
             } else if (134..=135).contains(&self.scene) {
                 egui::vec2(1280.0, 1080.0)
             } else if self.scene == 3

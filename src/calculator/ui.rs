@@ -14,6 +14,8 @@ pub struct State {
     pub(super) files: super::worksheet_ui::Files,
     #[cfg(feature = "ui-preview")]
     pub(super) input_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_numeric_send: Option<egui::Rect>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -29,13 +31,15 @@ impl Default for State {
             files: Default::default(),
             #[cfg(feature = "ui-preview")]
             input_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_numeric_send: None,
         };
         state.files.baseline = Some(state.snapshot());
         state
     }
 }
 impl State {
-    fn preview(&self) -> Result<(Option<String>, Value), String> {
+    pub(super) fn preview(&self) -> Result<(Option<String>, Value), String> {
         let angle = if self.degrees {
             Angle::Degrees
         } else {

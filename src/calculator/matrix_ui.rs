@@ -12,6 +12,11 @@ struct Input {
     cols: usize,
     cells: Vec<String>,
     paste: String,
+    #[serde(default = "empty_typed")]
+    typed: Vec<Option<Value>>,
+}
+fn empty_typed() -> Vec<Option<Value>> {
+    vec![None; 64]
 }
 impl Default for Input {
     fn default() -> Self {
@@ -20,6 +25,7 @@ impl Default for Input {
             cols: 3,
             cells: vec!["0".into(); 64],
             paste: String::new(),
+            typed: empty_typed(),
         }
     }
 }
@@ -70,7 +76,9 @@ impl Input {
                     return Err(format!("{name}({}, {}) 超过512字节", r + 1, c + 1));
                 }
                 cells.push(
-                    evaluate(text, variables, angle)
+                    self.typed[r * 8 + c]
+                        .map(Ok)
+                        .unwrap_or_else(|| evaluate(text, variables, angle))
                         .map_err(|e| format!("{name}({}, {}): {e}", r + 1, c + 1))?,
                 );
             }
@@ -84,14 +92,17 @@ impl Input {
     }
     fn ui(&mut self, ui: &mut egui::Ui, name: &str) -> bool {
         let mut changed = false;
+        if self.typed.iter().any(Option::is_some) {
+            ui.small("已接收数值类型字面量；修改单格转回表达式，清零/单位阵/TSV会清除原类型。≈表示保留的近似值。");
+        }
         egui::Frame::group(ui.style()).show(ui,|ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.strong(format!("矩阵 {name}"));
                 ui.label("行"); changed |= ui.add(egui::DragValue::new(&mut self.rows).range(1..=8)).changed();
                 ui.label("列"); changed |= ui.add(egui::DragValue::new(&mut self.cols).range(1..=8)).changed();
-                if ui.small_button("清零").clicked() { self.cells.fill("0".into()); changed=true; }
+                if ui.small_button("清零").clicked() { self.cells.fill("0".into()); self.typed.fill(None); changed=true; }
                 if ui.add_enabled(self.rows==self.cols,egui::Button::new("单位阵")).clicked() {
-                    self.cells.fill("0".into());
+                    self.cells.fill("0".into()); self.typed.fill(None);
                     for i in 0..self.rows { self.cells[i*8+i]="1".into(); }
                     changed=true;
                 }
@@ -102,7 +113,7 @@ impl Input {
                 match Self::from_tsv(&self.paste) {
                     Ok(candidate) => {
                         if ui.button(format!("确认应用 {} × {}",candidate.rows,candidate.cols)).clicked() {
-                            self.rows=candidate.rows;self.cols=candidate.cols;self.cells=candidate.cells;changed=true;
+                            self.rows=candidate.rows;self.cols=candidate.cols;self.cells=candidate.cells;self.typed=candidate.typed;changed=true;
                         }
                     }
                     Err(error) if !self.paste.is_empty() => {ui.colored_label(ui.visuals().error_fg_color,error);}
@@ -116,7 +127,10 @@ impl Input {
                     for r in 0..self.rows {
                         ui.small((r+1).to_string());
                         for c in 0..self.cols {
-                            changed |= ui.add(egui::TextEdit::singleline(&mut self.cells[r*8+c]).id_salt((name,r,c)).desired_width(84.0).char_limit(512).font(egui::TextStyle::Monospace)).on_hover_text("可输入表达式和现有变量，如 1/3、sin(30)、price；不执行赋值").changed();
+                            let index=r*8+c;
+                            let typed=self.typed[index].is_some();
+                            let response=ui.add(egui::TextEdit::singleline(&mut self.cells[index]).id_salt((name,r,c)).desired_width(84.0).char_limit(512).font(egui::TextStyle::Monospace)).on_hover_text(if typed { "已保留原数值类型；修改此格会转回表达式。近似值编辑时请删除≈，改为科学函数表达式。" } else { "可输入表达式和现有变量，如 1/3、sin(30)、price；不执行赋值" });
+                            if response.changed() { self.typed[index]=None; changed=true; }
                         }
                         ui.end_row();
                     }
@@ -139,6 +153,12 @@ impl Saved {
         for input in [&self.a, &self.b] {
             if !(1..=8).contains(&input.rows)
                 || !(1..=8).contains(&input.cols)
+                || input.typed.len() != 64
+                || input
+                    .typed
+                    .iter()
+                    .zip(&input.cells)
+                    .any(|(v, s)| v.is_some_and(|v| super::exchange::literal(v) != *s))
                 || input.cells.len() != 64
                 || input.cells.iter().any(|s| s.len() > 512)
                 || input.paste.len() > 16 * 1024
@@ -204,6 +224,56 @@ impl Default for State {
     }
 }
 impl State {
+    pub(super) fn numeric_description(
+        &self,
+        variables: &BTreeMap<String, Value>,
+        degrees: bool,
+    ) -> Result<String, String> {
+        if !self.current(variables, degrees) {
+            return Err("矩阵无结果或结果已过期；请先重新计算".into());
+        }
+        let value = &self.result.as_ref().ok_or("请先计算矩阵")?.value;
+        Ok(format!(
+            "{}×{} · {}",
+            value.rows,
+            value.cols,
+            if value.approximate() {
+                "含近似值"
+            } else {
+                "精确值"
+            }
+        ))
+    }
+    pub(super) fn numeric_result(
+        &self,
+        variables: &BTreeMap<String, Value>,
+        degrees: bool,
+    ) -> Result<super::exchange::NumericTable, String> {
+        if !self.current(variables, degrees) {
+            return Err("矩阵无结果或结果已过期；请先重新计算".into());
+        }
+        let value = &self.result.as_ref().ok_or("请先计算矩阵")?.value;
+        super::exchange::NumericTable::new(value.rows, value.cols, value.cells.clone())
+    }
+    pub(super) fn receive_numeric(&mut self, table: super::exchange::NumericTable) {
+        let mut input = Input {
+            rows: table.rows,
+            cols: table.cols,
+            ..Input::default()
+        };
+        for r in 0..table.rows {
+            for c in 0..table.cols {
+                let value = table.cells[r * table.cols + c];
+                let index = r * 8 + c;
+                input.cells[index] = super::exchange::literal(value);
+                input.typed[index] = Some(value);
+            }
+        }
+        self.a = input;
+        self.revision += 1;
+        self.result = None;
+        self.error.clear();
+    }
     pub(super) fn snapshot(&self) -> Saved {
         Saved {
             a: self.a.clone(),
@@ -373,6 +443,29 @@ impl State {
         self.error.clear();
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_numeric_fixture(&mut self) {
+        self.receive_numeric(
+            super::exchange::NumericTable::new(
+                2,
+                2,
+                vec![
+                    Value::Exact(1, 3),
+                    Value::Exact(i128::MAX, 1),
+                    Value::Approx(f64::from_bits(1)),
+                    Value::Approx(-0.0),
+                ],
+            )
+            .unwrap(),
+        );
+        self.operation = Operation::Transpose;
+        self.compute(&BTreeMap::new(), false).unwrap();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_numeric_compute(&mut self) {
+        self.operation = Operation::Transpose;
+        self.compute(&BTreeMap::new(), false).unwrap();
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {
         self.fixture();
         self.compute(&BTreeMap::new(), false).unwrap();
@@ -414,6 +507,44 @@ mod tests {
         state.a.cells[0] = "1/0".into();
         assert!(state.compute(&vars, false).is_err());
         assert!(state.result.is_none());
+    }
+    #[test]
+    fn typed_cells_survive_compute_storage_and_explicit_edit() {
+        let values = vec![
+            Value::Exact(1, 3),
+            Value::Approx(f64::from_bits(1)),
+            Value::Approx(-0.0),
+        ];
+        let mut state = State::default();
+        state.receive_numeric(
+            super::super::exchange::NumericTable::new(1, 3, values.clone()).unwrap(),
+        );
+        state.operation = Operation::Transpose;
+        state.compute(&BTreeMap::new(), false).unwrap();
+        let result = state.numeric_result(&BTreeMap::new(), false).unwrap();
+        assert_eq!(result.cells, values);
+        assert!(matches!(result.cells[2],Value::Approx(x) if x.to_bits()==(-0.0f64).to_bits()));
+        let bytes = serde_json::to_vec(&state.snapshot()).unwrap();
+        let saved: Saved = serde_json::from_slice(&bytes).unwrap();
+        saved.validate().unwrap();
+        state.restore(saved);
+        assert!(state.result.is_none());
+        state.compute(&BTreeMap::new(), false).unwrap();
+        assert!(
+            matches!(state.result.as_ref().unwrap().value.cells[1],Value::Approx(x) if x.to_bits()==1)
+        );
+        state.a.cells[0] = "1/2".into();
+        state.a.typed[0] = None;
+        state.revision += 1;
+        assert!(state.numeric_result(&BTreeMap::new(), false).is_err());
+        state.compute(&BTreeMap::new(), false).unwrap();
+        assert_eq!(
+            state.result.as_ref().unwrap().value.cells[0],
+            Value::Exact(1, 2)
+        );
+        let mut bad = state.snapshot();
+        bad.a.cells[1] = "wrong display".into();
+        assert!(bad.validate().is_err());
     }
     #[test]
     fn bulk_tsv_preserves_formulas_and_rejects_empty_ragged_or_oversized_data() {
