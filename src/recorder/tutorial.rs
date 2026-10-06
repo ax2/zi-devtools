@@ -8,6 +8,7 @@ pub enum ZoomMode {
     Off,
     Fixed,
     Follow,
+    Inset,
 }
 impl ZoomMode {
     pub fn label(self) -> &'static str {
@@ -15,6 +16,25 @@ impl ZoomMode {
             Self::Off => "原始画面",
             Self::Fixed => "固定焦点放大",
             Self::Follow => "跟随鼠标放大",
+            Self::Inset => "全景＋鼠标放大窗",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Corner {
+    TopLeft,
+    #[default]
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+impl Corner {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::TopLeft => "左上",
+            Self::TopRight => "右上",
+            Self::BottomLeft => "左下",
+            Self::BottomRight => "右下",
         }
     }
 }
@@ -26,6 +46,11 @@ pub struct Settings {
     pub smooth: bool,
     pub highlight: bool,
     pub clicks: bool,
+    pub inset_corner: Corner,
+    pub spotlight: bool,
+    /// Radius as fraction of the output's shorter side.
+    pub spotlight_radius: f32,
+    pub spotlight_dim: f32,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -36,6 +61,10 @@ impl Default for Settings {
             smooth: true,
             highlight: false,
             clicks: false,
+            inset_corner: Corner::TopRight,
+            spotlight: false,
+            spotlight_radius: 0.16,
+            spotlight_dim: 0.55,
         }
     }
 }
@@ -47,13 +76,17 @@ impl Settings {
                 .focus
                 .iter()
                 .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
+            || !self.spotlight_radius.is_finite()
+            || !(0.03..=0.45).contains(&self.spotlight_radius)
+            || !self.spotlight_dim.is_finite()
+            || !(0.0..=0.9).contains(&self.spotlight_dim)
         {
-            bail!("教程放大需要1–4倍与0–100%的焦点坐标");
+            bail!("教程参数无效：放大1–4倍、焦点0–100%、聚光半径3–45%、压暗0–90%");
         }
         Ok(())
     }
     pub fn active(self) -> bool {
-        self.mode != ZoomMode::Off || self.highlight || self.clicks
+        self.mode != ZoomMode::Off || self.highlight || self.clicks || self.spotlight
     }
 }
 pub struct Control {
@@ -200,7 +233,7 @@ impl Compositor {
             settings.scale
         };
         let target = match settings.mode {
-            ZoomMode::Follow => point
+            ZoomMode::Follow | ZoomMode::Inset => point
                 .or(self.center)
                 .unwrap_or([width as f32 / 2.0, height as f32 / 2.0]),
             _ => [
@@ -224,13 +257,25 @@ impl Compositor {
             old[0] + (target[0] - old[0]) * factor,
             old[1] + (target[1] - old[1]) * factor,
         ];
-        let span = [width as f32 / self.scale, height as f32 / self.scale];
+        let inset = [
+            (width as f32 * 0.36).round().max(1.0) as u32,
+            (height as f32 * 0.36).round().max(1.0) as u32,
+        ];
+        let viewport = if settings.mode == ZoomMode::Inset {
+            inset
+        } else {
+            size
+        };
+        let span = [
+            viewport[0] as f32 / self.scale,
+            viewport[1] as f32 / self.scale,
+        ];
         let left = (center[0] - span[0] / 2.0).clamp(0.0, width as f32 - span[0]);
         let top = (center[1] - span[1] / 2.0).clamp(0.0, height as f32 - span[1]);
         self.center = Some([left + span[0] / 2.0, top + span[1] / 2.0]);
         self.last = Some(elapsed);
         output.resize(source.len(), 0);
-        if self.scale <= 1.0001 {
+        if self.scale <= 1.0001 || settings.mode == ZoomMode::Inset {
             output.copy_from_slice(source);
         } else {
             self.columns.clear();
@@ -247,7 +292,42 @@ impl Compositor {
                 }
             }
         }
-        let mapped = |p: [f32; 2]| [(p[0] - left) * self.scale, (p[1] - top) * self.scale];
+        let mapped = |p: [f32; 2]| {
+            if settings.mode == ZoomMode::Inset {
+                p
+            } else {
+                [(p[0] - left) * self.scale, (p[1] - top) * self.scale]
+            }
+        };
+        if settings.spotlight
+            && let Some(point) = point
+        {
+            let point = mapped(point);
+            if point[0] >= 0.0
+                && point[1] >= 0.0
+                && point[0] < width as f32
+                && point[1] < height as f32
+            {
+                spotlight(
+                    output,
+                    size,
+                    point,
+                    width.min(height) as f32 * settings.spotlight_radius,
+                    settings.spotlight_dim,
+                );
+            }
+        }
+        if settings.mode == ZoomMode::Inset {
+            magnifier(
+                source,
+                output,
+                size,
+                inset,
+                settings.inset_corner,
+                [left, top],
+                self.scale,
+            );
+        }
         if settings.highlight
             && let Some(p) = point
         {
@@ -270,6 +350,63 @@ impl Compositor {
             );
         }
         Ok(())
+    }
+}
+fn spotlight(output: &mut [u8], [w, h]: [u32; 2], point: [f32; 2], radius: f32, dim: f32) {
+    let inner = radius * 0.9;
+    for y in 0..h {
+        let dy = y as f32 + 0.5 - point[1];
+        for x in 0..w {
+            let dx = x as f32 + 0.5 - point[0];
+            let distance = dx * dx + dy * dy;
+            if distance <= inner * inner {
+                continue;
+            }
+            let darkness = if distance >= radius * radius {
+                dim
+            } else {
+                dim * (distance.sqrt() - inner) / (radius - inner)
+            };
+            let pixel = &mut output[((y * w + x) * 4) as usize..][..4];
+            for channel in &mut pixel[..3] {
+                *channel = (f32::from(*channel) * (1.0 - darkness)).round() as u8;
+            }
+        }
+    }
+}
+fn magnifier(
+    source: &[u8],
+    output: &mut [u8],
+    size: [u32; 2],
+    inset: [u32; 2],
+    corner: Corner,
+    origin: [f32; 2],
+    scale: f32,
+) {
+    let [w, h] = size;
+    let [iw, ih] = inset;
+    let margin = ((w.min(h) as f32 * 0.02).round() as u32).min((w - iw).min(h - ih));
+    let x0 = if matches!(corner, Corner::TopLeft | Corner::BottomLeft) {
+        margin
+    } else {
+        w - iw - margin
+    };
+    let y0 = if matches!(corner, Corner::TopLeft | Corner::TopRight) {
+        margin
+    } else {
+        h - ih - margin
+    };
+    for y in 0..ih {
+        let sy = ((origin[1] + (y as f32 + 0.5) / scale) as u32).min(h - 1);
+        for x in 0..iw {
+            let sx = ((origin[0] + (x as f32 + 0.5) / scale) as u32).min(w - 1);
+            let pixel = &mut output[(((y0 + y) * w + x0 + x) * 4) as usize..][..4];
+            if x < 2 || y < 2 || x + 2 >= iw || y + 2 >= ih {
+                pixel.copy_from_slice(&[230, 150, 60, 255]);
+            } else {
+                pixel.copy_from_slice(&source[((sy * w + sx) * 4) as usize..][..4]);
+            }
+        }
     }
 }
 fn disk(
@@ -323,6 +460,174 @@ pub(super) fn physical_pointer(origin: [i32; 2], region: super::Region) -> Point
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn spotlight_preserves_center_alpha_source_and_restores_when_pointer_leaves() {
+        let src = [160, 200, 240, 173].repeat(64 * 64);
+        let mut c = Compositor::default();
+        let settings = Settings {
+            spotlight: true,
+            spotlight_dim: 0.5,
+            ..Settings::default()
+        };
+        let mut out = Vec::new();
+        c.render(
+            &src,
+            [64, 64],
+            settings,
+            Pointer {
+                position: Some([32.0, 32.0]),
+                buttons: 0,
+            },
+            Duration::ZERO,
+            &mut out,
+        )
+        .unwrap();
+        assert_eq!(&out[..4], &[80, 100, 120, 173]);
+        let center = ((32 * 64 + 32) * 4) as usize;
+        assert_eq!(&out[center..center + 4], &src[center..center + 4]);
+        assert!(out.chunks_exact(4).all(|p| p[3] == 173));
+        c.render(
+            &src,
+            [64, 64],
+            settings,
+            Pointer {
+                position: Some([-1.0, 32.0]),
+                buttons: 0,
+            },
+            Duration::from_millis(33),
+            &mut out,
+        )
+        .unwrap();
+        assert_eq!(src, out);
+    }
+    #[test]
+    fn inset_retains_overview_at_each_corner_and_reset_restores_exact_source() {
+        let src = source(128, 64);
+        let mut out = Vec::new();
+        for corner in [
+            Corner::TopLeft,
+            Corner::TopRight,
+            Corner::BottomLeft,
+            Corner::BottomRight,
+        ] {
+            let mut c = Compositor::default();
+            c.render(
+                &src,
+                [128, 64],
+                Settings {
+                    mode: ZoomMode::Inset,
+                    inset_corner: corner,
+                    smooth: false,
+                    ..Settings::default()
+                },
+                Pointer {
+                    position: Some([127.0, 63.0]),
+                    buttons: 0,
+                },
+                Duration::ZERO,
+                &mut out,
+            )
+            .unwrap();
+            let center = ((32 * 128 + 64) * 4) as usize;
+            assert_eq!(&out[center..center + 4], &src[center..center + 4]);
+            assert_ne!(src, out);
+            c.render(
+                &src,
+                [128, 64],
+                Settings::default(),
+                Pointer::default(),
+                Duration::from_millis(33),
+                &mut out,
+            )
+            .unwrap();
+            assert_eq!(src, out);
+        }
+        // Tiny legal regions remain bounded, even with a one-pixel lens.
+        Compositor::default()
+            .render(
+                &[1, 2, 3, 255],
+                [1, 1],
+                Settings {
+                    mode: ZoomMode::Inset,
+                    ..Settings::default()
+                },
+                Pointer::default(),
+                Duration::ZERO,
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(out.len(), 4);
+    }
+    #[test]
+    fn spotlight_invalid_parameters_do_not_replace_current_control() {
+        let control = Control::default();
+        let valid = Settings {
+            spotlight: true,
+            ..Settings::default()
+        };
+        control.set(valid).unwrap();
+        for settings in [
+            Settings {
+                spotlight_radius: f32::NAN,
+                ..valid
+            },
+            Settings {
+                spotlight_radius: 0.0,
+                ..valid
+            },
+            Settings {
+                spotlight_dim: f32::INFINITY,
+                ..valid
+            },
+            Settings {
+                spotlight_dim: 1.0,
+                ..valid
+            },
+        ] {
+            assert!(control.set(settings).is_err());
+            assert_eq!(control.snapshot(), valid);
+        }
+    }
+    #[test]
+    fn fixed_zoom_with_pointer_outside_visible_crop_does_not_black_out_video() {
+        let src = source(64, 64);
+        let pointer = Pointer {
+            position: Some([63.0, 63.0]),
+            buttons: 0,
+        };
+        let settings = Settings {
+            mode: ZoomMode::Fixed,
+            focus: [0.0, 0.0],
+            smooth: false,
+            ..Settings::default()
+        };
+        let mut original = Vec::new();
+        let mut spotlight = Vec::new();
+        Compositor::default()
+            .render(
+                &src,
+                [64, 64],
+                settings,
+                pointer,
+                Duration::ZERO,
+                &mut original,
+            )
+            .unwrap();
+        Compositor::default()
+            .render(
+                &src,
+                [64, 64],
+                Settings {
+                    spotlight: true,
+                    ..settings
+                },
+                pointer,
+                Duration::ZERO,
+                &mut spotlight,
+            )
+            .unwrap();
+        assert_eq!(original, spotlight);
+    }
     #[test]
     fn enabling_zoom_after_idle_starts_a_smooth_transition() {
         let mut compositor = Compositor::default();

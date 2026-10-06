@@ -9,7 +9,7 @@ fn main() -> eframe::Result {
     };
     use zi_devtools::recorder::{
         self, Event, Region, Session,
-        tutorial::{Pointer, Settings, ZoomMode},
+        tutorial::{Corner, Pointer, Settings, ZoomMode},
     };
     struct Fixture {
         folder: PathBuf,
@@ -18,6 +18,7 @@ fn main() -> eframe::Result {
         session: Option<Session>,
         started: Option<Instant>,
         deadline: Instant,
+        focus_effects: bool,
     }
     impl eframe::App for Fixture {
         fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -209,7 +210,23 @@ fn main() -> eframe::Result {
                 if let Some(started) = self.started {
                     let seconds = started.elapsed().as_secs_f32();
                     session.pause.set_paused((2.0..3.0).contains(&seconds));
-                    let settings = if seconds < 1.0 {
+                    let settings = if self.focus_effects {
+                        if !(1.0..4.2).contains(&seconds) {
+                            Settings::default()
+                        } else {
+                            Settings {
+                                mode: ZoomMode::Inset,
+                                inset_corner: if seconds < 3.2 {
+                                    Corner::TopRight
+                                } else {
+                                    Corner::BottomLeft
+                                },
+                                spotlight: true,
+                                smooth: false,
+                                ..Settings::default()
+                            }
+                        }
+                    } else if seconds < 1.0 {
                         Settings {
                             mode: ZoomMode::Fixed,
                             focus: [0.25, 0.25],
@@ -277,6 +294,7 @@ fn main() -> eframe::Result {
                 session: None,
                 started: None,
                 deadline: Instant::now(),
+                focus_effects: std::env::args().nth(2).as_deref() == Some("--focus"),
             }))
         }),
     )

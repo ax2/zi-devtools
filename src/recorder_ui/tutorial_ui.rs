@@ -1,5 +1,5 @@
 use super::*;
-use crate::recorder::tutorial::{Compositor, Pointer, Settings, ZoomMode};
+use crate::recorder::tutorial::{Compositor, Corner, Pointer, Settings, ZoomMode};
 
 pub(super) struct Preview {
     source: Vec<u8>,
@@ -11,6 +11,8 @@ pub(super) struct Preview {
     last: Option<Instant>,
     label: String,
     snapshot_region: Option<(String, Region)>,
+    #[cfg(feature = "ui-preview")]
+    fixture_pointer: Option<Pointer>,
 }
 impl Default for Preview {
     fn default() -> Self {
@@ -41,6 +43,8 @@ impl Default for Preview {
             last: None,
             label: "合成网格示例；在预览上移动和点击试用效果".into(),
             snapshot_region: None,
+            #[cfg(feature = "ui-preview")]
+            fixture_pointer: None,
         }
     }
 }
@@ -115,7 +119,7 @@ impl RecorderState {
             ui.add_enabled_ui(self.countdown_deadline.is_none(), |ui| {
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("tutorial-mode").selected_text(self.tutorial.mode.label()).show_ui(ui, |ui| {
-                        for mode in [ZoomMode::Off,ZoomMode::Fixed,ZoomMode::Follow] {
+                        for mode in [ZoomMode::Off,ZoomMode::Fixed,ZoomMode::Follow,ZoomMode::Inset] {
                             ui.selectable_value(&mut self.tutorial.mode, mode, mode.label());
                         }
                     });
@@ -133,10 +137,25 @@ impl RecorderState {
                         });
                     }
                 }
+                if self.tutorial.mode == ZoomMode::Inset {
+                    ui.horizontal(|ui| {
+                        ui.label("放大窗位置");
+                        egui::ComboBox::from_id_salt("tutorial-inset-corner").selected_text(self.tutorial.inset_corner.label()).show_ui(ui, |ui| {
+                            for corner in [Corner::TopLeft,Corner::TopRight,Corner::BottomLeft,Corner::BottomRight] { ui.selectable_value(&mut self.tutorial.inset_corner,corner,corner.label()); }
+                        });
+                        ui.small("保留全景，放大窗占画面宽高约36%；选择不遮挡讲解内容的位置。");
+                    });
+                }
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut self.tutorial.highlight,"鼠标高亮");
                     ui.checkbox(&mut self.tutorial.clicks,"左右键点击波纹");
+                    ui.checkbox(&mut self.tutorial.spotlight,"鼠标聚光灯");
                 });
+                if self.tutorial.spotlight {
+                    ui.add(egui::Slider::new(&mut self.tutorial.spotlight_radius,0.03..=0.45).text("聚光半径（画面短边比例）"));
+                    ui.add(egui::Slider::new(&mut self.tutorial.spotlight_dim,0.0..=0.9).text("周围压暗程度"));
+                    ui.small("鼠标离开选区时取消压暗；放大窗保持明亮。聚光灯用于强调，不用于隐藏敏感信息。");
+                }
             });
             if !allowed { ui.small("教程效果支持最多1600万像素；请缩小录制区域。"); }
             if before != self.tutorial {
@@ -178,11 +197,14 @@ impl RecorderState {
             let width=ui.available_width().min(preview.size[0] as f32);
             let (rect,response)=ui.allocate_exact_size(egui::vec2(width,width*preview.size[1] as f32/preview.size[0] as f32),Sense::click_and_drag());
             #[cfg(feature="ui-preview")]
-            if std::mem::take(&mut self.preview_tutorial_scroll) { response.scroll_to_me(Some(egui::Align::Center)); }
+            if std::mem::take(&mut self.preview_tutorial_scroll) { response.scroll_to_me(Some(egui::Align::Max)); }
             let position=ui.input(|i|i.pointer.hover_pos()).filter(|p|rect.contains(*p)).map(|p|[(p.x-rect.left())/rect.width()*preview.size[0] as f32,(p.y-rect.top())/rect.height()*preview.size[1] as f32]);
             let buttons=if response.hovered() { ui.input(|i|u8::from(i.pointer.primary_down()) | (u8::from(i.pointer.secondary_down())<<1)) } else { 0 };
             if preview.last.is_none_or(|at|at.elapsed()>=Duration::from_millis(33)) {
-                if preview.compositor.render(&preview.source,preview.size,self.tutorial,Pointer{position,buttons},preview.started.elapsed(),&mut preview.output).is_ok() {
+                let pointer = Pointer{position,buttons};
+                #[cfg(feature="ui-preview")]
+                let pointer = preview.fixture_pointer.unwrap_or(pointer);
+                if preview.compositor.render(&preview.source,preview.size,self.tutorial,pointer,preview.started.elapsed(),&mut preview.output).is_ok() {
                     let rgba:Vec<u8>=preview.output.chunks_exact(4).flat_map(|p|[p[2],p[1],p[0],p[3]]).collect();
                     let image=egui::ColorImage::from_rgba_unmultiplied([preview.size[0] as usize,preview.size[1] as usize],&rgba);
                     if let Some(texture)=&mut preview.texture {texture.set(image,egui::TextureOptions::LINEAR);}
@@ -192,6 +214,18 @@ impl RecorderState {
             }
             if let Some(texture)=&preview.texture {ui.painter().image(texture.id(),rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);}
             ui.ctx().request_repaint_after(Duration::from_millis(33));
+        });
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_spotlight_fixture(&mut self) {
+        self.preview_tutorial_fixture(true);
+        self.tutorial.mode = ZoomMode::Inset;
+        self.tutorial.spotlight = true;
+        self.tutorial.smooth = false;
+        self.tutorial_preview.label = "合成示例：全景＋局部放大窗与聚光灯，未录制真实桌面".into();
+        self.tutorial_preview.fixture_pointer = Some(Pointer {
+            position: Some([400.0, 120.0]),
+            buttons: 0,
         });
     }
 }
