@@ -22,9 +22,27 @@ fn validate(history: &History) -> Result<()> {
         history.entries.len() <= ITEM_LIMIT && history.bytes() <= BYTE_LIMIT,
         "剪贴板历史超出容量"
     );
+    ensure!(
+        history
+            .retention_days
+            .is_none_or(|days| (1..=3650).contains(&days)),
+        "历史保留期无效"
+    );
     let mut ids = std::collections::HashSet::new();
     let mut texts = std::collections::HashSet::new();
     for e in &history.entries {
+        ensure!(
+            e.first_captured_utc
+                .into_iter()
+                .chain(e.last_captured_utc)
+                .all(|time| { chrono::DateTime::from_timestamp(time, 0).is_some() }),
+            "历史UTC时间无效"
+        );
+        ensure!(
+            e.first_captured_utc
+                .is_none_or(|first| e.last_captured_utc.is_some_and(|last| first <= last)),
+            "首次与最近时间无效"
+        );
         ensure!(
             e.id > 0 && e.id <= history.next && ids.insert(e.id),
             "剪贴板历史ID无效"
@@ -137,7 +155,7 @@ fn connect(path: &Path, write: bool) -> Result<Connection> {
 fn save(path: &Path, history: History) -> Result<()> {
     validate(&history)?;
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-    serde_json::to_writer(&mut encoder, &Snapshot { schema: 1, history })?;
+    serde_json::to_writer(&mut encoder, &Snapshot { schema: 2, history })?;
     let compressed = Zeroizing::new(encoder.finish()?);
     let protected = protect(&compressed, false)?;
     let mut db = connect(path, true)?;
@@ -166,7 +184,16 @@ fn load(path: &Path) -> Result<Option<History>> {
     let compressed = protect(&cipher, true)?;
     let decoder = flate2::read::GzDecoder::new(compressed.as_slice()).take(200 * 1024 * 1024);
     let snapshot: Snapshot = serde_json::from_reader(decoder)?;
-    ensure!(snapshot.schema == 1, "剪贴板快照版本不支持");
+    ensure!(matches!(snapshot.schema, 1 | 2), "剪贴板快照版本不支持");
+    if snapshot.schema == 1 {
+        ensure!(
+            snapshot.history.retention_days.is_none()
+                && snapshot.history.entries.iter().all(|entry| {
+                    entry.first_captured_utc.is_none() && entry.last_captured_utc.is_none()
+                }),
+            "旧快照包含不支持的时间或策略字段"
+        );
+    }
     validate(&snapshot.history)?;
     Ok(Some(snapshot.history))
 }
@@ -384,6 +411,58 @@ impl Persistence {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_snapshot_migrates_without_inventing_utc_and_new_policy_roundtrips() {
+        let path = path();
+        save(&path, History::default()).unwrap();
+        let legacy = serde_json::json!({"schema":1,"history":{"next":1,"entries":[{"id":1,"text":"legacy fixture","source":"fixture.exe","time":"01-02 03:04:05","pinned":false}]}});
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        serde_json::to_writer(&mut encoder, &legacy).unwrap();
+        let protected = protect(&encoder.finish().unwrap(), false).unwrap();
+        let db = Connection::open(&path).unwrap();
+        db.execute(
+            "UPDATE clipboard SET payload=?1",
+            params![protected.as_slice()],
+        )
+        .unwrap();
+        drop(db);
+        let original = std::fs::read(&path).unwrap();
+        let mut history = load(&path).unwrap().unwrap();
+        assert_eq!(original, std::fs::read(&path).unwrap());
+        assert!(history.retention_days.is_none());
+        assert!(history.entries[0].first_captured_utc.is_none());
+        assert!(history.entries[0].last_captured_utc.is_none());
+        history.retention_days = Some(1);
+        assert_eq!(history.expire(chrono::Utc::now().timestamp()), 0);
+        history
+            .insert("new fixture".into(), "fixture.exe".into())
+            .unwrap();
+        save(&path, history).unwrap();
+        let restored = load(&path).unwrap().unwrap();
+        assert_eq!(restored.retention_days, Some(1));
+        assert_eq!(restored.entries.len(), 2);
+        assert!(restored.entries[0].first_captured_utc.is_some());
+        assert!(restored.entries[1].last_captured_utc.is_none());
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn invalid_retention_or_timestamps_do_not_replace_saved_history() {
+        let path = path();
+        let mut h = History::default();
+        h.insert("synthetic".into(), "fixture".into()).unwrap();
+        save(&path, h.clone()).unwrap();
+        let original = std::fs::read(&path).unwrap();
+        h.retention_days = Some(0);
+        assert!(save(&path, h.clone()).is_err());
+        h.retention_days = None;
+        h.entries[0].last_captured_utc = Some(i64::MAX);
+        assert!(save(&path, h.clone()).is_err());
+        h.entries[0].last_captured_utc = Some(h.entries[0].first_captured_utc.unwrap() - 1);
+        assert!(save(&path, h).is_err());
+        assert_eq!(original, std::fs::read(&path).unwrap());
+        assert_eq!(load(&path).unwrap().unwrap().entries[0].text, "synthetic");
+        std::fs::remove_file(path).unwrap();
+    }
     #[test]
     fn unknown_schema_and_invalid_ids_are_rejected_without_mutation() {
         let path = path();

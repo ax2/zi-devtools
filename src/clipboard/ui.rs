@@ -11,6 +11,9 @@ pub struct State {
     output: String,
     clear_confirm: bool,
     paused: bool,
+    retention_input: u16,
+    retention_confirm: bool,
+    last_retention_check: Option<std::time::Instant>,
     #[cfg(windows)]
     listener: Option<super::native::Listener>,
     #[cfg(windows)]
@@ -74,7 +77,9 @@ impl State {
         if let Some(listener) = &self.listener {
             for event in listener.rx.try_iter().take(64) {
                 match event {
-                    super::native::Event::Text(text, source) if !self.paused => {
+                    super::native::Event::Text(text, source)
+                        if !self.paused && !text.is_empty() =>
+                    {
                         match self.history.insert(text, source) {
                             Err(e) => self.message = e,
                             Ok(()) => self.storage.changed(),
@@ -86,6 +91,18 @@ impl State {
             }
             if listener.lost.swap(0, std::sync::atomic::Ordering::AcqRel) > 0 {
                 self.message = "复制事件过快，部分条目未采集".into();
+            }
+        }
+        if self.history.retention_days.is_some()
+            && self
+                .last_retention_check
+                .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(60))
+        {
+            self.last_retention_check = Some(std::time::Instant::now());
+            let removed = self.history.expire(chrono::Utc::now().timestamp());
+            if removed > 0 {
+                self.changed();
+                self.message = format!("按保留期限清理了{removed}条；置顶及时间未知的记录保留");
             }
         }
         let selected_count = self.selected.len();
@@ -109,14 +126,49 @@ impl State {
             false
         }
     }
+    fn retention_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("历史保留期限").default_open(true).show(ui, |ui| {
+            ui.label(self.history.retention_days.map_or_else(|| "自动清理未开启".to_string(), |days| format!("自动清理：最近复制满{days}天的非置顶记录")));
+            ui.small("按24小时计算，最多约一分钟检查一次；置顶、UTC时间未知和未来时间记录保留。清理只删除历史，不改系统剪贴板。开启本机保存时同步保存策略和清理结果。旧快照不推断年份。");
+            if self.retention_input == 0 { self.retention_input = self.history.retention_days.unwrap_or(30); }
+            ui.horizontal_wrapped(|ui| {
+                ui.add(egui::DragValue::new(&mut self.retention_input).range(1..=3650).suffix(" 天"));
+                let count = self.history.expired_count(self.retention_input, chrono::Utc::now().timestamp());
+                ui.label(format!("当前将清理{count}条"));
+                if ui.button("应用期限并清理…").clicked() { self.retention_confirm = true; }
+                if self.history.retention_days.is_some() && ui.button("关闭自动清理").clicked() {
+                    self.history.retention_days = None;
+                    self.retention_confirm = false;
+                    self.changed();
+                }
+            });
+            if self.retention_confirm {
+                let count = self.history.expired_count(self.retention_input, chrono::Utc::now().timestamp());
+                ui.label(format!("确认开启{}天期限并删除当前{count}条历史？后续过期记录会自动删除，不能撤销。", self.retention_input));
+                ui.horizontal(|ui| {
+                    if ui.button("确认应用与清理").clicked() {
+                        self.history.retention_days = Some(self.retention_input);
+                        let count = self.history.expire(chrono::Utc::now().timestamp());
+                        self.last_retention_check = Some(std::time::Instant::now());
+                        self.selected.retain(|id| self.history.entries.iter().any(|entry| entry.id == *id));
+                        self.output.clear();
+                        self.changed();
+                        self.retention_confirm = false;
+                        self.message = format!("已应用期限，清理{count}条历史");
+                    }
+                    if ui.button("取消").clicked() { self.retention_confirm = false; }
+                });
+            }
+        });
+    }
     pub fn needs_clock(&self) -> bool {
         #[cfg(windows)]
         {
-            self.storage.needs_clock()
+            self.storage.needs_clock() || self.history.retention_days.is_some()
         }
         #[cfg(not(windows))]
         {
-            false
+            self.history.retention_days.is_some()
         }
     }
     pub fn has_pending(&self) -> bool {
@@ -150,7 +202,7 @@ impl State {
             return;
         }
         ui.heading("超级剪贴板");
-        ui.label("v0.2.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
+        ui.label("v0.3.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
         ui.label("主动开启后采集新复制的文本；可另行开启本机保护保存，重启恢复历史但不自动采集。图片、富文本、文件引用尚待开发。");
         #[cfg(windows)]
         ui.horizontal_wrapped(|ui| {
@@ -220,6 +272,7 @@ impl State {
         }
         #[cfg(windows)]
         self.storage_ui(ui);
+        self.retention_ui(ui);
         ui.small("当前最多500条、单条1 MiB。来源可能未知；应用排除尚未接入，复制敏感内容前请暂停。默认不采集、不联网；本机保存须主动开启。");
         ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("搜索文本或来源应用"));
         if !self.message.is_empty() {
@@ -257,10 +310,18 @@ impl State {
                                     self.selected.retain(|id| *id != entry.id);
                                 }
                             }
-                            if ui.checkbox(&mut entry.pinned, "置顶保留").changed() {
+                            if ui.checkbox(&mut entry.pinned, "置顶保留").on_hover_text("置顶不自动过期；取消置顶后，已过期记录将在下一次期限检查时删除。").changed() {
                                 pin_changed = true;
                             }
-                            ui.small(format!("{} · {}", entry.source, entry.time));
+                            ui.small(format!("{} · {}", entry.source, entry.time))
+                                .on_hover_text(format!(
+                                    "首次UTC：{}\n最近UTC：{}",
+                                    timestamp_label(entry.first_captured_utc),
+                                    timestamp_label(entry.last_captured_utc)
+                                ));
+                            if entry.last_captured_utc.is_none() {
+                                ui.small("旧记录 · 年份未知");
+                            }
                             if ui.button("复制").clicked() {
                                 copy = Some(entry.text.clone());
                             }
@@ -330,10 +391,27 @@ impl State {
             None
         } else {
             Some((
-                format!("超级剪贴板0.2.0组合 · 条目{:?}", self.selected),
+                format!("超级剪贴板0.3.0组合 · 条目{:?}", self.selected),
                 &self.output,
             ))
         }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_retention_fixture(&mut self) {
+        self.preview_fixture();
+        self.history.retention_days = Some(30);
+        self.retention_input = 7;
+        let now = chrono::Utc::now().timestamp();
+        for entry in &mut self.history.entries {
+            entry.first_captured_utc = None;
+            entry.last_captured_utc = if entry.pinned {
+                None
+            } else {
+                Some(now - 10 * 86400)
+            };
+        }
+        self.retention_confirm = true;
+        self.message = "合成示例：修改期限前预览，不读取或写入用户数据。".into();
     }
     #[cfg(all(windows, feature = "ui-preview"))]
     pub fn preview_storage_fixture(&mut self) {
@@ -379,9 +457,35 @@ impl State {
     }
 }
 
+fn timestamp_label(timestamp: Option<i64>) -> String {
+    timestamp
+        .and_then(|time| chrono::DateTime::from_timestamp(time, 0))
+        .map_or_else(|| "未知".into(), |time| time.to_rfc3339())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn retention_poll_expires_and_invalidates_selected_handoff_once() {
+        let mut state = State::default();
+        state.preview_fixture();
+        let now = chrono::Utc::now().timestamp();
+        for entry in &mut state.history.entries {
+            entry.first_captured_utc = None;
+            entry.last_captured_utc = Some(now - 2 * 86400);
+        }
+        state.history.retention_days = Some(1);
+        assert!(state.needs_clock());
+        state.poll(&egui::Context::default());
+        assert_eq!(state.history.entries.len(), 1);
+        assert!(state.history.entries[0].pinned);
+        assert!(state.transfer_text().is_none());
+        assert_eq!(state.selected, vec![state.history.entries[0].id]);
+        let message = state.message.clone();
+        state.poll(&egui::Context::default());
+        assert_eq!(state.message, message);
+    }
     #[test]
     fn demo_rejects_full_pinned_history_without_panicking_or_replacing_originals() {
         let mut state = State::default();

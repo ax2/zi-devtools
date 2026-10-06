@@ -1,4 +1,4 @@
-//! Opt-in, bounded clipboard history. No persistence or network access.
+//! Opt-in, bounded clipboard history with optional protected local snapshots.
 #[cfg(windows)]
 mod native;
 #[cfg(windows)]
@@ -18,12 +18,18 @@ pub struct Entry {
     pub source: String,
     pub time: String,
     pub pinned: bool,
+    #[serde(default)]
+    pub first_captured_utc: Option<i64>,
+    #[serde(default)]
+    pub last_captured_utc: Option<i64>,
 }
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct History {
     pub entries: Vec<Entry>,
     next: u64,
+    #[serde(default)]
+    pub retention_days: Option<u16>,
 }
 impl History {
     pub fn insert(&mut self, text: String, source: String) -> Result<(), String> {
@@ -44,10 +50,20 @@ impl History {
                 source: String::new(),
                 time: String::new(),
                 pinned: false,
+                first_captured_utc: Some(chrono::Utc::now().timestamp()),
+                last_captured_utc: None,
             }
         };
+        let now = chrono::Utc::now().timestamp();
+        entry.last_captured_utc = Some(
+            entry
+                .last_captured_utc
+                .unwrap_or(now)
+                .max(entry.first_captured_utc.unwrap_or(now))
+                .max(now),
+        );
         entry.source = source;
-        entry.time = chrono::Local::now().format("%m-%d %H:%M:%S").to_string();
+        entry.time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         // Preflight eviction before mutating history: pinned content is never discarded.
         let mut bytes = self.entries.iter().map(|e| e.text.len()).sum::<usize>() + entry.text.len();
         let mut count = self.entries.len() + 1;
@@ -69,6 +85,29 @@ impl History {
         self.entries.retain(|e| !evict.contains(&e.id));
         self.entries.insert(0, entry);
         Ok(())
+    }
+    pub fn expired_count(&self, days: u16, now: i64) -> usize {
+        self.entries
+            .iter()
+            .filter(|entry| Self::expired(entry, days, now))
+            .count()
+    }
+    fn expired(entry: &Entry, days: u16, now: i64) -> bool {
+        (1..=3650).contains(&days)
+            && !entry.pinned
+            && entry.last_captured_utc.is_some_and(|captured| {
+                now.checked_sub(captured)
+                    .is_some_and(|age| age >= i64::from(days) * 86400)
+            })
+    }
+    pub fn expire(&mut self, now: i64) -> usize {
+        let Some(days) = self.retention_days else {
+            return 0;
+        };
+        let before = self.entries.len();
+        self.entries
+            .retain(|entry| !Self::expired(entry, days, now));
+        before - self.entries.len()
     }
     pub fn bytes(&self) -> usize {
         self.entries.iter().map(|e| e.text.len()).sum()
@@ -129,6 +168,55 @@ pub use native::isolated_fixture;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn retention_protects_pins_unknown_and_future_times_at_exact_boundary() {
+        let mut h = History::default();
+        let now = 2_000_000_000;
+        for text in ["old", "boundary", "fresh", "pinned", "unknown", "future"] {
+            h.insert(text.into(), "fixture".into()).unwrap();
+            let entry = &mut h.entries[0];
+            entry.first_captured_utc = None;
+            entry.last_captured_utc = match text {
+                "old" | "pinned" => Some(now - 2 * 86400),
+                "boundary" => Some(now - 86400),
+                "fresh" => Some(now - 86400 + 1),
+                "future" => Some(now + 86400),
+                _ => None,
+            };
+            entry.pinned = text == "pinned";
+        }
+        assert_eq!(h.expire(now), 0);
+        assert_eq!(h.expired_count(0, now), 0);
+        assert_eq!(h.expired_count(3651, now), 0);
+        assert_eq!(h.expired_count(1, now), 2);
+        h.retention_days = Some(1);
+        assert_eq!(h.expire(now), 2);
+        assert_eq!(
+            h.entries
+                .iter()
+                .map(|e| e.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["future", "unknown", "pinned", "fresh"]
+        );
+        assert_eq!(h.expire(now), 0);
+        assert_eq!(h.expire(i64::MIN), 0);
+    }
+    #[test]
+    fn recopy_preserves_first_capture_and_unknown_legacy_origin() {
+        let mut h = History::default();
+        h.insert("fixture".into(), "first".into()).unwrap();
+        let first = h.entries[0].first_captured_utc;
+        let future = chrono::Utc::now().timestamp() + 3600;
+        h.entries[0].last_captured_utc = Some(future);
+        h.insert("fixture".into(), "second".into()).unwrap();
+        assert_eq!(h.entries[0].first_captured_utc, first);
+        assert_eq!(h.entries[0].last_captured_utc, Some(future));
+        h.entries[0].first_captured_utc = None;
+        h.entries[0].last_captured_utc = None;
+        h.insert("fixture".into(), "third".into()).unwrap();
+        assert!(h.entries[0].first_captured_utc.is_none());
+        assert!(h.entries[0].last_captured_utc.is_some());
+    }
     #[test]
     fn byte_eviction_and_formula_export_preserve_original_text() {
         let mut h = History::default();

@@ -688,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            394..=395 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_retention_fixture();
+            }
             392..=393 => {
                 self.page = Page::Clipboard;
                 self.clipboard.preview_storage_fixture();
