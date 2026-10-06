@@ -4,6 +4,8 @@ use eframe::egui::{self, RichText};
 #[derive(Default)]
 pub struct State {
     history: History,
+    policy: super::policy::Editor,
+    excluded_count: u64,
     search: String,
     selected: Vec<u64>,
     format: usize,
@@ -24,9 +26,65 @@ pub struct State {
     restore_confirm: bool,
 }
 impl State {
+    pub fn new(policy_path: std::path::PathBuf) -> Self {
+        Self {
+            policy: super::policy::Editor::new(if cfg!(any(feature = "ui-preview", test)) {
+                None
+            } else {
+                Some(policy_path)
+            }),
+            ..Default::default()
+        }
+    }
+    fn policy_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("应用排除 · 采集前过滤").default_open(true).show(ui, |ui| {
+            ui.label(format!("已应用{}个进程规则 · 已跳过{}次通知 · 未知来源{}", self.policy.applied.excluded_apps.len(), self.excluded_count, if self.policy.applied.exclude_unknown { "不采集" } else { "允许采集" }));
+            ui.collapsing("查看当前生效的进程名单", |ui| {
+                if self.policy.applied.excluded_apps.is_empty() { ui.label("当前不排除已知进程"); }
+                else { egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| { for name in &self.policy.applied.excluded_apps { ui.label(name); } }); }
+            });
+            ui.small("按实际剪贴板所有者的进程文件名过滤，在读取文本正文前判断；不能保证识别所有密码或间接复制来源。每行一个.exe文件名，大小写不敏感，不填路径或通配符，最多64个。规则与历史保存独立。");
+            ui.add(egui::TextEdit::multiline(&mut self.policy.input).desired_rows(2).desired_width(f32::INFINITY).hint_text("example.exe\neditor.exe"));
+            ui.checkbox(&mut self.policy.unknown, "来源未知时不采集");
+            if self.policy.dirty() { ui.label("规则草稿未应用，当前仍使用上方已应用规则"); }
+            if self.policy.load_failed {
+                ui.label("旧规则读取失败；首次处理前不能开启采集，仅本次应用不会修改旧文件。");
+                ui.checkbox(&mut self.policy.replace_confirm, "允许保存时替换无法读取的旧规则文件");
+            }
+            ui.horizontal_wrapped(|ui| {
+                for (remember,label) in [(false,"仅本次应用"),(true,"保存并应用规则")] {
+                    if ui.add_enabled(!remember || self.policy.path.is_some(),egui::Button::new(label)).clicked() {
+                        match self.policy.apply(remember) {
+                            Ok(()) => {
+                                #[cfg(windows)]
+                                if let Some(listener)=&self.listener { listener.set_policy(self.policy.applied.clone()); }
+                                self.message="已应用排除规则；旧排队事件清除，不补采当前内容".into();
+                            }
+                            Err(error) => self.policy.status=error,
+                        }
+                    }
+                }
+                if ui.button("撤回草稿").clicked() { self.policy.input=self.policy.applied.excluded_apps.join("\n");self.policy.unknown=self.policy.applied.exclude_unknown; }
+                if ui.add_enabled(self.listener_is_off() && !self.policy.dirty(),egui::Button::new("重新读取保存规则")).clicked() { self.policy.reload(); }
+            });
+            ui.small(&self.policy.status);
+            if let Some(path)=&self.policy.path { ui.small(format!("规则文件：{}",path.display())); }
+        });
+    }
+    fn listener_is_off(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.listener.is_none()
+        }
+        #[cfg(not(windows))]
+        {
+            true
+        }
+    }
+
     #[cfg(windows)]
     fn storage_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("本机历史保存 · Windows用户保护").default_open(true).show(ui,|ui|{
+        egui::CollapsingHeader::new(format!("本机历史保存 · {}", if self.storage.enabled { "已开启" } else { "未开启" })).id_salt("clipboard-storage-options").default_open(false).show(ui,|ui|{
             ui.label(if self.storage.enabled {"已开启：后台保存；重启恢复历史，采集需另行开启。"} else {"未开启：历史只在会话内存中，退出后清空。"});
             ui.small("保存包含文本、来源、时间和置顶状态，保护范围为当前Windows用户；同用户程序仍可能访问。不开启云同步。");
             if let Some(path)=&self.storage.path {ui.small(format!("本机路径：{}",path.display()));}
@@ -86,6 +144,9 @@ impl State {
                         }
                     }
                     super::native::Event::Error(e) => self.message = e,
+                    super::native::Event::Excluded => {
+                        self.excluded_count = self.excluded_count.saturating_add(1)
+                    }
                     _ => {}
                 }
             }
@@ -127,7 +188,7 @@ impl State {
         }
     }
     fn retention_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("历史保留期限").default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(self.history.retention_days.map_or_else(|| "历史保留期限 · 未开启".to_string(), |days| format!("历史保留期限 · {days}天"))).id_salt("clipboard-retention-options").default_open(false).show(ui, |ui| {
             ui.label(self.history.retention_days.map_or_else(|| "自动清理未开启".to_string(), |days| format!("自动清理：最近复制满{days}天的非置顶记录")));
             ui.small("按24小时计算，最多约一分钟检查一次；置顶、UTC时间未知和未来时间记录保留。清理只删除历史，不改系统剪贴板。开启本机保存时同步保存策略和清理结果。旧快照不推断年份。");
             if self.retention_input == 0 { self.retention_input = self.history.retention_days.unwrap_or(30); }
@@ -174,11 +235,11 @@ impl State {
     pub fn has_pending(&self) -> bool {
         #[cfg(windows)]
         {
-            self.storage.pending()
+            self.storage.pending() || self.policy.dirty()
         }
         #[cfg(not(windows))]
         {
-            false
+            self.policy.dirty()
         }
     }
     fn copy(&mut self, ui: &egui::Ui, text: String) {
@@ -202,16 +263,22 @@ impl State {
             return;
         }
         ui.heading("超级剪贴板");
-        ui.label("v0.3.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
+        ui.label("v0.4.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
         ui.label("主动开启后采集新复制的文本；可另行开启本机保护保存，重启恢复历史但不自动采集。图片、富文本、文件引用尚待开发。");
         #[cfg(windows)]
         ui.horizontal_wrapped(|ui| {
             if self.listener.is_none() {
                 if ui
-                    .add_enabled(!self.storage.busy(), egui::Button::new("开启文本历史采集"))
+                    .add_enabled(
+                        !self.storage.busy() && self.policy.ready,
+                        egui::Button::new("开启文本历史采集"),
+                    )
                     .clicked()
                 {
-                    match super::native::Listener::start(ui.ctx().clone()) {
+                    match super::native::Listener::start(
+                        ui.ctx().clone(),
+                        self.policy.applied.clone(),
+                    ) {
                         Ok(listener) => {
                             self.listener = Some(listener);
                             self.paused = false;
@@ -272,8 +339,9 @@ impl State {
         }
         #[cfg(windows)]
         self.storage_ui(ui);
+        self.policy_ui(ui);
         self.retention_ui(ui);
-        ui.small("当前最多500条、单条1 MiB。来源可能未知；应用排除尚未接入，复制敏感内容前请暂停。默认不采集、不联网；本机保存须主动开启。");
+        ui.small("当前最多500条、单条1 MiB。来源可能未知；应用排除见上方；不能保证识别敏感内容，必要时请暂停。默认不采集、不联网；本机保存须主动开启。");
         ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("搜索文本或来源应用"));
         if !self.message.is_empty() {
             ui.label(&self.message);
@@ -391,10 +459,19 @@ impl State {
             None
         } else {
             Some((
-                format!("超级剪贴板0.3.0组合 · 条目{:?}", self.selected),
+                format!("超级剪贴板0.4.0组合 · 条目{:?}", self.selected),
                 &self.output,
             ))
         }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_policy_fixture(&mut self) {
+        self.preview_fixture();
+        self.policy.input = "synthetic-private.exe\nfixture-editor.exe".into();
+        self.policy.unknown = true;
+        self.policy.apply(false).unwrap();
+        self.policy.input.push_str("\nnew-draft.exe");
+        self.excluded_count = 12;
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_retention_fixture(&mut self) {
@@ -404,6 +481,15 @@ impl State {
         let now = chrono::Utc::now().timestamp();
         for entry in &mut self.history.entries {
             entry.first_captured_utc = None;
+            entry.time = if entry.pinned {
+                "01-02 03:04:05".into()
+            } else {
+                chrono::DateTime::from_timestamp(now - 10 * 86400, 0)
+                    .unwrap()
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string()
+            };
             entry.last_captured_utc = if entry.pinned {
                 None
             } else {
@@ -466,6 +552,23 @@ fn timestamp_label(timestamp: Option<i64>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn policy_drafts_guard_exit_without_enabling_history_storage_or_capture() {
+        let mut state = State::default();
+        assert!(!state.has_pending());
+        state.policy.input = "fixture.exe".into();
+        assert!(state.has_pending());
+        state.policy.apply(false).unwrap();
+        assert!(!state.has_pending() && state.policy.ready);
+        assert!(state.listener_is_off());
+        #[cfg(windows)]
+        assert!(!state.storage.enabled && state.storage.path.is_none());
+        state.policy.unknown = true;
+        assert!(state.has_pending());
+        state.policy.input = state.policy.applied.excluded_apps.join("\n");
+        state.policy.unknown = state.policy.applied.exclude_unknown;
+        assert!(!state.has_pending());
+    }
     #[test]
     fn retention_poll_expires_and_invalidates_selected_handoff_once() {
         let mut state = State::default();

@@ -1,5 +1,7 @@
 //! A message-only window owns the opt-in Windows listener; no active polling.
-use super::TEXT_LIMIT;
+use super::{CapturePolicy, TEXT_LIMIT};
+#[cfg(feature = "ui-preview")]
+static TEXT_READS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 use crossbeam_channel::{Receiver, bounded};
 use std::sync::{
     Arc, Mutex,
@@ -14,22 +16,30 @@ use windows_sys::Win32::{
 pub enum Event {
     Text(String, String),
     Error(String),
+    Excluded,
 }
 pub struct Listener {
     pub rx: Receiver<Event>,
     thread: u32,
     join: Option<std::thread::JoinHandle<()>>,
     gate: Arc<Mutex<()>>,
+    policy: Arc<Mutex<CapturePolicy>>,
     own_sequence: Arc<AtomicU32>,
     pub paused: Arc<std::sync::atomic::AtomicBool>,
     pub lost: Arc<AtomicU32>,
     window: usize,
 }
 impl Listener {
-    pub fn start(ctx: eframe::egui::Context) -> Result<Self, String> {
-        Self::start_impl(ctx, None)
+    pub fn start(ctx: eframe::egui::Context, policy: CapturePolicy) -> Result<Self, String> {
+        Self::start_impl(ctx, None, policy)
     }
-    fn start_impl(ctx: eframe::egui::Context, desktop: Option<usize>) -> Result<Self, String> {
+    fn start_impl(
+        ctx: eframe::egui::Context,
+        desktop: Option<usize>,
+        policy: CapturePolicy,
+    ) -> Result<Self, String> {
+        let policy = Arc::new(Mutex::new(policy.normalized()?));
+        let thread_policy = policy.clone();
         let (tx, rx) = bounded(64);
         let (ready_tx, ready_rx) = bounded(1);
         let gate = Arc::new(Mutex::new(()));
@@ -87,9 +97,11 @@ impl Listener {
                         {
                             None
                         } else {
-                            match read_text(sequence) {
-                                Ok(Some((text, source))) => Some(Event::Text(text, source)),
-                                Ok(None) => None,
+                            match read_text(
+                                sequence,
+                                &thread_policy.lock().unwrap_or_else(|e| e.into_inner()),
+                            ) {
+                                Ok(event) => event,
                                 Err(e) => Some(Event::Error(e)),
                             }
                         }
@@ -123,11 +135,19 @@ impl Listener {
             thread,
             join: Some(join),
             gate,
+            policy,
             own_sequence,
             paused,
             lost,
             window,
         })
+    }
+    pub fn set_policy(&self, policy: CapturePolicy) {
+        let _guard = self.gate.lock().unwrap_or_else(|e| e.into_inner());
+        *self.policy.lock().unwrap_or_else(|e| e.into_inner()) = policy;
+        self.own_sequence
+            .store(unsafe { GetClipboardSequenceNumber() }, Ordering::Release);
+        while self.rx.try_recv().is_ok() {}
     }
     pub fn set_paused(&self, value: bool) {
         let _guard = self.gate.lock().unwrap_or_else(|e| e.into_inner());
@@ -170,7 +190,7 @@ unsafe fn open_clipboard() -> Result<Clipboard, String> {
     }
     Err("剪贴板被其他程序占用，本次未读取/写入".into())
 }
-unsafe fn read_text(sequence: u32) -> Result<Option<(String, String)>, String> {
+unsafe fn read_text(sequence: u32, policy: &CapturePolicy) -> Result<Option<Event>, String> {
     if unsafe { IsClipboardFormatAvailable(13) } == 0 {
         return Ok(None);
     }
@@ -178,6 +198,12 @@ unsafe fn read_text(sequence: u32) -> Result<Option<(String, String)>, String> {
     if unsafe { GetClipboardSequenceNumber() } != sequence {
         return Ok(None);
     }
+    let source = unsafe { source_name() };
+    if policy.excludes(&source) {
+        return Ok(Some(Event::Excluded));
+    }
+    #[cfg(feature = "ui-preview")]
+    TEXT_READS.fetch_add(1, Ordering::Relaxed);
     let handle = unsafe { GetClipboardData(13) };
     if handle.is_null() {
         return Err("文本格式读取失败".into());
@@ -203,7 +229,10 @@ unsafe fn read_text(sequence: u32) -> Result<Option<(String, String)>, String> {
     if text.len() > TEXT_LIMIT {
         return Err("单条文本超过1 MiB，未采集".into());
     }
-    Ok(Some((text, unsafe { source_name() })))
+    if text.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(Event::Text(text, source)))
 }
 unsafe fn source_name() -> String {
     let owner = unsafe { GetClipboardOwner() };
@@ -333,6 +362,7 @@ pub fn isolated_fixture() -> Result<(), String> {
     let listener = Listener::start_impl(
         eframe::egui::Context::default(),
         Some(station.desktop as usize),
+        CapturePolicy::default(),
     )?;
     let receive = |expected: &str| -> Result<(), String> {
         match listener.rx.recv_timeout(Duration::from_secs(2)) {
@@ -354,11 +384,35 @@ pub fn isolated_fixture() -> Result<(), String> {
     assert!(listener.rx.try_recv().is_err());
     write_text("本工具合成输出", listener.window as HWND)?;
     receive("本工具合成输出")?;
+    let owner = unsafe { source_name() };
+    assert_ne!(owner, "来源未知", "fixture process owner must be known");
+    let policy = CapturePolicy::parse(&owner, false)?;
+    listener.set_policy(policy);
+    let before = TEXT_READS.load(Ordering::Acquire);
+    write_text("被排除合成文本", listener.window as HWND)?;
+    assert!(matches!(
+        listener.rx.recv_timeout(Duration::from_secs(2)),
+        Ok(Event::Excluded)
+    ));
+    assert_eq!(
+        TEXT_READS.load(Ordering::Acquire),
+        before,
+        "excluded source never retrieves text handle"
+    );
+    listener.set_policy(CapturePolicy::default());
+    std::thread::sleep(Duration::from_millis(50));
+    assert!(
+        listener.rx.try_recv().is_err(),
+        "policy change does not catch up"
+    );
+    write_text("被排除合成文本", listener.window as HWND)?;
+    receive("被排除合成文本")?;
+    assert!(TEXT_READS.load(Ordering::Acquire) > before);
     assert!(write_text("零\0字符", listener.window as HWND).is_err());
     assert!(write_text(&"x".repeat(TEXT_LIMIT + 1), listener.window as HWND).is_err());
     drop(listener);
     println!(
-        "PASS isolated Windows clipboard: actual notifications, UTF16 multiline, pause/no catch-up, own-output suppression, same-text external recopy, limits and shutdown; interactive clipboard untouched"
+        "PASS isolated Windows clipboard: actual notifications, UTF16 multiline, pause/no catch-up, own-output suppression, same-text external recopy, limits, pre-read process exclusions/no catch-up and shutdown; interactive clipboard untouched"
     );
     Ok(())
 }

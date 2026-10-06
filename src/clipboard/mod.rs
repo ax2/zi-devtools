@@ -1,9 +1,11 @@
 //! Opt-in, bounded clipboard history with optional protected local snapshots.
 #[cfg(windows)]
 mod native;
+mod policy;
 #[cfg(windows)]
 mod storage;
 mod ui;
+pub use policy::CapturePolicy;
 pub use ui::State;
 
 const ITEM_LIMIT: usize = 500;

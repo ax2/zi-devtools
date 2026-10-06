@@ -688,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            396..=397 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_policy_fixture();
+            }
             394..=395 => {
                 self.page = Page::Clipboard;
                 self.clipboard.preview_retention_fixture();
@@ -1663,6 +1667,8 @@ impl DevToolsApp {
             .parent()
             .map(|p| p.join("ui-preferences.json"))
             .unwrap_or_else(preferences::path);
+        let clipboard =
+            crate::clipboard::State::new(preferences_path.with_file_name("clipboard-policy.json"));
         let preferences = Preferences::load(&preferences_path);
         let theme = if preferences.light {
             Theme::Light
@@ -1798,7 +1804,7 @@ impl DevToolsApp {
             sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
             calculator: Default::default(),
-            clipboard: Default::default(),
+            clipboard,
             updates: Default::default(),
             portable_update: Default::default(),
             msi_update: Default::default(),
@@ -3492,7 +3498,7 @@ impl DevToolsApp {
                 "快捷指令草稿",
             ),
             (self.clock.has_work() || self.clock.saving(), "时钟检查点"),
-            (self.clipboard.has_pending(), "剪贴板本机历史"),
+            (self.clipboard.has_pending(), "剪贴板历史或规则"),
             (self.delta_update.has_work(), "更新包工作台"),
             (self.portable_update.busy(), "便携升级准备"),
             (self.msi_update.busy(), "MSI升级准备"),
@@ -4335,7 +4341,7 @@ impl eframe::App for DevToolsApp {
                 ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
-                if self.clipboard.has_pending(){ui.label("剪贴板本机历史尚未保存或后台任务进行中，请返回等待/重试。放弃未保存修改不会清除此前保存的旧历史。");}
+                if self.clipboard.has_pending(){ui.label("剪贴板历史尚未保存、规则草稿未应用或后台任务进行中，请返回处理。放弃未保存修改不会清除此前保存的旧历史。");}
                 ui.horizontal_wrapped(|ui| {
                     if self.clipboard.has_pending() && ui.button("返回剪贴板保存").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clipboard;}
                     if self.updates.download_has_work() && ui.button("返回更新下载").clicked() { self.workspace_exit_confirm=false;self.page=Page::Updates; }
