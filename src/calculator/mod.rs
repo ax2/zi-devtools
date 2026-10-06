@@ -1,4 +1,6 @@
 //! Bounded expression evaluation; no scripts, file access or network operations.
+mod matrix;
+mod matrix_ui;
 mod parser;
 mod ui;
 pub use ui::State;

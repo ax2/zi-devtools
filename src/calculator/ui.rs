@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 pub struct State {
     pub expression: String,
+    matrix_mode: bool,
+    matrix: super::matrix_ui::State,
     degrees: bool,
     variables: BTreeMap<String, Value>,
     history: Vec<(String, Value)>,
@@ -15,6 +17,8 @@ impl Default for State {
     fn default() -> Self {
         Self {
             expression: "0.1 + 0.2".into(),
+            matrix_mode: false,
+            matrix: Default::default(),
             degrees: false,
             variables: BTreeMap::new(),
             history: Vec::new(),
@@ -61,7 +65,7 @@ impl State {
     pub fn ui(&mut self, ui: &mut egui::Ui, version: &str) {
         ui.heading("全能计算器");
         ui.label(format!(
-            "v{version} · 开发中：精确表达式 / 科学函数 / 程序员运算 / 单位 / 变量与历史"
+            "v{version} · 开发中：精确表达式 / 科学函数 / 单位 / 矩阵与线性方程 / 变量与历史"
         ));
         ui.small("精确模式采用 i128 有理数；科学函数为近似实数。历史仅保留在本次运行内存中。");
         ui.add_space(12.0);
@@ -70,6 +74,14 @@ impl State {
             ui.selectable_value(&mut self.degrees, false, "弧度 RAD");
             ui.selectable_value(&mut self.degrees, true, "角度 DEG");
         });
+        ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(&mut self.matrix_mode, false, "表达式计算");
+            ui.selectable_value(&mut self.matrix_mode, true, "矩阵与线性方程");
+        });
+        if self.matrix_mode {
+            self.matrix.ui(ui, &self.variables, self.degrees);
+            return;
+        }
         let input = ui.add(
             egui::TextEdit::singleline(&mut self.expression)
                 .char_limit(2048)
@@ -155,7 +167,7 @@ impl State {
             ui.label("进制：0xff / 0b1010 / 0o17；科学计数法 1e-3；变量 price=19.90，后续 price*3。");
             ui.label("单位：mm/cm/m/km/in/ft/mi，mg/g/kg/lb，ms/s/min/h/day，B/KB/MB/GB/KiB/MiB/GiB，C/F/K。单位区分大小写。");
             ui.horizontal_wrapped(|ui| { for example in ["0.1+0.2","(128+64)*3","sin(30)","0xff & 0x0f","5 km -> m","25 C -> F","1 GiB -> MB","price = 19.90"] { if ui.button(example).clicked() { self.expression=example.into(); input.request_focus(); } } });
-            ui.small("矩阵、复数、方程、绘图、日期计算、可选历史持久化及跨工具接力尚未实现。");
+            ui.small("矩阵及线性方程见上方工作区；复数、非线性方程、绘图、日期计算、可选历史持久化及通用接力继续开发。");
         });
         ui.collapsing(format!("变量（{}）", self.variables.len()), |ui| {
             for (name, v) in &self.variables {
@@ -191,6 +203,19 @@ impl State {
                 }
             });
         }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_matrix_fixture(&mut self) {
+        self.matrix_mode = true;
+        self.matrix.preview_fixture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_matrix_position(&self) -> egui::Pos2 {
+        self.matrix.preview_position()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_matrix_check(&self) {
+        self.matrix.preview_check();
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {

@@ -688,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            402..=405 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_matrix_fixture();
+            }
             400..=401 => {
                 self.page = Page::Clipboard;
                 self.clipboard.preview_image_fixture(ctx);
@@ -1417,6 +1421,14 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_clock_check(&mut self, phase: u8) {
         self.clock.preview_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_matrix_position(&self) -> egui::Pos2 {
+        self.calculator.preview_matrix_position()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_matrix_check(&self) {
+        self.calculator.preview_matrix_check();
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_calculator_position(&self) -> egui::Pos2 {

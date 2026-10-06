@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 402] = [
+const NAMES: [&str; 406] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -412,6 +412,10 @@ const NAMES: [&str; 402] = [
     "image-relay-light",
     "clipboard-image-dark",
     "clipboard-image-light",
+    "calculator-matrix-dark",
+    "calculator-matrix-light",
+    "calculator-matrix-small-dark",
+    "calculator-matrix-small-light",
 ];
 
 struct Capture {
@@ -683,6 +687,18 @@ impl eframe::App for Capture {
                     modifiers: egui::Modifiers::NONE,
                 });
             }
+        }
+        if std::env::args().nth(3).as_deref() == Some("matrix-smoke")
+            && matches!(self.frames, 20 | 21)
+        {
+            let pos = self.app.preview_matrix_position();
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frames == 20,
+                modifiers: egui::Modifiers::NONE,
+            });
         }
         if std::env::args().nth(3).as_deref() == Some("calculator-smoke") {
             let released = match self.frames {
@@ -1792,6 +1808,24 @@ impl eframe::App for Capture {
                     std::process::exit(0);
                 }
                 _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("matrix-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 402, self.fixture.clone());
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 900.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 40 {
+                self.app.preview_matrix_check();
+                println!(
+                    "PASS matrix native calculate button: pivoted exact multi-RHS solution; fixture only"
+                );
+                std::process::exit(0);
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(60));
@@ -2934,6 +2968,8 @@ impl eframe::App for Capture {
                 || (344..=345).contains(&self.scene)
             {
                 egui::vec2(980.0, 640.0)
+            } else if (404..=405).contains(&self.scene) {
+                egui::vec2(980.0, 760.0)
             } else if (302..=303).contains(&self.scene) {
                 egui::vec2(760.0, 640.0)
             } else if (282..=283).contains(&self.scene) {
@@ -2956,7 +2992,7 @@ impl eframe::App for Capture {
                 || (136..=137).contains(&self.scene)
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)
-                || (400..=401).contains(&self.scene)
+                || (400..=403).contains(&self.scene)
                 || (280..=281).contains(&self.scene)
                 || (276..=277).contains(&self.scene)
             {
