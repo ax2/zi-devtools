@@ -688,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            406..=409 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_sheet_fixture();
+            }
             402..=405 => {
                 self.page = Page::Calculator;
                 self.calculator.preview_matrix_fixture();
@@ -1421,6 +1425,31 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_clock_check(&mut self, phase: u8) {
         self.clock.preview_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sheet_io(&mut self, ctx: &egui::Context, folder: &std::path::Path, phase: u8) {
+        match phase {
+            0 => self.calculator.preview_sheet_io_start(ctx, folder),
+            1 => self.calculator.preview_sheet_io_read(ctx),
+            2 => self.calculator.preview_sheet_io_check(false),
+            3 => self.calculator.preview_sheet_io_check(true),
+            4 => self.calculator.preview_sheet_overwrite(ctx),
+            5 => self.calculator.preview_sheet_cleanup(),
+            6 => {
+                assert!(self.calculator.has_work());
+                self.tray_exit_requested.store(true, Ordering::Release);
+            }
+            7 => {
+                assert!(self.workspace_exit_confirm);
+                assert!(!self.quit_requested);
+                self.workspace_exit_confirm = false;
+            }
+            _ => unreachable!(),
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sheet_position(&self, apply: bool) -> egui::Pos2 {
+        self.calculator.preview_sheet_position(apply)
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_matrix_position(&self) -> egui::Pos2 {
@@ -3566,6 +3595,7 @@ impl DevToolsApp {
             ),
             (self.clock.has_work() || self.clock.saving(), "时钟检查点"),
             (self.clipboard.has_pending(), "剪贴板历史或规则"),
+            (self.calculator.has_work(), "计算工作表"),
             (self.delta_update.has_work(), "更新包工作台"),
             (self.portable_update.busy(), "便携升级准备"),
             (self.msi_update.busy(), "MSI升级准备"),
@@ -4209,6 +4239,7 @@ impl eframe::App for DevToolsApp {
             restore_main_window(self.window_handle, ctx);
         }
         self.clipboard.poll(ctx);
+        self.calculator.poll(ctx);
         self.planner_active.store(
             self.planner.needs_clock() || self.clock.needs_clock() || self.clipboard.needs_clock(),
             Ordering::Release,
@@ -4372,6 +4403,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.has_work()
                 || self.clock.saving()
                 || self.clipboard.has_pending()
+                || self.calculator.has_work()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
@@ -4405,6 +4437,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.has_work()
                 || self.clock.saving()
                 || self.clipboard.has_pending()
+                || self.calculator.has_work()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
@@ -4421,8 +4454,10 @@ impl eframe::App for DevToolsApp {
                 ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
+                if self.calculator.has_work(){ui.label("计算工作表有未保存内容、待读取确认或后台任务；请返回另存/恢复基线或放弃本次读取。后台读写中须等待，完全退出会丢失未保存工作。");}
                 if self.clipboard.has_pending(){ui.label("剪贴板历史尚未保存、规则草稿未应用或后台任务进行中，请返回处理。放弃未保存修改不会清除此前保存的旧历史。");}
                 ui.horizontal_wrapped(|ui| {
+                    if self.calculator.has_work() && ui.button("返回计算器工作表").clicked(){self.workspace_exit_confirm=false;self.page=Page::Calculator;}
                     if self.clipboard.has_pending() && ui.button("返回剪贴板保存").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clipboard;}
                     if self.updates.download_has_work() && ui.button("返回更新下载").clicked() { self.workspace_exit_confirm=false;self.page=Page::Updates; }
                     if self.delta_update.has_work() && ui.button("返回更新包工作台").clicked() {self.workspace_exit_confirm=false;self.page=Page::DeltaUpdate;}
@@ -4431,7 +4466,7 @@ impl eframe::App for DevToolsApp {
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.clipboard.saving() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.clipboard.saving() && !self.calculator.busy() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });

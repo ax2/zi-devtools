@@ -3,6 +3,8 @@ mod matrix;
 mod matrix_ui;
 mod parser;
 mod ui;
+mod worksheet;
+mod worksheet_ui;
 pub use ui::State;
 
 use std::collections::BTreeMap;

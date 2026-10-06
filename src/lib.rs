@@ -32,6 +32,7 @@ pub mod knowledge_index;
 pub mod knowledge_mcp;
 pub mod knowledge_search;
 pub mod knowledge_sources;
+mod local_files;
 pub mod markdown_preview;
 pub mod network_tools;
 pub mod planner;

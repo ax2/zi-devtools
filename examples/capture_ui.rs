@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 406] = [
+const NAMES: [&str; 410] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -416,6 +416,10 @@ const NAMES: [&str; 406] = [
     "calculator-matrix-light",
     "calculator-matrix-small-dark",
     "calculator-matrix-small-light",
+    "calculator-sheet-dark",
+    "calculator-sheet-light",
+    "calculator-sheet-small-dark",
+    "calculator-sheet-small-light",
 ];
 
 struct Capture {
@@ -687,6 +691,18 @@ impl eframe::App for Capture {
                     modifiers: egui::Modifiers::NONE,
                 });
             }
+        }
+        if std::env::args().nth(3).as_deref() == Some("worksheet-smoke")
+            && matches!(self.frames, 70 | 71 | 80 | 81)
+        {
+            let pos = self.app.preview_sheet_position(self.frames >= 80);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 70 | 80),
+                modifiers: egui::Modifiers::NONE,
+            });
         }
         if std::env::args().nth(3).as_deref() == Some("matrix-smoke")
             && matches!(self.frames, 20 | 21)
@@ -1805,6 +1821,34 @@ impl eframe::App for Capture {
                 87 => self.app.preview_prefix_check(7),
                 100 => {
                     self.app.preview_prefix_check(5);
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("worksheet-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 406, self.fixture.clone());
+                self.app.preview_sheet_io(ctx, &self.folder, 0);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 900.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                30 => self.app.preview_sheet_io(ctx, &self.folder, 1),
+                50 => self.app.preview_sheet_io(ctx, &self.folder, 2),
+                52 => self.app.preview_sheet_io(ctx, &self.folder, 6),
+                54 => self.app.preview_sheet_io(ctx, &self.folder, 7),
+                100 => self.app.preview_sheet_io(ctx, &self.folder, 3),
+                110 => self.app.preview_sheet_io(ctx, &self.folder, 4),
+                140 => {
+                    self.app.preview_sheet_io(ctx, &self.folder, 5);
+                    println!(
+                        "PASS actual worksheet: background atomic save/read, later edits remain dirty, native replacement checkbox and restore button, no assignment replay, exact fractions, tray exit guard and no-overwrite failure; synthetic only"
+                    );
                     std::process::exit(0);
                 }
                 _ => {}
@@ -2968,7 +3012,7 @@ impl eframe::App for Capture {
                 || (344..=345).contains(&self.scene)
             {
                 egui::vec2(980.0, 640.0)
-            } else if (404..=405).contains(&self.scene) {
+            } else if (404..=405).contains(&self.scene) || (408..=409).contains(&self.scene) {
                 egui::vec2(980.0, 760.0)
             } else if (302..=303).contains(&self.scene) {
                 egui::vec2(760.0, 640.0)
@@ -2993,6 +3037,7 @@ impl eframe::App for Capture {
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)
                 || (400..=403).contains(&self.scene)
+                || (406..=407).contains(&self.scene)
                 || (280..=281).contains(&self.scene)
                 || (276..=277).contains(&self.scene)
             {

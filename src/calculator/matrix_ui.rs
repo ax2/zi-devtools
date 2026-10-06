@@ -5,7 +5,8 @@ use super::{
 use eframe::egui;
 use std::collections::BTreeMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Input {
     rows: usize,
     cols: usize,
@@ -126,6 +127,39 @@ impl Input {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Saved {
+    a: Input,
+    b: Input,
+    operation: Operation,
+}
+impl Saved {
+    pub fn validate(&self) -> Result<(), String> {
+        for input in [&self.a, &self.b] {
+            if !(1..=8).contains(&input.rows)
+                || !(1..=8).contains(&input.cols)
+                || input.cells.len() != 64
+                || input.cells.iter().any(|s| s.len() > 512)
+                || input.paste.len() > 16 * 1024
+            {
+                return Err("工作表矩阵维度、64格内容或粘贴草稿超出限制".into());
+            }
+        }
+        Ok(())
+    }
+    pub fn describe(&self) -> String {
+        format!(
+            "A {}×{} · B {}×{} · {}",
+            self.a.rows,
+            self.a.cols,
+            self.b.rows,
+            self.b.cols,
+            self.operation.label()
+        )
+    }
+}
+
 struct ResultSnapshot {
     value: Matrix,
     revision: u64,
@@ -170,6 +204,24 @@ impl Default for State {
     }
 }
 impl State {
+    pub(super) fn snapshot(&self) -> Saved {
+        Saved {
+            a: self.a.clone(),
+            b: self.b.clone(),
+            operation: self.operation,
+        }
+    }
+    pub(super) fn matches(&self, saved: &Saved) -> bool {
+        self.a == saved.a && self.b == saved.b && self.operation == saved.operation
+    }
+    pub(super) fn restore(&mut self, saved: Saved) {
+        self.a = saved.a;
+        self.b = saved.b;
+        self.operation = saved.operation;
+        self.revision += 1;
+        self.result = None;
+        self.error.clear();
+    }
     fn compute(
         &mut self,
         variables: &BTreeMap<String, Value>,
@@ -375,6 +427,21 @@ mod tests {
         assert!(Input::from_tsv(&"1\n".repeat(9)).is_err());
         assert!(Input::from_tsv(&["1"; 9].join("\t")).is_err());
         assert!(Input::from_tsv(&"中".repeat(200)).is_err());
+    }
+    #[test]
+    fn restored_draft_keeps_input_but_clears_old_derived_result_without_evaluation() {
+        let mut state = State::default();
+        state.fixture();
+        state.compute(&BTreeMap::new(), false).unwrap();
+        assert!(state.result.is_some());
+        let mut saved = state.snapshot();
+        saved.a.cells[0] = "unbound = 10".into();
+        saved.a.paste = "unfinished\t".into();
+        saved.validate().unwrap();
+        state.restore(saved.clone());
+        assert!(state.result.is_none());
+        assert!(state.matches(&saved));
+        assert!(state.compute(&BTreeMap::new(), false).is_err());
     }
     #[test]
     fn bounds_and_invalid_cells_report_coordinates() {
