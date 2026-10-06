@@ -13,7 +13,7 @@ pub struct State {
     pub(super) sheet_name: String,
     pub(super) files: super::worksheet_ui::Files,
     #[cfg(feature = "ui-preview")]
-    input_rect: Option<(egui::Rect, egui::Rect)>,
+    pub(super) input_rect: Option<(egui::Rect, egui::Rect)>,
 }
 impl Default for State {
     fn default() -> Self {

@@ -398,8 +398,10 @@ mod tests {
     #[test]
     fn failed_or_disconnected_io_preserves_baseline_and_current_work() {
         let ctx = egui::Context::default();
-        let mut state = State::default();
-        state.expression = "keep".into();
+        let mut state = State {
+            expression: "keep".into(),
+            ..State::default()
+        };
         let baseline = state.files.baseline.clone();
         let (tx, rx) = mpsc::channel();
         state.files.job = Some(rx);
