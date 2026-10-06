@@ -4,3 +4,4 @@
 /backups/
 *.pdb
 .env*
+__pycache__/

@@ -24,9 +24,11 @@ fn stamp(handle: HANDLE) -> Result<u64> {
 pub fn own_creation_time() -> Result<u64> {
     stamp(unsafe { GetCurrentProcess() })
 }
-/// Existing MSI does not persist InstallLocation. Conservatively refuse direct
-/// EXE replacement while this user's product marker is installed.
-pub fn reject_installer_marker() -> Result<()> {
+/// Use native registered components even when legacy MSI omits InstallLocation.
+/// A stale marker without a resolvable product stays a conservative refusal.
+pub fn reject_installer_marker(directory: &std::path::Path) -> Result<()> {
+    let products = super::installer::registered_products()?;
+    super::installer::ensure_portable_directory(directory, &products)?;
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
     let path: Vec<u16> = "Software\\ZiCode\\ZiDevTools\0".encode_utf16().collect();
     let name: Vec<u16> = "Installed\0".encode_utf16().collect();
@@ -48,8 +50,8 @@ pub fn reject_installer_marker() -> Result<()> {
         "无法确认MSI所有权，拒绝便携替换"
     );
     ensure!(
-        status != 0 || installed == 0,
-        "当前用户已安装MSI版，请通过Windows Installer升级；便携替换暂时禁用"
+        status != 0 || installed == 0 || !products.is_empty(),
+        "存在安装标记但无法确认产品归属，请先使用Windows Installer修复；拒绝便携替换"
     );
     Ok(())
 }

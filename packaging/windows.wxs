@@ -2,7 +2,8 @@
   <Package Name="Zi DevTools" Manufacturer="ZiCode" Version="$(var.AppVersion)"
            UpgradeCode="61AF00B6-E92A-4519-A0A3-382347FA4051" Scope="perUser" InstallerVersion="500">
     <SummaryInformation Description="Zi DevTools Windows x64 installer" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Zi DevTools is already installed." />
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of Zi DevTools is already installed." />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
     <MediaTemplate EmbedCab="yes" />
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">

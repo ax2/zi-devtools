@@ -207,7 +207,7 @@ pub fn current_directory() -> Result<PathBuf> {
 }
 fn reject_msi(directory: &Path) -> Result<()> {
     #[cfg(windows)]
-    super::portable_process::reject_installer_marker()?;
+    super::portable_process::reject_installer_marker(directory)?;
     // The existing MSI installs here. Do not bypass Windows Installer ownership.
     for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(base) = std::env::var_os(variable) {

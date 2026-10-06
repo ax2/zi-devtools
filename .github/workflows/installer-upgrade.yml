@@ -1,0 +1,39 @@
+name: Installer upgrade transactions
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install pinned WiX
+        shell: pwsh
+        run: |
+          $toolDir = Join-Path $env:RUNNER_TEMP 'zi-wix-upgrade'
+          dotnet tool install --tool-path $toolDir wix --version 5.0.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "ZIDEVTOOLS_WIX=$toolDir/wix.exe" >> $env:GITHUB_ENV
+      - run: cargo build --locked --example inspect_installer
+      - name: Disposable native MSI upgrade and rollback
+        run: python scripts/installer_upgrade_smoke.py
+      - name: Preserve non-sensitive fixture diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-upgrade-diagnostics
+          path: ${{ runner.temp }}/zi-msi-transaction-*/*.log
+          retention-days: 7

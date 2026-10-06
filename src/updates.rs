@@ -3,6 +3,8 @@ pub mod delta;
 pub mod delta_files;
 pub mod delta_ui;
 pub mod download;
+#[cfg(windows)]
+pub mod installer;
 pub mod portable;
 #[cfg(windows)]
 pub mod portable_process;
