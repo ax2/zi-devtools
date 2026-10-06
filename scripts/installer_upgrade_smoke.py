@@ -18,6 +18,8 @@ ET.register_namespace('', NS[1:-1])
 
 
 def main():
+    if not __debug__:
+        raise RuntimeError('Optimized Python disables validation; installer fixture refused')
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true', help='Build fixtures without installing')
     args = parser.parse_args()
