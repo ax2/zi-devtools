@@ -193,6 +193,7 @@ pub struct DevToolsApp {
     config_text: String,
     tool_state: ToolState,
     calculator: crate::calculator::State,
+    clipboard: crate::clipboard::State,
     clock: crate::clock::State,
     updates: crate::updates::State,
     portable_update: crate::updates::portable_ui::State,
@@ -687,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            390..=391 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_fixture();
+            }
             388..=389 => {
                 self.page = Page::Recorder;
                 self.recorder.preview_spotlight_fixture();
@@ -1785,6 +1790,7 @@ impl DevToolsApp {
             sqlite_browser: Default::default(),
             ascii_codes: Default::default(),
             calculator: Default::default(),
+            clipboard: Default::default(),
             updates: Default::default(),
             portable_update: Default::default(),
             msi_update: Default::default(),
@@ -4124,6 +4130,7 @@ impl eframe::App for DevToolsApp {
             self.planner.needs_clock() || self.clock.needs_clock(),
             Ordering::Release,
         );
+        self.clipboard.poll();
         self.mcp.tick(ctx);
         if self.recorder.poll() {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -4603,6 +4610,11 @@ impl eframe::App for DevToolsApp {
                                     .unwrap_or("未声明"),
                             )
                         });
+                }
+                Page::Clipboard => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("clipboard-workbench-page")
+                        .show(ui, |ui| self.clipboard.ui(ui));
                 }
                 Page::Calculator => {
                     egui::ScrollArea::vertical()

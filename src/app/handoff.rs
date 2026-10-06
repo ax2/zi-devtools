@@ -149,6 +149,7 @@ impl DevToolsApp {
                 self.tool_state.selected.label().into(),
                 &self.tool_state.output,
             )),
+            Page::Clipboard => self.clipboard.transfer_text(),
             Page::Data => Some(("数据工作台导出".into(), &self.data_state.output)),
             Page::Notes | Page::Calendar => self.planner.transfer_text(),
             Page::Diff => Some(("文本差异报告".into(), &self.diff_state.diff_output)),

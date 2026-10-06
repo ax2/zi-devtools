@@ -22,3 +22,5 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - run: cargo test --locked
+      - name: Isolated Windows clipboard interoperability
+        run: cargo run --locked --features ui-preview --example clipboard_fixture

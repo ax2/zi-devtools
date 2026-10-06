@@ -6,6 +6,7 @@ pub mod agent_record_ui;
 pub mod agent_ui;
 pub mod app;
 pub mod calculator;
+pub mod clipboard;
 pub mod clock;
 pub mod commands;
 pub mod config;
