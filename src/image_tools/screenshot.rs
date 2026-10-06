@@ -172,6 +172,10 @@ pub struct State {
     canvas: Option<egui::Rect>,
 }
 impl State {
+    pub(super) fn relay_source(&self) -> Option<Arc<RgbaImage>> {
+        self.output.clone()
+    }
+
     pub fn capture_active(&self) -> bool {
         self.capture_requested || self.capture_inflight || self.selecting()
     }

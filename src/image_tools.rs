@@ -2,6 +2,7 @@
 mod batch;
 mod editor;
 mod metadata;
+mod relay;
 mod screenshot;
 #[cfg(all(windows, feature = "ui-preview"))]
 pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
@@ -69,7 +70,7 @@ enum Job {
     },
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     #[default]
     Single,
@@ -82,6 +83,9 @@ enum Mode {
 #[derive(Default)]
 pub struct State {
     mode: Mode,
+    origins: Vec<relay::Origin>,
+    relay: Option<relay::Transfer>,
+    relay_route: Option<&'static str>,
     batch: batch::State,
     metadata: metadata::State,
     editor: editor::State,
@@ -93,7 +97,7 @@ pub struct State {
     width: u32,
     format: Format,
     jpeg_quality: u8,
-    encoded: Option<Vec<u8>>,
+    encoded: Option<Arc<Vec<u8>>>,
     texture: Option<egui::TextureHandle>,
     message: String,
     error: bool,
@@ -143,7 +147,23 @@ impl State {
             Mode::Screenshot => "screenshot-workbench",
         }
     }
+    pub fn take_relay_route(&mut self) -> Option<&'static str> {
+        self.relay_route.take()
+    }
     pub fn poll_screenshot(&mut self, ctx: &egui::Context) {
+        if let Some(transfer) = &mut self.relay {
+            transfer.poll(ctx);
+        }
+        if self
+            .relay
+            .as_ref()
+            .is_some_and(|transfer| transfer.cancelled && !transfer.busy())
+        {
+            self.relay = None;
+        }
+
+        self.poll(ctx);
+        self.editor.poll(ctx);
         self.screenshot.poll(ctx);
     }
     pub fn take_screenshot_capture_request(&mut self) -> bool {
@@ -220,7 +240,7 @@ impl State {
             "编码预览已生成：720 × 405 · {:.2} MB；可确认后另存新文件",
             encoded.len() as f64 / 1_000_000.0
         );
-        self.encoded = Some(encoded);
+        self.encoded = Some(Arc::new(encoded));
         self.texture = Some(ctx.load_texture(
             "image-workbench-preview",
             preview,
@@ -249,6 +269,7 @@ impl State {
                 self.width = image.width();
                 self.source_bytes = bytes;
                 self.source = Some(image);
+                self.origins.clear();
                 self.encoded = None;
                 self.texture = Some(ctx.load_texture(
                     "image-workbench-preview",
@@ -268,7 +289,7 @@ impl State {
                 height,
             }) => {
                 let size = encoded.len();
-                self.encoded = Some(encoded);
+                self.encoded = Some(Arc::new(encoded));
                 self.texture = Some(ctx.load_texture(
                     "image-workbench-preview",
                     preview,
@@ -374,6 +395,7 @@ impl State {
             ui.selectable_value(&mut self.mode, Mode::Editor, "裁剪与标注");
             ui.selectable_value(&mut self.mode, Mode::Screenshot, "截图与透明套索");
         });
+        self.relay_ui(ui);
         ui.add_space(10.0);
         match self.mode {
             Mode::Batch => return self.batch.ui(ui),
@@ -387,6 +409,9 @@ impl State {
         ui.label("在本机查看图片、缩小尺寸、转换格式并预览编码后的文件大小；原图不会被覆盖。");
         ui.add_space(12.0);
         let busy = self.pending.is_some();
+        if !self.origins.is_empty() {
+            ui.label("当前原图来自内存接力；输入路径后可切换文件。另存需手动选择输出路径。");
+        }
         ui.label("原图路径");
         ui.horizontal(|ui| {
             if ui
@@ -453,9 +478,13 @@ impl State {
                                 .changed()
                             {
                                 self.encoded = None;
-                                self.output = suggested_output(Path::new(&self.input), format)
-                                    .to_string_lossy()
-                                    .into_owned();
+                                if !self.input.trim().is_empty() {
+                                    self.output = suggested_output(Path::new(&self.input), format)
+                                        .to_string_lossy()
+                                        .into_owned();
+                                } else {
+                                    self.output.clear();
+                                }
                             }
                         }
                     });
@@ -664,7 +693,7 @@ mod tests {
             input: original.to_string_lossy().into_owned(),
             output: target.to_string_lossy().into_owned(),
             format: Format::Jpeg,
-            encoded: Some(encoded),
+            encoded: Some(Arc::new(encoded)),
             ..Default::default()
         };
         state.save();

@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 398] = [
+const NAMES: [&str; 400] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -408,6 +408,8 @@ const NAMES: [&str; 398] = [
     "clipboard-retention-light",
     "clipboard-policy-dark",
     "clipboard-policy-light",
+    "image-relay-dark",
+    "image-relay-light",
 ];
 
 struct Capture {
@@ -1304,6 +1306,32 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("image-relay-smoke") {
+            if self.frames == 0 {
+                self.app.preview_image_relay_smoke(ctx, 0);
+                self.quick_smoke_phase = 1;
+            } else if self
+                .app
+                .preview_image_relay_smoke(ctx, self.quick_smoke_phase)
+            {
+                if self.quick_smoke_phase == 2 {
+                    println!(
+                        "PASS image relay: actual transparent selection pixels, unconfirmed targets refused, screenshot source preserved, chained conversion/editor with shared image and two versioned origins, exact recent IDs; no files written"
+                    );
+                    std::process::exit(0);
+                }
+                self.quick_smoke_phase = 2;
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(30),
+                "image relay smoke timeout"
+            );
+            self.app.update(ctx, frame);
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+
         if smoke_mode.as_deref() == Some("screenshot-overlay-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 348, self.fixture.clone());

@@ -88,11 +88,12 @@ enum Job {
 
 pub(super) struct State {
     input: String,
+    origins: Vec<super::relay::Origin>,
     output: String,
     source: Option<Arc<DynamicImage>>,
     source_texture: Option<egui::TextureHandle>,
     output_texture: Option<egui::TextureHandle>,
-    encoded: Option<Vec<u8>>,
+    encoded: Option<Arc<Vec<u8>>>,
     edits: Vec<Edit>,
     tool: Tool,
     drag_start: Option<Point>,
@@ -111,6 +112,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             input: String::new(),
+            origins: Vec::new(),
             output: String::new(),
             source: None,
             source_texture: None,
@@ -134,6 +136,71 @@ impl Default for State {
 }
 
 impl State {
+    pub(super) fn relay_source(
+        &self,
+    ) -> Option<(
+        super::relay::Source,
+        Vec<super::relay::Origin>,
+        &'static str,
+    )> {
+        if self.pending.is_some() {
+            return None;
+        }
+        // Pending edits must be rendered before transfer; never silently send the unedited source.
+        if let Some(encoded) = &self.encoded {
+            return Some((
+                super::relay::Source::Encoded(encoded.clone()),
+                self.origins.clone(),
+                "image-crop-annotate",
+            ));
+        }
+        if !self.edits.is_empty() {
+            return None;
+        }
+        self.source.as_ref().map(|image| {
+            (
+                super::relay::Source::Image(image.clone()),
+                self.origins.clone(),
+                "image-crop-annotate",
+            )
+        })
+    }
+    pub(super) fn relay_target_state(&self) -> (bool, bool) {
+        (
+            self.pending.is_some(),
+            self.source.is_some()
+                || !self.edits.is_empty()
+                || self.encoded.is_some()
+                || !self.input.is_empty(),
+        )
+    }
+    pub(super) fn receive_relay(&mut self, ctx: &egui::Context, value: &super::relay::Prepared) {
+        self.source = Some(value.image.clone());
+        self.origins = value.origins.clone();
+        self.input.clear();
+        self.output.clear();
+        self.edits.clear();
+        self.format = Format::Png;
+        self.drag_start = None;
+        self.source_texture = Some(ctx.load_texture(
+            "editor-source",
+            value.thumbnail.clone(),
+            egui::TextureOptions::LINEAR,
+        ));
+        self.invalidate();
+        self.message = "已接收内存图片；编辑后生成预览并选择路径另存。".into();
+        self.error = false;
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn verify_relay_source(&self, source: &Arc<DynamicImage>, steps: usize) {
+        assert!(Arc::ptr_eq(self.source.as_ref().unwrap(), source));
+        assert_eq!(self.origins.len(), steps);
+        assert!(self.edits.is_empty() && self.encoded.is_none());
+        assert!(self.input.is_empty() && self.output.is_empty());
+        assert_eq!(self.format, Format::Png);
+    }
+
     #[cfg(feature = "ui-preview")]
     pub(super) fn preview_fixture(&mut self, ctx: &egui::Context) {
         let image = DynamicImage::ImageRgba8(image::ImageBuffer::from_fn(960, 540, |x, y| {
@@ -177,7 +244,7 @@ impl State {
         self.output_texture = None;
     }
 
-    fn poll(&mut self, ctx: &egui::Context) {
+    pub(super) fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.pending else { return };
         let result = match rx.try_recv() {
             Ok(value) => value,
@@ -196,6 +263,7 @@ impl State {
                     .to_string_lossy()
                     .into_owned();
                 self.source = Some(image);
+                self.origins.clear();
                 self.edits.clear();
                 self.invalidate();
                 self.message = "图片已读取。选择工具，在画布上拖动或点击。".into();
@@ -211,7 +279,7 @@ impl State {
                     "输出预览已生成：{width} × {height} · {:.2} MB；确认画面后另存。",
                     encoded.len() as f64 / 1_000_000.0
                 );
-                self.encoded = Some(encoded);
+                self.encoded = Some(Arc::new(encoded));
                 self.output_texture =
                     Some(ctx.load_texture("editor-output", preview, egui::TextureOptions::LINEAR));
                 self.error = false;
@@ -523,9 +591,13 @@ impl State {
                             .selectable_value(&mut self.format, format, format.label())
                             .changed()
                         {
-                            self.output = suggested_output(Path::new(&self.input), format)
-                                .to_string_lossy()
-                                .into_owned();
+                            if !self.input.trim().is_empty() {
+                                self.output = suggested_output(Path::new(&self.input), format)
+                                    .to_string_lossy()
+                                    .into_owned();
+                            } else {
+                                self.output.clear();
+                            }
                             self.invalidate();
                         }
                     }
@@ -937,6 +1009,31 @@ mod tests {
     use super::*;
     use image::ImageFormat;
     #[test]
+    fn relay_refuses_unrendered_edits_and_invalidates_old_result() {
+        let image = Arc::new(DynamicImage::new_rgba8(12, 8));
+        let mut state = State {
+            source: Some(image),
+            ..Default::default()
+        };
+        assert!(state.relay_source().is_some());
+        state.edits.push(Edit::Redact(Rect {
+            a: Point::new(0.1, 0.1),
+            b: Point::new(0.5, 0.5),
+        }));
+        assert!(state.relay_source().is_none());
+        let mut bytes = Cursor::new(Vec::new());
+        DynamicImage::new_rgba8(4, 3)
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .unwrap();
+        state.encoded = Some(Arc::new(bytes.into_inner()));
+        assert!(matches!(
+            state.relay_source().unwrap().0,
+            super::super::relay::Source::Encoded(_)
+        ));
+        state.invalidate();
+        assert!(state.relay_source().is_none());
+    }
+    #[test]
     fn crop_redact_arrow_and_output_keep_original_unchanged() {
         let image =
             DynamicImage::ImageRgba8(RgbaImage::from_pixel(100, 80, Rgba([200, 200, 200, 255])));
@@ -1030,7 +1127,7 @@ mod tests {
         let mut state = State {
             input: input.to_string_lossy().into_owned(),
             output: output.to_string_lossy().into_owned(),
-            encoded: Some(encoded),
+            encoded: Some(Arc::new(encoded)),
             ..Default::default()
         };
         state.save();

@@ -688,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            398..=399 => {
+                self.page = Page::Images;
+                self.images.preview_relay_fixture(ctx);
+            }
             396..=397 => {
                 self.page = Page::Clipboard;
                 self.clipboard.preview_policy_fixture();
@@ -1641,6 +1645,21 @@ impl DevToolsApp {
         })
         .unwrap();
         assert_eq!(self.frameworks.selected, crate::framework::Tool::Threads);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_relay_smoke(&mut self, ctx: &egui::Context, phase: u8) -> bool {
+        self.page = Page::Images;
+        let ready = self.images.preview_relay_smoke(ctx, phase);
+        if ready {
+            if let Some(id) = self.images.take_relay_route() {
+                self.visit(id);
+                assert_eq!(
+                    self.preferences.recent.first().map(String::as_str),
+                    Some(id)
+                );
+            }
+        }
+        ready
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_plugin_navigation(&self) -> bool {
@@ -2982,7 +3001,7 @@ impl DevToolsApp {
     fn tool_actions(&mut self, ui: &mut egui::Ui) {
         let p = self.colors;
         let mut selected = None;
-        let shortcut = self.handoff.is_none()
+        let shortcut = (self.handoff.is_none() && !self.images.relay_active())
             && !self.launcher_open
             && ui
                 .ctx()
@@ -4173,10 +4192,13 @@ impl eframe::App for DevToolsApp {
         let hotkey_events: Vec<_> = self.hotkey.events.try_iter().collect();
         for event in hotkey_events {
             match event {
-                crate::hotkey::Event::Triggered => {
+                crate::hotkey::Event::Triggered if !self.images.relay_active() => {
                     self.open_quick(ctx);
                     self.prefix.open();
                     self.quick_focus = true;
+                }
+                crate::hotkey::Event::Triggered => {
+                    restore_main_window(self.window_handle, ctx);
                 }
                 crate::hotkey::Event::Configured(setting, result) => match result {
                     Ok(()) => {
@@ -4369,7 +4391,7 @@ impl eframe::App for DevToolsApp {
             return;
         }
 
-        if self.handoff.is_none()
+        if (self.handoff.is_none() && !self.images.relay_active())
             && !self.workspace_exit_confirm
             && !self.data_state.modal_open()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K))
@@ -4405,8 +4427,9 @@ impl eframe::App for DevToolsApp {
         self.sidebar(ctx);
         self.handoff_bar(ctx);
         if matches!(self.page, Page::Notes | Page::Calendar) && self.planner.editor_open() {
-            let enabled =
-                !self.launcher_open && self.handoff.is_none() && !self.workspace_exit_confirm;
+            let enabled = !self.launcher_open
+                && (self.handoff.is_none() && !self.images.relay_active())
+                && !self.workspace_exit_confirm;
             egui::TopBottomPanel::bottom("planner-editor-actions")
                 .frame(
                     egui::Frame::new()
@@ -4428,7 +4451,7 @@ impl eframe::App for DevToolsApp {
                     }
                     scroll.show(ui, |ui| self.planner.ui(ui));
                     let save_shortcut = !self.launcher_open
-                        && self.handoff.is_none()
+                        && (self.handoff.is_none() && !self.images.relay_active())
                         && !self.workspace_exit_confirm
                         && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::S));
                     self.planner.finish_editor_actions(save_shortcut);
@@ -4510,8 +4533,11 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("plugins-page")
                         .show(ui, |ui| {
-                            self.plugins
-                                .ui(ui, !self.launcher_open && self.handoff.is_none())
+                            self.plugins.ui(
+                                ui,
+                                !self.launcher_open
+                                    && (self.handoff.is_none() && !self.images.relay_active()),
+                            )
                         });
                     if self.plugins.selected != previous
                         && let Some(id) = self.plugins.selected.clone()
@@ -4782,7 +4808,8 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| {
                             self.frameworks.ui(
                                 ui,
-                                !self.launcher_open && self.handoff.is_none(),
+                                !self.launcher_open
+                                    && (self.handoff.is_none() && !self.images.relay_active()),
                                 category,
                             )
                         });
@@ -4796,6 +4823,9 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.integrations.ui(ui));
                 }
             });
+        if let Some(id) = self.images.take_relay_route() {
+            self.visit(id);
+        }
         self.handoff_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
