@@ -1,0 +1,30 @@
+name: Update signing key
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/update-trust.json'
+      - 'src/updates/signed.rs'
+      - 'examples/publisher_key.rs'
+      - 'examples/sign_update.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/update-signing.yml'
+permissions:
+  contents: read
+jobs:
+  publisher-key:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify project secret matches embedded public key
+        shell: pwsh
+        env:
+          ZI_DEVTOOLS_UPDATE_SIGNING_KEY: ${{ secrets.ZI_DEVTOOLS_UPDATE_SIGNING_KEY }}
+        run: |
+          cargo run --locked --example publisher_key -- check-env
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

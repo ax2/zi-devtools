@@ -1,5 +1,5 @@
 //! Explicit bounded official release download; no installation or execution.
-use super::{Asset, REPOSITORY, Report, delta_files, verification};
+use super::{Asset, REPOSITORY, Report, delta_files, signed, verification};
 use anyhow::{Context, Result, ensure};
 use eframe::egui;
 use sha2::{Digest, Sha256};
@@ -112,6 +112,8 @@ pub struct Downloaded {
     pub version: semver::Version,
     pub sha256: String,
     pub bytes: Arc<[u8]>,
+    pub tool_changes: Arc<[String]>,
+    pub authentication: Option<Arc<signed::Authenticated>>,
 }
 pub fn download(
     report: &Report,
@@ -146,24 +148,65 @@ pub fn download(
         asset.size > 0 && asset.size <= MAX_ASSET,
         "发布附件超过128 MiB限制"
     );
-    let sums = report
-        .assets
-        .iter()
-        .find(|a| {
-            a.name == "SHA256SUMS.txt" && a.browser_download_url == format!("{base}SHA256SUMS.txt")
-        })
-        .context("发布缺少官方SHA256SUMS.txt，不能开始下载")?;
+    let manifest = report.assets.iter().find(|a| {
+        a.name == "update-manifest.json"
+            && a.browser_download_url == format!("{base}update-manifest.json")
+    });
+    let signature = report.assets.iter().find(|a| {
+        a.name == "update-manifest.sig"
+            && a.browser_download_url == format!("{base}update-manifest.sig")
+    });
+    ensure!(
+        manifest.is_some() == signature.is_some(),
+        "发布签名文件不完整；拒绝回退为未签名下载"
+    );
     let client = client()?;
-    let sums = fetch(
-        &client,
-        &sums.browser_download_url,
-        sums.size,
-        8192,
-        cancel,
-        &AtomicU64::new(0),
-    )?;
-    let sums = verification::checksums(&sums, &report.version)?;
-    let expected = sums.get(&asset.name).context("清单缺少所选附件")?;
+    let (expected, authentication) = if let (Some(manifest), Some(signature)) =
+        (manifest, signature)
+    {
+        let raw = fetch(
+            &client,
+            &manifest.browser_download_url,
+            manifest.size,
+            signed::MAX_MANIFEST as u64,
+            cancel,
+            &AtomicU64::new(0),
+        )?;
+        let signature = fetch(
+            &client,
+            &signature.browser_download_url,
+            signature.size,
+            signed::MAX_SIGNATURE as u64,
+            cancel,
+            &AtomicU64::new(0),
+        )?;
+        cancelled(cancel)?;
+        let authenticated = signed::verify_official(&raw, &signature)?;
+        let hash = signed::expected_file(&authenticated, &report.version, &asset.name, asset.size)?
+            .sha256
+            .clone();
+        (hash, Some(authenticated))
+    } else {
+        let sums = report
+            .assets
+            .iter()
+            .find(|a| {
+                a.name == "SHA256SUMS.txt"
+                    && a.browser_download_url == format!("{base}SHA256SUMS.txt")
+            })
+            .context("发布缺少官方SHA256SUMS.txt，不能开始下载")?;
+        let sums = fetch(
+            &client,
+            &sums.browser_download_url,
+            sums.size,
+            8192,
+            cancel,
+            &AtomicU64::new(0),
+        )?;
+        let sums = verification::checksums(&sums, &report.version)?;
+        let expected = sums.get(&asset.name).context("清单缺少所选附件")?.clone();
+        (expected, None)
+    };
     let bytes = fetch(
         &client,
         &asset.browser_download_url,
@@ -179,15 +222,21 @@ pub fn download(
     }
     let sha256 = format!("{:x}", hash.finalize());
     ensure!(
-        &sha256 == expected,
+        sha256 == expected,
         "下载摘要不匹配，内容已丢弃，请重新检查版本后重试"
     );
     cancelled(cancel)?;
+    let tool_changes = match &authentication {
+        Some(authenticated) => signed::changes(&authenticated.manifest.tools)?,
+        None => Vec::new(),
+    };
     Ok(Downloaded {
         name: asset.name.clone(),
         version: report.version.clone(),
         sha256,
         bytes: bytes.into(),
+        authentication: authentication.map(Arc::new),
+        tool_changes: tool_changes.into(),
     })
 }
 enum Completion {
@@ -378,7 +427,92 @@ impl State {
                     self.error = false;
                 }
             });
-            ui.weak("SHA-256与官方同版清单一致，尚未验证发布者签名。不会自动运行、安装或修改Windows Installer状态。");
+            if let Some(authenticated) = &preview.authentication {
+                ui.label(egui::RichText::new("发布签名与文件摘要均已验证").strong());
+                ui.label(format!("发布公钥指纹：{}", authenticated.key_id));
+                ui.weak(format!(
+                    "目标源码：{} · Windows {}+ x64",
+                    authenticated.manifest.source_commit,
+                    authenticated.manifest.minimum_windows_major
+                ));
+                {
+                    let changes = &preview.tool_changes;
+                    egui::CollapsingHeader::new(format!("内置工具版本差异（{}项）", changes.len()))
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            if changes.is_empty() {
+                                ui.label("目标与当前工具版本清单一致。");
+                            }
+                            egui::ScrollArea::vertical()
+                                .id_salt("signed-tool-changes")
+                                .max_height(220.0)
+                                .show(ui, |ui| {
+                                    for change in changes.iter() {
+                                        ui.label(change);
+                                    }
+                                });
+                        });
+                }
+            } else {
+                ui.weak("该发布未提供签名清单，仅验证SHA-256完整性，未认证发布者签名。");
+            }
+            ui.weak("不会自动运行、安装或修改Windows Installer状态。");
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_signed_fixture(&mut self, failure: bool) {
+        self.preview = None;
+        self.unsaved = false;
+        self.error = failure;
+        self.message = if failure {
+            "发布签名验证失败（合成演示），拒绝回退或保存。"
+        } else {
+            "合成演示：签名状态与版本差异展示，未真实下载或签名。"
+        }
+        .into();
+        if !failure {
+            let mut tools = signed::tools(
+                include_bytes!("../../docs/tools.json"),
+                env!("CARGO_PKG_VERSION"),
+            )
+            .expect("catalog fixture");
+            let changed = tools
+                .iter_mut()
+                .find(|t| t.id == "app-update-check")
+                .expect("updates fixture");
+            changed.version = Some("0.5.0".into());
+            let changes = signed::changes(&tools).expect("changes fixture");
+            let manifest = signed::Manifest {
+                schema: 1,
+                version: "0.83.0".into(),
+                source_commit: "b".repeat(40),
+                platform: "windows-x64".into(),
+                minimum_windows_major: 10,
+                files: [
+                    "ZiDevTools-0.83.0-windows-x64.exe",
+                    "ZiDevTools-0.83.0-windows-x64.msi",
+                    "ZiDevToolsMcp-0.83.0-windows-x64.exe",
+                ]
+                .iter()
+                .map(|name| signed::File {
+                    name: (*name).into(),
+                    size: 65536,
+                    sha256: "b".repeat(64),
+                })
+                .collect(),
+                tools,
+            };
+            self.preview = Some(Downloaded {
+                name: "ZiDevTools-0.83.0-windows-x64.exe".into(),
+                version: semver::Version::new(0, 83, 0),
+                sha256: "b".repeat(64),
+                bytes: vec![0; 65536].into(),
+                authentication: Some(Arc::new(signed::Authenticated {
+                    manifest,
+                    key_id: "b".repeat(64),
+                })),
+                tool_changes: changes.into(),
+            });
         }
     }
     #[cfg(feature = "ui-preview")]
@@ -396,6 +530,8 @@ impl State {
                 version: semver::Version::new(0, 81, 0),
                 sha256: "a".repeat(64),
                 bytes: vec![0; 1024].into(),
+                authentication: None,
+                tool_changes: Vec::new().into(),
             });
         }
         self.unsaved = false;
@@ -548,10 +684,41 @@ mod tests {
             version: semver::Version::new(1, 0, 0),
             sha256: "a".repeat(64),
             bytes: vec![0].into(),
+            authentication: None,
+            tool_changes: Vec::new().into(),
         })))
         .unwrap();
         state.poll();
         assert!(!state.has_work());
         assert!(state.preview.is_none());
+    }
+    #[test]
+    fn partial_signature_metadata_never_falls_back_to_unsigned_download() {
+        let name = "ZiDevTools-1.2.3-windows-x64.exe";
+        let base = format!("{REPOSITORY}/releases/download/v1.2.3/");
+        let asset = Asset {
+            name: name.into(),
+            size: 3,
+            browser_download_url: format!("{base}{name}"),
+        };
+        let report = Report {
+            version: semver::Version::new(1, 2, 3),
+            url: format!("{REPOSITORY}/releases/tag/v1.2.3"),
+            notes: String::new(),
+            assets: vec![
+                asset.clone(),
+                Asset {
+                    name: "update-manifest.json".into(),
+                    size: 3,
+                    browser_download_url: format!("{base}update-manifest.json"),
+                },
+            ],
+        };
+        assert!(
+            download(&report, &asset, &AtomicBool::new(false), &AtomicU64::new(0))
+                .unwrap_err()
+                .to_string()
+                .contains("拒绝回退")
+        );
     }
 }

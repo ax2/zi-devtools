@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.82.0-dev.17"
+version = "0.82.0-dev.18"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -5589,6 +5589,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rfd",
+ "ring",
  "rusqlite",
  "scraper",
  "semver",
@@ -5607,6 +5608,7 @@ dependencies = [
  "windows-capture",
  "windows-sys 0.59.0",
  "winresource",
+ "zeroize",
  "zip",
 ]
 

@@ -3,6 +3,7 @@ pub mod delta;
 pub mod delta_files;
 pub mod delta_ui;
 pub mod download;
+pub mod signed;
 pub mod verification;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
@@ -116,6 +117,8 @@ fn parse(bytes: &[u8], channel: Channel) -> Result<Option<Report>, String> {
             format!("ZiDevTools-{tag}-windows-x64.msi"),
             format!("ZiDevToolsMcp-{tag}-windows-x64.exe"),
             "SHA256SUMS.txt".into(),
+            "update-manifest.json".into(),
+            "update-manifest.sig".into(),
         ];
         let mut assets = Vec::new();
         for asset in release.assets {
@@ -325,7 +328,9 @@ impl State {
                         egui::RichText::new(format!("{status} · {}", report.version)).strong(),
                     );
                     ui.hyperlink_to("查看 GitHub 发布页", &report.url);
-                    ui.label("以下为发布附件大小；尚未下载或验证文件摘要、签名。");
+                    ui.label(
+                        "附件大小来自发布信息；点击下载后核对大小、摘要及该版本提供的发布签名。",
+                    );
                     if report.assets.is_empty() {
                         ui.colored_label(
                             ui.visuals().warn_fg_color,
@@ -335,7 +340,7 @@ impl State {
                     for asset in &report.assets {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(format!("{} · {}", asset.name, size(asset.size)));
-                            if asset.name != "SHA256SUMS.txt"
+                            if (asset.name.ends_with(".exe") || asset.name.ends_with(".msi"))
                                 && ui
                                     .add_enabled(
                                         !self.download.has_work(),
@@ -381,6 +386,38 @@ impl State {
     pub fn preview_download(&mut self, failure: bool) {
         self.result = None;
         self.download.preview_fixture(failure);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_signed_download(&mut self, failure: bool) {
+        self.result = None;
+        self.download.preview_signed_fixture(failure);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_signed_report(&mut self) {
+        let version = semver::Version::new(0, 83, 0);
+        let assets = [
+            ("ZiDevTools-0.83.0-windows-x64.exe", 27835392),
+            ("ZiDevTools-0.83.0-windows-x64.msi", 9744384),
+            ("ZiDevToolsMcp-0.83.0-windows-x64.exe", 2176512),
+            ("SHA256SUMS.txt", 306),
+            ("update-manifest.json", 25000),
+            ("update-manifest.sig", 212),
+        ]
+        .into_iter()
+        .map(|(name, size)| Asset {
+            name: name.into(),
+            size,
+            browser_download_url: format!("{REPOSITORY}/releases/download/v0.83.0/{name}"),
+        })
+        .collect();
+        self.result = Some(Ok(Some(Report {
+            version,
+            url: format!("{REPOSITORY}/releases/tag/v0.83.0"),
+            notes:
+                "合成界面演示，版本/附件并非实际公开发布。签名在下载时验证，列表不预先宣称已认证。"
+                    .into(),
+            assets,
+        })));
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_verification(&mut self, failure: bool) {

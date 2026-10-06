@@ -685,6 +685,16 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            370..=373 => {
+                self.page = Page::Updates;
+                self.preferences.updates = Default::default();
+                self.updates.preview_signed_download(scene >= 372);
+            }
+            374..=375 => {
+                self.page = Page::Updates;
+                self.preferences.updates = Default::default();
+                self.updates.preview_signed_report();
+            }
             366..=369 => {
                 self.page = Page::Updates;
                 self.preferences.updates = Default::default();

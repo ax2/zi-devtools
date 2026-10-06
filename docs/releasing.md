@@ -9,8 +9,8 @@
 1. 修改 Cargo.toml 版本、docs/tools.json 的版本和日期、docs/release-notes.md；运行 `python scripts/sync_tools.py`。
 2. 提交源代码与生成文档，等待 CI 通过。
 3. 在 Actions 运行 Release（workflow_dispatch）：读取 Cargo 版本，通过检查后自动创建 `v<version>` 标签和 Release。也可推送同名标签触发。
-4. Windows runner 执行文档同步检查、fmt、Clippy、测试、release 构建、安装器生成、静默安装/卸载检查，然后发布 MSI、便携 EXE 与 SHA256SUMS.txt。
-5. 已有 Release 不允许覆写；修复需要新版本。发版后下载四件资产，执行 `python scripts/verify_release.py --artifact-dir release/stage-current-public --version <版本号>`，检查三件程序/安装文件与 SHA256SUMS 完整且一致，然后更新官网清单快照。校验和检查检测文件损坏，不等于发布者签名验证。
+4. Windows runner 执行文档同步检查、fmt、Clippy、测试、release 构建、安装器生成、静默安装/卸载检查，然后用项目签名Secret生成并自验update-manifest.json/update-manifest.sig，再发布MSI、双EXE、SHA256SUMS及两件签名元数据（六件）。缺失/错误签名密钥时失败，不发布无签名新版本。
+5. 已有 Release 不允许覆写；修复需要新版本。后续签名正式版发版后下载六件资产，执行 `python scripts/verify_release.py --artifact-dir release/stage-current-public --version <版本号>`，检查三件程序/安装文件与 SHA256SUMS 完整且一致，然后更新官网清单快照。SHA256SUMS检测损坏；另外使用verify_signed_update核验内置公钥签名与每件文件，详情见[签名维护](update-signing.md)。历史v0.81.0四件资产不含签名，不能补称已认证。
 
 本地构建：`cargo build --release --locked`。使用 .NET 8 执行 `dotnet tool install --global wix --version 5.0.2` 后，再执行 `pwsh -File scripts/package.ps1`。默认输出到 release/：MSI、桌面便携 EXE、知识库 MCP 便携 EXE、SHA256SUMS，无 ZIP。如果旧便携 EXE 正在运行，可用 `pwsh -File scripts/package.ps1 -OutputDir release/stage-current` 在项目内独立目录打包，并用 `python scripts/installer_smoke.py --artifact-dir release/stage-current` 验证；CI 继续使用默认目录。MSI 同时安装两个程序，便携使用时将两 EXE 放在同一目录。安装为当前用户，不需要管理员权限。最低 Windows 10，x64。当前未配置代码签名，不能声明 Microsoft Store 认证。
 

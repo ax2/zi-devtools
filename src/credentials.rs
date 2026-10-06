@@ -4,6 +4,10 @@ use sha2::{Digest, Sha256};
 
 pub struct Target(String);
 impl Target {
+    /// Publisher-only namespace, never used or enumerated by normal updates.
+    pub fn update_publisher() -> Self {
+        Self("ZiDevTools/v1/publisher/ax2/zi-devtools/update-ed25519".into())
+    }
     /// Separate namespace, bound to the normalized complete MCP endpoint.
     pub fn mcp_http(endpoint: &str) -> Result<Self> {
         let url = crate::mcp_http::HttpConfig {
