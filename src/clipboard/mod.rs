@@ -1,6 +1,8 @@
 //! Opt-in, bounded clipboard history. No persistence or network access.
 #[cfg(windows)]
 mod native;
+#[cfg(windows)]
+mod storage;
 mod ui;
 pub use ui::State;
 
@@ -8,7 +10,8 @@ const ITEM_LIMIT: usize = 500;
 const TEXT_LIMIT: usize = 1024 * 1024;
 const BYTE_LIMIT: usize = 32 * 1024 * 1024;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Entry {
     pub id: u64,
     pub text: String,
@@ -16,7 +19,8 @@ pub struct Entry {
     pub time: String,
     pub pinned: bool,
 }
-#[derive(Default)]
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct History {
     pub entries: Vec<Entry>,
     next: u64,

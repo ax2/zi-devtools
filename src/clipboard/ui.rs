@@ -13,16 +13,71 @@ pub struct State {
     paused: bool,
     #[cfg(windows)]
     listener: Option<super::native::Listener>,
+    #[cfg(windows)]
+    storage: super::storage::Persistence,
+    #[cfg(windows)]
+    forget_confirm: bool,
+    #[cfg(windows)]
+    restore_confirm: bool,
 }
 impl State {
-    pub fn poll(&mut self) {
+    #[cfg(windows)]
+    fn storage_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("本机历史保存 · Windows用户保护").default_open(true).show(ui,|ui|{
+            ui.label(if self.storage.enabled {"已开启：后台保存；重启恢复历史，采集需另行开启。"} else {"未开启：历史只在会话内存中，退出后清空。"});
+            ui.small("保存包含文本、来源、时间和置顶状态，保护范围为当前Windows用户；同用户程序仍可能访问。不开启云同步。");
+            if let Some(path)=&self.storage.path {ui.small(format!("本机路径：{}",path.display()));}
+            ui.horizontal_wrapped(|ui|{
+                if ui.add_enabled(!self.storage.busy(),egui::Button::new(if self.storage.enabled {"立即保存 / 重试"} else {"开启本机保存与重启恢复"})).clicked(){self.storage.save_now(ui.ctx(),&self.history);}
+                if ui.add_enabled(!self.storage.busy(),egui::Button::new("停止保存并删除本机历史…")).clicked(){self.forget_confirm=true;}
+                if self.storage.busy(){ui.spinner();ui.label("本机读写中，退出前请等待");}
+                else if self.storage.pending(){ui.label("尚有未保存的历史变化");}
+            });
+            if self.storage.load_failed && ui.add_enabled(!self.storage.busy(),egui::Button::new("重试读取此前历史")).clicked(){
+                if self.history.entries.is_empty(){self.start_reload(ui.ctx());}else{self.restore_confirm=true;}
+            }
+            if self.restore_confirm {
+                ui.label(format!("读取旧历史将替换当前{}条会话历史，并关闭采集。确认继续？",self.history.entries.len()));
+                ui.horizontal(|ui|{if ui.button("确认读取并替换").clicked(){self.start_reload(ui.ctx());self.restore_confirm=false;}
+                if ui.button("取消读取").clicked(){self.restore_confirm=false;}});
+            }
+            if !self.storage.error.is_empty(){ui.label(&self.storage.error);}
+            if self.forget_confirm {
+                ui.label("停止后会话历史仍可使用；删除此前保存的本机快照，重启不恢复。确认删除？");
+                ui.horizontal(|ui|{
+                    if ui.add_enabled(!self.storage.busy(),egui::Button::new("确认停止并删除")).clicked(){self.storage.forget(ui.ctx());self.forget_confirm=false;}
+                    if ui.button("取消").clicked(){self.forget_confirm=false;}
+                });
+            }
+        });
+    }
+    #[cfg(windows)]
+    fn start_reload(&mut self, ctx: &egui::Context) {
+        self.listener = None;
+        self.selected.clear();
+        self.output.clear();
+        self.storage.reload(ctx);
+    }
+    pub fn poll(&mut self, ctx: &egui::Context) {
+        #[cfg(windows)]
+        {
+            let before = self.storage.restored_revision;
+            self.storage.poll(ctx, &mut self.history);
+            if before != self.storage.restored_revision {
+                self.selected.clear();
+                self.output.clear();
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = ctx;
         #[cfg(windows)]
         if let Some(listener) = &self.listener {
             for event in listener.rx.try_iter().take(64) {
                 match event {
                     super::native::Event::Text(text, source) if !self.paused => {
-                        if let Err(e) = self.history.insert(text, source) {
-                            self.message = e;
+                        match self.history.insert(text, source) {
+                            Err(e) => self.message = e,
+                            Ok(()) => self.storage.changed(),
                         }
                     }
                     super::native::Event::Error(e) => self.message = e,
@@ -40,6 +95,40 @@ impl State {
             self.output.clear();
         }
     }
+    fn changed(&mut self) {
+        #[cfg(windows)]
+        self.storage.changed();
+    }
+    pub fn saving(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.storage.busy()
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    pub fn needs_clock(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.storage.needs_clock()
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    pub fn has_pending(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.storage.pending()
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
     fn copy(&mut self, ui: &egui::Ui, text: String) {
         #[cfg(windows)]
         if let Some(listener) = &self.listener {
@@ -53,13 +142,23 @@ impl State {
         self.message = "已交给系统剪贴板".into();
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        #[cfg(windows)]
+        if self.storage.restoring() {
+            ui.heading("正在恢复本机保护历史");
+            ui.spinner();
+            ui.label("完成前暂不修改历史或开启采集。");
+            return;
+        }
         ui.heading("超级剪贴板");
-        ui.label("v0.1.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
-        ui.label("主动开启后采集新复制的文本，只保存在本次运行内存中；暂停不补采，彻底退出后清空。图片、富文本、文件引用及本机历史保存尚待开发。");
+        ui.label("v0.2.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
+        ui.label("主动开启后采集新复制的文本；可另行开启本机保护保存，重启恢复历史但不自动采集。图片、富文本、文件引用尚待开发。");
         #[cfg(windows)]
         ui.horizontal_wrapped(|ui| {
             if self.listener.is_none() {
-                if ui.button("开启文本历史采集").clicked() {
+                if ui
+                    .add_enabled(!self.storage.busy(), egui::Button::new("开启文本历史采集"))
+                    .clicked()
+                {
                     match super::native::Listener::start(ui.ctx().clone()) {
                         Ok(listener) => {
                             self.listener = Some(listener);
@@ -91,7 +190,7 @@ impl State {
                 }
                 if ui.button("关闭采集").clicked() {
                     self.listener = None;
-                    self.message = "已关闭，历史仅保留到退出；可主动清空".into();
+                    self.message = "已关闭采集；历史保存状态见下方".into();
                 }
             }
             ui.label(format!(
@@ -111,6 +210,7 @@ impl State {
                 if ui.button("确认清空").clicked() {
                     self.history.entries.clear();
                     self.selected.clear();
+                    self.changed();
                     self.clear_confirm = false;
                 }
                 if ui.button("取消").clicked() {
@@ -118,13 +218,16 @@ impl State {
                 }
             });
         }
-        ui.small("当前最多500条、单条1 MiB。来源可能未知；应用排除尚未接入，复制敏感内容前请暂停。默认不采集、不保存到磁盘、不联网。");
+        #[cfg(windows)]
+        self.storage_ui(ui);
+        ui.small("当前最多500条、单条1 MiB。来源可能未知；应用排除尚未接入，复制敏感内容前请暂停。默认不采集、不联网；本机保存须主动开启。");
         ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("搜索文本或来源应用"));
         if !self.message.is_empty() {
             ui.label(&self.message);
         }
         ui.separator();
         let query = self.search.to_lowercase();
+        let mut pin_changed = false;
         let mut copy = None;
         let mut delete = None;
         egui::ScrollArea::vertical()
@@ -154,7 +257,9 @@ impl State {
                                     self.selected.retain(|id| *id != entry.id);
                                 }
                             }
-                            ui.checkbox(&mut entry.pinned, "置顶保留");
+                            if ui.checkbox(&mut entry.pinned, "置顶保留").changed() {
+                                pin_changed = true;
+                            }
                             ui.small(format!("{} · {}", entry.source, entry.time));
                             if ui.button("复制").clicked() {
                                 copy = Some(entry.text.clone());
@@ -171,7 +276,11 @@ impl State {
                     });
                 }
             });
+        if pin_changed {
+            self.changed();
+        }
         if let Some(id) = delete {
+            self.changed();
             self.history.entries.retain(|e| e.id != id);
             self.selected.retain(|x| *x != id);
         }
@@ -221,12 +330,19 @@ impl State {
             None
         } else {
             Some((
-                format!("超级剪贴板0.1.0组合 · 条目{:?}", self.selected),
+                format!("超级剪贴板0.2.0组合 · 条目{:?}", self.selected),
                 &self.output,
             ))
         }
     }
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub fn preview_storage_fixture(&mut self) {
+        self.preview_fixture();
+        self.storage.preview_enabled();
+        self.message = "合成示例：本机保存已开启的界面；不读取或写入真实数据。".into();
+    }
     pub fn preview_fixture(&mut self) {
+        self.changed();
         self.selected.clear();
         self.output.clear();
         for (text, source) in [
@@ -296,7 +412,7 @@ mod tests {
         assert!(state.transfer_text().is_some());
         let remove = state.selected[0];
         state.history.entries.retain(|e| e.id != remove);
-        state.poll();
+        state.poll(&egui::Context::default());
         assert!(state.transfer_text().is_none());
         assert!(!state.selected.contains(&remove));
     }
