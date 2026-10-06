@@ -60,19 +60,32 @@ jobs:
         run: |
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version
           python scripts/installer_smoke.py
-      - name: Sign and verify update manifest
+      - name: Collect previous release baseline without execution
+        id: delta-baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/release_delta_baseline.py ($env:RELEASE_TAG.Substring(1))
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Sign and verify update manifest and beneficial delta pair
         shell: pwsh
         env:
           ZI_DEVTOOLS_UPDATE_SIGNING_KEY: ${{ secrets.ZI_DEVTOOLS_UPDATE_SIGNING_KEY }}
+          DELTA_BASELINE_DIR: ${{ steps.delta-baseline.outputs.directory }}
+          DELTA_BASELINE_VERSION: ${{ steps.delta-baseline.outputs.version }}
         run: |
           $version = $env:RELEASE_TAG.Substring(1)
           $outputPath = (Resolve-Path release).Path
-          cargo run --release --locked --example sign_update -- release docs/tools.json $version $env:GITHUB_SHA $outputPath
+          $signArgs = @('run','--release','--locked','--example','sign_update','--','release','docs/tools.json',$version,$env:GITHUB_SHA,$outputPath)
+          if ($env:DELTA_BASELINE_DIR) { $signArgs += @('--delta-from',$env:DELTA_BASELINE_DIR,$env:DELTA_BASELINE_VERSION) }
+          cargo @signArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Publish version and assets
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Zi DevTools $env:RELEASE_TAG" --notes-file docs/release-notes.md release/*.msi release/*.exe release/SHA256SUMS.txt release/update-manifest.json release/update-manifest.sig
+          $assets = Get-ChildItem -LiteralPath release -File | Where-Object { $_.Extension -in @('.msi','.exe','.zidelta') -or $_.Name -in @('SHA256SUMS.txt','update-manifest.json','update-manifest.sig','update-delta.json','update-delta.sig') } | ForEach-Object { $_.FullName }
+          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Zi DevTools $env:RELEASE_TAG" --notes-file docs/release-notes.md @assets
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

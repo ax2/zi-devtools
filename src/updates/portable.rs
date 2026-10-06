@@ -250,7 +250,7 @@ pub fn prepare(
     )
 }
 #[allow(clippy::too_many_arguments)]
-fn prepare_authenticated(
+pub(super) fn prepare_authenticated(
     dir: &Path,
     old_version: &str,
     raw: &[u8],
@@ -638,6 +638,25 @@ pub fn history(directory: &Path) -> Result<Vec<(Prepared, Receipt)>> {
     Ok(rows)
 }
 
+#[cfg(test)]
+pub(super) fn test_apply_or_restore(
+    directory: &Path,
+    a: &signed::Authenticated,
+    recover: bool,
+) -> Result<()> {
+    let p = plan(directory)?;
+    if recover {
+        restore(directory, &p, a)
+    } else {
+        apply_authenticated(
+            directory,
+            directory.parent().context("fixture parent missing")?,
+            &p,
+            a,
+            || Ok(()),
+        )
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

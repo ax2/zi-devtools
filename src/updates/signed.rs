@@ -72,6 +72,7 @@ pub fn publisher(key: &Ed25519KeyPair) -> PublisherKey {
         public_key: STANDARD.encode(key.public_key().as_ref()),
     }
 }
+#[cfg(test)]
 fn payload(raw: &[u8]) -> Vec<u8> {
     [DOMAIN, raw].concat()
 }
@@ -142,14 +143,33 @@ pub fn sign(manifest: &Manifest, key: &Ed25519KeyPair) -> Result<(Vec<u8>, Vec<u
     validate(manifest)?;
     let raw = serde_json::to_vec_pretty(manifest)?;
     ensure!(raw.len() <= MAX_MANIFEST, "更新清单超过大小限制");
+    let signature = sign_detached(&raw, DOMAIN, key)?;
+    Ok((raw, signature))
+}
+pub(super) fn sign_detached(raw: &[u8], domain: &[u8], key: &Ed25519KeyPair) -> Result<Vec<u8>> {
+    ensure!(
+        !raw.is_empty() && raw.len() <= MAX_MANIFEST,
+        "签名内容大小无效"
+    );
     let signature = Signature {
         schema: 1,
         key_id: publisher(key).id,
-        signature: STANDARD.encode(key.sign(&payload(&raw)).as_ref()),
+        signature: STANDARD.encode(key.sign(&[domain, raw].concat()).as_ref()),
     };
-    Ok((raw, serde_json::to_vec(&signature)?))
+    Ok(serde_json::to_vec(&signature)?)
 }
 pub fn verify(raw: &[u8], signature: &[u8], trust: &TrustStore) -> Result<Authenticated> {
+    let key_id = verify_detached(raw, signature, trust, DOMAIN)?;
+    let manifest: Manifest = serde_json::from_slice(raw).context("更新清单格式无效")?;
+    validate(&manifest)?;
+    Ok(Authenticated { manifest, key_id })
+}
+pub(super) fn verify_detached(
+    raw: &[u8],
+    signature: &[u8],
+    trust: &TrustStore,
+    domain: &[u8],
+) -> Result<String> {
     ensure!(
         !raw.is_empty() && raw.len() <= MAX_MANIFEST && signature.len() <= MAX_SIGNATURE,
         "签名或更新清单超过大小限制"
@@ -186,14 +206,9 @@ pub fn verify(raw: &[u8], signature: &[u8], trust: &TrustStore) -> Result<Authen
         .context("签名编码无效")?;
     ensure!(bytes.len() == 64, "签名长度无效");
     signature::UnparsedPublicKey::new(&signature::ED25519, &key)
-        .verify(&payload(raw), &bytes)
+        .verify(&[domain, raw].concat(), &bytes)
         .map_err(|_| anyhow::anyhow!("发布签名验证失败，不能使用该更新清单"))?;
-    let manifest: Manifest = serde_json::from_slice(raw).context("更新清单格式无效")?;
-    validate(&manifest)?;
-    Ok(Authenticated {
-        manifest,
-        key_id: signature.key_id,
-    })
+    Ok(signature.key_id)
 }
 pub fn verify_official(raw: &[u8], signature: &[u8]) -> Result<Authenticated> {
     let trust: TrustStore = serde_json::from_str(include_str!("../../docs/update-trust.json"))

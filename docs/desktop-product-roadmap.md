@@ -106,3 +106,7 @@ EXE 提供用户主动安装/修复/移除入口；MSI 有安装选项并在升�
 阶段可交错推进，但系统入口写入与更新必须先完成失败恢复设计。每次只把真实验收的能力改为已实现；公开发布还要验证安装包、下载摘要及网站同步。所有验收日志与截图保存在长期项目档案，不上传用户内容或凭据。
 
 系统集成设计依据：[Microsoft Explorer 菜单接入文档](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/integrate-packaged-app-with-file-explorer)说明现代菜单的 IExplorerCommand 与应用身份；[Microsoft 补丁包文档](https://learn.microsoft.com/en-us/windows/win32/msi/patch-packages)说明 MSP 补丁结构及目标安装版本关系。本文在此基础上提出分阶段方案，仍需本项目的实际安装验证。
+
+## dev22认证增量更新
+
+独立签名增量清单已接入发布工程和便携升级：匹配双EXE基线时下载/重建，未匹配使用完整包并说明原因；签名或内容错误停止。重建EXE与完整签名清单一致后复用退出替换/恢复。MSI仍使用完整安装器，首次正式线上增量、健康握手/自动回滚和断点续传尚未验收，详见[认证增量升级](signed-delta-updates.md)。

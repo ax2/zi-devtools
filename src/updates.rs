@@ -10,10 +10,12 @@ pub mod msi;
 #[cfg(windows)]
 pub mod msi_ui;
 pub mod portable;
+mod portable_download;
 #[cfg(windows)]
 pub mod portable_process;
 pub mod portable_ui;
 pub mod signed;
+pub mod signed_delta;
 pub mod verification;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
@@ -129,10 +131,12 @@ fn parse(bytes: &[u8], channel: Channel) -> Result<Option<Report>, String> {
             "SHA256SUMS.txt".into(),
             "update-manifest.json".into(),
             "update-manifest.sig".into(),
+            "update-delta.json".into(),
+            "update-delta.sig".into(),
         ];
         let mut assets = Vec::new();
         for asset in release.assets {
-            if names.contains(&asset.name)
+            if (names.contains(&asset.name) || signed_delta::asset_name(&asset.name, tag))
                 && asset.size > 0
                 && asset.browser_download_url
                     == format!("{REPOSITORY}/releases/download/v{tag}/{}", asset.name)

@@ -1,0 +1,38 @@
+name: Authenticated delta preparation
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Read actual previous release without execution
+        id: baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content Cargo.toml | Select-String '^version = "([^"]+)"').Matches.Groups[1].Value.Split('-')[0]
+          python scripts/release_delta_baseline.py $version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run: cargo build --release --locked --bins
+      - name: Actual EXE reconstruction and disposable portable transaction
+        if: steps.baseline.outputs.directory != ''
+        shell: pwsh
+        env:
+          ZI_DELTA_BASELINE_DIR: ${{ steps.baseline.outputs.directory }}
+          ZI_DELTA_BASELINE_VERSION: ${{ steps.baseline.outputs.version }}
+        run: |
+          cargo test --lib --locked updates::signed_delta::tests::actual_release_pair -- --ignored --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

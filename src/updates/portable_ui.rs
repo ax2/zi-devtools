@@ -1,6 +1,6 @@
 //! Explicit prepare/confirm/exit flow; preparation runs outside the UI thread.
-use super::{Report, download, portable};
-use anyhow::{Context, Result, ensure};
+use super::{Report, portable, portable_download};
+use anyhow::Result;
 use eframe::egui;
 use std::{
     sync::{
@@ -12,11 +12,11 @@ use std::{
 };
 
 struct Job {
-    receiver: mpsc::Receiver<Result<portable::Prepared, String>>,
+    receiver: mpsc::Receiver<Result<portable_download::Outcome, String>>,
     cancel: Arc<AtomicBool>,
     desktop: Arc<AtomicU64>,
     mcp: Arc<AtomicU64>,
-    total: u64,
+    total: Arc<AtomicU64>,
 }
 #[derive(Default)]
 pub struct State {
@@ -29,6 +29,7 @@ pub struct State {
     inspected: bool,
     eligibility_error: Option<String>,
     restore: bool,
+    transfer: String,
 }
 impl Drop for State {
     fn drop(&mut self) {
@@ -36,59 +37,6 @@ impl Drop for State {
             job.cancel.store(true, Ordering::Relaxed);
         }
     }
-}
-fn prepare_online(
-    report: Report,
-    cancel: &AtomicBool,
-    desktop_progress: &AtomicU64,
-    mcp_progress: &AtomicU64,
-) -> Result<portable::Prepared> {
-    let directory = portable::current_directory()?;
-    ensure!(
-        report
-            .version
-            .cmp_precedence(&semver::Version::parse(env!("CARGO_PKG_VERSION"))?)
-            .is_gt(),
-        "没有更高版本可安装"
-    );
-    ensure!(
-        report
-            .assets
-            .iter()
-            .any(|a| a.name == "update-manifest.json")
-            && report
-                .assets
-                .iter()
-                .any(|a| a.name == "update-manifest.sig"),
-        "便携升级必须有完整发布者签名，不接受历史无签名包"
-    );
-    let desktop = report
-        .assets
-        .iter()
-        .find(|a| a.name == format!("ZiDevTools-{}-windows-x64.exe", report.version))
-        .context("缺少桌面程序")?;
-    let mcp = report
-        .assets
-        .iter()
-        .find(|a| a.name == format!("ZiDevToolsMcp-{}-windows-x64.exe", report.version))
-        .context("缺少MCP程序")?;
-    let desktop = download::download(&report, desktop, cancel, desktop_progress)?;
-    let mcp = download::download(&report, mcp, cancel, mcp_progress)?;
-    let signed = desktop.signed_metadata.context("桌面附件未认证")?;
-    ensure!(
-        mcp.signed_metadata.as_deref() == Some(signed.as_ref()),
-        "两件附件的签名清单不同，请重新检查"
-    );
-    let helper = super::delta_files::read(&std::env::current_exe()?, false, cancel)?;
-    portable::prepare(
-        &directory,
-        env!("CARGO_PKG_VERSION"),
-        &signed.0,
-        &signed.1,
-        [&desktop.bytes, &mcp.bytes],
-        &helper,
-        cancel,
-    )
 }
 impl State {
     pub fn busy(&self) -> bool {
@@ -104,7 +52,8 @@ impl State {
         self.job = None;
         match result {
             Ok(p) => {
-                self.prepared = Some(Arc::new(p));
+                self.transfer = p.transfer;
+                self.prepared = Some(Arc::new(p.prepared));
                 self.message = "已认证并暂存新程序，当前文件尚未替换。".into();
                 self.error = false;
                 self.confirm = false;
@@ -138,9 +87,7 @@ impl State {
         }
         ui.separator();
         ui.label(egui::RichText::new("便携版升级").strong());
-        ui.weak(
-            "认证下载桌面与MCP程序，保留旧版本；确认后退出、替换并重新启动。MSI请使用安装器升级。",
-        );
+        ui.weak("优先使用签名且基线匹配的增量包；否则下载完整程序。保留旧版，确认后退出更新。");
         if let Some(error) = &self.eligibility_error {
             ui.weak(format!("当前目录不能便携升级：{error}"));
         }
@@ -174,19 +121,20 @@ impl State {
                 let mcp = Arc::new(AtomicU64::new(0));
                 let desktop_worker = desktop.clone();
                 let mcp_worker = mcp.clone();
-                let total = report
-                    .assets
-                    .iter()
-                    .filter(|a| a.name.ends_with(".exe"))
-                    .map(|a| a.size)
-                    .sum();
+                let total = Arc::new(AtomicU64::new(0));
+                let total_worker = total.clone();
                 let ctx = ui.ctx().clone();
                 match std::thread::Builder::new()
                     .name("portable-update-prepare".into())
                     .spawn(move || {
                         let _ = tx.send(
-                            prepare_online(report, &worker, &desktop_worker, &mcp_worker)
-                                .map_err(|e| e.to_string()),
+                            portable_download::prepare(
+                                report,
+                                &worker,
+                                [&desktop_worker, &mcp_worker],
+                                &total_worker,
+                            )
+                            .map_err(|e| e.to_string()),
                         );
                         ctx.request_repaint();
                     }) {
@@ -198,7 +146,7 @@ impl State {
                             mcp,
                             total,
                         });
-                        self.message = "正在认证和下载完整升级文件…".into();
+                        self.message = "正在认证发布、选择增量或完整包…".into();
                         self.error = false;
                     }
                     Err(_) => {
@@ -212,12 +160,13 @@ impl State {
         }
         if let Some(job) = &self.job {
             let done = job.desktop.load(Ordering::Relaxed) + job.mcp.load(Ordering::Relaxed);
-            if job.total > 0 {
+            let total = job.total.load(Ordering::Relaxed);
+            if total > 0 {
                 ui.add(
-                    egui::ProgressBar::new(done as f32 / job.total as f32).text(format!(
+                    egui::ProgressBar::new(done as f32 / total as f32).text(format!(
                         "已下载 {} / {}",
                         super::size(done),
-                        super::size(job.total)
+                        super::size(total)
                     )),
                 );
             }
@@ -248,6 +197,9 @@ impl State {
                 p.version,
                 super::size(p.bytes)
             ));
+            if !self.transfer.is_empty() {
+                ui.label(&self.transfer);
+            }
             ui.weak(format!("更新及恢复副本：{}", p.directory.display()));
             egui::CollapsingHeader::new(format!("工具变化（{}项）", p.changes.len())).show(
                 ui,
@@ -296,6 +248,7 @@ impl State {
                 self.prepared = None;
                 self.confirm = false;
                 self.restore = false;
+                self.transfer.clear();
                 self.message = "暂存文件保留，可在原目录检查；当前程序未被替换。".into();
             }
         }
@@ -310,6 +263,7 @@ impl State {
                             && ui.button(format!("选择恢复 {}", p.old_version)).clicked()
                         {
                             self.prepared = Some(Arc::new(p.clone()));
+                            self.transfer.clear();
                             self.restore = true;
                             self.confirm = false;
                         }
@@ -317,6 +271,17 @@ impl State {
                 });
         }
         requested
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_delta(&mut self, fallback: bool) {
+        self.preview(false);
+        self.message = "合成示例：准备完成，尚未下载或替换真实程序。".into();
+        self.transfer = if fallback {
+            "完整包准备 · 发布增量基线与当前版本或文件不同；程序内容下载 28.61 MiB（不含元数据）"
+        } else {
+            "增量准备 · 程序内容下载 8.00 MiB，完整EXE为 28.61 MiB，节省 72.0%（不含元数据）"
+        }
+        .into();
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview(&mut self, failed: bool) {

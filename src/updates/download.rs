@@ -116,6 +116,86 @@ pub struct Downloaded {
     pub authentication: Option<Arc<signed::Authenticated>>,
     pub signed_metadata: Option<Arc<(Vec<u8>, Vec<u8>)>>,
 }
+pub(super) fn metadata(
+    report: &Report,
+    name: &str,
+    limit: usize,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>> {
+    ensure!(
+        report.url == format!("{REPOSITORY}/releases/tag/v{}", report.version),
+        "不支持非官方发布"
+    );
+    let asset = report
+        .assets
+        .iter()
+        .find(|a| a.name == name)
+        .context("缺少更新元数据")?;
+    ensure!(
+        asset.browser_download_url
+            == format!("{REPOSITORY}/releases/download/v{}/{name}", report.version),
+        "元数据地址不属于本次发布"
+    );
+    fetch(
+        &client()?,
+        &asset.browser_download_url,
+        asset.size,
+        limit as u64,
+        cancel,
+        &AtomicU64::new(0),
+    )
+}
+pub(super) fn signed_release(
+    report: &Report,
+    cancel: &AtomicBool,
+) -> Result<(signed::Authenticated, Vec<u8>, Vec<u8>)> {
+    let raw = metadata(report, "update-manifest.json", signed::MAX_MANIFEST, cancel)?;
+    let sig = metadata(report, "update-manifest.sig", signed::MAX_SIGNATURE, cancel)?;
+    let a = signed::verify_official(&raw, &sig)?;
+    ensure!(
+        a.manifest.version == report.version.to_string(),
+        "签名目标版本不符"
+    );
+    Ok((a, raw, sig))
+}
+pub(super) fn authenticated_bytes(
+    report: &Report,
+    expected: &signed::File,
+    cancel: &AtomicBool,
+    progress: &AtomicU64,
+) -> Result<Vec<u8>> {
+    ensure!(
+        report.url == format!("{REPOSITORY}/releases/tag/v{}", report.version),
+        "不支持非官方发布"
+    );
+    let asset = report
+        .assets
+        .iter()
+        .find(|a| a.name == expected.name)
+        .context("认证附件缺失")?;
+    ensure!(
+        asset.size == expected.size
+            && asset.browser_download_url
+                == format!(
+                    "{REPOSITORY}/releases/download/v{}/{}",
+                    report.version, expected.name
+                ),
+        "附件与认证清单不符"
+    );
+    let bytes = fetch(
+        &client()?,
+        &asset.browser_download_url,
+        expected.size,
+        MAX_ASSET,
+        cancel,
+        progress,
+    )?;
+    ensure!(
+        super::portable::digest(&bytes) == expected.sha256,
+        "认证附件摘要不符，拒绝继续"
+    );
+    Ok(bytes)
+}
 pub fn download(
     report: &Report,
     asset: &Asset,
