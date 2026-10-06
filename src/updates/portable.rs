@@ -39,7 +39,7 @@ pub struct Receipt {
     pub version: String,
     pub message: String,
 }
-fn digest(data: &[u8]) -> String {
+pub(super) fn digest(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 fn cancelled(cancel: &AtomicBool) -> Result<()> {
@@ -49,7 +49,7 @@ fn cancelled(cancel: &AtomicBool) -> Result<()> {
     );
     Ok(())
 }
-fn plain(path: &Path, directory: bool) -> Result<()> {
+pub(super) fn plain(path: &Path, directory: bool) -> Result<()> {
     let m = fs::symlink_metadata(path).context("无法检查更新位置")?;
     ensure!(
         if directory { m.is_dir() } else { m.is_file() },
@@ -63,7 +63,7 @@ fn plain(path: &Path, directory: bool) -> Result<()> {
     }
     Ok(())
 }
-fn root(path: &Path) -> Result<PathBuf> {
+pub(super) fn root(path: &Path) -> Result<PathBuf> {
     ensure!(path.is_absolute(), "更新目录必须为绝对路径");
     // Directory aliases may be resolved once, but the pinned physical path must be plain.
     let path = path.canonicalize()?;
@@ -87,7 +87,7 @@ fn stage(path: &Path) -> Result<PathBuf> {
     plain(&pinned, true)?;
     Ok(pinned)
 }
-fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
+pub(super) fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
     plain(path, false)?;
     use std::io::Read;
     let mut data = Vec::new();
@@ -117,7 +117,7 @@ fn plan(directory: &Path) -> Result<Plan> {
 fn authenticated(p: &Plan) -> Result<signed::Authenticated> {
     signed::verify_official(p.manifest.as_bytes(), p.signature.as_bytes())
 }
-fn hash_file(path: &Path) -> Result<String> {
+pub(super) fn hash_file(path: &Path) -> Result<String> {
     Ok(digest(&read(path, super::delta::MAX_FILE)?))
 }
 fn target_hashes(a: &signed::Authenticated) -> Result<[String; 2]> {

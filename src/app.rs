@@ -196,6 +196,7 @@ pub struct DevToolsApp {
     clock: crate::clock::State,
     updates: crate::updates::State,
     portable_update: crate::updates::portable_ui::State,
+    msi_update: crate::updates::msi_ui::State,
     delta_update: crate::updates::delta_ui::State,
     prefix: commands::Prefix,
     http_state: HttpWorkbenchState,
@@ -686,6 +687,11 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            380..=383 => {
+                self.page = Page::Updates;
+                self.updates.preview_signed_report();
+                self.msi_update.preview(scene >= 382);
+            }
             376..=379 => {
                 self.page = Page::Updates;
                 self.preferences.updates = Default::default();
@@ -1772,6 +1778,7 @@ impl DevToolsApp {
             calculator: Default::default(),
             updates: Default::default(),
             portable_update: Default::default(),
+            msi_update: Default::default(),
             delta_update: Default::default(),
             clock: crate::clock::State::new(preferences_path.with_file_name("clock.json"),cc.egui_ctx.clone()),
             prefix: Default::default(),
@@ -3463,6 +3470,8 @@ impl DevToolsApp {
             ),
             (self.clock.has_work() || self.clock.saving(), "时钟检查点"),
             (self.delta_update.has_work(), "更新包工作台"),
+            (self.portable_update.busy(), "便携升级准备"),
+            (self.msi_update.busy(), "MSI升级准备"),
             (self.updates.download_has_work(), "更新下载预览"),
             (
                 self.images.screenshot_has_work() || self.images.background_active(),
@@ -3507,10 +3516,15 @@ impl DevToolsApp {
         .into_iter()
         .filter_map(|(active, name)| active.then_some(name))
         .collect();
-        if self
-            .portable_update
-            .ui(ui, report, &blockers, &self.manager.config_snapshot().path)
-        {
+        let exit_for_upgrade = if self.msi_update.available() {
+            self.msi_update
+                .ui(ui, report, &blockers, &self.manager.config_snapshot().path)
+        } else {
+            self.portable_update
+                .ui(ui, report, &blockers, &self.manager.config_snapshot().path)
+        };
+        self.msi_update.records_ui(ui);
+        if exit_for_upgrade {
             self.quit_requested = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -4185,6 +4199,7 @@ impl eframe::App for DevToolsApp {
         }
         self.updates.poll();
         self.portable_update.poll();
+        self.msi_update.poll();
         self.delta_update.poll(ctx);
         let now = chrono::Utc::now().timestamp();
         if self.updates.automatic_due(&self.preferences.updates, now) {
@@ -4248,6 +4263,7 @@ impl eframe::App for DevToolsApp {
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
+                || self.msi_update.busy()
                 || self.images.screenshot_has_work()
             {
                 self.workspace_exit_confirm = true;
@@ -4279,6 +4295,7 @@ impl eframe::App for DevToolsApp {
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
+                || self.msi_update.busy()
                 || self.images.screenshot_has_work())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -4299,7 +4316,7 @@ impl eframe::App for DevToolsApp {
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });

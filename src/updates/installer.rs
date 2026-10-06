@@ -28,6 +28,47 @@ fn wide(value: &std::ffi::OsStr) -> Result<Vec<u16>> {
 fn text(value: &str) -> Result<Vec<u16>> {
     wide(std::ffi::OsStr::new(value))
 }
+/// Called only after authenticated preparation and exact process exit.
+/// Windows Installer owns replacement and rollback; no manual EXE copying.
+pub(super) fn install(package: &Path, directory: &Path, visible: bool) -> Result<u32> {
+    let package = text(&installer_path(package)?)?;
+    let directory = installer_path(directory)?;
+    ensure!(
+        !directory.chars().any(|c| c.is_control() || c == '"'),
+        "安装路径包含保留字符"
+    );
+    let properties = text(&format!(
+        "INSTALLFOLDER=\"{directory}\" REBOOT=ReallySuppress MSIRESTARTMANAGERCONTROL=Disable"
+    ))?;
+    let old_ui = unsafe {
+        MsiSetInternalUI(
+            if visible {
+                INSTALLUILEVEL_BASIC
+            } else {
+                INSTALLUILEVEL_NONE
+            },
+            std::ptr::null_mut(),
+        )
+    };
+    struct Ui(i32);
+    impl Drop for Ui {
+        fn drop(&mut self) {
+            unsafe {
+                MsiSetInternalUI(self.0, std::ptr::null_mut());
+            }
+        }
+    }
+    let _ui = Ui(old_ui);
+    Ok(unsafe { MsiInstallProductW(package.as_ptr(), properties.as_ptr()) })
+}
+fn installer_path(path: &Path) -> Result<String> {
+    let value = path.to_str().context("安装路径编码无效")?;
+    Ok(if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        value.strip_prefix(r"\\?\").unwrap_or(value).to_owned()
+    })
+}
 fn check(code: u32, operation: &str) -> Result<()> {
     ensure!(code == 0, "Windows Installer {operation}失败（{code}）");
     Ok(())
@@ -105,7 +146,7 @@ pub fn inspect(path: &Path) -> Result<Package> {
             && metadata.file_attributes() & 0x400 == 0,
         "MSI必须为普通文件"
     );
-    let path = wide(path.as_os_str())?;
+    let path = text(&installer_path(path)?)?;
     let mut db = 0;
     check(
         unsafe { MsiOpenDatabaseW(path.as_ptr(), MSIDBOPEN_READONLY, &mut db) },

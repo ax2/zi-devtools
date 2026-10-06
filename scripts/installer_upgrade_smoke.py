@@ -22,16 +22,18 @@ def main():
         raise RuntimeError('Optimized Python disables validation; installer fixture refused')
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true', help='Build fixtures without installing')
+    parser.add_argument('--rust-updater', action='store_true', help='CI only: invoke authenticated Rust updater test')
     args = parser.parse_args()
-    probe = ROOT / 'target/debug/examples/inspect_installer.exe'
+    build_root = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
+    probe = build_root / 'debug/examples/inspect_installer.exe'
     assert probe.is_file(), 'Build the read-only probe first'
     wix = os.environ.get('ZIDEVTOOLS_WIX', 'wix')
     # Explicitly refuse self-hosted or local execution for install/uninstall.
-    if not args.compile_only:
+    if not args.compile_only or args.rust_updater:
         assert os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('CI') == 'true'
         assert os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted', 'Disposable runner required'
         assert probe_json(probe) == [], 'Existing Zi DevTools product detected; refuse all mutation'
-    base = Path(os.environ['RUNNER_TEMP']) if not args.compile_only else ROOT / 'target'
+    base = Path(os.environ['RUNNER_TEMP']) if not args.compile_only else build_root
     folder = Path(tempfile.mkdtemp(prefix='zi-msi-transaction-', dir=base)).resolve()
     assert folder.is_relative_to(base.resolve()) and not folder.is_symlink()
     target = folder / '安装 & upgrade with spaces'
@@ -69,6 +71,16 @@ def main():
         packages[label] = (msi, metadata)
     assert len({m['desktop_component'] for _, m in packages.values()}) == 1, 'Desktop component identity must stay stable'
     print('PASS: all three real WiX fixtures compiled and inspected read-only', flush=True)
+    if args.rust_updater:
+        environment = os.environ.copy()
+        environment['ZI_MSI_FIXTURE_DIR'] = str(folder)
+        subprocess.run(['cargo', 'test', '--lib', '--locked',
+                        'updates::msi::tests::native_authenticated_upgrade_transaction',
+                        '--', '--ignored', '--exact', '--nocapture'],
+                       check=True, cwd=ROOT, env=environment, timeout=600)
+        assert probe_json(probe) == []
+        print('PASS: production Rust updater transaction verified on disposable runner', flush=True)
+        return
     if args.compile_only:
         return
 

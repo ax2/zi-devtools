@@ -10,6 +10,15 @@ use zi_devtools::{
 
 fn main() -> Result<()> {
     let raw: Vec<_> = std::env::args_os().skip(1).collect();
+    if raw.first().is_some_and(|s| s == "--apply-msi-update") {
+        anyhow::ensure!(raw.len() == 5, "MSI helper needs PLAN PID STAMP CONFIG");
+        return zi_devtools::updates::msi::run_helper(
+            std::path::Path::new(&raw[1]),
+            raw[2].to_str().context("Invalid parent PID")?.parse()?,
+            raw[3].to_str().context("Invalid parent stamp")?.parse()?,
+            std::path::Path::new(&raw[4]),
+        );
+    }
     if raw.first().is_some_and(|s| s == "--apply-portable-update") {
         anyhow::ensure!(
             matches!(raw.len(), 6 | 7),

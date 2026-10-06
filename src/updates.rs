@@ -5,6 +5,10 @@ pub mod delta_ui;
 pub mod download;
 #[cfg(windows)]
 pub mod installer;
+#[cfg(windows)]
+pub mod msi;
+#[cfg(windows)]
+pub mod msi_ui;
 pub mod portable;
 #[cfg(windows)]
 pub mod portable_process;
@@ -334,44 +338,51 @@ impl State {
                         egui::RichText::new(format!("{status} · {}", report.version)).strong(),
                     );
                     ui.hyperlink_to("查看 GitHub 发布页", &report.url);
-                    ui.label(
+                    egui::CollapsingHeader::new(format!(
+                        "附件与发布说明（{}项）",
+                        report.assets.len()
+                    ))
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        ui.label(
                         "附件大小来自发布信息；点击下载后核对大小、摘要及该版本提供的发布签名。",
                     );
-                    if report.assets.is_empty() {
-                        ui.colored_label(
-                            ui.visuals().warn_fg_color,
-                            "未找到符合命名规则的 Windows x64 附件。",
-                        );
-                    }
-                    for asset in &report.assets {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(format!("{} · {}", asset.name, size(asset.size)));
-                            if (asset.name.ends_with(".exe") || asset.name.ends_with(".msi"))
-                                && ui
-                                    .add_enabled(
-                                        !self.download.has_work(),
-                                        egui::Button::new("下载并校验"),
-                                    )
-                                    .clicked()
-                            {
-                                self.download.start(report.clone(), asset.clone(), ui.ctx());
-                            }
-                        });
-                    }
-                    ui.add_space(8.0);
-                    ui.label("发布说明");
-                    egui::ScrollArea::vertical()
-                        .id_salt("release-notes")
-                        .max_height(360.0)
-                        .show(ui, |ui| {
-                            ui.label(&report.notes);
-                        });
+                        if report.assets.is_empty() {
+                            ui.colored_label(
+                                ui.visuals().warn_fg_color,
+                                "未找到符合命名规则的 Windows x64 附件。",
+                            );
+                        }
+                        for asset in &report.assets {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(format!("{} · {}", asset.name, size(asset.size)));
+                                if (asset.name.ends_with(".exe") || asset.name.ends_with(".msi"))
+                                    && ui
+                                        .add_enabled(
+                                            !self.download.has_work(),
+                                            egui::Button::new("下载并校验"),
+                                        )
+                                        .clicked()
+                                {
+                                    self.download.start(report.clone(), asset.clone(), ui.ctx());
+                                }
+                            });
+                        }
+                        ui.add_space(8.0);
+                        ui.label("发布说明");
+                        egui::ScrollArea::vertical()
+                            .id_salt("release-notes")
+                            .max_height(360.0)
+                            .show(ui, |ui| {
+                                ui.label(&report.notes);
+                            });
+                    });
                 }
             }
         }
         self.download.ui(ui);
         egui::CollapsingHeader::new("已有下载文件？离线校验")
-            .default_open(!self.download.has_preview())
+            .default_open(false)
             .show(ui, |ui| self.verification.ui(ui));
         let changed = next.channel != policy.channel || next.automatic != policy.automatic;
         if next.channel != policy.channel {
