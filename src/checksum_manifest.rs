@@ -188,6 +188,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {
         self.paths = "C:\\Demo\\release\\ZiDevTools.exe\nC:\\Demo\\release\\ZiDevTools.msi".into();

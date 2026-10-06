@@ -474,6 +474,12 @@ impl Drop for State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.prepare_running.is_some()
+            || self.model_running.is_some()
+            || self.answer_running.is_some()
+    }
+
     pub fn new(path: PathBuf, vector_path: PathBuf) -> Self {
         Self {
             path,

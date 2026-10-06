@@ -365,6 +365,10 @@ impl Default for State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.receiver.is_some()
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_saved_export_ready(&self) -> bool {
         if self.receiver.is_some() {

@@ -438,6 +438,10 @@ impl Default for State {
     }
 }
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     fn start(&mut self) {
         if self.running.is_some() {
             return;

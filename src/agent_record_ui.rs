@@ -43,6 +43,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.folder_task.is_some()
+    }
+
     fn load(&mut self, path: &Path) {
         self.cancel_folder();
         match agent_record::load_file(path) {

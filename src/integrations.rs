@@ -63,6 +63,10 @@ pub struct IntegrationState {
     receiver: Option<Receiver<String>>,
 }
 impl IntegrationState {
+    pub(crate) fn background_active(&self) -> bool {
+        self.receiver.is_some()
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.heading("本机集成发现");
         ui.label(

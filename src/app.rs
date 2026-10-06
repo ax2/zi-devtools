@@ -195,6 +195,7 @@ pub struct DevToolsApp {
     calculator: crate::calculator::State,
     clock: crate::clock::State,
     updates: crate::updates::State,
+    portable_update: crate::updates::portable_ui::State,
     delta_update: crate::updates::delta_ui::State,
     prefix: commands::Prefix,
     http_state: HttpWorkbenchState,
@@ -685,6 +686,11 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            376..=379 => {
+                self.page = Page::Updates;
+                self.preferences.updates = Default::default();
+                self.portable_update.preview(scene >= 378);
+            }
             370..=373 => {
                 self.page = Page::Updates;
                 self.preferences.updates = Default::default();
@@ -1765,6 +1771,7 @@ impl DevToolsApp {
             ascii_codes: Default::default(),
             calculator: Default::default(),
             updates: Default::default(),
+            portable_update: Default::default(),
             delta_update: Default::default(),
             clock: crate::clock::State::new(preferences_path.with_file_name("clock.json"),cc.egui_ctx.clone()),
             prefix: Default::default(),
@@ -3437,6 +3444,76 @@ impl DevToolsApp {
         if check {
             self.check_updates(ctx, false);
         }
+        let report = self
+            .updates
+            .result
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .and_then(|r| r.clone());
+        let blockers: Vec<&str> = [
+            (self.data_state.has_work(), "数据工作台"),
+            (
+                self.planner.has_unsaved() || self.planner.saving(),
+                "备忘录与日程",
+            ),
+            (
+                self.prefix.has_work(&self.preferences.command_bindings)
+                    || self.prefix.files.busy(),
+                "快捷指令草稿",
+            ),
+            (self.clock.has_work() || self.clock.saving(), "时钟检查点"),
+            (self.delta_update.has_work(), "更新包工作台"),
+            (self.updates.download_has_work(), "更新下载预览"),
+            (
+                self.images.screenshot_has_work() || self.images.background_active(),
+                "截图与图片处理",
+            ),
+            (self.intake.busy(), "文件导入"),
+            (
+                self.statuses
+                    .iter()
+                    .any(|s| s.managed && s.state == ServiceState::Running),
+                "运行中的托管服务",
+            ),
+            (
+                self.recorder.tray_status() != crate::recorder_ui::TrayRecordingStatus::Idle,
+                "录屏",
+            ),
+            (self.file_state.job.phase.active(), "文件校验"),
+            (self.network_state.busy, "网络工具"),
+            (self.http_state.tabs.iter().any(|t| t.busy), "HTTP请求"),
+            (self.plugins.is_running(), "插件工具"),
+            (self.agent.background_active(), "Agent"),
+            (self.agent_records.background_active(), "Agent运行记录"),
+            (self.mcp.background_active(), "MCP"),
+            (self.knowledge_answer.background_active(), "知识问答"),
+            (self.embedding.background_active(), "向量对比"),
+            (self.knowledge_capture.background_active(), "知识采集"),
+            (self.document_ingestion.background_active(), "文档入库"),
+            (self.knowledge_index.background_active(), "关键词索引"),
+            (self.vector_index.background_active(), "向量索引"),
+            (self.knowledge_eval.background_active(), "RAG评测"),
+            (self.knowledge_sources.background_active(), "知识来源"),
+            (self.knowledge_search.background_active(), "知识搜索"),
+            (self.hybrid_search.background_active(), "混合检索"),
+            (self.checksum_manifest.background_active(), "校验清单"),
+            (self.disk_inspector.background_active(), "磁盘分析"),
+            (self.duplicate_finder.background_active(), "重复文件"),
+            (self.directory_compare.background_active(), "目录比较"),
+            (self.sqlite_browser.background_active(), "SQLite"),
+            (self.frameworks.background_active(), "Java/Django"),
+            (self.integrations.background_active(), "本机集成"),
+        ]
+        .into_iter()
+        .filter_map(|(active, name)| active.then_some(name))
+        .collect();
+        if self
+            .portable_update
+            .ui(ui, report, &blockers, &self.manager.config_snapshot().path)
+        {
+            self.quit_requested = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 
     fn settings_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -4107,6 +4184,7 @@ impl eframe::App for DevToolsApp {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         self.updates.poll();
+        self.portable_update.poll();
         self.delta_update.poll(ctx);
         let now = chrono::Utc::now().timestamp();
         if self.updates.automatic_due(&self.preferences.updates, now) {
@@ -4169,6 +4247,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.saving()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
+                || self.portable_update.busy()
                 || self.images.screenshot_has_work()
             {
                 self.workspace_exit_confirm = true;
@@ -4199,6 +4278,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.saving()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
+                || self.portable_update.busy()
                 || self.images.screenshot_has_work())
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -4219,7 +4299,7 @@ impl eframe::App for DevToolsApp {
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });

@@ -291,6 +291,10 @@ pub struct State {
     copied: Option<Instant>,
 }
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     pub fn result_text(&self) -> &str {
         self.drafts
             .get(&self.selected)

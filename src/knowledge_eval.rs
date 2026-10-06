@@ -589,6 +589,10 @@ impl Drop for State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     pub fn new(index_path: PathBuf, vector_path: PathBuf) -> Self {
         Self {
             index_path,

@@ -295,6 +295,10 @@ impl Drop for State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some() || self.model_running.is_some()
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {
         self.model = "bge-m3:latest".into();

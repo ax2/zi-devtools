@@ -110,6 +110,10 @@ pub struct McpState {
 }
 
 impl McpState {
+    pub(crate) fn background_active(&self) -> bool {
+        self.receiver.is_some() || self.oauth.pending() || self.credential_ack.is_some()
+    }
+
     pub fn new(access_path: PathBuf) -> Self {
         Self {
             transport: Transport::Stdio,

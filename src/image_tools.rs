@@ -100,6 +100,10 @@ pub struct State {
     pending: Option<mpsc::Receiver<Result<Job, String>>>,
 }
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.pending.is_some()
+    }
+
     pub fn screenshot_capture_active(&self) -> bool {
         self.screenshot.capture_active()
     }

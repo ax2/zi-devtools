@@ -65,6 +65,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,

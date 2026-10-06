@@ -9,6 +9,56 @@ use zi_devtools::{
 };
 
 fn main() -> Result<()> {
+    let raw: Vec<_> = std::env::args_os().skip(1).collect();
+    if raw.first().is_some_and(|s| s == "--apply-portable-update") {
+        anyhow::ensure!(
+            matches!(raw.len(), 6 | 7),
+            "Invalid portable helper arguments"
+        );
+        let pid = raw[2].to_str().context("Invalid parent PID")?.parse()?;
+        let stamp = raw[3]
+            .to_str()
+            .context("Invalid parent identity")?
+            .parse()?;
+        let action = raw[4].to_str().context("Invalid update action")?;
+        anyhow::ensure!(
+            matches!(action, "apply" | "restore"),
+            "Invalid update action"
+        );
+        anyhow::ensure!(
+            raw.len() == 6 || raw[6] == "--no-restart",
+            "Invalid helper restart argument"
+        );
+        return zi_devtools::updates::portable::run_helper(
+            std::path::Path::new(&raw[1]),
+            pid,
+            stamp,
+            action == "restore",
+            std::path::Path::new(&raw[5]),
+            raw.len() == 6,
+        );
+    }
+    if raw
+        .first()
+        .is_some_and(|s| s == "--recover-portable-update")
+    {
+        anyhow::ensure!(
+            matches!(raw.len(), 3 | 4),
+            "Recovery needs PLAN CONFIG [--no-restart]"
+        );
+        anyhow::ensure!(
+            raw.len() == 3 || raw[3] == "--no-restart",
+            "Invalid recovery argument"
+        );
+        return zi_devtools::updates::portable::run_helper(
+            std::path::Path::new(&raw[1]),
+            0,
+            0,
+            true,
+            std::path::Path::new(&raw[2]),
+            raw.len() == 3,
+        );
+    }
     let arguments = parse_args()?;
     if let Some(port) = arguments.fixture_port {
         return fixture::run(port);

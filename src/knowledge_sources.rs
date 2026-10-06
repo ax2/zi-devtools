@@ -513,6 +513,10 @@ pub struct State {
     locked: bool,
 }
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     pub fn sources(&self) -> &[Source] {
         &self.sources
     }

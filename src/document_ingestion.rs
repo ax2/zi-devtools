@@ -303,6 +303,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, sources: &[Source]) {
         self.selected_source = sources.first().map(|s| s.id.clone()).unwrap_or_default();

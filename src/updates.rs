@@ -3,6 +3,10 @@ pub mod delta;
 pub mod delta_files;
 pub mod delta_ui;
 pub mod download;
+pub mod portable;
+#[cfg(windows)]
+pub mod portable_process;
+pub mod portable_ui;
 pub mod signed;
 pub mod verification;
 use eframe::egui;

@@ -114,6 +114,7 @@ pub struct Downloaded {
     pub bytes: Arc<[u8]>,
     pub tool_changes: Arc<[String]>,
     pub authentication: Option<Arc<signed::Authenticated>>,
+    pub signed_metadata: Option<Arc<(Vec<u8>, Vec<u8>)>>,
 }
 pub fn download(
     report: &Report,
@@ -161,7 +162,7 @@ pub fn download(
         "发布签名文件不完整；拒绝回退为未签名下载"
     );
     let client = client()?;
-    let (expected, authentication) = if let (Some(manifest), Some(signature)) =
+    let (expected, authentication, signed_metadata) = if let (Some(manifest), Some(signature)) =
         (manifest, signature)
     {
         let raw = fetch(
@@ -185,7 +186,7 @@ pub fn download(
         let hash = signed::expected_file(&authenticated, &report.version, &asset.name, asset.size)?
             .sha256
             .clone();
-        (hash, Some(authenticated))
+        (hash, Some(authenticated), Some(Arc::new((raw, signature))))
     } else {
         let sums = report
             .assets
@@ -205,7 +206,7 @@ pub fn download(
         )?;
         let sums = verification::checksums(&sums, &report.version)?;
         let expected = sums.get(&asset.name).context("清单缺少所选附件")?.clone();
-        (expected, None)
+        (expected, None, None)
     };
     let bytes = fetch(
         &client,
@@ -236,6 +237,7 @@ pub fn download(
         sha256,
         bytes: bytes.into(),
         authentication: authentication.map(Arc::new),
+        signed_metadata,
         tool_changes: tool_changes.into(),
     })
 }
@@ -480,7 +482,7 @@ impl State {
                 .iter_mut()
                 .find(|t| t.id == "app-update-check")
                 .expect("updates fixture");
-            changed.version = Some("0.5.0".into());
+            changed.version = Some("0.6.0".into());
             let changes = signed::changes(&tools).expect("changes fixture");
             let manifest = signed::Manifest {
                 schema: 1,
@@ -507,6 +509,7 @@ impl State {
                 version: semver::Version::new(0, 83, 0),
                 sha256: "b".repeat(64),
                 bytes: vec![0; 65536].into(),
+                signed_metadata: None,
                 authentication: Some(Arc::new(signed::Authenticated {
                     manifest,
                     key_id: "b".repeat(64),
@@ -531,6 +534,7 @@ impl State {
                 sha256: "a".repeat(64),
                 bytes: vec![0; 1024].into(),
                 authentication: None,
+                signed_metadata: None,
                 tool_changes: Vec::new().into(),
             });
         }
@@ -685,6 +689,7 @@ mod tests {
             sha256: "a".repeat(64),
             bytes: vec![0].into(),
             authentication: None,
+            signed_metadata: None,
             tool_changes: Vec::new().into(),
         })))
         .unwrap();

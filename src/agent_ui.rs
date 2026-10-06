@@ -74,6 +74,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.receiver.is_some()
+    }
+
     pub fn new(access_path: PathBuf) -> Self {
         Self {
             endpoint: "http://127.0.0.1:11434/api/chat".into(),

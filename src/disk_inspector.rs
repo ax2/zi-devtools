@@ -277,6 +277,10 @@ impl Default for State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.receiver.is_some()
+    }
+
     fn poll(&mut self) {
         let Some(receiver) = &self.receiver else {
             return;

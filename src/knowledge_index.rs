@@ -460,6 +460,10 @@ pub struct State {
 }
 
 impl State {
+    pub(crate) fn background_active(&self) -> bool {
+        self.running.is_some()
+    }
+
     pub fn new(path: PathBuf) -> Self {
         let (stats, message) = match inspect(&path) {
             Ok(stats) => (Some(stats), String::new()),
