@@ -4,6 +4,9 @@ use eframe::egui::{self, RichText};
 #[derive(Default)]
 pub struct State {
     history: History,
+    images_enabled: bool,
+    image_preview: Option<Preview>,
+    image_relay: Option<std::sync::Arc<super::Picture>>,
     policy: super::policy::Editor,
     excluded_count: u64,
     search: String,
@@ -25,6 +28,16 @@ pub struct State {
     #[cfg(windows)]
     restore_confirm: bool,
 }
+type PreviewReceipt = Result<(egui::ColorImage, Vec<u8>), String>;
+struct Preview {
+    cancelled: bool,
+    id: u64,
+    picture: std::sync::Arc<super::Picture>,
+    texture: Option<egui::TextureHandle>,
+    dib: Option<Vec<u8>>,
+    error: String,
+    job: Option<std::sync::mpsc::Receiver<PreviewReceipt>>,
+}
 impl State {
     pub fn new(policy_path: std::path::PathBuf) -> Self {
         Self {
@@ -37,7 +50,7 @@ impl State {
         }
     }
     fn policy_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("应用排除 · 采集前过滤").default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new("应用排除 · 采集前过滤").default_open(self.image_preview.is_none()).show(ui, |ui| {
             ui.label(format!("已应用{}个进程规则 · 已跳过{}次通知 · 未知来源{}", self.policy.applied.excluded_apps.len(), self.excluded_count, if self.policy.applied.exclude_unknown { "不采集" } else { "允许采集" }));
             ui.collapsing("查看当前生效的进程名单", |ui| {
                 if self.policy.applied.excluded_apps.is_empty() { ui.label("当前不排除已知进程"); }
@@ -86,7 +99,7 @@ impl State {
     fn storage_ui(&mut self, ui: &mut egui::Ui) {
         egui::CollapsingHeader::new(format!("本机历史保存 · {}", if self.storage.enabled { "已开启" } else { "未开启" })).id_salt("clipboard-storage-options").default_open(false).show(ui,|ui|{
             ui.label(if self.storage.enabled {"已开启：后台保存；重启恢复历史，采集需另行开启。"} else {"未开启：历史只在会话内存中，退出后清空。"});
-            ui.small("保存包含文本、来源、时间和置顶状态，保护范围为当前Windows用户；同用户程序仍可能访问。不开启云同步。");
+            ui.small("保存包含文本、图片、来源、时间和置顶状态，保护范围为当前Windows用户；同用户程序仍可能访问。不开启云同步。");
             if let Some(path)=&self.storage.path {ui.small(format!("本机路径：{}",path.display()));}
             ui.horizontal_wrapped(|ui|{
                 if ui.add_enabled(!self.storage.busy(),egui::Button::new(if self.storage.enabled {"立即保存 / 重试"} else {"开启本机保存与重启恢复"})).clicked(){self.storage.save_now(ui.ctx(),&self.history);}
@@ -117,14 +130,19 @@ impl State {
         self.listener = None;
         self.selected.clear();
         self.output.clear();
+        self.cancel_image_preview();
+        self.image_relay = None;
         self.storage.reload(ctx);
     }
     pub fn poll(&mut self, ctx: &egui::Context) {
+        self.poll_image(ctx);
         #[cfg(windows)]
         {
             let before = self.storage.restored_revision;
             self.storage.poll(ctx, &mut self.history);
             if before != self.storage.restored_revision {
+                self.cancel_image_preview();
+                self.image_relay = None;
                 self.selected.clear();
                 self.output.clear();
             }
@@ -134,12 +152,20 @@ impl State {
         #[cfg(windows)]
         if let Some(listener) = &self.listener {
             for event in listener.rx.try_iter().take(64) {
-                match event {
+                match event.event {
                     super::native::Event::Text(text, source)
                         if !self.paused && !text.is_empty() =>
                     {
                         match self.history.insert(text, source) {
                             Err(e) => self.message = e,
+                            Ok(()) => self.storage.changed(),
+                        }
+                    }
+                    super::native::Event::Image(image, source)
+                        if !self.paused && self.images_enabled =>
+                    {
+                        match self.history.insert_image(image, source) {
+                            Err(error) => self.message = error,
                             Ok(()) => self.storage.changed(),
                         }
                     }
@@ -151,7 +177,7 @@ impl State {
                 }
             }
             if listener.lost.swap(0, std::sync::atomic::Ordering::AcqRel) > 0 {
-                self.message = "复制事件过快，部分条目未采集".into();
+                self.message = "通知队列达到事件或字节上限，部分条目未采集".into();
             }
         }
         if self.history.retention_days.is_some()
@@ -171,6 +197,229 @@ impl State {
             .retain(|id| self.history.entries.iter().any(|e| e.id == *id));
         if self.selected.len() != selected_count {
             self.output.clear();
+        }
+    }
+    fn cancel_image_preview(&mut self) {
+        if self.image_preview.as_ref().is_some_and(|p| p.job.is_some()) {
+            self.image_preview.as_mut().unwrap().cancelled = true;
+        } else {
+            self.image_preview = None;
+        }
+    }
+    fn open_image(&mut self, ctx: &egui::Context, id: u64) {
+        if self.image_preview.as_ref().is_some_and(|p| p.job.is_some()) {
+            self.message = "图片预览准备中，请等待完成或取消".into();
+            return;
+        }
+        let Some(picture) = self
+            .history
+            .entries
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.image.clone())
+        else {
+            return;
+        };
+        let source = picture.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let wake = ctx.clone();
+        std::thread::spawn(move || {
+            let result = (|| -> anyhow::Result<_> {
+                Ok((source.thumbnail()?, super::media::to_dib(&source)?))
+            })();
+            let _ = tx.send(result.map_err(|_| "图片预览准备失败，历史保留".into()));
+            wake.request_repaint();
+        });
+        self.image_preview = Some(Preview {
+            cancelled: false,
+            id,
+            picture,
+            texture: None,
+            dib: None,
+            error: String::new(),
+            job: Some(rx),
+        });
+    }
+    fn poll_image(&mut self, ctx: &egui::Context) {
+        let Some(preview) = &mut self.image_preview else {
+            return;
+        };
+        if !self.history.entries.iter().any(|entry| {
+            entry.id == preview.id
+                && entry
+                    .image
+                    .as_ref()
+                    .is_some_and(|image| std::sync::Arc::ptr_eq(image, &preview.picture))
+        }) {
+            if preview.job.is_some() {
+                preview.cancelled = true;
+            } else {
+                self.image_preview = None;
+                return;
+            }
+        }
+        let Some(job) = &preview.job else { return };
+        let result = match job.try_recv() {
+            Ok(value) => value,
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                ctx.request_repaint_after(std::time::Duration::from_millis(80));
+                return;
+            }
+            Err(_) => Err("图片准备线程结束".into()),
+        };
+        preview.job = None;
+        if preview.cancelled {
+            self.image_preview = None;
+            return;
+        }
+        match result {
+            Ok((image, dib)) => {
+                preview.texture = Some(ctx.load_texture(
+                    "clipboard-image-preview",
+                    image,
+                    egui::TextureOptions::LINEAR,
+                ));
+                preview.dib = Some(dib);
+            }
+            Err(error) => preview.error = error,
+        };
+    }
+    pub fn take_image_relay(&mut self) -> Option<std::sync::Arc<super::Picture>> {
+        self.image_relay.take()
+    }
+    fn image_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(preview) = &self.image_preview else {
+            return;
+        };
+        if preview.cancelled {
+            ui.small("上一图片预览已取消，后台释放中");
+            return;
+        }
+        ui.separator();
+        ui.heading("图片预览");
+        ui.small(format!(
+            "{} × {} · PNG {:.1}KiB · ID {}",
+            preview.picture.width,
+            preview.picture.height,
+            preview.picture.png.len() as f64 / 1024.0,
+            preview.id
+        ));
+        if preview.job.is_some() {
+            ui.spinner();
+            ui.label("后台准备预览和复制格式");
+        }
+        if let Some(texture) = &preview.texture {
+            let size = texture.size_vec2();
+            let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+            for y in 0..=(size.y as usize / 12) {
+                for x in 0..=(size.x as usize / 12) {
+                    let cell = egui::Rect::from_min_size(
+                        rect.min + egui::vec2(x as f32 * 12.0, y as f32 * 12.0),
+                        egui::vec2(12.0, 12.0),
+                    )
+                    .intersect(rect);
+                    ui.painter().rect_filled(
+                        cell,
+                        0.0,
+                        if (x + y) % 2 == 0 {
+                            egui::Color32::from_gray(160)
+                        } else {
+                            egui::Color32::from_gray(200)
+                        },
+                    );
+                }
+            }
+            ui.painter().image(
+                texture.id(),
+                rect,
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                egui::Color32::WHITE,
+            );
+        }
+        if !preview.error.is_empty() {
+            ui.label(&preview.error);
+        }
+        let mut close = false;
+        let mut copy = false;
+        let mut relay = false;
+        let mut save = false;
+        ui.horizontal_wrapped(|ui| {
+            copy = ui
+                .add_enabled(
+                    preview.dib.is_some(),
+                    egui::Button::new("复制图片（PNG + 位图）"),
+                )
+                .clicked();
+            relay = ui
+                .add_enabled(
+                    preview.texture.is_some(),
+                    egui::Button::new("发送到图片工具…"),
+                )
+                .clicked();
+            save = ui.button("另存透明PNG…").clicked();
+            close = ui.button("关闭预览").clicked();
+        });
+        ui.small("图片单独预览，不参加文本组合；发送后还需预览确认目标，来源历史保留。只缓存当前一张预览。");
+        if relay {
+            self.image_relay = Some(preview.picture.clone());
+        }
+        if copy {
+            let dib = preview.dib.as_ref().unwrap();
+            #[cfg(windows)]
+            {
+                self.message = match &self.listener {
+                    Some(listener) => listener.copy_picture(&preview.picture, dib),
+                    None => super::native::copy_picture(&preview.picture, dib),
+                }
+                .map_or_else(
+                    |error| error,
+                    |_| "已复制PNG与位图；本工具输出不回流采集".into(),
+                );
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = dib;
+                self.message = "图片复制当前仅支持Windows".into();
+            }
+        }
+        if save
+            && let Some(path) = rfd::FileDialog::new()
+                .add_filter("PNG", &["png"])
+                .set_file_name("clipboard-image.png")
+                .save_file()
+        {
+            use std::io::Write;
+            let result = (|| -> anyhow::Result<()> {
+                anyhow::ensure!(
+                    path.extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("png")),
+                    "请选择.png路径"
+                );
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)?;
+                if let Err(error) = file
+                    .write_all(&preview.picture.png)
+                    .and_then(|_| file.sync_all())
+                {
+                    drop(file);
+                    let _ = std::fs::remove_file(&path);
+                    return Err(error.into());
+                }
+                Ok(())
+            })();
+            self.message = result.map_or_else(
+                |_| "另存失败，目标已存在或不可写；历史保留".into(),
+                |_| "已另存透明PNG".into(),
+            );
+        }
+        if close {
+            if self.image_preview.as_ref().is_some_and(|p| p.job.is_some()) {
+                self.image_preview.as_mut().unwrap().cancelled = true;
+            } else {
+                self.image_preview = None;
+            }
         }
     }
     fn changed(&mut self) {
@@ -263,15 +512,15 @@ impl State {
             return;
         }
         ui.heading("超级剪贴板");
-        ui.label("v0.4.0 · 开发中：文本历史 / 搜索与置顶 / 按选择顺序组合复制");
-        ui.label("主动开启后采集新复制的文本；可另行开启本机保护保存，重启恢复历史但不自动采集。图片、富文本、文件引用尚待开发。");
+        ui.label("v0.5.0 · 开发中：文本与图片历史 / 搜索与置顶 / 组合与接力");
+        ui.label("主动开启后采集新复制的文本；可另行开启本机保护保存，重启恢复历史但不自动采集。图片采集需另外开启；富文本与文件引用继续开发。");
         #[cfg(windows)]
         ui.horizontal_wrapped(|ui| {
             if self.listener.is_none() {
                 if ui
                     .add_enabled(
                         !self.storage.busy() && self.policy.ready,
-                        egui::Button::new("开启文本历史采集"),
+                        egui::Button::new("开启历史采集"),
                     )
                     .clicked()
                 {
@@ -280,9 +529,10 @@ impl State {
                         self.policy.applied.clone(),
                     ) {
                         Ok(listener) => {
+                            listener.set_images(self.images_enabled);
                             self.listener = Some(listener);
                             self.paused = false;
-                            self.message = "已开启；仅采集后续复制的文本".into();
+                            self.message = "已开启；仅采集后续复制的内容".into();
                         }
                         Err(e) => self.message = e,
                     }
@@ -323,6 +573,19 @@ impl State {
         });
         #[cfg(not(windows))]
         ui.label("剪贴板采集当前仅支持Windows。");
+        if ui
+            .checkbox(
+                &mut self.images_enabled,
+                "同时采集图片（PNG / 常见24、32位DIB，默认关闭）",
+            )
+            .changed()
+        {
+            #[cfg(windows)]
+            if let Some(listener) = &self.listener {
+                listener.set_images(self.images_enabled);
+            }
+            self.message = "图片采集范围已修改，清除排队通知，不补采当前剪贴板".into();
+        }
         if self.clear_confirm {
             ui.horizontal_wrapped(|ui| {
                 ui.label("删除全部会话历史（含置顶）？");
@@ -341,7 +604,7 @@ impl State {
         self.storage_ui(ui);
         self.policy_ui(ui);
         self.retention_ui(ui);
-        ui.small("当前最多500条、单条1 MiB。来源可能未知；应用排除见上方；不能保证识别敏感内容，必要时请暂停。默认不采集、不联网；本机保存须主动开启。");
+        ui.small("当前最多500条，文本单条1MiB；图片最多400万像素、PNG16MiB，总32MiB同时计编码与RGBA容量。来源可能未知；应用排除见上方；不能保证识别敏感内容，必要时请暂停。默认不采集、不联网；本机保存须主动开启。");
         ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("搜索文本或来源应用"));
         if !self.message.is_empty() {
             ui.label(&self.message);
@@ -351,9 +614,10 @@ impl State {
         let mut pin_changed = false;
         let mut copy = None;
         let mut delete = None;
+        let mut open_image = None;
         egui::ScrollArea::vertical()
             .id_salt("clipboard-history-list")
-            .max_height(340.0)
+            .max_height(if self.image_preview.is_some() {180.0}else{340.0})
             .show(ui, |ui| {
                 if self.history.entries.is_empty() {
                     ui.label("开启采集后，在任意应用复制文本；也可先试用合成示例。");
@@ -371,7 +635,7 @@ impl State {
                     egui::Frame::group(ui.style()).show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             let mut selected = self.selected.contains(&entry.id);
-                            if ui.checkbox(&mut selected, "选择").changed() {
+                            if ui.add_enabled(entry.image.is_none(),egui::Checkbox::new(&mut selected, "选择文本")).changed() {
                                 if selected {
                                     self.selected.push(entry.id);
                                 } else {
@@ -390,21 +654,31 @@ impl State {
                             if entry.last_captured_utc.is_none() {
                                 ui.small("旧记录 · 年份未知");
                             }
-                            if ui.button("复制").clicked() {
+                            if let Some(image)=&entry.image {
+                                ui.small(format!("图片 · {}×{} · PNG {:.1}KiB",image.width,image.height,image.png.len() as f64/1048576.0));
+                                if ui.button("查看图片").clicked(){open_image=Some(entry.id);}
+                            }
+                            if entry.image.is_none() && ui.button("复制").clicked() {
                                 copy = Some(entry.text.clone());
                             }
                             if ui.button("删除").clicked() {
                                 delete = Some(entry.id);
                             }
                         });
+                        if entry.image.is_none() {
                         let preview: String = entry.text.chars().take(180).collect();
                         ui.label(preview);
                         if entry.text.chars().count() > 180 {
                             ui.small("长文本已截断；下方组合预览可查看完整结果");
                         }
+                        }
                     });
                 }
             });
+        if let Some(id) = open_image {
+            self.open_image(ui.ctx(), id);
+        }
+        self.image_ui(ui);
         if pin_changed {
             self.changed();
         }
@@ -450,6 +724,9 @@ impl State {
                 ui.small(e);
             }
         }
+        if ui.button("载入合成图片示例（不读取系统剪贴板）").clicked() {
+            self.add_picture_example(ui.ctx());
+        }
         if ui.button("载入合成示例（不读取系统剪贴板）").clicked() {
             self.preview_fixture();
         }
@@ -459,9 +736,78 @@ impl State {
             None
         } else {
             Some((
-                format!("超级剪贴板0.4.0组合 · 条目{:?}", self.selected),
+                format!("超级剪贴板0.5.0组合 · 条目{:?}", self.selected),
                 &self.output,
             ))
+        }
+    }
+    fn add_picture_example(&mut self, ctx: &egui::Context) {
+        let image = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(600, 240, |x, y| {
+            let dx = x as i32 - 300;
+            let dy = y as i32 - 120;
+            image::Rgba([
+                ((x / 3) + 30) as u8,
+                ((y / 2) + 70) as u8,
+                180,
+                if dx * dx / 9 + dy * dy < 12500 {
+                    if x < 200 { 120 } else { 255 }
+                } else {
+                    0
+                },
+            ])
+        }));
+        let value = match super::Picture::from_image(image) {
+            Ok(value) => std::sync::Arc::new(value),
+            Err(_) => {
+                self.message = "图片示例准备失败".into();
+                return;
+            }
+        };
+        match self.history.insert_image(value, "合成图片示例".into()) {
+            Ok(()) => {
+                self.changed();
+                self.open_image(ctx, self.history.entries[0].id);
+            }
+            Err(error) => self.message = error,
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_fixture(&mut self, ctx: &egui::Context) {
+        self.add_picture_example(ctx);
+        self.selected.clear();
+        self.output.clear();
+        self.message = "合成透明图片示例；不读取系统剪贴板或真实历史".into();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_ready(
+        &mut self,
+        ctx: &egui::Context,
+    ) -> Option<std::sync::Arc<super::Picture>> {
+        self.poll_image(ctx);
+        let preview = self.image_preview.as_ref()?;
+        if preview.texture.is_some() && preview.dib.is_some() {
+            let source = self
+                .history
+                .entries
+                .iter()
+                .find(|e| e.id == preview.id)
+                .unwrap()
+                .image
+                .as_ref()
+                .unwrap();
+            assert!(std::sync::Arc::ptr_eq(source, &preview.picture));
+            assert!(
+                preview
+                    .picture
+                    .image()
+                    .unwrap()
+                    .to_rgba8()
+                    .pixels()
+                    .any(|p| p.0[3] == 0)
+            );
+            Some(preview.picture.clone())
+        } else {
+            None
         }
     }
     #[cfg(feature = "ui-preview")]
@@ -552,6 +898,59 @@ fn timestamp_label(timestamp: Option<i64>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn restored_id_cannot_reuse_old_picture_preview_or_late_cancelled_texture() {
+        let ctx = egui::Context::default();
+        let picture = std::sync::Arc::new(
+            super::super::Picture::from_image(image::DynamicImage::new_rgba8(4, 3)).unwrap(),
+        );
+        let mut state = State::default();
+        state
+            .history
+            .insert_image(picture.clone(), "fixture".into())
+            .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        state.image_preview = Some(Preview {
+            cancelled: false,
+            id: state.history.entries[0].id,
+            picture: picture.clone(),
+            texture: None,
+            dib: None,
+            error: String::new(),
+            job: Some(rx),
+        });
+        // A restore may reuse the stable numeric ID for a different actual payload.
+        state.history.entries[0].image = Some(std::sync::Arc::new(
+            super::super::Picture::from_image(image::DynamicImage::new_rgba8(2, 2)).unwrap(),
+        ));
+        tx.send(Ok((
+            picture.thumbnail().unwrap(),
+            super::super::media::to_dib(&picture).unwrap(),
+        )))
+        .unwrap();
+        state.poll_image(&ctx);
+        assert!(state.image_preview.is_none());
+        assert!(state.take_image_relay().is_none());
+        state.history.entries[0].image = Some(picture.clone());
+        let (tx, rx) = std::sync::mpsc::channel();
+        state.image_preview = Some(Preview {
+            cancelled: false,
+            id: state.history.entries[0].id,
+            picture: picture.clone(),
+            texture: None,
+            dib: None,
+            error: String::new(),
+            job: Some(rx),
+        });
+        state.cancel_image_preview();
+        tx.send(Ok((
+            picture.thumbnail().unwrap(),
+            super::super::media::to_dib(&picture).unwrap(),
+        )))
+        .unwrap();
+        state.poll_image(&ctx);
+        assert!(state.image_preview.is_none());
+    }
     #[test]
     fn policy_drafts_guard_exit_without_enabling_history_storage_or_capture() {
         let mut state = State::default();

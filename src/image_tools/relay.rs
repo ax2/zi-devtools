@@ -194,6 +194,38 @@ impl Transfer {
     }
 }
 impl State {
+    pub fn start_clipboard_relay(&mut self, ctx: &egui::Context, png: Arc<Vec<u8>>) -> Result<()> {
+        ensure!(self.relay.is_none(), "已有图片接力，请先确认或取消");
+        self.relay = Some(Transfer::start(
+            ctx,
+            Source::Encoded(png),
+            Vec::new(),
+            "super-clipboard",
+        ));
+        Ok(())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clipboard_relay_apply(
+        &mut self,
+        ctx: &egui::Context,
+        png: &Arc<Vec<u8>>,
+    ) -> bool {
+        let Some(transfer) = self.relay.as_mut() else {
+            return false;
+        };
+        transfer.poll(ctx);
+        let Some(prepared) = &transfer.prepared else {
+            return false;
+        };
+        assert_eq!(transfer.source_id, "super-clipboard");
+        assert_eq!(prepared.origins[0].version, "0.5.0");
+        let original = image::load_from_memory_with_format(png, ImageFormat::Png).unwrap();
+        assert_eq!(prepared.image.to_rgba8(), original.to_rgba8());
+        self.apply_relay(ctx).unwrap();
+        assert_eq!(self.mode, Mode::Single);
+        assert!(self.output.is_empty() && self.encoded.is_none());
+        true
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_relay_fixture(&mut self, ctx: &egui::Context) {
         self.preview_fixture(ctx);

@@ -30,6 +30,7 @@ fn validate(history: &History) -> Result<()> {
     );
     let mut ids = std::collections::HashSet::new();
     let mut texts = std::collections::HashSet::new();
+    let mut images = std::collections::HashSet::new();
     for e in &history.entries {
         ensure!(
             e.first_captured_utc
@@ -47,13 +48,21 @@ fn validate(history: &History) -> Result<()> {
             e.id > 0 && e.id <= history.next && ids.insert(e.id),
             "剪贴板历史ID无效"
         );
-        ensure!(
-            !e.text.is_empty()
-                && e.text.len() <= TEXT_LIMIT
-                && !e.text.contains('\0')
-                && texts.insert(&e.text),
-            "剪贴板历史文本无效"
-        );
+        if let Some(image) = &e.image {
+            ensure!(
+                e.text.is_empty() && images.insert(&image.sha256),
+                "图片混入文本或重复图片"
+            );
+            image.validate()?;
+        } else {
+            ensure!(
+                !e.text.is_empty()
+                    && e.text.len() <= TEXT_LIMIT
+                    && !e.text.contains('\0')
+                    && texts.insert(&e.text),
+                "剪贴板历史文本无效"
+            );
+        }
         ensure!(
             e.source.len() <= 2048 && e.time.len() <= 64,
             "剪贴板历史元信息过大"
@@ -155,7 +164,7 @@ fn connect(path: &Path, write: bool) -> Result<Connection> {
 fn save(path: &Path, history: History) -> Result<()> {
     validate(&history)?;
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-    serde_json::to_writer(&mut encoder, &Snapshot { schema: 2, history })?;
+    serde_json::to_writer(&mut encoder, &Snapshot { schema: 3, history })?;
     let compressed = Zeroizing::new(encoder.finish()?);
     let protected = protect(&compressed, false)?;
     let mut db = connect(path, true)?;
@@ -184,7 +193,17 @@ fn load(path: &Path) -> Result<Option<History>> {
     let compressed = protect(&cipher, true)?;
     let decoder = flate2::read::GzDecoder::new(compressed.as_slice()).take(200 * 1024 * 1024);
     let snapshot: Snapshot = serde_json::from_reader(decoder)?;
-    ensure!(matches!(snapshot.schema, 1 | 2), "剪贴板快照版本不支持");
+    ensure!(matches!(snapshot.schema, 1..=3), "剪贴板快照版本不支持");
+    if snapshot.schema < 3 {
+        ensure!(
+            snapshot
+                .history
+                .entries
+                .iter()
+                .all(|entry| entry.image.is_none()),
+            "旧快照不支持图片"
+        );
+    }
     if snapshot.schema == 1 {
         ensure!(
             snapshot.history.retention_days.is_none()
@@ -408,9 +427,156 @@ impl Persistence {
     }
 }
 
+#[cfg(feature = "ui-preview")]
+pub fn media_benchmark() -> Result<()> {
+    let root = std::env::temp_dir().join(format!(
+        "zi-clipboard-media-benchmark-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir(&root)?;
+    let path = root.join("history.sqlite3");
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(self.0.join("history.sqlite3"));
+            let _ = std::fs::remove_dir(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(root);
+    let started = Instant::now();
+    let mut history = History::default();
+    for i in 0..500 {
+        let mut seed = 0x12345678u32 ^ (i + 1);
+        let mut image = image::RgbaImage::new(75, 75);
+        for pixel in image.pixels_mut() {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            *pixel = image::Rgba([seed as u8, (seed >> 8) as u8, (seed >> 16) as u8, 255]);
+        }
+        history
+            .insert_image(
+                std::sync::Arc::new(super::Picture::from_image(
+                    image::DynamicImage::ImageRgba8(image),
+                )?),
+                "fixture.exe".into(),
+            )
+            .map_err(anyhow::Error::msg)?;
+    }
+    ensure!(
+        history.entries.len() == 500,
+        "benchmark must retain 500 distinct images"
+    );
+    let build_ms = started.elapsed().as_millis();
+    let budget = history.bytes();
+    let sampled_rss = || -> u64 {
+        let pid = sysinfo::get_current_pid().unwrap();
+        let mut system = sysinfo::System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+        system.process(pid).unwrap().memory()
+    };
+    let rss_built = sampled_rss();
+    let expected = history
+        .entries
+        .iter()
+        .map(|e| e.image.as_ref().unwrap().sha256.clone())
+        .collect::<Vec<_>>();
+    let start = Instant::now();
+    save(&path, history)?;
+    let save_ms = start.elapsed().as_millis();
+    let disk = std::fs::metadata(&path)?.len();
+    let rss_saved = sampled_rss();
+    let start = Instant::now();
+    let restored = load(&path)?.unwrap();
+    let restore_ms = start.elapsed().as_millis();
+    let rss_restored = sampled_rss();
+    ensure!(
+        restored
+            .entries
+            .iter()
+            .map(|e| e.image.as_ref().unwrap().sha256.clone())
+            .collect::<Vec<_>>()
+            == expected,
+        "benchmark image hashes changed"
+    );
+    println!(
+        "PASS synthetic 500-image protected snapshot: {}",
+        serde_json::json!({"items":500,"pixel_size":[75,75],"charged_bytes":budget,"sqlite_bytes":disk,"build_ms":build_ms,"save_ms":save_ms,"restore_ms":restore_ms,"sampled_rss_bytes":[rss_built,rss_saved,rss_restored],"scope":"synthetic temporary data, sampled boundaries not peak RSS or full application cold startup; no clipboard access"})
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn protected_mixed_snapshot_roundtrip_and_legacy_media_rejection() {
+        let path = path();
+        let mut h = History::default();
+        h.insert("synthetic mixed text".into(), "fixture".into())
+            .unwrap();
+        let mut old = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        serde_json::to_writer(
+            &mut old,
+            &Snapshot {
+                schema: 2,
+                history: h.clone(),
+            },
+        )
+        .unwrap();
+        save(&path, h.clone()).unwrap();
+        let cipher = protect(&old.finish().unwrap(), false).unwrap();
+        let db = Connection::open(&path).unwrap();
+        db.execute(
+            "UPDATE clipboard SET payload=?1",
+            params![cipher.as_slice()],
+        )
+        .unwrap();
+        drop(db);
+        let old_restored = load(&path).unwrap().unwrap();
+        assert_eq!(
+            old_restored.entries[0].first_captured_utc,
+            h.entries[0].first_captured_utc
+        );
+        assert_eq!(old_restored.entries[0].id, h.entries[0].id);
+        let picture = std::sync::Arc::new(
+            super::super::Picture::from_image(image::DynamicImage::ImageRgba8(
+                image::RgbaImage::from_fn(4, 3, |x, y| {
+                    image::Rgba([x as u8, y as u8, 80, (x * 60) as u8])
+                }),
+            ))
+            .unwrap(),
+        );
+        h.insert_image(picture.clone(), "fixture.exe".into())
+            .unwrap();
+        h.entries[0].pinned = true;
+        save(&path, h.clone()).unwrap();
+        let restored = load(&path).unwrap().unwrap();
+        assert_eq!(restored.entries.len(), 2);
+        assert!(restored.entries[0].pinned);
+        assert_eq!(restored.entries[0].image.as_ref().unwrap().png, picture.png);
+        let disk = std::fs::read(&path).unwrap();
+        assert!(!disk.windows(8).any(|s| s == b"\x89PNG\r\n\x1a\n"));
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        serde_json::to_writer(
+            &mut encoder,
+            &Snapshot {
+                schema: 2,
+                history: h,
+            },
+        )
+        .unwrap();
+        let cipher = protect(&encoder.finish().unwrap(), false).unwrap();
+        let db = Connection::open(&path).unwrap();
+        db.execute(
+            "UPDATE clipboard SET payload=?1",
+            params![cipher.as_slice()],
+        )
+        .unwrap();
+        drop(db);
+        assert!(load(&path).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
     #[test]
     fn legacy_snapshot_migrates_without_inventing_utc_and_new_policy_roundtrips() {
         let path = path();

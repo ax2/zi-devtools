@@ -688,6 +688,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            400..=401 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_image_fixture(ctx);
+            }
             398..=399 => {
                 self.page = Page::Images;
                 self.images.preview_relay_fixture(ctx);
@@ -1645,6 +1649,38 @@ impl DevToolsApp {
         })
         .unwrap();
         assert_eq!(self.frameworks.selected, crate::framework::Tool::Threads);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_clipboard_media_smoke(&mut self, ctx: &egui::Context, phase: u8) -> bool {
+        if phase == 0 {
+            self.page = Page::Clipboard;
+            self.clipboard.preview_image_fixture(ctx);
+            return false;
+        }
+        let Some(picture) = self.clipboard.preview_image_ready(ctx) else {
+            return false;
+        };
+        if phase == 1 {
+            self.images
+                .start_clipboard_relay(ctx, picture.png.clone())
+                .unwrap();
+            self.page = Page::Images;
+            return true;
+        }
+        if !self.images.preview_clipboard_relay_apply(ctx, &picture.png) {
+            return false;
+        }
+        let id = self.images.take_relay_route().unwrap();
+        self.visit(id);
+        assert_eq!(
+            self.preferences.recent.first().map(String::as_str),
+            Some("image-tools")
+        );
+        assert!(std::sync::Arc::ptr_eq(
+            &self.clipboard.preview_image_ready(ctx).unwrap(),
+            &picture
+        ));
+        true
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_relay_smoke(&mut self, ctx: &egui::Context, phase: u8) -> bool {
@@ -4263,6 +4299,16 @@ impl eframe::App for DevToolsApp {
         }
         self.prefix.files.poll();
         self.images.poll_screenshot(ctx);
+        if let Some(picture) = self.clipboard.take_image_relay() {
+            match self.images.start_clipboard_relay(ctx, picture.png.clone()) {
+                Ok(()) => {
+                    self.page = Page::Images;
+                    self.quick_open = false;
+                }
+                Err(error) => self.toast = Some((error.to_string(), Instant::now())),
+            }
+        }
+
         if self.images.take_screenshot_capture_request() {
             self.quick_open = false;
             if hide_main_window(self.window_handle) {

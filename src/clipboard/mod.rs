@@ -1,7 +1,9 @@
 //! Opt-in, bounded clipboard history with optional protected local snapshots.
+mod media;
 #[cfg(windows)]
 mod native;
 mod policy;
+pub use media::Picture;
 #[cfg(windows)]
 mod storage;
 mod ui;
@@ -17,6 +19,8 @@ const BYTE_LIMIT: usize = 32 * 1024 * 1024;
 pub struct Entry {
     pub id: u64,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<std::sync::Arc<Picture>>,
     pub source: String,
     pub time: String,
     pub pinned: bool,
@@ -33,15 +37,46 @@ pub struct History {
     #[serde(default)]
     pub retention_days: Option<u16>,
 }
+impl Entry {
+    pub fn bytes(&self) -> usize {
+        self.image
+            .as_ref()
+            .map_or(self.text.len(), |image| image.cost())
+    }
+}
 impl History {
     pub fn insert(&mut self, text: String, source: String) -> Result<(), String> {
-        if text.is_empty() {
+        self.insert_content(text, None, source)
+    }
+    pub fn insert_image(
+        &mut self,
+        image: std::sync::Arc<Picture>,
+        source: String,
+    ) -> Result<(), String> {
+        self.insert_content(String::new(), Some(image), source)
+    }
+    fn insert_content(
+        &mut self,
+        text: String,
+        image: Option<std::sync::Arc<Picture>>,
+        source: String,
+    ) -> Result<(), String> {
+        if text.is_empty() && image.is_none() {
             return Ok(());
         }
         if text.len() > TEXT_LIMIT {
             return Err("单条文本超过1 MiB，未采集".into());
         }
-        let existing = self.entries.iter().position(|e| e.text == text);
+        if let Some(image) = &image {
+            if image.cost() > BYTE_LIMIT {
+                return Err("图片超过历史容量".into());
+            }
+        }
+        let existing = self.entries.iter().position(|e| match (&e.image, &image) {
+            (Some(a), Some(b)) => a.sha256 == b.sha256,
+            (None, None) => e.text == text,
+            _ => false,
+        });
         let mut entry = if let Some(i) = existing {
             self.entries.remove(i)
         } else {
@@ -49,6 +84,7 @@ impl History {
             Entry {
                 id: self.next,
                 text,
+                image,
                 source: String::new(),
                 time: String::new(),
                 pinned: false,
@@ -67,7 +103,7 @@ impl History {
         entry.source = source;
         entry.time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         // Preflight eviction before mutating history: pinned content is never discarded.
-        let mut bytes = self.entries.iter().map(|e| e.text.len()).sum::<usize>() + entry.text.len();
+        let mut bytes = self.bytes() + entry.bytes();
         let mut count = self.entries.len() + 1;
         let mut evict = Vec::new();
         for old in self.entries.iter().rev().filter(|e| !e.pinned) {
@@ -76,7 +112,7 @@ impl History {
             }
             evict.push(old.id);
             count -= 1;
-            bytes -= old.text.len();
+            bytes -= old.bytes();
         }
         if count > ITEM_LIMIT || bytes > BYTE_LIMIT {
             if let Some(index) = existing {
@@ -112,15 +148,25 @@ impl History {
         before - self.entries.len()
     }
     pub fn bytes(&self) -> usize {
-        self.entries.iter().map(|e| e.text.len()).sum()
+        self.entries
+            .iter()
+            .fold(0usize, |sum, entry| sum.saturating_add(entry.bytes()))
     }
     pub fn combined(&self, selected: &[u64], format: usize) -> Result<String, String> {
+        if selected.iter().any(|id| {
+            self.entries
+                .iter()
+                .any(|e| e.id == *id && e.image.is_some())
+        }) {
+            return Err("图片请使用独立图片预览，不参加文本组合".into());
+        }
         let parts: Vec<&str> = selected
             .iter()
             .map(|id| {
                 self.entries
                     .iter()
                     .find(|e| e.id == *id)
+                    .filter(|e| e.image.is_none())
                     .map(|e| e.text.as_str())
                     .ok_or("选择的历史已失效，请重新选择".to_string())
             })
@@ -166,10 +212,62 @@ impl History {
 
 #[cfg(all(windows, feature = "ui-preview"))]
 pub use native::isolated_fixture;
+#[cfg(all(windows, feature = "ui-preview"))]
+pub use storage::media_benchmark;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mixed_images_deduplicate_preserve_pins_and_do_not_enter_text_composition() {
+        let picture =
+            std::sync::Arc::new(Picture::from_image(image::DynamicImage::new_rgba8(8, 5)).unwrap());
+        let mut h = History::default();
+        h.insert("fixture text".into(), "fixture".into()).unwrap();
+        let text = h.entries[0].id;
+        h.insert_image(picture.clone(), "first".into()).unwrap();
+        let id = h.entries[0].id;
+        h.entries[0].pinned = true;
+        h.insert_image(picture.clone(), "second".into()).unwrap();
+        assert_eq!(h.entries.len(), 2);
+        assert_eq!(h.entries[0].id, id);
+        assert!(h.entries[0].pinned && h.entries[0].text.is_empty());
+        assert!(std::sync::Arc::ptr_eq(
+            h.entries[0].image.as_ref().unwrap(),
+            &picture
+        ));
+        assert_eq!(h.bytes(), picture.cost() + 12);
+        assert!(h.combined(&[id, text], 0).is_err());
+        assert_eq!(h.combined(&[text], 0).unwrap(), "fixture text");
+        h.retention_days = Some(1);
+        h.entries[0].last_captured_utc = Some(1);
+        h.entries[1].last_captured_utc = Some(2_000_000_000);
+        assert_eq!(h.expire(2_000_000_000), 0);
+    }
+    #[test]
+    fn pinned_image_budget_refuses_incoming_without_discarding_existing_work() {
+        let mut h = History::default();
+        let image = std::sync::Arc::new(
+            Picture::from_image(image::DynamicImage::new_rgba8(2000, 2000)).unwrap(),
+        );
+        h.insert_image(image, "fixture".into()).unwrap();
+        h.entries[0].pinned = true;
+        for i in 0..15 {
+            h.insert(
+                format!("{i:02}{}", "x".repeat(TEXT_LIMIT - 2)),
+                "fixture".into(),
+            )
+            .unwrap();
+            h.entries[0].pinned = true;
+        }
+        let ids = h.entries.iter().map(|e| e.id).collect::<Vec<_>>();
+        let other = std::sync::Arc::new(
+            Picture::from_image(image::DynamicImage::new_rgba8(1800, 1800)).unwrap(),
+        );
+        assert!(h.insert_image(other, "fixture".into()).is_err());
+        assert_eq!(h.entries.iter().map(|e| e.id).collect::<Vec<_>>(), ids);
+        assert!(h.bytes() <= BYTE_LIMIT);
+    }
     #[test]
     fn retention_protects_pins_unknown_and_future_times_at_exact_boundary() {
         let mut h = History::default();

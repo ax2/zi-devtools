@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 400] = [
+const NAMES: [&str; 402] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -410,6 +410,8 @@ const NAMES: [&str; 400] = [
     "clipboard-policy-light",
     "image-relay-dark",
     "image-relay-light",
+    "clipboard-image-dark",
+    "clipboard-image-light",
 ];
 
 struct Capture {
@@ -1306,6 +1308,31 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("clipboard-media-smoke") {
+            if self.frames == 0 {
+                self.app.preview_clipboard_media_smoke(ctx, 0);
+                self.quick_smoke_phase = 1;
+            } else if self
+                .app
+                .preview_clipboard_media_smoke(ctx, self.quick_smoke_phase)
+            {
+                if self.quick_smoke_phase == 2 {
+                    println!(
+                        "PASS clipboard image: actual background preview and DIB preparation, transparent pixels, typed image relay, versioned clipboard origin, source history preserved and exact recent target; synthetic only"
+                    );
+                    std::process::exit(0);
+                }
+                self.quick_smoke_phase = 2;
+            }
+            assert!(
+                self.started.elapsed() < Duration::from_secs(30),
+                "clipboard media smoke timeout"
+            );
+            self.app.update(ctx, frame);
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("image-relay-smoke") {
             if self.frames == 0 {
                 self.app.preview_image_relay_smoke(ctx, 0);
@@ -2929,6 +2956,7 @@ impl eframe::App for Capture {
                 || (136..=137).contains(&self.scene)
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)
+                || (400..=401).contains(&self.scene)
                 || (280..=281).contains(&self.scene)
                 || (276..=277).contains(&self.scene)
             {
