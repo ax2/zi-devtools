@@ -263,6 +263,8 @@ pub struct DevToolsApp {
     launcher_query: String,
     launcher_open: bool,
     launcher_focus: bool,
+    #[cfg(feature = "ui-preview")]
+    workflow_bookmark_button: Option<egui::Rect>,
     launcher_index: usize,
     toast: Option<(String, Instant)>,
     data_state: crate::workbench::sessions::Workspace,
@@ -789,6 +791,65 @@ impl DevToolsApp {
         }
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_bookmark_position(&self) -> egui::Pos2 {
+        self.workflow_bookmark_button
+            .expect("visible workflow bookmark button")
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_bookmark_check(&mut self, phase: u8) {
+        match phase {
+            0 => {
+                assert_eq!(self.preferences.workflow_favorites.len(), 1);
+                assert_eq!(
+                    Preferences::load(&self.preferences_path).workflow_favorites,
+                    self.preferences.workflow_favorites
+                );
+                self.data_state.preview_workflow_bookmark_state(0);
+            }
+            1 => {
+                assert_eq!(self.preferences.workflow_favorites.len(), 1);
+                assert_eq!(
+                    Preferences::load(&self.preferences_path).workflow_favorites,
+                    self.preferences.workflow_favorites
+                );
+                assert!(self.launcher_open);
+                self.data_state.preview_workflow_bookmark_state(1);
+            }
+            2 => {
+                assert!(self.launcher_open);
+                assert_eq!(self.launcher_query, "每日资料清洗");
+                assert!(self.entries(&self.launcher_query).is_empty());
+                assert_eq!(
+                    self.data_state.workflow_matches(&self.launcher_query).total,
+                    0
+                );
+                assert_eq!(
+                    self.preferences
+                        .workflow_favorites
+                        .iter()
+                        .filter(|entry| entry.matches(&self.launcher_query))
+                        .count(),
+                    1
+                );
+            }
+            3 => {
+                assert!(self.preferences.workflow_favorites.is_empty());
+                assert!(
+                    Preferences::load(&self.preferences_path)
+                        .workflow_favorites
+                        .is_empty()
+                );
+                self.data_state.preview_workflow_bookmark_state(1);
+                assert_eq!(
+                    self.data_state.workflow_matches(&self.launcher_query).total,
+                    0
+                );
+            }
+            _ => panic!("unknown bookmark fixture phase"),
+        }
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_text_plugin(&mut self, ctx: &egui::Context, light: bool, phase: u8) {
         match phase {
@@ -2143,6 +2204,8 @@ impl DevToolsApp {
             preferences, preferences_path: preferences_path.clone(),
             tool_search: String::new(), library_query: String::new(), launcher_query: String::new(), launcher_open: false,
             launcher_focus: false, launcher_index: 0, toast: None,
+            #[cfg(feature = "ui-preview")]
+            workflow_bookmark_button: None,
             data_state: crate::workbench::sessions::Workspace::new(preferences_path.with_file_name("workspace.sqlite3")), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: crate::mcp_ui::McpState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
@@ -2716,6 +2779,7 @@ impl DevToolsApp {
         }
         let mut open = true;
         let mut chosen = None;
+        let mut bookmark_action = None;
         egui::Window::new("快速打开工具与流程")
             .open(&mut open)
             .collapsible(false)
@@ -2741,7 +2805,15 @@ impl DevToolsApp {
                 let query = self.launcher_query.to_lowercase();
                 let entries = self.entries(&query);
                 let workflows = self.data_state.workflow_matches(&query);
-                let count = entries.len() + workflows.entries.len();
+                let saved: Vec<_> = self
+                    .preferences
+                    .workflow_favorites
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, entry)| entry.matches(&query))
+                    .map(|(index, _)| index)
+                    .collect();
+                let count = saved.len() + entries.len() + workflows.entries.len();
                 if count == 0 {
                     ui.label("没有匹配的工具或已检查流程；可在数据工作台选择或刷新流程文件夹。");
                 } else {
@@ -2758,7 +2830,58 @@ impl DevToolsApp {
                     egui::ScrollArea::vertical()
                         .max_height(380.0)
                         .show(ui, |ui| {
+                            for (index, saved_index) in saved.iter().enumerate() {
+                                let workflow = &self.preferences.workflow_favorites[*saved_index];
+                                let response = ui
+                                    .horizontal(|ui| {
+                                        let response = ui.selectable_label(
+                                            index == self.launcher_index,
+                                            format!(
+                                                "{} · 收藏流程 · {}步",
+                                                workflow.name, workflow.steps
+                                            ),
+                                        );
+                                        let star = ui
+                                            .small_button("★")
+                                            .on_hover_text("移除收藏；保留原文件");
+                                        #[cfg(feature = "ui-preview")]
+                                        if index == 0 {
+                                            self.workflow_bookmark_button =
+                                                Some(star.rect.intersect(ui.clip_rect()));
+                                        }
+                                        if star.clicked() {
+                                            bookmark_action = Some(Ok(workflow.clone()));
+                                        }
+                                        response
+                                    })
+                                    .inner;
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(format!(
+                                            "{} · 摘要来自收藏时；重新读取后在当前实例确认",
+                                            workflow
+                                                .path
+                                                .file_name()
+                                                .unwrap_or_default()
+                                                .to_string_lossy()
+                                        ))
+                                        .size(12.0)
+                                        .color(self.colors.muted),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(workflow.path.display().to_string());
+                                if scroll_selection && index == self.launcher_index {
+                                    response.scroll_to_me(Some(egui::Align::Center));
+                                }
+                                if response.clicked() {
+                                    chosen =
+                                        Some(launcher::Choice::SavedWorkflow(workflow.clone()));
+                                }
+                                ui.add_space(6.0);
+                            }
                             for (i, e) in entries.iter().enumerate() {
+                                let i = saved.len() + i;
                                 let response = ui.selectable_label(
                                     i == self.launcher_index,
                                     format!("{}   ·   {}   ·   {}", e.title, e.category, e.badge()),
@@ -2784,14 +2907,39 @@ impl DevToolsApp {
                                 }
                             }
                             for (offset, workflow) in workflows.entries.iter().enumerate() {
-                                let index = entries.len() + offset;
-                                let response = ui.selectable_label(
-                                    index == self.launcher_index,
-                                    format!(
-                                        "{} · 已保存流程 · {}步",
-                                        workflow.name, workflow.steps
-                                    ),
-                                );
+                                let index = saved.len() + entries.len() + offset;
+                                let response = ui
+                                    .horizontal(|ui| {
+                                        let response = ui.selectable_label(
+                                            index == self.launcher_index,
+                                            format!(
+                                                "{} · 已保存流程 · {}步",
+                                                workflow.name, workflow.steps
+                                            ),
+                                        );
+                                        let favorite = self.data_state.workflow_is_bookmarked(
+                                            workflow,
+                                            &self.preferences.workflow_favorites,
+                                        );
+                                        let star = ui
+                                            .small_button(if favorite { "★" } else { "☆" })
+                                            .on_hover_text(if favorite {
+                                                "移除收藏；保留原文件"
+                                            } else {
+                                                "收藏流程位置和摘要；下次直接搜索，不保存表格或授权"
+                                            });
+                                        #[cfg(feature = "ui-preview")]
+                                        if offset == 0 {
+                                            self.workflow_bookmark_button =
+                                                Some(star.rect.intersect(ui.clip_rect()));
+                                        }
+                                        if star.clicked() {
+                                            bookmark_action =
+                                                Some(self.data_state.workflow_bookmark(workflow));
+                                        }
+                                        response
+                                    })
+                                    .inner;
                                 let detail = format!(
                                     "{} · {} · 载入后确认，不自动执行",
                                     workflow.instance_name,
@@ -2820,11 +2968,17 @@ impl DevToolsApp {
                         ));
                     }
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-                        chosen = Some(if let Some(entry) = entries.get(self.launcher_index) {
+                        chosen = Some(if let Some(index) = saved.get(self.launcher_index) {
+                            launcher::Choice::SavedWorkflow(
+                                self.preferences.workflow_favorites[*index].clone(),
+                            )
+                        } else if let Some(entry) = entries.get(self.launcher_index - saved.len()) {
                             launcher::Choice::Tool(entry.id.clone())
                         } else {
                             launcher::Choice::Workflow(
-                                workflows.entries[self.launcher_index - entries.len()].clone(),
+                                workflows.entries
+                                    [self.launcher_index - saved.len() - entries.len()]
+                                .clone(),
                             )
                         });
                     }
@@ -2841,6 +2995,12 @@ impl DevToolsApp {
         }
         if let Some(choice) = chosen {
             self.open_search_choice(choice);
+        }
+        if let Some(bookmark) = bookmark_action {
+            match bookmark {
+                Ok(bookmark) => self.toggle_workflow_bookmark(bookmark),
+                Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
+            }
         }
     }
 

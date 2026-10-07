@@ -2,6 +2,13 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_bookmark_state(&mut self, phase: u8) {
+        match phase {
+            0 => assert!(self.workflow.files.listing.is_none()),
+            1 => assert!(self.workflow.files.review.is_none()),
+            _ => panic!("unknown bookmark state phase"),
+        }
+    }
     pub fn preview_workflow_search_check(&self, phase: u8) {
         let original = Dataset::parse(
             "编号,名称,数量\n001, Zi Tools ,2\n002, Local Notes ,3",

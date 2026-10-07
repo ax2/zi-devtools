@@ -67,6 +67,12 @@ impl State {
 }
 
 impl DataState {
+    pub(super) fn open_bookmarked_workflow(&mut self, path: PathBuf) -> Result<()> {
+        ensure_not_busy(self)?;
+        self.workflow.files.read(path)?;
+        self.show_workflow();
+        Ok(())
+    }
     pub(super) fn open_searched_workflow(
         &mut self,
         file: &std::ffi::OsStr,

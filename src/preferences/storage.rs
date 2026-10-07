@@ -37,7 +37,12 @@ fn merge_fields(latest: &mut Value, base: &Value, current: &Value, root: bool) {
             .keys()
             .chain(new.keys().filter(|key| !old.contains_key(*key)))
         {
-            if root && matches!(key.as_str(), "favorites" | "recent" | "usage") {
+            if root
+                && matches!(
+                    key.as_str(),
+                    "favorites" | "recent" | "usage" | "workflow_favorites"
+                )
+            {
                 continue;
             }
             match (old.get(key), new.get(key)) {
@@ -130,6 +135,7 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
     if !prefs.pending_recent.is_empty()
         || prefs.favorites != old.favorites
         || prefs.usage != old.usage
+        || prefs.workflow_favorites != old.workflow_favorites
     {
         return Ok(false);
     }
@@ -140,13 +146,15 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
     latest.normalize();
     let changed = prefs.favorites != latest.favorites
         || prefs.recent != latest.recent
-        || prefs.usage != latest.usage;
+        || prefs.usage != latest.usage
+        || prefs.workflow_favorites != latest.workflow_favorites;
     if changed {
         prefs.favorites = latest.favorites;
         prefs.recent = latest.recent;
         prefs.usage = latest.usage;
+        prefs.workflow_favorites = latest.workflow_favorites;
         let current = serde_json::to_value(&*prefs)?;
-        for key in ["favorites", "recent", "usage"] {
+        for key in ["favorites", "recent", "usage", "workflow_favorites"] {
             base[key] = current[key].clone();
         }
         prefs.baseline = Some(base);
@@ -175,6 +183,33 @@ pub(super) fn save(prefs: &mut Preferences, path: &Path) -> Result<()> {
     merge_fields(&mut document, &base, &current, true);
     let mut next: Preferences = serde_json::from_value(document.clone())?;
     let old: Preferences = serde_json::from_value(base)?;
+    for entry in &old.workflow_favorites {
+        if !prefs
+            .workflow_favorites
+            .iter()
+            .any(|item| item.path == entry.path)
+        {
+            next.workflow_favorites
+                .retain(|item| item.path != entry.path);
+        }
+    }
+    for entry in &prefs.workflow_favorites {
+        if !old.workflow_favorites.iter().any(|item| item == entry) {
+            if let Some(existing) = next
+                .workflow_favorites
+                .iter_mut()
+                .find(|item| item.path == entry.path)
+            {
+                *existing = entry.clone();
+            } else {
+                ensure!(
+                    next.workflow_favorites.len() < 100,
+                    "其他窗口已收藏100条流程，请刷新后移除不再需要的收藏"
+                );
+                next.workflow_favorites.push(entry.clone());
+            }
+        }
+    }
     for id in &old.favorites {
         if !prefs.favorites.contains(id) {
             next.favorites.retain(|item| item != id);
@@ -203,7 +238,7 @@ pub(super) fn save(prefs: &mut Preferences, path: &Path) -> Result<()> {
     }
     next.normalize();
     let clean = serde_json::to_value(&next)?;
-    for key in ["favorites", "recent", "usage"] {
+    for key in ["favorites", "recent", "usage", "workflow_favorites"] {
         document[key] = clean[key].clone();
     }
     let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));

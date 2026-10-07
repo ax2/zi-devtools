@@ -2,11 +2,22 @@ use super::*;
 pub(super) enum Choice {
     Tool(String),
     Workflow(crate::workbench::sessions::WorkflowMatch),
+    SavedWorkflow(crate::preferences::SavedWorkflow),
 }
 
 impl DevToolsApp {
     pub(super) fn open_search_choice(&mut self, choice: Choice) {
         match choice {
+            Choice::SavedWorkflow(selected) => {
+                match self.data_state.open_workflow_bookmark(&selected) {
+                    Ok(()) => {
+                        self.page = Page::Data;
+                        self.launcher_open = false;
+                        self.visit("pipeline");
+                    }
+                    Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
+                }
+            }
             Choice::Tool(id) => {
                 if let Some(entry) = self.entries("").into_iter().find(|entry| entry.id == id) {
                     self.open_entry(&entry);
@@ -20,6 +31,24 @@ impl DevToolsApp {
                 }
                 Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
             },
+        }
+    }
+    pub(super) fn toggle_workflow_bookmark(&mut self, entry: crate::preferences::SavedWorkflow) {
+        match self
+            .preferences
+            .toggle_workflow(&self.preferences_path, entry)
+        {
+            Ok(saved) => {
+                self.toast = Some((
+                    if saved {
+                        "已收藏流程；下次可用Ctrl K直接找到，打开后仍需确认".into()
+                    } else {
+                        "已移除流程收藏，原文件保留".into()
+                    },
+                    Instant::now(),
+                ))
+            }
+            Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
         }
     }
 }

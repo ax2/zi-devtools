@@ -6,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 mod storage;
+mod workflows;
+pub use workflows::SavedWorkflow;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -22,6 +24,7 @@ pub struct Preferences {
     pub recent: Vec<String>,
     pub usage: std::collections::BTreeMap<String, u32>,
     pub workflow_library_folder: Option<PathBuf>,
+    pub workflow_favorites: Vec<SavedWorkflow>,
     pub recorder_auto_minimize: bool,
     pub recorder_auto_stop_minutes: u16,
     pub recorder_quality: crate::recorder::RecordingQuality,
@@ -39,6 +42,7 @@ impl Default for Preferences {
             recent: Vec::new(),
             usage: Default::default(),
             workflow_library_folder: None,
+            workflow_favorites: Vec::new(),
             recorder_auto_minimize: true,
             recorder_auto_stop_minutes: 0,
             recorder_quality: crate::recorder::RecordingQuality::default(),
@@ -102,6 +106,7 @@ impl Preferences {
         value
     }
     fn normalize(&mut self) {
+        workflows::normalize(&mut self.workflow_favorites);
         if self
             .workflow_library_folder
             .as_ref()

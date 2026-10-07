@@ -62,6 +62,53 @@ mod tests {
         }
     }
     #[test]
+    fn workflow_bookmark_opens_without_scan_reloads_and_preserves_active_content_on_failures() {
+        let fixture = Fixture::new();
+        fixture.definition("daily.json", "收藏时摘要");
+        let mut checked = fixture.workspace();
+        checked.workflow.files.list(fixture.0.clone()).unwrap();
+        wait(&mut checked);
+        let found = checked.workflow_matches("收藏时");
+        let bookmark = checked.workflow_bookmark(&found.entries[0]).unwrap();
+        checked.workflow.files.list(fixture.0.clone()).unwrap();
+        assert!(checked.workflow_bookmark(&found.entries[0]).is_err());
+        wait(&mut checked);
+        let mut reopened = fixture.workspace();
+        reopened.input = "current input untouched".into();
+        assert!(reopened.workflow.files.listing.is_none());
+        fixture.definition("daily.json", "文件新内容");
+        reopened.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut reopened);
+        assert_eq!(
+            reopened.workflow.files.review.as_ref().unwrap().name,
+            "文件新内容"
+        );
+        assert_eq!(reopened.input, "current input untouched");
+        assert!(reopened.workflow.files.listing.is_none());
+        assert!(reopened.open_workflow_bookmark(&bookmark).is_err());
+        reopened.workflow.files.review = None;
+        std::fs::remove_file(&bookmark.path).unwrap();
+        reopened.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut reopened);
+        assert!(reopened.workflow.files.review.is_none());
+        assert_eq!(reopened.workflow.files.job.phase, Phase::Failed);
+        assert_eq!(reopened.input, "current input untouched");
+        let active = reopened.active_id().to_owned();
+        reopened.workflow.files.job.begin();
+        assert!(reopened.open_workflow_bookmark(&bookmark).is_err());
+        assert_eq!(reopened.active_id(), active);
+        reopened
+            .workflow
+            .files
+            .job
+            .finish(Phase::Done, "test resumed");
+        std::fs::write(&bookmark.path, "not a workflow").unwrap();
+        reopened.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut reopened);
+        assert!(reopened.workflow.files.review.is_none());
+        assert_eq!(reopened.input, "current input untouched");
+    }
+    #[test]
     fn workflow_search_cache_routes_original_instance_and_reloads_changed_file_for_review() {
         let fixture = Fixture::new();
         fixture.definition("daily.json", "每日清洗");
@@ -187,6 +234,69 @@ pub(super) struct Cache {
     value: WorkflowMatches,
 }
 impl Workspace {
+    pub fn workflow_is_bookmarked(
+        &self,
+        selected: &WorkflowMatch,
+        bookmarks: &[crate::preferences::SavedWorkflow],
+    ) -> bool {
+        self.instances
+            .iter()
+            .find(|instance| instance.id == selected.instance_id)
+            .filter(|instance| {
+                instance.state.workflow.files.listing_revision == selected.listing_revision
+            })
+            .and_then(|instance| instance.state.workflow.files.listing.as_ref())
+            .and_then(|listing| {
+                listing
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path.file_name() == Some(selected.file_name.as_os_str()))
+            })
+            .is_some_and(|entry| bookmarks.iter().any(|bookmark| bookmark.path == entry.path))
+    }
+    pub fn workflow_bookmark(
+        &self,
+        selected: &WorkflowMatch,
+    ) -> Result<crate::preferences::SavedWorkflow> {
+        let instance = self
+            .instances
+            .iter()
+            .find(|instance| instance.id == selected.instance_id)
+            .context("该流程所属实例已关闭，请重新搜索")?;
+        let files = &instance.state.workflow.files;
+        anyhow::ensure!(
+            files.listing_revision == selected.listing_revision,
+            "流程列表已变化，请重新搜索"
+        );
+        let entry = files
+            .listing
+            .as_ref()
+            .and_then(|listing| {
+                listing
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path.file_name() == Some(selected.file_name.as_os_str()))
+            })
+            .context("流程列表已变化，请重新搜索")?;
+        let bookmark = crate::preferences::SavedWorkflow {
+            path: entry.path.clone(),
+            name: entry.name.clone(),
+            steps: entry.steps,
+        };
+        anyhow::ensure!(bookmark.valid(), "流程收藏信息无效");
+        Ok(bookmark)
+    }
+    pub fn open_workflow_bookmark(
+        &mut self,
+        bookmark: &crate::preferences::SavedWorkflow,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            !self.operation_pending() && !self.modal_open(),
+            "请先完成当前实例的保存或确认操作"
+        );
+        anyhow::ensure!(bookmark.valid(), "流程收藏信息无效");
+        self.open_bookmarked_workflow(bookmark.path.clone())
+    }
     pub fn workflow_matches(&mut self, query: &str) -> WorkflowMatches {
         let query = query.trim().to_lowercase();
         let mut hasher = DefaultHasher::new();

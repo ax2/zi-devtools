@@ -13,8 +13,7 @@ fn save_new(definition: &Definition, path: &std::path::Path) -> Result<()> {
 }
 fn load(path: &std::path::Path) -> Result<Definition> {
     anyhow::ensure!(path.is_absolute(), "请选择绝对路径");
-    let file = File::open(path).context("无法打开流程文件")?;
-    anyhow::ensure!(file.metadata()?.is_file(), "请选择普通流程文件");
+    let file = crate::local_files::open_regular(path, LIMIT).context("无法打开普通流程文件")?;
     let mut bytes = Vec::new();
     file.take((LIMIT + 1) as u64).read_to_end(&mut bytes)?;
     Definition::parse(&bytes)
