@@ -6,6 +6,8 @@ pub struct State {
     pub expression: String,
     pub(super) matrix_mode: bool,
     pub(super) plot_mode: bool,
+    pub(super) date_mode: bool,
+    pub(super) dates: super::dates::State,
     pub(super) plot: super::plot_ui::State,
     pub(super) matrix: super::matrix_ui::State,
     pub(super) degrees: bool,
@@ -28,6 +30,8 @@ impl Default for State {
             expression: "0.1 + 0.2".into(),
             matrix_mode: false,
             plot_mode: false,
+            date_mode: false,
+            dates: Default::default(),
             plot: Default::default(),
             matrix: Default::default(),
             degrees: false,
@@ -93,8 +97,8 @@ impl State {
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, version: &str) {
         ui.heading("全能计算器");
-        if self.plot_mode {
-            ui.small(format!("v{version} · 函数绘图 · 近似采样，不自动保存"));
+        if self.plot_mode || self.date_mode {
+            ui.small(format!("v{version} · 独立工作区 · 主动保存工作表"));
             let status = if self.busy() {
                 "后台任务中"
             } else if self.dirty() {
@@ -113,18 +117,24 @@ impl State {
             self.worksheet_ui(ui);
         }
         ui.add_space(12.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.label("三角函数角度");
-            ui.selectable_value(&mut self.degrees, false, "弧度 RAD");
-            ui.selectable_value(&mut self.degrees, true, "角度 DEG");
-        });
+        if !self.date_mode {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("三角函数角度");
+                ui.selectable_value(&mut self.degrees, false, "弧度 RAD");
+                ui.selectable_value(&mut self.degrees, true, "角度 DEG");
+            });
+        }
         ui.horizontal_wrapped(|ui| {
             if ui
-                .selectable_label(!self.matrix_mode && !self.plot_mode, "表达式计算")
+                .selectable_label(
+                    !self.matrix_mode && !self.plot_mode && !self.date_mode,
+                    "表达式计算",
+                )
                 .clicked()
             {
                 self.matrix_mode = false;
                 self.plot_mode = false;
+                self.date_mode = false;
             }
             if ui
                 .selectable_label(self.matrix_mode && !self.plot_mode, "矩阵与数据统计")
@@ -132,12 +142,26 @@ impl State {
             {
                 self.matrix_mode = true;
                 self.plot_mode = false;
+                self.date_mode = false;
             }
             if ui.selectable_label(self.plot_mode, "函数绘图").clicked() {
                 self.matrix_mode = false;
                 self.plot_mode = true;
+                self.date_mode = false;
+            }
+            if ui
+                .selectable_label(self.date_mode, "日期与工作日")
+                .clicked()
+            {
+                self.date_mode = true;
+                self.matrix_mode = false;
+                self.plot_mode = false;
             }
         });
+        if self.date_mode {
+            self.dates.ui(ui);
+            return;
+        }
         if self.plot_mode {
             let files_busy = self.busy() && !self.plot.busy();
             self.plot.ui(ui, &self.variables, self.degrees, files_busy);
@@ -261,7 +285,7 @@ impl State {
             ui.label("进制：0xff / 0b1010 / 0o17；科学计数法 1e-3；变量 price=19.90，后续 price*3。");
             ui.label("单位：mm/cm/m/km/in/ft/mi，mg/g/kg/lb，ms/s/min/h/day，B/KB/MB/GB/KiB/MiB/GiB，C/F/K。单位区分大小写。");
             ui.horizontal_wrapped(|ui| { for example in ["0.1+0.2","(128+64)*3","sin(30)","0xff & 0x0f","5 km -> m","25 C -> F","1 GiB -> MB","price = 19.90"] { if ui.button(example).clicked() { self.expression=example.into(); input.request_focus(); } } });
-            ui.small("矩阵及线性方程见上方工作区；复数、非线性方程、日期计算、原文件更新、任意精度与通用接力继续开发。");
+            ui.small("矩阵及线性方程见上方工作区；复数、非线性方程、原文件更新、任意精度与通用接力继续开发。");
         });
         ui.collapsing(format!("变量（{}）", self.variables.len()), |ui| {
             for (name, v) in &self.variables {
@@ -302,6 +326,7 @@ impl State {
     pub fn preview_matrix_fixture(&mut self) {
         self.matrix_mode = true;
         self.plot_mode = false;
+        self.date_mode = false;
         self.matrix.preview_fixture();
     }
     #[cfg(feature = "ui-preview")]
@@ -339,6 +364,51 @@ impl State {
         if phase == 1 {
             assert!(self.expression.contains("1/0"));
             assert!(self.preview().is_err());
+        }
+    }
+}
+
+#[cfg(feature = "ui-preview")]
+impl State {
+    pub fn preview_date_fixture(&mut self) {
+        *self = Self::default();
+        self.date_mode = true;
+        self.dates.saved.operation = super::dates::Operation::WeekdayOffset;
+        self.dates.saved.start = "2026-10-09".into();
+        self.dates.saved.amount = "3".into();
+        self.variables.insert("ans".into(), Value::Exact(7, 1));
+        self.history = vec![("old".into(), Value::Exact(7, 1))];
+    }
+    pub fn preview_date_position(&self) -> egui::Pos2 {
+        self.dates
+            .compute_rect
+            .expect("date button rendered")
+            .center()
+    }
+    pub fn preview_date_check(&mut self, phase: u8) {
+        assert_eq!(self.variables["ans"], Value::Exact(7, 1));
+        assert_eq!(self.history.len(), 1);
+        match phase {
+            0 => assert!(self.numeric_result().is_err()),
+            1 => {
+                assert_eq!(self.dates.current_text().unwrap(), "2026-10-14 · 星期三");
+            }
+            2 => {
+                self.dates.saved.amount = "4".into();
+                assert!(self.numeric_result().is_err());
+                assert!(self.dates.current_text().is_err());
+            }
+            3 => {
+                self.dates.saved.operation = super::dates::Operation::Difference;
+                self.dates.saved.end = "2026-10-14".into();
+            }
+            4 => {
+                assert_eq!(
+                    self.numeric_result().unwrap().cells,
+                    vec![Value::Exact(5, 1)]
+                );
+            }
+            _ => panic!("unknown date preview phase"),
         }
     }
 }

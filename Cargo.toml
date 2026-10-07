@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.51"
+version = "0.82.0-dev.52"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -99,4 +99,8 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "preferences_fixture"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "calculator_dates_ui"
 required-features = ["ui-preview"]

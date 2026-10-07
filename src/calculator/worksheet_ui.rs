@@ -35,6 +35,8 @@ impl State {
             degrees: self.degrees,
             matrix_mode: self.matrix_mode,
             plot_mode: self.plot_mode,
+            date_mode: self.date_mode,
+            dates: self.dates.saved.clone(),
             plot: self.plot.saved.clone(),
             variables: self.variables.clone(),
             history: self.history.clone(),
@@ -48,6 +50,8 @@ impl State {
                 || self.degrees != data.degrees
                 || self.matrix_mode != data.matrix_mode
                 || self.plot_mode != data.plot_mode
+                || self.date_mode != data.date_mode
+                || self.dates.saved != data.dates
                 || self.plot.saved != data.plot
                 || self.variables != data.variables
                 || self.history != data.history
@@ -70,6 +74,9 @@ impl State {
         self.degrees = data.degrees;
         self.matrix_mode = data.matrix_mode;
         self.plot_mode = data.plot_mode;
+        self.date_mode = data.date_mode;
+        self.dates = Default::default();
+        self.dates.saved = data.dates.clone();
         self.plot = Default::default();
         self.plot.saved = data.plot.clone();
         self.variables = data.variables.clone();
@@ -78,7 +85,7 @@ impl State {
         self.files.baseline = Some(data);
         self.files.incoming = None;
         self.files.allow_replace = false;
-        self.files.message = "已恢复工作表；未回放历史赋值，矩阵和绘图结果需重新计算".into();
+        self.files.message = "已恢复工作表；未回放历史赋值，矩阵、绘图和日期结果需重新计算".into();
         self.files.error = false;
     }
     pub fn poll(&mut self, ctx: &egui::Context) {
@@ -254,7 +261,7 @@ impl State {
                     ui.monospace(&doc.data.expression);
                     ui.small(doc.data.matrix.describe());
                     ui.small(
-                        "替换名称、算式、变量、历史、角度、绘图参数和两矩阵；不会重放旧计算或自动保存。",
+                        "替换名称、算式、变量、历史、角度、绘图、日期参数和两矩阵；不会重放旧计算或自动保存。",
                     );
                     if dirty {
                         let response = ui.checkbox(
@@ -365,6 +372,44 @@ impl State {
 mod tests {
     use super::*;
     use crate::calculator::Value;
+    #[test]
+    fn date_sheet_saves_invalid_drafts_restores_without_execution_and_preserves_other_work() {
+        let root = std::env::temp_dir().join(format!("zi-dates-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let mut state = State {
+            date_mode: true,
+            ..Default::default()
+        };
+        state.expression = "price = 19.90".into();
+        state.variables.insert("ans".into(), Value::Exact(19, 1));
+        state.history = vec![("old".into(), Value::Exact(19, 1))];
+        state.dates.calculate();
+        assert_eq!(
+            state.numeric_result().unwrap().cells,
+            vec![Value::Exact(364, 1)]
+        );
+        state.dates.saved.start = "unfinished".into();
+        assert!(state.dirty());
+        assert!(state.numeric_result().is_err());
+        let saved = state.snapshot();
+        let path = root.join("dates.json");
+        super::super::worksheet::save(&path, saved.clone()).unwrap();
+        let restored = super::super::worksheet::read(&path).unwrap();
+        state.apply(restored.data);
+        assert_eq!(state.snapshot(), saved);
+        assert!(!state.dirty());
+        assert!(state.numeric_result().is_err());
+        assert_eq!(state.variables["ans"], Value::Exact(19, 1));
+        assert_eq!(state.history.len(), 1);
+        state.dates.saved.start = "2026-01-01".into();
+        assert!(state.dirty());
+        state.dates.calculate();
+        assert_eq!(
+            state.numeric_result().unwrap().cells,
+            vec![Value::Exact(364, 1)]
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn plot_configuration_is_dirty_restored_without_replaying_and_blocks_matrix_during_sampling() {
         let mut state = State {

@@ -10,6 +10,7 @@ impl State {
     pub fn preview_plot_fixture(&mut self, ready: bool) {
         *self = Self::default();
         self.plot_mode = true;
+        self.date_mode = false;
         self.expression = "preserve_price=19.90".into();
         self.variables = BTreeMap::from([
             ("ans".into(), Value::Exact(7, 1)),

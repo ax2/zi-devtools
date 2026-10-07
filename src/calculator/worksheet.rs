@@ -106,6 +106,10 @@ pub(super) struct Data {
     #[serde(default)]
     pub plot_mode: bool,
     #[serde(default)]
+    pub date_mode: bool,
+    #[serde(default)]
+    pub dates: super::dates::Saved,
+    #[serde(default)]
     pub plot: super::plot::Saved,
     #[serde(deserialize_with = "variables")]
     pub variables: BTreeMap<String, Value>,
@@ -135,9 +139,14 @@ impl Data {
             validate_value(*value).map_err(anyhow::Error::msg)?;
         }
         self.plot.validate().map_err(anyhow::Error::msg)?;
+        self.dates.validate().map_err(anyhow::Error::msg)?;
         ensure!(
-            !(self.matrix_mode && self.plot_mode),
-            "矩阵和绘图工作区不能同时选中"
+            [self.matrix_mode, self.plot_mode, self.date_mode]
+                .into_iter()
+                .filter(|b| *b)
+                .count()
+                <= 1,
+            "计算器只能选中一个工作区"
         );
         self.matrix.validate().map_err(anyhow::Error::msg)
     }
@@ -156,16 +165,21 @@ impl Document {
         data.validate()?;
         Ok(Self {
             format: "zi-devtools-calculator".into(),
-            schema: 4,
-            tool_version: "0.8.0".into(),
+            schema: 5,
+            tool_version: "0.9.0".into(),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=4),
+            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=5),
             "不支持的计算工作表格式或版本"
+        );
+        ensure!(
+            self.schema >= 5
+                || (!self.data.date_mode && self.data.dates == super::dates::Saved::default()),
+            "日期工作区要求工作表schema5"
         );
         ensure!(
             self.schema >= 4 || !self.data.matrix.uses_statistics(),
@@ -217,6 +231,38 @@ pub(super) fn save(path: &Path, data: Data) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn date_schema_five_roundtrip_and_old_versions_default_or_reject_date_payload() {
+        let mut source = data();
+        source.matrix_mode = false;
+        source.date_mode = true;
+        source.dates.start = "draft not evaluated".into();
+        let doc = Document::new(source.clone()).unwrap();
+        let bytes = serde_json::to_vec(&doc).unwrap();
+        let restored: Document = serde_json::from_slice(&bytes).unwrap();
+        restored.validate().unwrap();
+        assert_eq!(restored.data, source);
+        let mut json = serde_json::to_value(doc).unwrap();
+        for schema in 1..=4 {
+            json["schema"] = schema.into();
+            assert!(
+                serde_json::from_value::<Document>(json.clone())
+                    .unwrap()
+                    .validate()
+                    .is_err()
+            );
+        }
+        for schema in 1..=4 {
+            let mut legacy = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
+            legacy["schema"] = schema.into();
+            legacy["data"].as_object_mut().unwrap().remove("dates");
+            legacy["data"].as_object_mut().unwrap().remove("date_mode");
+            let restored: Document = serde_json::from_value(legacy).unwrap();
+            restored.validate().unwrap();
+            assert!(!restored.data.date_mode);
+            assert_eq!(restored.data.dates, super::super::dates::Saved::default());
+        }
+    }
+    #[test]
     fn statistics_require_schema_four_and_legacy_matrix_files_still_validate() {
         let mut document = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
         for schema in [1, 2, 3] {
@@ -237,7 +283,7 @@ mod tests {
         let restored = serde_json::from_value::<Document>(document).unwrap();
         restored.validate().unwrap();
         assert!(restored.data.matrix.uses_statistics());
-        assert_eq!(Document::new(restored.data).unwrap().schema, 4);
+        assert_eq!(Document::new(restored.data).unwrap().schema, 5);
     }
     #[test]
     fn plot_settings_roundtrip_and_legacy_defaults_do_not_store_sample_results() {
@@ -247,7 +293,7 @@ mod tests {
         settings.plot.curves[0].expression = "factor*sin(x)".into();
         settings.plot.points = 1025;
         let document = Document::new(settings.clone()).unwrap();
-        assert_eq!(document.schema, 4);
+        assert_eq!(document.schema, 5);
         let bytes = serde_json::to_vec(&document).unwrap();
         let restored: Document = serde_json::from_slice(&bytes).unwrap();
         restored.validate().unwrap();
@@ -271,6 +317,8 @@ mod tests {
             degrees: true,
             matrix_mode: true,
             plot_mode: false,
+            date_mode: false,
+            dates: Default::default(),
             plot: Default::default(),
             variables: BTreeMap::from([
                 ("ans".into(), Value::Exact(i128::MAX, 1)),
@@ -326,7 +374,7 @@ mod tests {
             assert!(serde_json::from_str::<Value>(text).is_err(), "{text}");
         }
         let mut doc = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
-        doc["schema"] = 5.into();
+        doc["schema"] = 6.into();
         assert!(
             serde_json::from_value::<Document>(doc.clone())
                 .unwrap()

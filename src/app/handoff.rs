@@ -8,6 +8,14 @@ mod plot_preview;
 mod table_statistics_preview;
 use crate::calculator::exchange::{MatrixSlot, NumericTable, Representation};
 
+fn calculator_version() -> &'static str {
+    catalog()
+        .iter()
+        .find(|entry| entry.id == "advanced-calculator")
+        .and_then(|entry| entry.version.as_deref())
+        .unwrap_or("未声明")
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Target {
     Tool(ToolKind),
@@ -453,7 +461,7 @@ impl DevToolsApp {
             });
             if send {
                 match Transfer::new(
-                    "函数采样表 · 计算器v0.6.0 · 近似值".into(),
+                    format!("函数采样表 · 计算器v{} · 近似值", calculator_version()),
                     self.calculator.plot_csv().unwrap(),
                 ) {
                     Ok(mut transfer) => {
@@ -492,7 +500,7 @@ impl DevToolsApp {
             });
             if send {
                 match Transfer::numeric(
-                    "计算器结果快照 · v0.6.0".into(),
+                    format!("计算器结果快照 · v{}", calculator_version()),
                     self.calculator.numeric_result().unwrap(),
                 ) {
                     Ok(t) => self.handoff = Some(t),

@@ -2525,6 +2525,19 @@ impl DevToolsApp {
         }
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_date_fixture(&mut self) {
+        self.calculator.preview_date_fixture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_date_position(&self) -> egui::Pos2 {
+        self.calculator.preview_date_position()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_date_check(&mut self, phase: u8) {
+        self.calculator.preview_date_check(phase);
+    }
+
     pub fn open_startup_tool(&mut self, id: &str) {
         if let Some(entry) = self.entries("").into_iter().find(|e| e.id == id) {
             self.open_entry(&entry);

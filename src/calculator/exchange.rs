@@ -184,6 +184,7 @@ impl State {
     pub fn preview_statistic_state(&mut self, ready: bool) {
         self.matrix_mode = true;
         self.plot_mode = false;
+        self.date_mode = false;
         self.variables.insert("ans".into(), Value::Exact(7, 1));
         self.history = vec![("old history".into(), Value::Exact(7, 1))];
         if ready {
@@ -207,6 +208,9 @@ impl State {
         }
     }
     pub fn numeric_description(&self) -> Result<String, String> {
+        if self.date_mode {
+            return self.dates.description();
+        }
         if self.matrix_mode {
             self.matrix
                 .numeric_description(&self.variables, self.degrees)
@@ -223,6 +227,9 @@ impl State {
         }
     }
     pub fn numeric_result(&self) -> Result<NumericTable, String> {
+        if self.date_mode {
+            return NumericTable::new(1, 1, vec![Value::Exact(self.dates.number()? as i128, 1)]);
+        }
         if self.matrix_mode {
             self.matrix.numeric_result(&self.variables, self.degrees)
         } else {
@@ -251,6 +258,7 @@ impl State {
         self.matrix.receive_numeric_into(table, slot);
         self.matrix_mode = true;
         self.plot_mode = false;
+        self.date_mode = false;
         self.message = format!(
             "类型表格已填入{}；保留另一矩阵、算式和变量，尚未计算",
             slot.label()
