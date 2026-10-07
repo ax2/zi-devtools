@@ -220,7 +220,9 @@ impl DevToolsApp {
                             .color(if exit.success { p.muted } else { p.red }),
                     );
                 }
-                if status.managed && status.health_url.is_some() && status.health.ok == Some(false)
+                if status.state.is_available()
+                    && status.health_url.is_some()
+                    && status.health.ok == Some(false)
                 {
                     let detail = status
                         .health

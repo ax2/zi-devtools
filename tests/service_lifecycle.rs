@@ -266,6 +266,7 @@ fn health_checks_reject_client_and_server_http_errors() {
         let port = listener.local_addr().unwrap().port();
         yaml.push_str(&format!("  {id}:\n    repo: {}\n    command: echo fixture\n    health_url: http://127.0.0.1:{port}/health\n",root.display()));
         servers.push(thread::spawn(move || {
+            for _ in 0..2 {
             let deadline = std::time::Instant::now() + Duration::from_secs(5);
             loop {
                 match listener.accept() {
@@ -281,14 +282,12 @@ fn health_checks_reject_client_and_server_http_errors() {
                     Err(error) => panic!("health fixture failed: {error}"),
                 }
             }
+            }
         }));
     }
     fs::write(&path, yaml).unwrap();
     let manager = ServiceManager::new(load_config(&path).unwrap()).unwrap();
     let statuses = manager.list_services();
-    for server in servers {
-        server.join().unwrap();
-    }
     for (id, code, ok) in [
         ("ok", 200, true),
         ("missing", 404, false),
@@ -297,14 +296,24 @@ fn health_checks_reject_client_and_server_http_errors() {
         let status = statuses.iter().find(|status| status.id == id).unwrap();
         assert_eq!(status.health.status_code, Some(code));
         assert_eq!(status.health.ok, Some(ok));
-        assert_eq!(
-            status.state,
-            if ok {
-                ServiceState::External
-            } else {
-                ServiceState::Stopped
-            }
+        assert_eq!(status.state, ServiceState::External);
+        if !ok {
+            assert!(status.display_state().contains("未通过"));
+        }
+        assert!(
+            manager
+                .start(id)
+                .unwrap_err()
+                .to_string()
+                .contains("外部进程占用")
         );
+        assert!(
+            manager.logs(id, 5).unwrap().is_empty(),
+            "duplicate launch must not run a command"
+        );
+    }
+    for server in servers {
+        server.join().unwrap();
     }
     drop(manager);
     fs::remove_dir_all(root).unwrap();

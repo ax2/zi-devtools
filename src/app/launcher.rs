@@ -91,7 +91,8 @@ impl DevToolsApp {
                                     ui.colored_label(
                                         if status.failed_exit() {
                                             self.colors.red
-                                        } else if status.managed && status.health.ok == Some(false)
+                                        } else if status.state.is_available()
+                                            && (!status.managed || status.health.ok == Some(false))
                                         {
                                             self.colors.amber
                                         } else if status.managed {

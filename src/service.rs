@@ -118,8 +118,12 @@ impl ServiceStatus {
     }
 
     pub fn display_state(&self) -> &'static str {
-        if self.managed && self.health_url.is_some() && self.health.ok == Some(false) {
-            "进程运行 · 健康检查未通过"
+        if self.state.is_available() && self.health_url.is_some() && self.health.ok == Some(false) {
+            if self.managed {
+                "进程运行 · 健康检查未通过"
+            } else {
+                "外部响应 · 健康检查未通过"
+            }
         } else if self.failed_exit() {
             "异常退出"
         } else if self.state == ServiceState::Stopped && self.last_exit.is_some() {
@@ -273,7 +277,7 @@ impl ServiceManager {
         };
         let state = if process_running {
             ServiceState::Running
-        } else if health.ok == Some(true) {
+        } else if health.status_code.is_some() {
             ServiceState::External
         } else if port_open == Some(true) {
             ServiceState::PortOpen
