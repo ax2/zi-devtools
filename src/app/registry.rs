@@ -389,6 +389,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "data" => Page::Data,
             "data-sqlite-export" => Page::Data,
             "pipeline" => Page::Data,
+            "text-flow" => Page::Data,
             "workspace-sessions" => Page::Data,
             "data-transform" => Page::Data,
             "csv-merge" => Page::Data,

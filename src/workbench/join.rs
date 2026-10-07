@@ -281,6 +281,7 @@ impl DataState {
         self.join.force_open = true;
     }
     pub fn show_join(&mut self) {
+        self.set_active_tool("csv-merge");
         self.join.force_open = true;
     }
     pub(super) fn poll_join(&mut self) {

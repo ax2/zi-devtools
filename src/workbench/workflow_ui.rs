@@ -146,6 +146,7 @@ impl DataState {
         }
     }
     pub fn show_workflow(&mut self) {
+        self.set_active_tool("pipeline");
         self.workflow.reveal = true;
     }
     #[cfg(feature = "ui-preview")]

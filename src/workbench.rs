@@ -225,6 +225,10 @@ pub fn save_new_file(path: &str, content: &str) -> Result<()> {
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DataState {
+    #[serde(skip)]
+    active_tool: String,
+    #[serde(default)]
+    text_flow: crate::text_flow::State,
     pub input: String,
     pub format: DataFormat,
     pub output: String,
@@ -253,6 +257,42 @@ pub struct DataState {
     numeric_selector: numeric::Selector,
 }
 impl DataState {
+    pub fn active_tool_id(&self) -> &str {
+        if self.active_tool.is_empty() {
+            "data"
+        } else {
+            &self.active_tool
+        }
+    }
+    pub fn set_active_tool(&mut self, id: &str) {
+        if matches!(
+            id,
+            "data"
+                | "text-flow"
+                | "pipeline"
+                | "workspace-sessions"
+                | "data-sqlite-export"
+                | "data-transform"
+                | "csv-merge"
+        ) {
+            self.active_tool = id.into();
+        }
+    }
+    pub fn show_text_flow(&mut self) {
+        self.set_active_tool("text-flow");
+        self.text_flow.open();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_position(&self, index: usize) -> egui::Pos2 {
+        self.text_flow.preview_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_check(&self) {
+        self.text_flow.preview_check();
+    }
+    pub fn take_text_flow_send(&mut self) -> Option<String> {
+        self.text_flow.take_send()
+    }
     pub fn take_numeric_request(
         &mut self,
     ) -> Option<(String, crate::calculator::exchange::NumericTable)> {
@@ -265,6 +305,7 @@ impl DataState {
             .or_else(|| self.workflow.output.take_open_request())
     }
     pub fn show_sqlite_export(&mut self) {
+        self.set_active_tool("data-sqlite-export");
         self.sqlite_export.reveal = true;
     }
     #[cfg(feature = "ui-preview")]
@@ -337,6 +378,7 @@ impl DataState {
         });
     }
     pub fn poll(&mut self) {
+        self.text_flow.poll();
         if let Some(receiver) = &self.receiver {
             let result = match receiver.try_recv() {
                 Ok(value) => Some(value),
@@ -377,6 +419,7 @@ impl DataState {
             "数据工作台",
             "CSV / TSV 与 JSON 对象数组 · 筛选、排序、预览和导出",
         );
+        self.text_flow.ui(ui);
         self.numeric_selector.toolbar(
             ui,
             self.dataset.as_ref(),

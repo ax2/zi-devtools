@@ -25,6 +25,7 @@ enum Target {
     Csv,
     Tsv,
     JsonData,
+    TextFlow,
     Before,
     After,
     Memo,
@@ -39,6 +40,7 @@ impl Target {
             Self::Csv => "数据工作台 · CSV",
             Self::Tsv => "数据工作台 · TSV",
             Self::JsonData => "数据工作台 · JSON 对象数组",
+            Self::TextFlow => "操作流程 · 文本工具链（新实例）",
             Self::Before => "文本对比 · 左侧原文",
             Self::After => "文本对比 · 右侧新文",
             Self::Memo => "备忘录 · 新建草稿",
@@ -55,6 +57,7 @@ impl Target {
                 Self::Csv,
                 Self::Tsv,
                 Self::JsonData,
+                Self::TextFlow,
                 Self::Before,
                 Self::After,
                 Self::Memo,
@@ -216,7 +219,11 @@ impl Transfer {
         diff: &mut DiffState,
     ) -> anyhow::Result<(Page, Option<ToolKind>)> {
         match self.target {
-            Target::Memo | Target::Event | Target::Calculator | Target::Diagnostic(_) => {
+            Target::Memo
+            | Target::Event
+            | Target::Calculator
+            | Target::Diagnostic(_)
+            | Target::TextFlow => {
                 anyhow::bail!("备忘 / 日程草稿需通过资料入口接收")
             }
             Target::Tool(kind) => {
@@ -779,6 +786,10 @@ impl DevToolsApp {
                 self.planner
                     .receive_text(&transfer.source, &transfer.text)
                     .map(|_| (Page::Notes, None))
+            } else if transfer.target == Target::TextFlow {
+                self.data_state
+                    .import_text_flow(transfer.text.clone(), "接力文本流程")
+                    .map(|_| (Page::Data, None))
             } else if transfer.new_data_instance
                 && matches!(
                     transfer.target,

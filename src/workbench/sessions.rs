@@ -45,7 +45,8 @@ enum Reply {
 
 impl DataState {
     pub fn busy(&self) -> bool {
-        self.parse_job.phase.active()
+        self.text_flow.busy()
+            || self.parse_job.phase.active()
             || self.join.job.phase.active()
             || self.sqlite_export.job.phase.active()
             || self.workflow.job.phase.active()
@@ -53,7 +54,8 @@ impl DataState {
             || self.workflow.output.busy()
     }
     pub fn has_content(&self) -> bool {
-        !self.input.is_empty()
+        self.text_flow.has_content()
+            || !self.input.is_empty()
             || self.dataset.is_some()
             || !self.output.is_empty()
             || self.join.has_content()
@@ -85,6 +87,7 @@ impl DataState {
     }
 
     fn validate_saved(&self) -> Result<()> {
+        self.text_flow.validate()?;
         anyhow::ensure!(
             self.input.len() <= INPUT_LIMIT
                 && self.output.len() <= 8 * 1024 * 1024
@@ -202,7 +205,10 @@ impl Workspace {
         self.operation_pending() || self.instances.iter().any(|instance| instance.state.busy())
     }
     pub fn modal_open(&self) -> bool {
-        self.save_confirm || self.close_confirm.is_some() || self.delete_confirm.is_some()
+        self.save_confirm
+            || self.close_confirm.is_some()
+            || self.delete_confirm.is_some()
+            || self.text_flow.modal_open()
     }
     pub fn open_library(&mut self) {
         if !self.operation_pending() {
@@ -270,6 +276,15 @@ impl Workspace {
         self.create(name)?;
         self.deref_mut().import_text(text, format, tsv)
     }
+    pub fn import_text_flow(&mut self, text: String, name: &str) -> Result<()> {
+        // Validate before creating an instance, including the stricter action limit.
+        let mut state = crate::text_flow::State::default();
+        state.receive(text)?;
+        self.create(name)?;
+        self.deref_mut().text_flow = state;
+        self.deref_mut().set_active_tool("text-flow");
+        Ok(())
+    }
     pub fn snapshots(&self) -> Vec<crate::tasks::Row> {
         self.instances
             .iter()
@@ -301,6 +316,11 @@ impl Workspace {
                         "流程结果文件保存",
                         true,
                     ),
+                    instance
+                        .state
+                        .text_flow
+                        .job
+                        .snapshot("text-flow", "文本工具流程", true),
                 ]
                 .into_iter()
                 .flatten()
@@ -345,6 +365,18 @@ impl Workspace {
                 .is_some_and(|r| r.generation == generation)
         {
             instance.state.workflow.cancel();
+        }
+    }
+    pub fn cancel_text_flow(&mut self, id: &str, generation: u64) {
+        if let Some(instance) = self.instances.iter_mut().find(|i| i.id == id)
+            && instance
+                .state
+                .text_flow
+                .job
+                .snapshot("text-flow", "", true)
+                .is_some_and(|row| row.generation == generation)
+        {
+            instance.state.text_flow.cancel();
         }
     }
     pub fn cancel_workflow_output(&mut self, id: &str, generation: u64) {
@@ -499,6 +531,54 @@ impl DerefMut for Workspace {
 mod tests {
     use super::*;
     use std::fs;
+    #[test]
+    fn text_flow_handoff_creates_independent_draft_and_roundtrips_without_execution() {
+        let mut work = Workspace::new(PathBuf::from("unused-text-flow.db"));
+        work.input = "table original".into();
+        let source = work.active_id().to_owned();
+        work.import_text_flow("中文🦀".into(), "text flow").unwrap();
+        assert_ne!(source, work.active_id());
+        assert!(work.has_work());
+        assert!(!work.busy());
+        let snapshot = work.snapshot().unwrap();
+        let restored = DataState::restore(&snapshot).unwrap();
+        assert!(restored.text_flow.has_content());
+        assert!(!restored.busy());
+        assert!(
+            work.import_text_flow("x".repeat(1024 * 1024 + 1), "too large")
+                .is_err()
+        );
+        assert_eq!(work.instances.len(), 2);
+        work.select(&source).unwrap();
+        assert_eq!(work.input, "table original");
+    }
+    #[test]
+    fn old_data_snapshot_without_text_flow_restores_its_existing_table() {
+        let mut data = DataState::default();
+        data.input = "id,name\n001,中文".into();
+        data.dataset = Some(Dataset::parse(&data.input, DataFormat::Csv, b',').unwrap());
+        let mut old = serde_json::to_value(&data).unwrap();
+        old.as_object_mut().unwrap().remove("text_flow");
+        let restored = DataState::restore(&serde_json::to_vec(&old).unwrap()).unwrap();
+        assert_eq!(restored.dataset, data.dataset);
+        assert!(!restored.text_flow.has_content());
+        assert!(!restored.busy());
+        assert_eq!(restored.active_tool_id(), "data");
+        let mut restored = restored;
+        for id in [
+            "text-flow",
+            "data-sqlite-export",
+            "csv-merge",
+            "data-transform",
+            "pipeline",
+            "workspace-sessions",
+        ] {
+            restored.set_active_tool(id);
+            assert_eq!(restored.active_tool_id(), id);
+        }
+        restored.set_active_tool("unknown");
+        assert_eq!(restored.active_tool_id(), "workspace-sessions");
+    }
     #[test]
     fn typed_page_import_creates_independent_work_and_rejects_oversize_before_creation() {
         let mut workspace = Workspace::new(

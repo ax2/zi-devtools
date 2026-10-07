@@ -290,6 +290,7 @@ impl DataState {
         self.refresh_transformed_view();
     }
     pub fn show_transform(&mut self) {
+        self.set_active_tool("data-transform");
         self.transform.force_open = true;
     }
     fn refresh_transformed_view(&mut self) {

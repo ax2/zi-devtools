@@ -314,6 +314,7 @@ impl DevToolsApp {
                         e.id == self.frameworks.selected.id()
                     }
                     None if self.page == Page::Images => e.id == self.images.active_tool_id(),
+                    None if self.page == Page::Data => e.id == self.data_state.active_tool_id(),
                     None if self.page == Page::Recorder => e.id == self.recorder.active_tool_id(),
                     None => true,
                 }

@@ -12,6 +12,7 @@ impl Target {
             Self::Tool(kind) => kind.id(),
             Self::Diagnostic(tool) => tool.id(),
             Self::Csv | Self::Tsv | Self::JsonData => "data",
+            Self::TextFlow => "text-flow",
             Self::Before | Self::After => "diff",
             Self::Memo => "memos",
             Self::Event => "calendar-planner",

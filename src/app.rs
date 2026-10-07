@@ -759,6 +759,28 @@ impl DevToolsApp {
         self.data_state.preview_workflow_position(index)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.data_state.input = "original table draft".into();
+        self.open_startup_tool("text-flow");
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_position(&self, index: usize) -> egui::Pos2 {
+        self.data_state.preview_text_flow_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_check(&self, sent: bool) {
+        assert_eq!(self.data_state.active_tool_id(), "text-flow");
+        assert_eq!(
+            self.preferences.recent.first().map(String::as_str),
+            Some("text-flow")
+        );
+        self.data_state.preview_text_flow_check();
+        assert_eq!(self.data_state.input, "original table draft");
+        assert_eq!(self.handoff.is_some(), sent);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_output_prepare(
         &mut self,
         ctx: &egui::Context,
@@ -2921,6 +2943,9 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
+        if e.page == Page::Data {
+            self.data_state.set_active_tool(&e.id);
+        }
         if e.page == Page::Recorder {
             self.recorder.select_entry(&e.id);
         }
@@ -2945,6 +2970,8 @@ impl DevToolsApp {
             self.data_state.show_sqlite_export();
         } else if e.id == "pipeline" {
             self.data_state.show_workflow();
+        } else if e.id == "text-flow" {
+            self.data_state.show_text_flow();
         } else if matches!(
             e.id.as_str(),
             "screen-recorder-audio-mix"
@@ -5155,6 +5182,12 @@ impl eframe::App for DevToolsApp {
                                 self.page = Page::SqliteBrowser;
                                 self.visit("sqlite");
                             }
+                            Err(error) => self.data_state.message = error.to_string(),
+                        }
+                    }
+                    if let Some(text) = self.data_state.take_text_flow_send() {
+                        match handoff::Transfer::new("文本工具流程结果".into(), &text) {
+                            Ok(transfer) => self.handoff = Some(transfer),
                             Err(error) => self.data_state.message = error.to_string(),
                         }
                     }

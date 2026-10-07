@@ -16,6 +16,9 @@ impl DevToolsApp {
         } else if key == "workflow-output" {
             self.data_state.show_workflow_output();
             "data"
+        } else if key == "text-flow" {
+            self.data_state.show_text_flow();
+            "data"
         } else if matches!(key, "pipeline" | "workflow-file") {
             self.data_state.show_workflow();
             "data"
@@ -202,6 +205,7 @@ impl DevToolsApp {
                 ("csv-merge", Some(id)) => self.data_state.cancel(&id, generation),
                 ("sqlite-export", Some(id)) => self.data_state.cancel_sqlite(&id, generation),
                 ("pipeline", Some(id)) => self.data_state.cancel_workflow(&id, generation),
+                ("text-flow", Some(id)) => self.data_state.cancel_text_flow(&id, generation),
                 ("workflow-output", Some(id)) => {
                     self.data_state.cancel_workflow_output(&id, generation)
                 }

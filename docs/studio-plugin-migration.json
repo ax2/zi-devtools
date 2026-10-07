@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.71",
+  "sourceCatalogVersion": "0.82.0-dev.72",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -250,7 +250,7 @@
     {
       "sourceToolId": "data",
       "title": "CSV / JSON 数据工作台",
-      "sourceVersion": "1.4.1",
+      "sourceVersion": "1.5.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1536,6 +1536,16 @@
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "text-flow",
+      "title": "文本工具流程",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     }
   ]
 }
