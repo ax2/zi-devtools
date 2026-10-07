@@ -192,6 +192,59 @@ fn network_fixture_guard() -> MutexGuard<'static, ()> {
 }
 
 #[test]
+fn reload_keeps_live_service_ownership_and_allows_changes_after_stop() {
+    let _guard = network_fixture_guard();
+    let root = std::env::temp_dir().join(format!("zi-service-reload-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    let exe = env!("CARGO_BIN_EXE_ZiDevTools").replace('\\', "/");
+    let path = root.join("services.yml");
+    fs::write(&path,format!("state_dir: {}\nservices:\n  fixture:\n    repo: {}\n    command: '\"{}\" --fixture-server {}'\n    port: {}\n",root.join("state").display(),root.display(),exe,port,port)).unwrap();
+    let manager = ServiceManager::new(load_config(&path).unwrap()).unwrap();
+    manager.start("fixture").unwrap();
+    let current = manager.config_snapshot();
+    let pid = manager.service_status("fixture").unwrap().pid.unwrap();
+    let mut switched = current.clone();
+    switched.state_dir = root.join("alternate-state");
+    assert!(manager.replace_config(switched.clone()).is_err());
+    assert!(!switched.state_dir.exists());
+    let mut removed = current.clone();
+    removed.services.clear();
+    assert!(manager.replace_config(removed.clone()).is_err());
+    let mut edited = current.clone();
+    edited.services.get_mut("fixture").unwrap().command = "exit /b 0".into();
+    assert!(manager.replace_config(edited).is_err());
+    assert_eq!(manager.config_snapshot().services, current.services);
+    assert_eq!(manager.service_status("fixture").unwrap().pid, Some(pid));
+    // A manager recovered from PID records has no Child handle but must apply
+    // the same protection to a still-running owned process.
+    let recovered = ServiceManager::new(current.clone()).unwrap();
+    assert!(recovered.replace_config(removed).is_err());
+    assert!(recovered.replace_config(switched.clone()).is_err());
+    drop(recovered);
+    let mut added = current.clone();
+    let mut extra = added.services["fixture"].clone();
+    extra.id = "extra".into();
+    extra.command = "exit /b 0".into();
+    extra.port = None;
+    added.services.insert(extra.id.clone(), extra);
+    manager.replace_config(added).unwrap();
+    assert_eq!(manager.service_status("fixture").unwrap().pid, Some(pid));
+    manager.replace_config(current).unwrap();
+    manager.stop("fixture").unwrap();
+    manager.replace_config(switched).unwrap();
+    assert!(root.join("alternate-state/logs").is_dir());
+    assert_eq!(
+        manager.service_status("fixture").unwrap().state,
+        ServiceState::Stopped
+    );
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn immediate_exit_keeps_code_logs_and_clears_stale_failure_on_next_run() {
     let root = std::env::temp_dir().join(format!("zi-service-exit-{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&root).unwrap();

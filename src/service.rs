@@ -191,6 +191,25 @@ impl ServiceManager {
             .lifecycle
             .try_lock()
             .ok_or_else(|| anyhow!("服务操作进行中，暂缓配置重载，请稍后刷新"))?;
+        self.reap_children();
+        let current = self.config_snapshot();
+        let mut system = System::new();
+        system.refresh_processes(ProcessesToUpdate::All, true);
+        let children = self.children.lock();
+        let active: Vec<&String> = current
+            .services
+            .keys()
+            .filter(|id| children.contains_key(*id) || self.validated_pid(id, &system).is_some())
+            .collect();
+        if !active.is_empty() && current.state_dir != config.state_dir {
+            bail!("存在托管服务，请先停止后再切换状态目录");
+        }
+        for id in active {
+            if current.services.get(id) != config.services.get(id) {
+                bail!("服务 {id} 正在托管，请先停止后再修改或移除定义");
+            }
+        }
+        drop(children);
         prepare_state_dirs(&config.state_dir)?;
         let desired = load_desired_running(&config);
         *self.config.write() = config;
@@ -878,7 +897,11 @@ fn safe_id(value: &str) -> String {
 }
 
 fn read_text_limited(path: &Path, max_bytes: usize) -> Result<String> {
-    let bytes = fs::read(path).with_context(|| format!("读取 {} 失败", path.display()))?;
+    let mut bytes = Vec::new();
+    File::open(path)
+        .with_context(|| format!("读取 {} 失败", path.display()))?
+        .take(max_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)?;
     let truncated = bytes.len() > max_bytes;
     let mut text = String::from_utf8_lossy(&bytes[..bytes.len().min(max_bytes)]).into_owned();
     if truncated {
@@ -888,34 +911,51 @@ fn read_text_limited(path: &Path, max_bytes: usize) -> Result<String> {
 }
 
 fn tail_text(path: &Path, max_lines: usize) -> Result<String> {
-    const MAX_PREVIEW_BYTES: u64 = 4 * 1024 * 1024;
-    let Ok(mut file) = File::open(path) else {
-        return Ok(String::new());
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(String::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("读取日志 {} 失败", path.display()));
+        }
     };
     let size = file.metadata()?.len();
-    let truncated_bytes = size.saturating_sub(MAX_PREVIEW_BYTES);
-    file.seek(SeekFrom::Start(truncated_bytes))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
+    let (truncated_bytes, bytes) = read_log_snapshot(&mut file, size)?;
     let start = if truncated_bytes > 0 {
         bytes
             .iter()
             .position(|byte| *byte == b'\n')
-            .map_or(bytes.len(), |index| index + 1)
+            .map_or(0, |index| index + 1)
     } else {
         0
     };
     let text = String::from_utf8_lossy(&bytes[start..]);
-    let lines: Vec<&str> = text.lines().collect();
-    let first = lines.len().saturating_sub(max_lines);
-    let mut preview = lines[first..].join("\n");
-    if truncated_bytes > 0 || first > 0 {
+    let mut lines: Vec<&str> = text
+        .lines()
+        .rev()
+        .take(max_lines.saturating_add(1))
+        .collect();
+    let omitted = lines.len() > max_lines;
+    if omitted {
+        lines.pop();
+    }
+    lines.reverse();
+    let mut preview = lines.join("\n");
+    if truncated_bytes > 0 || omitted {
         preview.insert_str(
             0,
             "[日志预览仅显示末尾内容；可点击“打开完整日志文件”查看原始文件]\n\n",
         );
     }
     Ok(preview)
+}
+
+fn read_log_snapshot(file: &mut File, size: u64) -> Result<(u64, Vec<u8>)> {
+    const MAX_PREVIEW_BYTES: u64 = 4 * 1024 * 1024;
+    let start = size.saturating_sub(MAX_PREVIEW_BYTES);
+    file.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    file.take(size - start).read_to_end(&mut bytes)?;
+    Ok((start, bytes))
 }
 
 #[cfg(test)]
@@ -950,6 +990,56 @@ mod tests {
         let preview = tail_text(&path, 2).unwrap();
         assert!(preview.contains("预览仅显示末尾内容"));
         assert!(preview.ends_with("two\nthree"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn previews_large_config_without_reading_the_whole_file_and_reports_log_errors() {
+        let root = std::env::temp_dir().join(format!("zi-preview-bound-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("large.txt");
+        fs::write(&path, vec![b'x'; 6 * 1024 * 1024]).unwrap();
+        let preview = read_text_limited(&path, 8).unwrap();
+        assert!(preview.starts_with("xxxxxxxx\n\n..."));
+        assert!(!preview.contains("xxxxxxxxx"));
+        assert_eq!(fs::metadata(&path).unwrap().len(), 6 * 1024 * 1024);
+        assert!(tail_text(&root, 2).is_err());
+        assert!(
+            tail_text(&root.join("not-created.log"), 2)
+                .unwrap()
+                .is_empty()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn log_snapshot_ignores_later_appends_and_caps_long_lines() {
+        let root = std::env::temp_dir().join(format!("zi-log-snapshot-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("growing.log");
+        fs::write(&path, b"original\n").unwrap();
+        let mut file = File::open(&path).unwrap();
+        let size = file.metadata().unwrap().len();
+        OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(&vec![b'a'; 6 * 1024 * 1024])
+            .unwrap();
+        let (start, bytes) = read_log_snapshot(&mut file, size).unwrap();
+        assert_eq!(start, 0);
+        assert_eq!(bytes, b"original\n");
+        let final_size = file.metadata().unwrap().len();
+        let (start, bytes) = read_log_snapshot(&mut file, final_size).unwrap();
+        assert!(start > 0);
+        assert_eq!(bytes.len(), 4 * 1024 * 1024);
+        assert!(bytes.iter().all(|byte| *byte == b'a'));
+        let preview = tail_text(&path, 2).unwrap();
+        assert!(preview.contains("仅显示末尾"));
+        assert!(preview.ends_with(&"a".repeat(64)));
+        assert!(preview.len() <= 4 * 1024 * 1024 + 200);
+        assert_eq!(fs::metadata(&path).unwrap().len(), final_size);
+        drop(file);
         fs::remove_dir_all(root).unwrap();
     }
 }
