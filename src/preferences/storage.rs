@@ -8,7 +8,7 @@ use std::{
     path::Path,
 };
 
-fn read(path: &Path) -> Result<Option<Value>> {
+pub(super) fn read(path: &Path) -> Result<Option<Value>> {
     let file = match fs::File::open(path) {
         Ok(file) => file,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),

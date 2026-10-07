@@ -1,6 +1,55 @@
 use super::*;
 
 impl DevToolsApp {
+    pub fn preview_tray_workflow_prepare(
+        &mut self,
+        ctx: &egui::Context,
+        folder: &Path,
+        light: bool,
+    ) {
+        self.preview_scene(
+            ctx,
+            if light { 461 } else { 460 },
+            folder.join("sample.txt"),
+        );
+        self.preferences.favorites.clear();
+        self.preferences.recent.clear();
+        let entry = crate::preferences::SavedWorkflow {
+            path: folder.join("workflow-library-fixture/daily.json"),
+            name: "每日资料清洗".into(),
+            steps: 2,
+        };
+        self.preferences
+            .toggle_workflow(&self.preferences_path, entry)
+            .unwrap();
+        self.set_theme(ctx, if light { Theme::Dark } else { Theme::Light });
+        self.open_tray_context(ctx);
+        assert_eq!(
+            self.quick_tab, "收藏",
+            "flow-only favorites must select Favorites"
+        );
+        self.quick_tab = "流程".into();
+        self.quick_position = Some(egui::pos2(40.0, 40.0));
+        self.preview_tray_workflow = Some((folder.to_path_buf(), 0));
+    }
+    pub fn preview_tray_workflow_finish(&mut self, ctx: &egui::Context) {
+        self.quit_requested = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+    pub fn preview_tray_workflow_check(&self, light: bool) {
+        assert!(!self.quick_open);
+        assert_eq!(self.page, Page::Data);
+        assert_eq!(self.theme, if light { Theme::Dark } else { Theme::Light });
+        assert!(
+            self.preview_tray_workflow
+                .as_ref()
+                .unwrap()
+                .0
+                .join("tray-workflows.png")
+                .is_file()
+        );
+        self.data_state.preview_workflow_search_check(1);
+    }
     pub fn preview_service_batch_report_scene(&mut self) {
         let mut config = self.manager.config_snapshot();
         let base = config.services["demo"].clone();

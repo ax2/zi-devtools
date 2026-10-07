@@ -43,6 +43,17 @@ pub(super) fn normalize(entries: &mut Vec<SavedWorkflow>) {
     entries.truncate(100);
 }
 impl Preferences {
+    pub fn workflow_shortcut_current(&self, config: &Path, entry: &SavedWorkflow) -> Result<bool> {
+        if self.pending_workflow_loads.contains(entry) {
+            return Ok(true);
+        }
+        let Some(value) = super::storage::read(config)? else {
+            return Ok(false);
+        };
+        let mut latest: Preferences = serde_json::from_value(value)?;
+        latest.normalize();
+        Ok(latest.workflow_favorites.contains(entry) || latest.workflow_recent.contains(entry))
+    }
     pub fn workflow_loaded(&mut self, entry: SavedWorkflow) {
         if !entry.valid() {
             return;
@@ -98,6 +109,40 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tray_shortcut_rechecks_disk_metadata_removal_and_corruption() {
+        let dir = std::env::temp_dir().join(format!("zi-tray-flow-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let config = dir.join("prefs.json");
+        let entry = SavedWorkflow {
+            path: dir.join("missing.json"),
+            name: "每日清洗".into(),
+            steps: 2,
+        };
+        let mut current = Preferences::load(&config);
+        assert!(!current.workflow_shortcut_current(&config, &entry).unwrap());
+        current.toggle_workflow(&config, entry.clone()).unwrap();
+        let stale = current.clone();
+        assert!(stale.workflow_shortcut_current(&config, &entry).unwrap());
+        current.toggle_workflow(&config, entry.clone()).unwrap();
+        assert!(!stale.workflow_shortcut_current(&config, &entry).unwrap());
+        let mut changed = entry.clone();
+        changed.steps = 3;
+        current.workflow_loaded(changed.clone());
+        current.save(&config).unwrap();
+        assert!(!stale.workflow_shortcut_current(&config, &entry).unwrap());
+        assert!(stale.workflow_shortcut_current(&config, &changed).unwrap());
+        fs::write(&config, "damaged").unwrap();
+        assert!(stale.workflow_shortcut_current(&config, &entry).is_err());
+        current.workflow_loaded(entry.clone());
+        assert!(current.workflow_shortcut_current(&config, &entry).unwrap());
+        assert_eq!(fs::read_to_string(&config).unwrap(), "damaged");
+        assert!(
+            !entry.path.exists(),
+            "metadata recheck must not read workflow files"
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn recent_workflow_merge_removal_retry_bounds_and_current_metadata() {
         let dir = std::env::temp_dir().join(format!("zi-recent-flow-{}", uuid::Uuid::new_v4()));

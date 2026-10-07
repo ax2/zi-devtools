@@ -183,6 +183,8 @@ pub struct DevToolsApp {
     preview_service_rows: usize,
     #[cfg(feature = "ui-preview")]
     preview_tray_capture: Option<PathBuf>,
+    #[cfg(feature = "ui-preview")]
+    preview_tray_workflow: Option<(PathBuf, usize)>,
     hotkey: crate::hotkey::Service,
     hotkey_edit: crate::hotkey::Setting,
     hotkey_status: String,
@@ -2267,6 +2269,8 @@ impl DevToolsApp {
             preview_service_rows: 0,
             #[cfg(feature = "ui-preview")]
             preview_tray_capture: None,
+            #[cfg(feature = "ui-preview")]
+            preview_tray_workflow: None,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,

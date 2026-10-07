@@ -1,4 +1,5 @@
 use super::*;
+mod workflows;
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum Scope {
     #[default]
@@ -143,7 +144,9 @@ impl DevToolsApp {
         self.launcher_open = false;
         self.launcher_query.clear();
         self.launcher_index = 0;
-        self.quick_tab = if self.preferences.favorites.is_empty() {
+        self.quick_tab = if self.preferences.favorites.is_empty()
+            && self.preferences.workflow_favorites.is_empty()
+        {
             "最近"
         } else {
             "收藏"
@@ -159,7 +162,11 @@ impl DevToolsApp {
     pub(super) fn open_tray_context(&mut self, ctx: &egui::Context) {
         self.open_quick(ctx);
         self.quick_context = true;
-        if self.preferences.recent.is_empty() && self.preferences.favorites.is_empty() {
+        if self.preferences.recent.is_empty()
+            && self.preferences.favorites.is_empty()
+            && self.preferences.workflow_recent.is_empty()
+            && self.preferences.workflow_favorites.is_empty()
+        {
             self.quick_tab = "全部".into();
         }
     }
@@ -505,6 +512,8 @@ impl DevToolsApp {
         }
         let mut chosen = None;
         let mut show_main = false;
+        let mut workflow_chosen = None;
+        let mut workflow_search = false;
         let original_colors = self.colors;
         let contextual = self.quick_context;
         let system_theme = ctx
@@ -518,6 +527,21 @@ impl DevToolsApp {
             });
         }
         ctx.show_viewport_immediate(id, builder, |panel, _| {
+            #[cfg(feature = "ui-preview")]
+            if let Some((_, frame)) = self.preview_tray_workflow.as_mut() {
+                if *frame == 40 {
+                    panel.input_mut(|i| {
+                        i.events.push(egui::Event::Key {
+                            key: egui::Key::Enter,
+                            physical_key: None,
+                            pressed: true,
+                            repeat: false,
+                            modifiers: egui::Modifiers::NONE,
+                        })
+                    });
+                }
+                *frame += 1;
+            }
             let focused = panel.input(|i| i.viewport().focused.unwrap_or(false));
             if focused {
                 self.quick_had_focus = true;
@@ -562,7 +586,7 @@ impl DevToolsApp {
                             } else {
                                 "工具速启"
                             });
-                            ui.small("搜索 · 收藏 · 最近 · 服务");
+                            ui.small("搜索 · 收藏 · 最近 · 流程 · 服务");
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.button("×").on_hover_text("收起 · Esc").clicked() {
@@ -599,7 +623,7 @@ impl DevToolsApp {
                     let response = ui.add_sized(
                         [ui.available_width(), 38.0],
                         egui::TextEdit::singleline(&mut self.launcher_query)
-                            .hint_text("搜索工具、用途、关键词…"),
+                            .hint_text("搜索工具、流程、用途、关键词…"),
                     );
                     let mut scroll_selection = response.changed() || self.quick_focus;
                     if response.changed() {
@@ -611,10 +635,19 @@ impl DevToolsApp {
                         self.quick_focus = false;
                     }
                     ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        for tab in ["收藏", "最近", "常用", "全部", "服务"] {
+                    ui.horizontal_wrapped(|ui| {
+                        for tab in ["收藏", "最近", "常用", "全部", "流程", "服务"] {
+                            let tab_color = if self.quick_tab == tab {
+                                Color32::WHITE
+                            } else {
+                                self.colors.text
+                            };
                             if ui
-                                .selectable_value(&mut self.quick_tab, tab.into(), tab)
+                                .selectable_value(
+                                    &mut self.quick_tab,
+                                    tab.into(),
+                                    RichText::new(tab).color(tab_color),
+                                )
                                 .clicked()
                             {
                                 self.launcher_index = 0;
@@ -626,33 +659,43 @@ impl DevToolsApp {
                         return;
                     }
                     let mut entries = self.entries(&self.launcher_query);
-                    if self.launcher_query.trim().is_empty() {
-                        if self.quick_tab == "常用" {
-                            entries.retain(|e| {
-                                self.preferences.usage.get(&e.id).copied().unwrap_or(0) > 0
-                            });
-                            entries.sort_by_key(|e| {
-                                std::cmp::Reverse(
-                                    self.preferences.usage.get(&e.id).copied().unwrap_or(0),
-                                )
-                            });
-                        } else if self.quick_tab == "收藏" {
-                            entries.retain(|e| self.preferences.favorites.contains(&e.id));
-                            entries.sort_by_key(|e| {
-                                self.preferences.favorites.iter().position(|id| id == &e.id)
-                            });
-                        } else if self.quick_tab == "最近" {
-                            entries.retain(|e| self.preferences.recent.contains(&e.id));
-                            entries.sort_by_key(|e| {
-                                self.preferences.recent.iter().position(|id| id == &e.id)
-                            });
-                        }
+                    if self.quick_tab == "流程" {
+                        entries.clear();
+                    }
+                    let workflow_rows = workflows::shortcuts(
+                        &self.preferences,
+                        &self.quick_tab,
+                        &self.launcher_query,
+                    );
+                    if self.quick_tab == "常用" {
+                        entries.retain(|e| {
+                            self.preferences.usage.get(&e.id).copied().unwrap_or(0) > 0
+                        });
+                        entries.sort_by_key(|e| {
+                            std::cmp::Reverse(
+                                self.preferences.usage.get(&e.id).copied().unwrap_or(0),
+                            )
+                        });
+                    } else if self.quick_tab == "收藏" {
+                        entries.retain(|e| self.preferences.favorites.contains(&e.id));
+                        entries.sort_by_key(|e| {
+                            self.preferences.favorites.iter().position(|id| id == &e.id)
+                        });
+                    } else if self.quick_tab == "最近" {
+                        entries.retain(|e| self.preferences.recent.contains(&e.id));
+                        entries.sort_by_key(|e| {
+                            self.preferences.recent.iter().position(|id| id == &e.id)
+                        });
                     }
                     ui.add_space(8.0);
                     ui.label(
-                        RichText::new(format!("{} 个工具", entries.len()))
-                            .small()
-                            .color(self.colors.muted),
+                        RichText::new(format!(
+                            "{} 个工具 · {} 条流程入口",
+                            entries.len(),
+                            workflow_rows.total
+                        ))
+                        .small()
+                        .color(self.colors.muted),
                     );
                     let arrow_down = panel
                         .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
@@ -665,18 +708,78 @@ impl DevToolsApp {
                         self.launcher_index = self.launcher_index.saturating_sub(1);
                     }
                     scroll_selection |= arrow_down || arrow_up;
-                    self.launcher_index = self.launcher_index.min(entries.len().saturating_sub(1));
+                    self.launcher_index = self
+                        .launcher_index
+                        .min((entries.len() + workflow_rows.entries.len()).saturating_sub(1));
                     egui::ScrollArea::vertical()
                         .id_salt("quick-results")
-                        .max_height((ui.available_height() - 96.0).max(40.0))
+                        .max_height(
+                            (ui.available_height()
+                                - if workflow_rows.total > 0 || self.quick_tab == "流程" {
+                                    160.0
+                                } else {
+                                    112.0
+                                })
+                            .max(40.0),
+                        )
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            if entries.is_empty() {
+                            if entries.is_empty() && workflow_rows.entries.is_empty() {
                                 ui.add_space(24.0);
-                                ui.strong("这里还没有工具");
+                                ui.strong("这里还没有匹配的工具或流程");
                                 ui.label("切换“全部”或输入关键词。点击 ☆ 添加收藏。");
                             }
+                            for (index, (entry, kind)) in workflow_rows.entries.iter().enumerate() {
+                                let selected = index == self.launcher_index;
+                                let name = if entry.name.chars().count() > 22 {
+                                    format!("{}…", entry.name.chars().take(22).collect::<String>())
+                                } else {
+                                    entry.name.clone()
+                                };
+                                let button = ui
+                                    .add_sized(
+                                        [ui.available_width(), 54.0],
+                                        egui::Button::new(
+                                            RichText::new(format!(
+                                                "{} · {}步\n{} · 载入后确认",
+                                                name, entry.steps, kind
+                                            ))
+                                            .color(
+                                                if selected {
+                                                    Color32::WHITE
+                                                } else {
+                                                    self.colors.text
+                                                },
+                                            ),
+                                        )
+                                        .selected(selected),
+                                    )
+                                    .on_hover_text(&entry.name);
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(
+                                            entry
+                                                .path
+                                                .file_name()
+                                                .unwrap_or_default()
+                                                .to_string_lossy(),
+                                        )
+                                        .size(12.0)
+                                        .color(self.colors.muted),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(entry.path.display().to_string());
+                                if selected && scroll_selection {
+                                    button.scroll_to_me(Some(egui::Align::Center));
+                                }
+                                if button.clicked() {
+                                    workflow_chosen = Some(entry.clone());
+                                }
+                                ui.add_space(6.0);
+                            }
                             for (index, entry) in entries.iter().enumerate() {
+                                let index = index + workflow_rows.entries.len();
                                 ui.push_id(&entry.id, |ui| {
                                     let selected = index == self.launcher_index;
                                     egui::Frame::new()
@@ -722,10 +825,23 @@ impl DevToolsApp {
                                 });
                             }
                         });
-                    if panel.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
-                        && let Some(entry) = entries.get(self.launcher_index)
-                    {
-                        chosen = Some(entry.id.clone());
+                    if panel.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
+                        if let Some((entry, _)) = workflow_rows.entries.get(self.launcher_index) {
+                            workflow_chosen = Some(entry.clone());
+                        } else if let Some(entry) = entries.get(
+                            self.launcher_index
+                                .saturating_sub(workflow_rows.entries.len()),
+                        ) {
+                            chosen = Some(entry.id.clone());
+                        }
+                    }
+                    if workflow_rows.total > 0 || self.quick_tab == "流程" {
+                        if ui.button("全部流程搜索 ↗").clicked() {
+                            workflow_search = true;
+                        }
+                        if workflow_rows.total > workflow_rows.entries.len() {
+                            ui.small("收藏与最近各显示最多6条；完整列表请打开流程搜索。");
+                        }
                     }
                     ui.separator();
                     ui.horizontal(|ui| {
@@ -778,6 +894,15 @@ impl DevToolsApp {
         if show_main {
             self.quick_open = false;
             restore_main_window(self.window_handle, ctx);
+        }
+        if let Some(entry) = workflow_chosen {
+            self.open_tray_workflow(ctx, entry);
+        }
+        if workflow_search {
+            self.quick_open = false;
+            restore_main_window(self.window_handle, ctx);
+            self.open_launcher();
+            self.launcher_scope = Scope::Workflows;
         }
         if !self.quick_open {
             wake_main_window(self.window_handle, ctx);
