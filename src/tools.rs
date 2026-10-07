@@ -1,13 +1,9 @@
 use std::{collections::HashMap, fs::File, path::Path};
 
 use anyhow::{Context, Result, anyhow};
-use base64::{
-    Engine,
-    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
-};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Local, LocalResult, NaiveDateTime, TimeZone};
 use qrcode::{Color, QrCode};
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ToolKind {
@@ -520,6 +516,7 @@ pub struct ToolState {
     pub pattern: String,
     pub number_base: u32,
     pub qr_image: Option<QrImage>,
+    pub plugin_compatible: bool,
     drafts: HashMap<ToolKind, ToolDraft>,
 }
 
@@ -530,6 +527,7 @@ struct ToolDraft {
     message: String,
     pattern: String,
     number_base: u32,
+    plugin_compatible: bool,
 }
 
 impl ToolState {
@@ -545,6 +543,7 @@ impl ToolState {
                 message: std::mem::take(&mut self.message),
                 pattern: std::mem::take(&mut self.pattern),
                 number_base: self.number_base,
+                plugin_compatible: self.plugin_compatible,
             },
         );
         let next = self.drafts.remove(&kind).unwrap_or_default();
@@ -552,6 +551,7 @@ impl ToolState {
         self.input = next.input;
         self.output = next.output;
         self.message = next.message;
+        self.plugin_compatible = next.plugin_compatible;
         self.pattern = next.pattern;
         self.number_base = if next.number_base == 0 {
             10
@@ -571,8 +571,58 @@ impl Default for ToolState {
             pattern: String::new(),
             number_base: 10,
             qr_image: None,
+            plugin_compatible: false,
             drafts: HashMap::new(),
         }
+    }
+}
+
+impl ToolState {
+    pub fn has_plugin_mode(&self) -> bool {
+        matches!(
+            self.selected,
+            ToolKind::Json | ToolKind::Base64 | ToolKind::Sha256
+        )
+    }
+    pub fn run(&self, action: usize) -> Result<String> {
+        if !self.plugin_compatible || !self.has_plugin_mode() {
+            return run_tool(
+                self.selected,
+                action,
+                &self.input,
+                &self.pattern,
+                self.number_base,
+            );
+        }
+        let capability = match (self.selected, action) {
+            (ToolKind::Json, 0 | 2) => "devtools.text.json.format",
+            (ToolKind::Json, 1) => "devtools.text.json.minify",
+            (ToolKind::Base64, 0) => "devtools.text.base64.encode",
+            (ToolKind::Base64, 1) => "devtools.text.base64.decode",
+            (ToolKind::Sha256, 0) => "devtools.text.sha256",
+            _ => return Err(anyhow!("无效的工具操作")),
+        };
+        let request = serde_json::to_vec(&serde_json::json!({
+            "pluginId": "com.zicode.devtools.text", "sceneId": "standalone",
+            "capabilityId": capability, "commandId": null, "input": {"text": self.input},
+        }))?;
+        let result = zi_text_core::execute_request(&request);
+        // Check the same wire-result limit, even though the desktop shows raw text.
+        let bounded: serde_json::Value =
+            serde_json::from_slice(&zi_text_core::serialize_result(&result))?;
+        if !bounded["ok"].as_bool().unwrap_or(false) {
+            return Err(anyhow!(
+                "{}：{}",
+                bounded["error"]["code"]
+                    .as_str()
+                    .unwrap_or("INTERNAL_ERROR"),
+                bounded["error"]["message"].as_str().unwrap_or("处理失败")
+            ));
+        }
+        if self.selected == ToolKind::Json && action == 2 {
+            return Ok("JSON 有效（插件兼容规则）".into());
+        }
+        Ok(result.data.expect("successful result").text)
     }
 }
 
@@ -667,22 +717,19 @@ pub fn generate_qr(input: &str) -> Result<QrImage> {
 }
 
 pub fn json_format(input: &str) -> Result<String> {
-    let value: serde_json::Value = serde_json::from_str(input).context("JSON 格式无效")?;
-    Ok(serde_json::to_string_pretty(&value)?)
+    zi_text_core::json(input, true).context("JSON 格式无效")
 }
 
 pub fn json_minify(input: &str) -> Result<String> {
-    let value: serde_json::Value = serde_json::from_str(input).context("JSON 格式无效")?;
-    Ok(serde_json::to_string(&value)?)
+    zi_text_core::json(input, false).context("JSON 格式无效")
 }
 
 pub fn base64_encode(input: &str) -> String {
-    STANDARD.encode(input.as_bytes())
+    zi_text_core::encode(input)
 }
 
 pub fn base64_decode(input: &str) -> Result<String> {
-    let bytes = STANDARD.decode(input.trim()).context("Base64 数据无效")?;
-    String::from_utf8(bytes).context("解码结果不是 UTF-8 文本")
+    zi_text_core::decode(input.trim()).map_err(|error| anyhow!(error))
 }
 
 pub fn url_encode(input: &str) -> String {
@@ -696,7 +743,7 @@ pub fn url_decode(input: &str) -> Result<String> {
 }
 
 pub fn sha256(input: &str) -> String {
-    format!("{:x}", Sha256::digest(input.as_bytes()))
+    zi_text_core::sha256(input)
 }
 
 pub fn timestamp_to_local(input: &str) -> Result<String> {
@@ -803,6 +850,49 @@ fn clipped(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn plugin_mode_preserves_legacy_and_tool_drafts() {
+        let mut state = super::ToolState {
+            input: "9007199254740992".into(),
+            ..Default::default()
+        };
+        assert!(state.run(1).is_ok());
+        state.plugin_compatible = true;
+        assert!(
+            state
+                .run(1)
+                .unwrap_err()
+                .to_string()
+                .contains("INVALID_INPUT")
+        );
+        state.select(super::ToolKind::Base64);
+        assert!(!state.plugin_compatible);
+        state.input = " YQ== ".into();
+        assert_eq!(state.run(1).unwrap(), "a");
+        state.plugin_compatible = true;
+        assert!(
+            state
+                .run(1)
+                .unwrap_err()
+                .to_string()
+                .contains("INVALID_ENCODING")
+        );
+        state.select(super::ToolKind::Json);
+        assert!(state.plugin_compatible);
+        assert_eq!(state.input, "9007199254740992");
+        state.select(super::ToolKind::Sha256);
+        state.plugin_compatible = true;
+        state.input = "abc".into();
+        assert_eq!(state.run(0).unwrap(), super::sha256("abc"));
+        state.input = "中".repeat(2731);
+        assert!(
+            state
+                .run(0)
+                .unwrap_err()
+                .to_string()
+                .contains("INPUT_TOO_LARGE")
+        );
+    }
     #[test]
     fn all_tool_samples_run_and_ids_are_unique() {
         let mut ids = std::collections::HashSet::new();

@@ -14,6 +14,8 @@ mod task_center;
 use registry::{Page, ToolEntry, catalog};
 
 #[cfg(feature = "ui-preview")]
+use crate::tools::run_tool;
+#[cfg(feature = "ui-preview")]
 use std::path::Path;
 use std::{
     fs,
@@ -40,7 +42,7 @@ use crate::{
     network_tools::{NetworkPane, NetworkState, resolve_host, test_tcp},
     preferences::{self, Preferences},
     service::{ActionResult, ServiceManager, ServiceState, ServiceStatus},
-    tools::{ToolKind, ToolState, generate_qr, generate_uuid, run_tool},
+    tools::{ToolKind, ToolState, generate_qr, generate_uuid},
     tray::{Navigation, TrayAction, TrayController, TrayEntry, TrayTool},
     workbench::{DataState, FileState},
 };
@@ -755,6 +757,35 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_inspection(&mut self, phase: u8) {
         self.data_state.preview_workflow_inspection(phase);
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_plugin(&mut self, ctx: &egui::Context, light: bool, phase: u8) {
+        match phase {
+            0 => {
+                self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+                self.startup_warning = None;
+                self.launcher_open = false;
+                self.quick_open = false;
+                self.open_startup_tool("json");
+                self.tool_state.plugin_compatible = true;
+                self.tool_state.input = r#"{"name":"Zi","name":"duplicate"}"#.into();
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            1 => {
+                assert!(self.tool_state.message.contains("INVALID_INPUT"));
+                assert!(self.tool_state.output.is_empty());
+            }
+            2 => {
+                self.tool_state.input = r#"{"b":2,"a":1}"#.into();
+                self.tool_state.message.clear();
+            }
+            3 => {
+                assert!(self.tool_state.message.is_empty());
+                assert_eq!(self.tool_state.output, "{\n  \"a\": 1,\n  \"b\": 2\n}");
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[cfg(feature = "ui-preview")]
@@ -2945,6 +2976,11 @@ impl DevToolsApp {
                                 });
                         }
                         let help = self.tool_state.selected.help();
+                        if self.tool_state.has_plugin_mode()
+                            && ui.checkbox(&mut self.tool_state.plugin_compatible, "插件兼容模式").on_hover_text("8192 UTF-8 字节；JSON 拒绝重复键、超过 64 层和不安全整数；Base64 严格校验，不忽略空白").changed() {
+                                self.tool_state.output.clear();
+                                self.tool_state.message.clear();
+                        }
                         if !help.is_empty() {
                             ui.label(RichText::new(help).small().color(p.muted));
                             ui.add_space(8.0);
@@ -3055,13 +3091,7 @@ impl DevToolsApp {
             }
         });
         if let Some(index) = selected {
-            match run_tool(
-                self.tool_state.selected,
-                index,
-                &self.tool_state.input,
-                &self.tool_state.pattern,
-                self.tool_state.number_base,
-            ) {
+            match self.tool_state.run(index) {
                 Ok(output) => {
                     self.tool_state.output = output;
                     self.tool_state.message.clear();

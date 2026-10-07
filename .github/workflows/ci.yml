@@ -17,12 +17,25 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
+          targets: wasm32-wasip1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: Swatinem/rust-cache@v2
       - run: python scripts/sync_tools.py --check
       - run: python scripts/verify_studio_contract.py
       - run: python scripts/sync_studio_plugin_map.py --check
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - run: cargo test --locked
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - name: Real native and WASI text contract parity
+        shell: pwsh
+        run: |
+          cargo build -p zi-text-wasi --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p zi-text-wasi --locked --release --target wasm32-wasip1 --config 'target.wasm32-wasip1.rustflags=["-C","link-arg=--max-memory=67108864","-C","link-arg=-zstack-size=2097152"]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_text_wasi.py --wasm target/wasm32-wasip1/release/zi-text-wasi.wasm --native target/debug/zi-text-wasi.exe --output "$env:RUNNER_TEMP/text-wasi-parity.json"
+          exit $LASTEXITCODE
       - name: Isolated Windows clipboard interoperability
         run: cargo run --locked --features ui-preview --example clipboard_fixture

@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.82.0-dev.56"
+version = "0.82.0-dev.57"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -5610,7 +5610,25 @@ dependencies = [
  "windows-sys 0.59.0",
  "winresource",
  "zeroize",
+ "zi-text-core",
  "zip",
+]
+
+[[package]]
+name = "zi-text-core"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "zi-text-wasi"
+version = "0.1.0"
+dependencies = [
+ "zi-text-core",
 ]
 
 [[package]]

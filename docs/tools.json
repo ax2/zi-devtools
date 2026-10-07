@@ -1,5 +1,5 @@
 {
-  "version": "0.82.0-dev.56",
+  "version": "0.82.0-dev.57",
   "updated": "2026-10-07",
   "tools": [
     {
@@ -8,7 +8,7 @@
       "status": "implemented",
       "category": "小工具",
       "priority": "—",
-      "scope": "格式化、压缩与校验 JSON",
+      "scope": "格式化、压缩与校验 JSON；同仓共享纯Rust核心，可选插件兼容模式（8192 UTF-8字节、JSON深度/重复键/安全整数与严格Base64）；五项WASI能力为未签名候选，Studio真实接入待验收",
       "discovery": {
         "label": "JSON",
         "summary": "格式化、压缩与校验 JSON",
@@ -21,12 +21,17 @@
           "压缩json"
         ]
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "共享Rust核心及可选插件兼容模式；独立版默认行为保留。WASI/View候选独立验收，不代表Host已接入。"
         }
       ]
     },
@@ -36,7 +41,7 @@
       "status": "implemented",
       "category": "小工具",
       "priority": "—",
-      "scope": "UTF-8 文本与 Base64 编解码",
+      "scope": "UTF-8 文本与 Base64 编解码；同仓共享纯Rust核心，可选插件兼容模式（8192 UTF-8字节、JSON深度/重复键/安全整数与严格Base64）；五项WASI能力为未签名候选，Studio真实接入待验收",
       "discovery": {
         "label": "Base64",
         "summary": "UTF-8 文本与 Base64 编解码",
@@ -47,12 +52,17 @@
           "base64编码"
         ]
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "共享Rust核心及可选插件兼容模式；独立版默认行为保留。WASI/View候选独立验收，不代表Host已接入。"
         }
       ]
     },
@@ -85,7 +95,7 @@
       "status": "implemented",
       "category": "小工具",
       "priority": "—",
-      "scope": "计算文本的 SHA-256 摘要",
+      "scope": "计算文本的 SHA-256 摘要；同仓共享纯Rust核心，可选插件兼容模式（8192 UTF-8字节、JSON深度/重复键/安全整数与严格Base64）；五项WASI能力为未签名候选，Studio真实接入待验收",
       "discovery": {
         "label": "SHA-256 文本摘要",
         "summary": "计算文本的 SHA-256 摘要",
@@ -93,12 +103,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "共享Rust核心及可选插件兼容模式；独立版默认行为保留。WASI/View候选独立验收，不代表Host已接入。"
         }
       ]
     },

@@ -28,7 +28,7 @@ for tool in catalog["tools"]:
         category = "await_host"
         reason = "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     rows.append(dict(sourceToolId=tool["id"], title=tool["name"], sourceVersion=tool["tool_version"],
-                     sourceStatus=tool["status"], migration=category, pluginStatus="not_delivered",
+                     sourceStatus=tool["status"], migration=category, pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
                      pilotCapabilities=pilot.get(tool["id"], []), reason=reason))
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,

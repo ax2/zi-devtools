@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.56",
+  "sourceCatalogVersion": "0.82.0-dev.57",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -12,10 +12,10 @@
     {
       "sourceToolId": "json",
       "title": "JSON",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
       "pilotCapabilities": [
         "devtools.text.json.format",
         "devtools.text.json.minify"
@@ -25,10 +25,10 @@
     {
       "sourceToolId": "base64",
       "title": "Base64",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
       "pilotCapabilities": [
         "devtools.text.base64.encode",
         "devtools.text.base64.decode"
@@ -48,10 +48,10 @@
     {
       "sourceToolId": "sha256",
       "title": "SHA-256 文本摘要",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
       "pilotCapabilities": [
         "devtools.text.sha256"
       ],

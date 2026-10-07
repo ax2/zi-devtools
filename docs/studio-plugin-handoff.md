@@ -1,6 +1,6 @@
 # Studio 插件提供方交接
 
-2026-10-07：接收到 Studio 会话的插件交付契约和优先接续要求。本轮正在完成流程只读结果检查器的安全验证检查点；随后优先五项文本能力试点与完整目录迁移映射。
+2026-10-07：接收到 Studio 会话的插件交付契约和优先接续要求。流程结果检查器检查点已完成；本轮已推进五项文本能力实际候选与完整目录迁移映射。
 
 契约：`zicode.devtools-plugin/1.0.0-rc.1`。已一次性复制并逐项核对10件文件，连同索引共11件，位于 `contracts/studio-devtools/v1/`。索引SHA-256：`dd0688c009fa2d0600ab2d5af038a19efb5e1e26910619c1aede84aa668873f9`。此后构建/CI只使用本仓库快照，不读取Studio仓库，不引入跨仓path依赖、EXE启动或共享可变用户数据库。
 
@@ -14,4 +14,16 @@
 
 [迁移映射](studio-plugin-migration.json)覆盖当前全部152项：32项纯计算迁移候选、58项等待Host接口、62项独立版整体未完成。重叠整合暂为0项，尚未确认Host已有同能力，避免推定。五项试点对应json/base64/sha256三项独立工具，全部pluginStatus仍not_delivered，acceptedCapabilities=0。脚本从tools.json同步工具版本/状态，CI执行 --check 防止漏项或陈旧映射。静态候选不代表整个界面/文件功能可直接迁移，需逐项抽核心和限定输入协议。
 
-快照核验脚本：`python scripts/verify_studio_contract.py`，只依赖本仓库。`.gitattributes`禁用该快照的换行转换，以保存发布方原始摘要。16向量和5 capability数量已核对，实际WASI尚未构建；当前机器缺少wasm32-wasip1 target且未发现wasmtime CLI，下一轮使用共享工具链/缓存补齐，不新建重复target。
+快照核验脚本：`python scripts/verify_studio_contract.py`，只依赖本仓库。`.gitattributes`禁用该快照的换行转换，以保存发布方原始摘要。16向量和5 capability数量已核对，初次核对时尚未构建实际WASI、缺少wasm32-wasip1且未发现wasmtime CLI；后续已复用共享工具链补齐target并构建实际模块，见下方更新。
+
+## 2026-10-07：文本核心与实际模块
+
+wasm32-wasip1现已装入既有工具链，仍复用D盘Cargo缓存和唯一共享target。实现crates/zi-text-core与crates/zi-text-wasi；根工作区default-members保持独立程序。独立JSON/Base64/SHA-256默认走同一算法，另有显式插件兼容模式执行相同有界请求。严格校验缺失/重复/额外字段、唯一处理器、UTF-8文本/请求/结果字节、JSON重复键/64层/安全整数和Base64 padding。
+
+已构建实际WASI模块并通过36组原生/WASI逐字节对照，包括16条契约向量和接近48KiB的结果；已检查模块声明64MiB最大内存。Node只用于本项目功能验证，不是生产沙箱，也不验收fuel。stdout为单一结果，正常proc_exit行为记录在包外verification中，Host仍需正确处理成功退出与并发管道排空。
+
+View位于plugins/text/views/main.html，自包含，无外部CSS/JS/图片。公开SDK测试替身连接实际WASI，桌面1100px浅色/390px窄窗深色通过；空输入、超限、错误、重复点击、Ctrl+Enter、结果重用、输入变化后忽略旧结果及无Host禁用通过。实际Studio桥、安装、撤权、升级/回滚、场景及Pi Broker未验收。无授权正式私钥，交付unsigned目录，不生成伪签名容器。
+
+JSON/Base64/SHA-256源工具版本1.1.0，五项插件候选0.1.0；迁移表三项pluginStatus更新为candidate，acceptedCapabilities仍为0。独立版默认宽整数、重复键旧策略与解码外层空白保留；插件模式用契约严格规则。后续资源/服务/桌面profile仍等待Host接口。
+
+实际最终模块220439字节，SHA-256 abfd0dbe45c064c4f8e40a5945c004694eb356cdf13688f8d7adf6536e64f20a；36组对照最大响应47191字节。当前模块在Node中_start正常返回，exitCode=0，未触发proc_exit；不据此宣称Studio的proc_exit(0)缺口已修复。候选目录计划release/text-plugin-0.1.0-dev57，包外text-plugin-0.1.0-dev57-verification.json，不生成额外ZIP。

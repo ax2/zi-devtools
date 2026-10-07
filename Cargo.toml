@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.56"
+version = "0.82.0-dev.57"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -12,6 +12,7 @@ name = "ZiDevTools"
 path = "src/main.rs"
 
 [dependencies]
+zi-text-core = { path = "crates/zi-text-core" }
 ab_glyph = "0.2.32"
 anyhow = "1.0"
 base64 = "0.22"
@@ -58,6 +59,11 @@ rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
 
 [features]
 ui-preview = []
+
+[workspace]
+members = ["crates/zi-text-core", "crates/zi-text-wasi"]
+default-members = ["."]
+resolver = "3"
 
 [[example]]
 name = "capture_ui"
@@ -111,4 +117,8 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "workflow_inspector_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "text_plugin_ui"
 required-features = ["ui-preview"]

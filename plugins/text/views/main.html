@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZiDevTools 文本工具</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6fa;--card:#fff;--text:#18253a;--muted:#52627a;--line:#d9e0ec;--accent:#245bd7;--error:#ae2436;--soft:#e9efff}
+@media(prefers-color-scheme:dark){:root{--bg:#101622;--card:#192233;--text:#edf2fb;--muted:#abb9d0;--line:#35435b;--accent:#91b1ff;--error:#ffadba;--soft:#263650}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1100px;padding:28px;margin:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:start}h1{margin:0;font-size:26px;letter-spacing:-.5px}p{margin:6px 0;color:var(--muted)}.tag{background:var(--soft);color:var(--accent);padding:5px 10px;border-radius:20px;white-space:nowrap;font-size:12px}.toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:24px 0 16px}label{display:block;font-weight:600}select,button,textarea{font:inherit;color:var(--text)}select,button{border:1px solid var(--line);background:var(--card);border-radius:9px;min-height:40px;padding:8px 14px}select{min-width:230px;max-width:100%}button{cursor:pointer}button:hover:enabled{border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}select:focus-visible,button:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}.panelhead{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}.count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}textarea,pre{width:100%;min-height:280px;max-height:480px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:14px;font:14px/1.7 ui-monospace,Consolas,monospace;tab-size:2}textarea{resize:vertical}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.status{margin:16px 0;border-radius:9px;padding:12px 14px;background:var(--soft);overflow-wrap:anywhere;min-height:48px}.status[data-error=true]{color:var(--error)}.help{font-size:13px;margin-top:18px}kbd{border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}footer{font-size:12px;color:var(--muted);margin-top:18px}@media(max-width:650px){main{padding:18px 14px}header{display:block}.tag{display:inline-block;margin-top:10px}.grid{grid-template-columns:1fr}.toolbar{margin-top:18px}textarea,pre{min-height:180px;max-height:360px}h1{font-size:23px}.panel{padding:14px}}
+</style>
+<main>
+<header><div><h1>文本工具</h1><p>整理 JSON、转换编码，或校验文本摘要。</p></div><span class="tag">本地计算 · v0.1.0 候选</span></header>
+<div class="toolbar"><div><label for="operation">操作</label><select id="operation"><option value="json.format">JSON 格式化</option><option value="json.minify">JSON 压缩</option><option value="base64.encode">Base64 编码</option><option value="base64.decode">Base64 解码</option><option value="sha256">SHA-256</option></select></div><button class="primary" id="run" disabled>处理文本</button><span class="count"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span></div>
+<div class="grid"><section class="panel"><div class="panelhead"><label for="input">输入</label><span id="input-count" class="count">0 / 8192 字节</span></div><textarea id="input" spellcheck="false" placeholder="在这里粘贴文本；空文本也可处理"></textarea><div class="buttons"><button id="sample">载入示例</button><button id="clear">清空</button></div></section><section class="panel"><div class="panelhead"><strong>结果</strong><span id="output-count" class="count">等待处理</span></div><pre id="output" tabindex="0" aria-label="处理结果">处理结果将显示在这里</pre><div class="buttons"><button id="select" disabled>选中结果</button><button id="reuse" disabled>结果作为输入</button></div></section></div>
+<div id="status" class="status" role="status" aria-live="polite">正在连接宿主…</div><p id="help" class="help"></p><footer>不保存文本，不访问文件或网络。AI 工具入口需要在 Studio 中另外授权；此界面不会自动发送内容给模型。</footer>
+</main>
+<script>
+(() => {
+  'use strict';
+  const el = id => document.getElementById(id);
+  const input=el('input'), operation=el('operation'), output=el('output');
+  const bytes=text=>new TextEncoder().encode(text).length;
+  let sdk, ready=false, busy=false, revision=0, result=null;
+  const hints={json:'JSON 最多 64 层，拒绝重复键和超出 ±9007199254740991 的整数。对象键递归排序。',base64:'标准 Base64，保留 padding，不接受空白或缺失 padding；解码结果必须是 UTF-8。',sha256:'按原始 UTF-8 字节计算 SHA-256，包括首尾空白与换行。'};
+  const samples={json:'{"name":"ZiDevTools","local":true,"tools":["JSON","Base64"]}',base64:'Hello, 字与码!',sha256:'abc'};
+  function status(text,error=false){el('status').textContent=text;el('status').dataset.error=String(error)}
+  function controls(){el('run').disabled=!ready||busy||bytes(input.value)>8192;el('run').textContent=busy?'处理中…':'处理文本';el('select').disabled=result===null||result==='';el('reuse').disabled=result===null||bytes(result)>8192||busy;el('input-count').textContent=`${bytes(input.value)} / 8192 字节`;el('help').textContent=hints[operation.value.split('.')[0]];el('input-count').style.color=bytes(input.value)>8192?'var(--error)':''}
+  function changed(){revision++;result=null;output.textContent='处理结果将显示在这里';el('output-count').textContent='等待处理';try{sdk?.setDirty(input.value.length>0)}catch{}controls();if(bytes(input.value)>8192)status('文本超过 8192 UTF-8 字节，请缩短后再处理。',true);else if(ready)status(busy?'输入已改变，本次返回结果将被忽略。':'可以处理文本。')}
+  input.addEventListener('input',changed);operation.addEventListener('change',changed);
+  el('sample').addEventListener('click',()=>{if(input.value && !confirm('用示例替换当前输入？'))return;input.value=operation.value==='base64.decode'?'SGVsbG8sIOS4juS4jueggSE=':samples[operation.value.split('.')[0]];changed()});
+  el('clear').addEventListener('click',()=>{if(input.value && !confirm('清空当前输入和结果？'))return;input.value='';changed();input.focus()});
+  el('reuse').addEventListener('click',()=>{if(result===null||bytes(result)>8192||busy)return;input.value=result;changed();input.focus()});
+  el('select').addEventListener('click',()=>{const range=document.createRange();range.selectNodeContents(output);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);output.focus();status('结果已选中，可按 Ctrl+C 复制。')});
+  async function run(){
+    if(!ready||busy||bytes(input.value)>8192)return;
+    const stamp=revision, text=input.value, capability='devtools.text.'+operation.value;
+    busy=true;result=null;output.textContent='正在处理…';el('output-count').textContent='处理中';status('正在本地处理文本…');controls();
+    let timer;
+    try{
+      const response=await Promise.race([sdk.capabilities.invoke(capability,{text}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('timeout')),6000)})]);
+      if(stamp!==revision){status('已忽略过期结果，请处理当前输入。');return}
+      if(response?.contractVersion!=='1.0.0-rc.1'||typeof response?.ok!=='boolean')throw new Error('protocol');
+      if(!response.ok){output.textContent='未生成结果';el('output-count').textContent='处理失败';status(`${response.error?.code||'INTERNAL_ERROR'}：${response.error?.message||'工具处理失败'}`,true);return}
+      if(typeof response.data?.text!=='string'||response.error!==null)throw new Error('protocol');
+      result=response.data.text;output.textContent=result===''?'（空文本结果）':result;el('output-count').textContent=`${bytes(result)} 字节`;status(result===''?'处理完成，结果为空文本。':'处理完成。');
+    }catch{
+      if(stamp===revision){output.textContent='未生成结果';el('output-count').textContent='调用失败';status('宿主拒绝、连接中断或响应超时，请检查插件状态后重试。',true)}
+    }finally{clearTimeout(timer);busy=false;controls()}
+  }
+  el('run').addEventListener('click',run);document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key==='Enter'){event.preventDefault();run()}});
+  controls();
+  (async()=>{try{sdk=window.zicode;if(!sdk)throw new Error('host');await sdk.ready();await sdk.context.get();ready=true;status('可以处理文本。');controls()}catch{status('需要在 Studio 插件页面中打开。宿主未连接，暂不能处理文本。',true)}})();
+})();
+</script>
+</html>
