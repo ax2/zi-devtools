@@ -781,6 +781,28 @@ impl DevToolsApp {
         assert_eq!(self.handoff.is_some(), sent);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_table_check(&self, phase: u8) {
+        self.data_state.instances[0]
+            .state
+            .preview_text_flow_table_check(phase == 1);
+        assert_eq!(
+            self.data_state.instances[0].state.input,
+            "original table draft"
+        );
+        assert!(self.handoff.is_none());
+        assert_eq!(
+            self.data_state.instances.len(),
+            if phase == 3 { 2 } else { 1 }
+        );
+        if phase == 3 {
+            self.data_state.preview_text_flow_table_received();
+            assert_eq!(
+                self.preferences.recent.first().map(String::as_str),
+                Some("data")
+            );
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_output_prepare(
         &mut self,
         ctx: &egui::Context,
@@ -5189,6 +5211,14 @@ impl eframe::App for DevToolsApp {
                         match handoff::Transfer::new("文本工具流程结果".into(), &text) {
                             Ok(transfer) => self.handoff = Some(transfer),
                             Err(error) => self.data_state.message = error.to_string(),
+                        }
+                    }
+                    if let Some(data) = self.data_state.take_text_flow_table() {
+                        match self.data_state.import_table(data, "流程表格结果") {
+                            Ok(()) => self.visit("data"),
+                            Err(error) => {
+                                self.data_state.text_flow_transfer_failed(error.to_string())
+                            }
                         }
                     }
                 }

@@ -1,8 +1,5 @@
 //! Versioned native text actions and serial execution. No implicit file/network actions.
-use crate::{
-    tasks::{Job, Phase},
-    tools::{ToolKind, run_tool},
-};
+use crate::tasks::{Job, Phase};
 use anyhow::{Result, ensure};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
@@ -16,33 +13,8 @@ const LIMIT: usize = 1024 * 1024;
 const TRACE_LIMIT: usize = 8 * LIMIT;
 const STEPS: usize = 16;
 
-pub struct Action {
-    pub id: &'static str,
-    pub version: u32,
-    pub label: &'static str,
-    pub tool: ToolKind,
-    operation: usize,
-}
-macro_rules! actions {
-    ($(($id:literal, $label:literal, $kind:ident, $op:literal)),* $(,)?) => {
-        pub static ACTIONS: &[Action] = &[$(Action { id: $id, version: 1, label: $label, tool: ToolKind::$kind, operation: $op }),*];
-    }
-}
-actions![
-    ("json.pretty", "JSON · 格式化", Json, 0),
-    ("json.minify", "JSON · 压缩", Json, 1),
-    ("base64.encode", "Base64 · 编码", Base64, 0),
-    ("base64.decode", "Base64 · 解码", Base64, 1),
-    ("url.encode", "URL · 编码", Url, 0),
-    ("url.decode", "URL · 解码", Url, 1),
-    ("html.escape", "HTML · 转义", HtmlEscape, 0),
-    ("html.unescape", "HTML · 还原", HtmlEscape, 1),
-    ("text.escape", "文本 · 转义", TextEscape, 0),
-    ("text.unescape", "文本 · 还原", TextEscape, 1),
-    ("hex.encode", "十六进制 · 编码", Hex, 0),
-    ("hex.decode", "十六进制 · 解码", Hex, 1),
-    ("sha256.digest", "SHA-256 · 摘要", Sha256, 0),
-];
+mod material;
+pub use material::{ACTIONS, Action, Kind, Material};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -73,18 +45,42 @@ impl Default for Definition {
     }
 }
 impl Definition {
+    fn output_kind(&self) -> Result<Kind> {
+        self.validate()?;
+        Ok(self
+            .steps
+            .last()
+            .map(|step| step.registered().map(|action| action.output))
+            .transpose()?
+            .unwrap_or(Kind::Text))
+    }
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.version == 1, "不支持此文本流程版本");
+        ensure!(matches!(self.version, 1 | 2), "不支持此流程版本");
         ensure!(self.steps.len() <= STEPS, "文本流程最多16步");
-        for step in &self.steps {
-            step.registered()?;
+        let mut kind = Kind::Text;
+        for (index, step) in self.steps.iter().enumerate() {
+            let action = step.registered()?;
+            ensure!(
+                self.version == 2 || !action.typed(),
+                "第{}步需要流程格式2",
+                index + 1
+            );
+            ensure!(
+                action.input == kind,
+                "第{}步 {}需要{}，上一步输出为{}",
+                index + 1,
+                action.label,
+                action.input.label(),
+                kind.label()
+            );
+            kind = action.output;
         }
         Ok(())
     }
 }
 #[derive(Debug, Default)]
 pub struct Run {
-    pub outputs: Vec<String>,
+    pub outputs: Vec<Material>,
     pub failure: Option<String>,
     pub cancelled: bool,
 }
@@ -93,7 +89,7 @@ pub fn execute(definition: &Definition, input: &str, cancel: &AtomicBool) -> Res
     ensure!(!definition.steps.is_empty(), "请先添加操作步骤");
     ensure!(input.len() <= LIMIT, "输入最多1 MiB");
     let mut run = Run::default();
-    let mut current = input.to_owned();
+    let mut current = Material::Text(input.to_owned());
     let mut bytes = 0usize;
     for (index, step) in definition.steps.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
@@ -101,9 +97,10 @@ pub fn execute(definition: &Definition, input: &str, cancel: &AtomicBool) -> Res
             break;
         }
         let action = step.registered()?;
-        match run_tool(action.tool, action.operation, &current, "", 10) {
+        match action.execute(&current, cancel) {
             Ok(output) => {
-                if output.len() > LIMIT || bytes.saturating_add(output.len()) > TRACE_LIMIT {
+                let size = output.bytes()?;
+                if size > LIMIT || bytes.saturating_add(size) > TRACE_LIMIT {
                     run.failure = Some(format!(
                         "第{}步 {}：结果超过单步1 MiB或累计8 MiB，后续步骤未运行",
                         index + 1,
@@ -111,7 +108,7 @@ pub fn execute(definition: &Definition, input: &str, cancel: &AtomicBool) -> Res
                     ));
                     break;
                 }
-                bytes += output.len();
+                bytes += size;
                 current = output.clone();
                 run.outputs.push(output);
             }
@@ -153,6 +150,14 @@ pub struct State {
     #[serde(skip)]
     send: Option<String>,
     #[serde(skip)]
+    table_send: Option<crate::workbench::Dataset>,
+    #[serde(skip)]
+    table_review: Option<crate::workbench::Dataset>,
+    #[serde(skip)]
+    table_review_preview: String,
+    #[serde(skip)]
+    preview_cache: Option<(usize, String)>,
+    #[serde(skip)]
     recipe: String,
     #[serde(skip)]
     review: Option<Definition>,
@@ -164,7 +169,7 @@ pub struct State {
     selected: usize,
     #[cfg(feature = "ui-preview")]
     #[serde(skip)]
-    buttons: [Option<egui::Rect>; 3],
+    buttons: [Option<(egui::Rect, egui::Rect)>; 6],
 }
 impl Drop for State {
     fn drop(&mut self) {
@@ -177,7 +182,7 @@ impl State {
         self.scroll_until = Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
     }
     pub(crate) fn modal_open(&self) -> bool {
-        self.review.is_some()
+        self.review.is_some() || self.table_review.is_some()
     }
     pub(crate) fn receive(&mut self, input: String) -> Result<()> {
         ensure!(input.len() <= LIMIT, "文本流程输入最多1 MiB");
@@ -197,6 +202,13 @@ impl State {
         ensure!(self.input.len() <= LIMIT, "文本流程输入最多1 MiB");
         self.definition.validate()
     }
+    pub fn take_table_send(&mut self) -> Option<crate::workbench::Dataset> {
+        self.table_send.take()
+    }
+    pub(crate) fn transfer_failed(&mut self, message: String) {
+        self.message = message;
+        self.open();
+    }
     pub fn take_send(&mut self) -> Option<String> {
         self.send.take()
     }
@@ -207,6 +219,9 @@ impl State {
     fn invalidate(&mut self) {
         self.result = None;
         self.send = None;
+        self.table_send = None;
+        self.table_review = None;
+        self.preview_cache = None;
         self.message.clear();
         self.selected = 0;
     }
@@ -272,9 +287,9 @@ impl State {
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll();
-        let response = egui::CollapsingHeader::new("操作流程 · 文本工具链")
+        let response = egui::CollapsingHeader::new("操作流程 · 文本 / 表格工具链")
             .id_salt("text-tool-flow").open(self.reveal.then_some(true)).default_open(self.has_content()).show(ui, |ui| {
-            ui.label("每一步接收上一步文本。运行只计算结果；原输入保留，可保存当前工作实例。最多16步。");
+            ui.label("每一步接收上一步材料，输入/输出类型必须匹配。原输入保留，可保存当前工作实例；最多16步。");
             let busy = self.busy();
             let mut changed = false;
             ui.add_enabled_ui(!busy, |ui| {
@@ -284,17 +299,23 @@ impl State {
                     if ui.button("添加操作…").clicked() { self.picker_open = !self.picker_open; }
                     let button=ui.add_enabled(self.input.is_empty() && self.definition.steps.is_empty(), egui::Button::new("示例"))
                         .on_hover_text("已有草稿时保留内容；可在新实例中载入示例");
-                    #[cfg(feature="ui-preview")] { self.buttons[0]=Some(button.rect); }
+                    #[cfg(feature="ui-preview")] { self.buttons[0]=Some((button.rect,ui.clip_rect())); }
                     if button.clicked() { self.input = "{\"名称\":\"本地工具🦀\",\"数量\":2}".into(); self.definition.steps = ["json.minify","base64.encode","base64.decode","json.pretty"].into_iter().map(|id| Step{action:id.into(),version:1}).collect(); self.open(); changed=true; }
+                    let table_button=ui.add_enabled(self.input.is_empty() && self.definition.steps.is_empty(),egui::Button::new("表格示例"));
+                    #[cfg(feature="ui-preview")] { self.buttons[3]=Some((table_button.rect,ui.clip_rect())); }
+                    if table_button.clicked() { self.input="编号,名称,数量\n001, Zi Tools ,002\n002, 本地工具🦀 ,003".into();self.definition=Definition{version:2,steps:["table.parse_csv","table.trim","table.export_schema","table.parse_schema"].into_iter().map(|id|Step{action:id.into(),version:1}).collect()};self.open();changed=true; }
+
                 });
                 if self.picker_open || self.definition.steps.is_empty() {
                 ui.horizontal(|ui| { ui.label("搜索操作"); ui.text_edit_singleline(&mut self.query); });
                 let query=self.query.trim().to_lowercase();
+                let next_kind=self.definition.output_kind().ok();
+                ui.small(format!("下一步输入：{}；类型不匹配时请先导出或解析材料",next_kind.map_or("先修正步骤顺序",Kind::label)));
                 egui::ScrollArea::vertical().id_salt("text-flow-actions").max_height(95.0).show(ui, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         for action in ACTIONS.iter().filter(|a| query.is_empty() || a.id.contains(&query) || a.label.to_lowercase().contains(&query)) {
-                            if ui.add_enabled(self.definition.steps.len()<STEPS, egui::Button::new(action.label)).on_hover_text(format!("{} · 操作契约v{} · 文本 → 文本",action.id,action.version)).clicked() {
-                                self.definition.steps.push(Step{action:action.id.into(),version:action.version}); changed=true;
+                            if ui.add_enabled(self.definition.steps.len()<STEPS && next_kind==Some(action.input), egui::Button::new(action.label)).on_hover_text(format!("{} · 操作契约v{} · {} → {}\n{}",action.id,action.version,action.input.label(),action.output.label(),action.note)).clicked() {
+                                self.definition.steps.push(Step{action:action.id.into(),version:action.version}); if action.typed() { self.definition.version=2; } changed=true;
                             }
                         }
                     });
@@ -304,7 +325,8 @@ impl State {
                 egui::ScrollArea::vertical().id_salt("text-flow-step-list").max_height(125.0).show(ui, |ui| {
                 for (index, step) in self.definition.steps.iter().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(format!("{}. {} · v{}",index+1,step.registered().map_or(step.action.as_str(),|a| a.label),step.version));
+                        let action=step.registered().ok();
+                        ui.label(format!("{}. {} · v{}",index+1,action.map_or(step.action.as_str(),|a| a.label),step.version)).on_hover_text(action.map_or_else(String::new,|a|format!("{} → {}\n{}",a.input.label(),a.output.label(),a.note)));
                         if ui.add_enabled(index>0,egui::Button::new("↑")).clicked() { edit=Some((index,0)); }
                         if ui.add_enabled(index+1<self.definition.steps.len(),egui::Button::new("↓")).clicked() { edit=Some((index,1)); }
                         if ui.button("移除").clicked() { edit=Some((index,2)); }
@@ -314,9 +336,10 @@ impl State {
                 if let Some((index,op))=edit { match op { 0=>self.definition.steps.swap(index,index-1),1=>self.definition.steps.swap(index,index+1),_=>{self.definition.steps.remove(index);} }; changed=true; }
             });
             if changed { self.invalidate(); }
+            if let Err(error)=self.definition.validate() { ui.colored_label(ui.visuals().error_fg_color,error.to_string()); }
             ui.horizontal(|ui| {
-                let button=ui.add_enabled(!busy&&!self.definition.steps.is_empty(),egui::Button::new("运行文本流程"));
-                #[cfg(feature="ui-preview")] { self.buttons[1]=Some(button.rect); }
+                let button=ui.add_enabled(!busy&&!self.definition.steps.is_empty()&&self.definition.validate().is_ok(),egui::Button::new("运行流程"));
+                #[cfg(feature="ui-preview")] { self.buttons[1]=Some((button.rect,ui.clip_rect())); }
                 if button.clicked() && let Err(error)=self.start() { self.message=error.to_string(); }
                 if ui.add_enabled(busy,egui::Button::new("取消")).on_hover_text("在当前操作返回后停止；已完成结果保留").clicked() { self.cancel(); }
             });
@@ -328,13 +351,15 @@ impl State {
             if let Some(run)=&self.result {
                 ui.horizontal_wrapped(|ui| { for (index,_) in run.outputs.iter().enumerate() { ui.selectable_value(&mut self.selected,index,format!("第{}步结果",index+1)); } });
                 if let Some(output)=run.outputs.get(self.selected) {
-                    ui.label(format!("{}字节{}",output.len(),if output.len()>8192 { " · 仅展示前8192字节，复制与接力使用完整结果" } else { "" }));
-                    let mut preview=output.chars().scan(0,|bytes,c|{*bytes+=c.len_utf8(); (*bytes<=8192).then_some(c)}).collect::<String>();
+                    ui.label(output.summary());
+                    ui.small("文本预览最多8192字节；表格仅前3行×6列，表头256/单元格1024字节；复制与接力使用完整材料。");
+                    if self.preview_cache.as_ref().is_none_or(|(index,_)| *index!=self.selected) { self.preview_cache=Some((self.selected,output.preview().unwrap_or_else(|e|e.to_string()))); }
+                    let mut preview=self.preview_cache.as_ref().unwrap().1.clone();
                     ui.horizontal(|ui| {
-                        if ui.button("复制完整结果").clicked() { ui.ctx().copy_text(output.clone()); }
-                        let button=ui.button("发送到其他工具…");
-                        #[cfg(feature="ui-preview")] { self.buttons[2]=Some(button.rect); }
-                        if button.clicked() { self.send=Some(output.clone()); }
+                        if ui.button("复制完整结果").clicked() { match output.render() {Ok(text)=>ui.ctx().copy_text(text),Err(e)=>self.message=e.to_string()} }
+                        let button=ui.button(if output.kind()==Kind::Table {"送到数据工作台…"} else {"发送到其他工具…"});
+                        #[cfg(feature="ui-preview")] { self.buttons[2]=Some((button.rect,ui.clip_rect())); }
+                        if button.clicked() { match output {Material::Text(text)=>self.send=Some(text.clone()),Material::Table(data)=>{self.table_review=Some(data.clone());self.table_review_preview=preview.clone();}} }
                     });
                     egui::ScrollArea::vertical().id_salt("text-flow-result").max_height(95.0).show(ui, |ui| { ui.add(egui::TextEdit::multiline(&mut preview).interactive(false).desired_width(f32::INFINITY).desired_rows(4)); });
                 }
@@ -362,6 +387,32 @@ impl State {
         }
         if response.body_response.is_some() {
             self.reveal = false;
+        }
+
+        let mut table_choice = None;
+        if let Some(data) = &self.table_review {
+            egui::Modal::new(egui::Id::new("text-flow-table-send")).show(ui.ctx(),|ui| {
+                ui.heading("送到独立数据工作台？");
+                ui.label(format!("完整步骤结果：{}行 / {}列；不只发送屏幕样本",data.rows.len(),data.headers.len()));
+                ui.label("保留列顺序、NULL、数字、布尔、文本及JSON复合值。创建新实例；原流程输入和全部步骤结果保留，不自动运行目标流程。");
+                ui.small("样本值按JSON记法显示：文本有引号，数字/布尔/NULL保留其类型；仅前3行×6列。");
+                let mut preview=self.table_review_preview.clone();
+                egui::ScrollArea::vertical().id_salt("text-flow-table-review").max_height(180.0).show(ui,|ui|{ui.add(egui::TextEdit::multiline(&mut preview).interactive(false).desired_width(520.0));});
+                ui.horizontal(|ui| {
+                    let cancel=ui.button("返回");
+                    let confirm=ui.button("确认创建新实例");
+                    #[cfg(feature="ui-preview")] { self.buttons[4]=Some((confirm.rect,ui.clip_rect()));self.buttons[5]=Some((cancel.rect,ui.clip_rect())); }
+                    if cancel.clicked(){table_choice=Some(false);}else if confirm.clicked(){table_choice=Some(true);}
+                });
+            });
+        }
+        if let Some(confirm) = table_choice {
+            let data = self.table_review.take().unwrap();
+            if confirm {
+                self.table_send = Some(data);
+            } else {
+                self.open();
+            }
         }
         let mut choice = None;
         if let Some(definition) = &self.review {
@@ -404,9 +455,12 @@ impl State {
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_position(&self, index: usize) -> egui::Pos2 {
-        self.buttons[index]
-            .expect("visible text flow button")
-            .center()
+        let (rect, clip) = self.buttons[index].expect("visible flow button");
+        assert!(
+            clip.contains_rect(rect),
+            "control {index} must be visible: {rect:?} clip={clip:?}"
+        );
+        rect.center()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_check(&self) {
@@ -414,8 +468,28 @@ impl State {
         assert!(self.input.contains("本地工具🦀"));
         let run = self.result.as_ref().unwrap();
         assert_eq!(run.outputs.len(), 4);
-        assert!(run.outputs[3].contains("本地工具🦀"));
-        assert!(run.outputs[3].contains('\n'));
+        assert!(run.outputs[3].text().unwrap().contains("本地工具🦀"));
+        assert!(run.outputs[3].text().unwrap().contains('\n'));
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_table_check(&self, review: bool) {
+        assert_eq!(self.job.phase, Phase::Done);
+        assert!(self.input.contains(" Zi Tools "));
+        let run = self.result.as_ref().unwrap();
+        assert_eq!(run.outputs.len(), 4);
+        let Material::Table(data) = &run.outputs[3] else {
+            panic!("typed table output")
+        };
+        assert_eq!(data.headers, vec!["编号", "名称", "数量"]);
+        assert_eq!(
+            data.rows[0],
+            vec![
+                serde_json::json!("001"),
+                serde_json::json!("Zi Tools"),
+                serde_json::json!("002")
+            ]
+        );
+        assert_eq!(self.table_review.is_some(), review);
     }
 }
 
@@ -434,6 +508,135 @@ mod tests {
                 .collect(),
         }
     }
+    fn typed(ids: &[&str]) -> Definition {
+        let mut d = recipe(ids);
+        d.version = 2;
+        d
+    }
+    #[test]
+    fn csv_native_encoding_and_typed_table_steps_preserve_order_and_leading_zero_text() {
+        let source = "z,a,n\n001, 中文🦀 ,002\n003, x ,004";
+        let d = typed(&[
+            "table.parse_csv",
+            "table.trim",
+            "table.export_schema",
+            "base64.encode",
+            "base64.decode",
+            "table.parse_schema",
+        ]);
+        let run = execute(&d, source, &AtomicBool::new(false)).unwrap();
+        assert!(run.failure.is_none());
+        assert_eq!(run.outputs.len(), 6);
+        let Material::Table(data) = &run.outputs[5] else {
+            panic!("table")
+        };
+        assert_eq!(data.headers, vec!["z", "a", "n"]);
+        assert_eq!(
+            data.rows[0],
+            vec![
+                serde_json::json!("001"),
+                serde_json::json!("中文🦀"),
+                serde_json::json!("002")
+            ]
+        );
+        assert_eq!(run.outputs[2], run.outputs[4]);
+        assert!(source.contains(" 中文🦀 "));
+    }
+    #[test]
+    fn typed_json_values_and_empty_schema_survive_serial_operations() {
+        let source = r#"[{"z":" x ","n":9223372036854775807,"yes":true,"missing":null,"nested":[1,"a"],"nul":"中文\u0000🦀"}]"#;
+        let run = execute(
+            &typed(&[
+                "table.parse_json",
+                "table.trim",
+                "table.export_schema",
+                "table.parse_schema",
+            ]),
+            source,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(run.failure.is_none());
+        let Material::Table(data) = &run.outputs[3] else {
+            panic!("table")
+        };
+        for (column, expected) in [
+            ("z", serde_json::json!("x")),
+            ("n", serde_json::json!(i64::MAX)),
+            ("yes", serde_json::json!(true)),
+            ("missing", serde_json::Value::Null),
+            ("nested", serde_json::json!([1, "a"])),
+            ("nul", serde_json::json!("中文\0🦀")),
+        ] {
+            let i = data.headers.iter().position(|c| c == column).unwrap();
+            assert_eq!(data.rows[0][i], expected);
+        }
+        let run = execute(
+            &typed(&[
+                "table.parse_csv",
+                "table.export_schema",
+                "table.parse_schema",
+            ]),
+            "z,中文,a\n",
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let Material::Table(data) = &run.outputs[2] else {
+            panic!("table")
+        };
+        assert_eq!(data.headers, vec!["z", "中文", "a"]);
+        assert!(data.rows.is_empty());
+        let run = execute(
+            &typed(&["table.parse_csv", "table.export_json"]),
+            "z,中文,a\n",
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert_eq!(run.outputs.len(), 1);
+        assert!(run.failure.unwrap().contains("列结构JSON"));
+    }
+    #[test]
+    fn typed_contract_rejects_incompatible_chains_before_running_and_invalid_shapes_at_read() {
+        let incompatible = typed(&["table.parse_csv", "base64.encode"]);
+        assert!(
+            incompatible
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("第2步")
+        );
+        assert!(recipe(&["table.parse_csv"]).validate().is_err());
+        for source in [
+            r#"{"headers":["a"],"rows":[[1,2]]}"#,
+            r#"{"headers":["a","a"],"rows":[]}"#,
+            r#"{"headers":["a"],"rows":[],"command":"run"}"#,
+        ] {
+            let run = execute(
+                &typed(&["table.parse_schema", "table.export_schema"]),
+                source,
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+            assert!(run.outputs.is_empty());
+            assert!(run.failure.unwrap().contains("第1步"));
+        }
+        let run = execute(
+            &typed(&["table.parse_json"]),
+            r#"[{"":1}]"#,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(run.outputs.is_empty());
+        assert!(run.failure.is_some());
+        let run = execute(
+            &typed(&["table.parse_tsv", "table.export_csv", "table.parse_csv"]),
+            "b\ta\n002\t中文",
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(run.failure.is_none());
+        assert_eq!(run.outputs[0], run.outputs[2]);
+    }
     #[test]
     fn serial_native_actions_keep_source_and_exact_intermediates() {
         let input = "{\"名称\":\"中文🦀\",\"n\":2}";
@@ -449,13 +652,21 @@ mod tests {
         assert!(!run.cancelled);
         assert_eq!(run.outputs.len(), 5);
         assert_eq!(run.outputs[0], run.outputs[2]);
-        assert_eq!(run.outputs[1], crate::tools::base64_encode(&run.outputs[0]));
-        assert_eq!(run.outputs[4], crate::tools::sha256(&run.outputs[3]));
+        assert_eq!(
+            run.outputs[1],
+            Material::Text(crate::tools::base64_encode(run.outputs[0].text().unwrap()))
+        );
+        assert_eq!(
+            run.outputs[4],
+            Material::Text(crate::tools::sha256(run.outputs[3].text().unwrap()))
+        );
         assert_eq!(input, "{\"名称\":\"中文🦀\",\"n\":2}");
         let mut ids = std::collections::BTreeSet::new();
         for a in ACTIONS {
             assert!(ids.insert(a.id));
-            assert!(a.operation < a.tool.actions().len());
+            if let material::Executor::Native(tool, operation) = a.executor {
+                assert!(operation < tool.actions().len());
+            }
         }
     }
     #[test]
@@ -466,7 +677,7 @@ mod tests {
             &AtomicBool::new(false),
         )
         .unwrap();
-        assert_eq!(run.outputs, vec!["YWJj"]);
+        assert_eq!(run.outputs, vec![Material::Text("YWJj".into())]);
         assert!(run.failure.unwrap().contains("第2步"));
         let run = execute(&recipe(&["hex.encode"]), "abc", &AtomicBool::new(true)).unwrap();
         assert!(run.cancelled);
@@ -506,7 +717,7 @@ mod tests {
         let bytes = serde_json::to_vec(&d).unwrap();
         assert_eq!(serde_json::from_slice::<Definition>(&bytes).unwrap(), d);
         let run = execute(&d, "a b🦀", &AtomicBool::new(false)).unwrap();
-        assert_eq!(run.outputs[1], "a b🦀");
+        assert_eq!(run.outputs[1].text().unwrap(), "a b🦀");
         let mut d = d;
         d.steps = vec![d.steps[0].clone(); STEPS + 1];
         assert!(d.validate().is_err());
@@ -546,13 +757,13 @@ mod tests {
             let input = "中文🦀\0<&\"\n";
             let run = execute(&recipe(&pair), input, &AtomicBool::new(false)).unwrap();
             assert!(run.failure.is_none());
-            assert_eq!(run.outputs[1], input);
+            assert_eq!(run.outputs[1].text().unwrap(), input);
         }
         let input = serde_json::to_string(&"x".repeat(700_000)).unwrap();
         let definition = recipe(&["json.minify"; 16]);
         let run = execute(&definition, &input, &AtomicBool::new(false)).unwrap();
         assert_eq!(run.outputs.len(), 11);
         assert!(run.failure.unwrap().contains("第12步"));
-        assert_eq!(run.outputs[10], input);
+        assert_eq!(run.outputs[10].text().unwrap(), input);
     }
 }

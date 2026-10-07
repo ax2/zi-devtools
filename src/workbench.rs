@@ -44,6 +44,14 @@ pub struct Dataset {
     pub rows: Vec<Vec<Value>>,
 }
 impl Dataset {
+    pub(crate) fn trim_text_columns(&self, cancel: &AtomicBool) -> Result<Self> {
+        let mut current = self.clone();
+        for column in 0..self.headers.len() {
+            anyhow::ensure!(!cancel.load(Ordering::Relaxed), "表格转换已取消");
+            current = transform::propose(&current, column, transform::Operation::Trim, "")?.data;
+        }
+        Ok(current)
+    }
     pub(crate) fn from_parts(headers: Vec<String>, rows: Vec<Vec<Value>>) -> Result<Self> {
         let data = Self { headers, rows };
         data.validate_saved()?;
@@ -104,6 +112,12 @@ impl Dataset {
             }
             DataFormat::Json => {
                 let value: Value = serde_json::from_str(input.trim_start_matches('\u{feff}'))?;
+                if value.is_object() {
+                    let data: Self = serde_json::from_str(input.trim_start_matches('\u{feff}'))
+                        .context("JSON对象须为含headers/rows的列结构表格，不接受其他字段")?;
+                    data.validate_saved()?;
+                    return Ok(data);
+                }
                 let items = value
                     .as_array()
                     .ok_or_else(|| anyhow!("JSON 须为对象数组，例如 [{{\"name\":\"Zi\"}}]"))?;
@@ -136,6 +150,7 @@ impl Dataset {
         if data.headers.is_empty() || data.headers.len() > COLUMN_LIMIT {
             bail!("数据须包含 1–128 列");
         }
+        data.validate_saved()?;
         Ok(data)
     }
     pub fn export(&self, indices: &[usize], format: DataFormat, delimiter: u8) -> Result<String> {
@@ -290,8 +305,32 @@ impl DataState {
     pub fn preview_text_flow_check(&self) {
         self.text_flow.preview_check();
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_table_check(&self, review: bool) {
+        self.text_flow.preview_table_check(review);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_table_received(&self) {
+        let data = self.dataset.as_ref().unwrap();
+        assert_eq!(data.headers, vec!["编号", "名称", "数量"]);
+        assert_eq!(
+            data.rows[0],
+            vec![
+                serde_json::json!("001"),
+                serde_json::json!("Zi Tools"),
+                serde_json::json!("002")
+            ]
+        );
+        assert_eq!(self.visible, vec![0, 1]);
+    }
     pub fn take_text_flow_send(&mut self) -> Option<String> {
         self.text_flow.take_send()
+    }
+    pub fn take_text_flow_table(&mut self) -> Option<Dataset> {
+        self.text_flow.take_table_send()
+    }
+    pub fn text_flow_transfer_failed(&mut self, message: String) {
+        self.text_flow.transfer_failed(message);
     }
     pub fn take_numeric_request(
         &mut self,
@@ -417,7 +456,7 @@ impl DataState {
         heading(
             ui,
             "数据工作台",
-            "CSV / TSV 与 JSON 对象数组 · 筛选、排序、预览和导出",
+            "CSV / TSV、JSON 对象数组或列结构 JSON · 筛选、排序与导出",
         );
         self.text_flow.ui(ui);
         self.numeric_selector.toolbar(
@@ -429,7 +468,7 @@ impl DataState {
         card(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.selectable_value(&mut self.format, DataFormat::Csv, "CSV / TSV");
-                ui.selectable_value(&mut self.format, DataFormat::Json, "JSON 数组");
+                ui.selectable_value(&mut self.format, DataFormat::Json, "JSON 表格");
                 if self.format == DataFormat::Csv {
                     ui.checkbox(&mut self.tab_delimiter, "Tab 分隔");
                 }

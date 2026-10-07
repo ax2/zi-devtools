@@ -110,27 +110,21 @@ impl DataState {
 impl Workspace {
     pub(crate) fn import_table(&mut self, data: Dataset, name: &str) -> Result<()> {
         data.validate_saved()?;
-        // An empty JSON array has no header schema. CSV carries the headers
-        // without inventing a row; nonempty tables keep their typed JSON values.
-        let format = if data.rows.is_empty() {
-            DataFormat::Csv
-        } else {
-            DataFormat::Json
-        };
-        let input = data.export(&(0..data.rows.len()).collect::<Vec<_>>(), format, b',')?;
+        // Column-aware JSON preserves empty tables, order and value types on reparse.
+        let input = serde_json::to_string(&data)?;
         anyhow::ensure!(
             input.len() <= INPUT_LIMIT,
             "当前页输入表示超过2 MiB，未创建实例"
         );
         let message = format!(
-            "已导入SQLite当前页：{}行 / {}列；未运行流程，不代表全表",
+            "已接收独立表格材料：{}行 / {}列；未运行流程，范围以来源审核为准",
             data.rows.len(),
             data.headers.len()
         );
         self.create(name)?;
         let state = self.deref_mut();
         state.input = input;
-        state.format = format;
+        state.format = DataFormat::Json;
         state.replace_with_join(data);
         state.message = message;
         Ok(())
@@ -649,7 +643,7 @@ mod tests {
         workspace
             .import_table(data.clone(), "empty SQLite page")
             .unwrap();
-        assert!(workspace.format == DataFormat::Csv);
+        assert!(workspace.format == DataFormat::Json);
         let snapshot = workspace.snapshot().unwrap();
         let mut restored = DataState::restore(&snapshot).unwrap();
         restored.parse();
@@ -670,6 +664,64 @@ mod tests {
         workspace.select(&source).unwrap();
         assert_eq!(workspace.input, "original draft");
         assert_eq!(workspace.instances.len(), 2);
+    }
+    #[test]
+    fn structured_table_draft_reparse_preserves_wide_columns_and_value_types() {
+        let mut workspace = Workspace::new(PathBuf::from("unused-structured-table.db"));
+        workspace.input = "source draft".into();
+        let data = Dataset::from_parts(
+            vec![
+                format!("z{}", "x".repeat(2048)),
+                "a".into(),
+                "null".into(),
+                "list".into(),
+            ],
+            vec![
+                vec![
+                    serde_json::json!(7),
+                    serde_json::json!(true),
+                    serde_json::Value::Null,
+                    serde_json::json!(["中文", 1])
+                ];
+                1024
+            ],
+        )
+        .unwrap();
+        assert!(
+            data.export(&(0..1024).collect::<Vec<_>>(), DataFormat::Json, b',')
+                .unwrap()
+                .len()
+                > INPUT_LIMIT
+        );
+        workspace
+            .import_table(data.clone(), "typed material")
+            .unwrap();
+        assert!(workspace.input.len() < INPUT_LIMIT);
+        let snapshot = workspace.snapshot().unwrap();
+        let mut restored = DataState::restore(&snapshot).unwrap();
+        restored.parse();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while restored.busy() {
+            restored.poll();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(
+            restored.parse_job.phase,
+            Phase::Done,
+            "{}",
+            restored.message
+        );
+        assert_eq!(restored.dataset.as_ref(), Some(&data));
+        assert_eq!(restored.visible.len(), 1024);
+        assert_eq!(workspace.instances[0].state.input, "source draft");
+        for invalid in [
+            r#"{"headers":["a"],"headers":["b"],"rows":[]}"#,
+            r#"{"headers":["a"],"rows":[[1,2]]}"#,
+            r#"{"headers":["a"],"rows":[],"target":"x"}"#,
+        ] {
+            assert!(Dataset::parse(invalid, DataFormat::Json, b',').is_err());
+        }
     }
     #[test]
     fn independent_work_continues_and_saved_snapshot_restores_without_execution() {

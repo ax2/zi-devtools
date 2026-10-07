@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.72",
+  "sourceCatalogVersion": "0.82.0-dev.73",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -250,7 +250,7 @@
     {
       "sourceToolId": "data",
       "title": "CSV / JSON 数据工作台",
-      "sourceVersion": "1.5.0",
+      "sourceVersion": "1.6.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1539,8 +1539,8 @@
     },
     {
       "sourceToolId": "text-flow",
-      "title": "文本工具流程",
-      "sourceVersion": "1.0.0",
+      "title": "文本 / 表格流程",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",

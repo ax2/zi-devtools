@@ -9,6 +9,7 @@ struct Preview {
     app: DevToolsApp,
     folder: PathBuf,
     light: bool,
+    table: bool,
     frame: u32,
     captured: u32,
     started: Instant,
@@ -16,9 +17,12 @@ struct Preview {
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
         let index = match self.frame {
-            20 | 21 => Some(0),
+            20 | 21 => Some(if self.table { 3 } else { 0 }),
             50 | 51 => Some(1),
             120 | 121 => Some(2),
+            142 | 143 if self.table => Some(5),
+            180 | 181 if self.table => Some(2),
+            200 | 201 if self.table => Some(4),
             _ => None,
         };
         if let Some(index) = index {
@@ -38,13 +42,32 @@ impl eframe::App for Preview {
             self.app.preview_text_flow_prepare(ctx, self.light);
         }
         if self.frame == 100 {
-            self.app.preview_text_flow_check(false);
+            if self.table {
+                self.app.preview_text_flow_table_check(0);
+            } else {
+                self.app.preview_text_flow_check(false);
+            }
         }
         if self.frame == 130 {
-            self.app.preview_text_flow_check(true);
+            if self.table {
+                self.app.preview_text_flow_table_check(1);
+            } else {
+                self.app.preview_text_flow_check(true);
+            }
+        }
+        if self.table && self.frame == 160 {
+            self.app.preview_text_flow_table_check(2);
+        }
+        if self.table && self.frame == 190 {
+            self.app.preview_text_flow_table_check(1);
+        }
+        if self.table && self.frame == 225 {
+            self.app.preview_text_flow_table_check(3);
         }
         self.app.update(ctx, frame);
-        if matches!(self.frame, 100 | 135) {
+        if matches!(self.frame, 100 | 135)
+            || (self.table && matches!(self.frame, 160 | 185 | 210 | 225))
+        {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         for event in ctx.input(|i| i.events.clone()) {
@@ -65,10 +88,18 @@ impl eframe::App for Preview {
                 self.captured += 1;
             }
         }
-        if self.frame == 150 {
+        if self.frame == 150 && !self.table {
             assert_eq!(self.captured, 2);
             println!(
                 "PASS actual native sample/run/intermediate results/send review; original table draft retained; light={}",
+                self.light
+            );
+            self.app.preview_tray_workflow_finish(ctx);
+        }
+        if self.table && self.frame == 240 {
+            assert_eq!(self.captured, 6);
+            println!(
+                "PASS typed native table sample/run/review/cancel/review/confirm: new visible typed instance, source and results retained; light={}",
                 self.light
             );
             self.app.preview_tray_workflow_finish(ctx);
@@ -83,6 +114,7 @@ fn main() -> eframe::Result<()> {
     let folder = folder.canonicalize().unwrap();
     std::fs::write(folder.join("services.yml"), "services: {}\n").unwrap();
     let light = std::env::args().nth(2).as_deref() == Some("light");
+    let table = std::env::args().nth(3).as_deref() == Some("table");
     eframe::run_native(
         "Text flow acceptance",
         eframe::NativeOptions {
@@ -94,6 +126,7 @@ fn main() -> eframe::Result<()> {
                 app: DevToolsApp::new(cc, folder.join("services.yml"), false),
                 folder,
                 light,
+                table,
                 frame: 0,
                 captured: 0,
                 started: Instant::now(),
