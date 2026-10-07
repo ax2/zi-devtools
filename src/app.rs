@@ -759,6 +759,11 @@ impl DevToolsApp {
         self.data_state.preview_workflow_position(index)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_launcher_blocked(&self) {
+        assert!(self.launcher_open);
+        self.data_state.preview_text_flow_idle();
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_prepare(&mut self, ctx: &egui::Context, light: bool) {
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
         self.startup_warning = None;
@@ -5187,9 +5192,20 @@ impl eframe::App for DevToolsApp {
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
-                            RichText::new("Ctrl K  搜索工具    ·    Ctrl Enter  执行转换")
-                                .size(11.0)
-                                .color(self.colors.muted),
+                            RichText::new(if self.page == Page::Data {
+                                self.data_state
+                                    .primary_label()
+                                    .map(|label| {
+                                        format!("Ctrl K  搜索工具    ·    Ctrl Enter  {label}")
+                                    })
+                                    .unwrap_or_else(|| "Ctrl K  搜索工具".into())
+                            } else if matches!(self.page, Page::SmallTools | Page::EncodingTools) {
+                                "Ctrl K  搜索工具    ·    Ctrl Enter  执行转换".into()
+                            } else {
+                                "Ctrl K  搜索工具".into()
+                            })
+                            .size(11.0)
+                            .color(self.colors.muted),
                         );
                     });
                 });
@@ -5251,6 +5267,22 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.start_page(ui));
                 }
                 Page::Data => {
+                    if !self.launcher_open
+                        && !self.workspace_exit_confirm
+                        && self.handoff.is_none()
+                        && !self.images.relay_active()
+                        && !self.quick_open
+                        && !self.data_state.modal_open()
+                        && self.data_state.primary_label().is_some()
+                        && ctx.input_mut(|input| {
+                            input.consume_key(egui::Modifiers::CTRL, egui::Key::Enter)
+                        })
+                    {
+                        if let Err(error) = self.data_state.run_primary() {
+                            self.toast = Some((error.to_string(), Instant::now()));
+                        }
+                        ctx.request_repaint();
+                    }
                     if let Some(id) = self.data_state.view_toolbar(ui) {
                         self.visit(id);
                     }

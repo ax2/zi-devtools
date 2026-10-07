@@ -10,15 +10,34 @@ struct Preview {
     folder: PathBuf,
     light: bool,
     table: bool,
+    shortcuts: bool,
     frame: u32,
     captured: u32,
     started: Instant,
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
+        if self.shortcuts {
+            let key = match self.frame {
+                30 | 31 => Some((egui::Key::K, egui::Modifiers::CTRL)),
+                50 | 51 | 75 | 76 | 130 | 131 => Some((egui::Key::Enter, egui::Modifiers::CTRL)),
+                60 | 61 => Some((egui::Key::Escape, egui::Modifiers::NONE)),
+                _ => None,
+            };
+            if let Some((key, modifiers)) = key {
+                input.modifiers = modifiers;
+                input.events.push(egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: matches!(self.frame, 30 | 50 | 60 | 75 | 130),
+                    repeat: false,
+                    modifiers,
+                });
+            }
+        }
         let index = match self.frame {
             20 | 21 => Some(if self.table { 3 } else { 0 }),
-            50 | 51 => Some(1),
+            50 | 51 if !self.shortcuts => Some(1),
             120 | 121 => Some(2),
             142 | 143 if self.table => Some(5),
             180 | 181 if self.table => Some(2),
@@ -65,6 +84,9 @@ impl eframe::App for Preview {
             self.app.preview_text_flow_table_check(3);
         }
         self.app.update(ctx, frame);
+        if self.shortcuts && self.frame == 55 {
+            self.app.preview_text_flow_launcher_blocked();
+        }
         if matches!(self.frame, 100 | 135)
             || (self.table && matches!(self.frame, 160 | 185 | 210 | 225))
         {
@@ -115,6 +137,7 @@ fn main() -> eframe::Result<()> {
     std::fs::write(folder.join("services.yml"), "services: {}\n").unwrap();
     let light = std::env::args().nth(2).as_deref() == Some("light");
     let table = std::env::args().nth(3).as_deref() == Some("table");
+    let shortcuts = std::env::args().nth(4).as_deref() == Some("shortcuts");
     eframe::run_native(
         "Text flow acceptance",
         eframe::NativeOptions {
@@ -127,6 +150,7 @@ fn main() -> eframe::Result<()> {
                 folder,
                 light,
                 table,
+                shortcuts,
                 frame: 0,
                 captured: 0,
                 started: Instant::now(),

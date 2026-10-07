@@ -293,6 +293,31 @@ impl DataState {
         self.set_active_tool("data-transform");
         self.transform.force_open = true;
     }
+    pub(super) fn run_transform_preview(&mut self) -> Result<()> {
+        anyhow::ensure!(
+            !self.busy() && !self.dialog_pending(),
+            "请先结束任务或关闭当前审核"
+        );
+        let data = self.dataset.as_ref().context("请先解析表格")?;
+        if self.transform.keep.len() != data.headers.len() {
+            self.transform.keep = vec![true; data.headers.len()];
+        }
+        let result = if self.transform.operation == Operation::SelectColumns {
+            select_columns(data, &self.transform.keep)
+        } else {
+            propose(
+                data,
+                self.transform.column,
+                self.transform.operation,
+                &self.transform.value,
+            )
+        };
+        self.transform.proposal = None;
+        self.transform.proposal = Some(result?);
+        self.message.clear();
+        self.transform.force_open = true;
+        Ok(())
+    }
     fn refresh_transformed_view(&mut self) {
         self.workflow.invalidate();
         self.output.clear();
@@ -362,6 +387,7 @@ impl DataState {
         ui.add_space(12.0);
         let mut apply = false;
         let mut undo = false;
+        let mut preview_requested = false;
         egui::CollapsingHeader::new("列转换 · 预览后应用")
             .id_salt("data-transform")
             .open(self.transform.force_open.then_some(true))
@@ -403,12 +429,7 @@ impl DataState {
                 }
                 ui.small("空字符串是 \"\"，null 是缺失值。纯空白需先去空白，再转 null；填充 null 不会替换空字符串。");
                 ui.horizontal(|ui| {
-                    if ui.button("预览转换").clicked() {
-                        match if self.transform.operation == Operation::SelectColumns { select_columns(data, &self.transform.keep) } else { propose(data, self.transform.column, self.transform.operation, &self.transform.value) } {
-                            Ok(proposal) => { self.transform.proposal = Some(proposal); self.message.clear(); }
-                            Err(error) => { self.transform.proposal = None; self.message = format!("{error:#}"); }
-                        }
-                    }
+                    preview_requested = ui.button("预览转换").on_hover_text("Ctrl Enter；仅生成预览，不应用").clicked();
                     undo = ui.add_enabled(self.transform.undo.is_some(), egui::Button::new("撤销最近一次")).clicked();
                 });
                 if let Some(proposal) = &self.transform.proposal {
@@ -428,6 +449,8 @@ impl DataState {
             self.undo_transform();
         } else if apply {
             self.apply_transform();
+        } else if preview_requested && let Err(error) = self.run_transform_preview() {
+            self.message = format!("{error:#}");
         }
     }
 }

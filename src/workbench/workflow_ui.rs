@@ -212,7 +212,7 @@ impl DataState {
         self.workflow.files.list(folder).unwrap();
     }
 
-    fn start_workflow(&mut self) -> Result<()> {
+    pub(super) fn start_workflow(&mut self) -> Result<()> {
         ensure_not_busy(self)?;
         let input = self.dataset.as_ref().context("请先解析表格")?;
         self.workflow.definition.validate()?;
@@ -1022,6 +1022,23 @@ const OPERATIONS: [ColumnOperation; 10] = [
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn primary_pipeline_dispatch_previews_without_applying_source() {
+        let mut state = fixture();
+        let source = state.dataset.clone();
+        state.show_workflow();
+        state.run_primary().unwrap();
+        assert!(state.run_primary().is_err());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.busy() {
+            assert!(std::time::Instant::now() < deadline);
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(state.dataset, source);
+        assert!(state.workflow.proposal.is_some());
+        assert_eq!(state.workflow.job.phase, Phase::Done);
+    }
     use super::*;
     #[test]
     fn remembered_folder_restores_location_only_and_does_not_replace_instance_content() {

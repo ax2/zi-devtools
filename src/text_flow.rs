@@ -256,7 +256,8 @@ impl State {
         self.message.clear();
         self.selected = 0;
     }
-    fn start(&mut self) -> Result<()> {
+    pub(crate) fn start(&mut self) -> Result<()> {
+        ensure!(!self.modal_open(), "请先完成或关闭当前审核");
         ensure!(!self.busy(), "请等待当前流程结束");
         self.validate()?;
         ensure!(!self.definition.steps.is_empty(), "请先添加操作步骤");

@@ -284,6 +284,34 @@ impl DataState {
         self.set_active_tool("csv-merge");
         self.join.force_open = true;
     }
+    pub(super) fn run_join_preview(&mut self) -> Result<()> {
+        anyhow::ensure!(
+            !self.busy() && !self.dialog_pending(),
+            "请先结束任务或关闭当前审核"
+        );
+        let left = self.dataset.as_ref().context("请先解析左表")?.clone();
+        let input = self.join.input.clone();
+        let format = self.join.format;
+        let delimiter = if self.join.tsv { b'\t' } else { b',' };
+        let mode = self.join.mode;
+        let lk = self.join.left_key.min(left.headers.len().saturating_sub(1));
+        let rk = self.join.right_key.clone();
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.join.cancel = cancel.clone();
+        self.join.preview = None;
+        self.join.message.clear();
+        let (tx, rx) = mpsc::channel();
+        self.join.receiver = Some(rx);
+        self.join.job.begin();
+        self.join.invalidated = false;
+        self.join.force_open = true;
+        std::thread::spawn(move || {
+            let result = Dataset::parse(&input, format, delimiter)
+                .and_then(|right| combine(&left, &right, mode, lk, &rk, &cancel));
+            let _ = tx.send(result.map_err(|e| e.to_string()));
+        });
+        Ok(())
+    }
     pub(super) fn poll_join(&mut self) {
         if let Some(receiver) = &self.join.receiver {
             match receiver.try_recv() {
@@ -340,6 +368,7 @@ impl DataState {
         };
         self.join.left_key = self.join.left_key.min(left.headers.len() - 1);
         let mut apply = false;
+        let mut preview_requested = false;
         if self.join.force_open {
             ui.scroll_to_cursor(Some(egui::Align::Min));
         }
@@ -375,19 +404,7 @@ impl DataState {
                         });
                     }
                     if changed { self.join.preview = None; }
-                    if ui.button("生成合并预览").clicked() {
-                        self.join.preview = None; self.join.message.clear();
-                        let left = left.clone(); let input = self.join.input.clone(); let format = self.join.format;
-                        let delimiter = if self.join.tsv { b'\t' } else { b',' };
-                        let mode = self.join.mode; let lk = self.join.left_key; let rk = self.join.right_key.clone();
-                        let cancel = Arc::new(AtomicBool::new(false)); self.join.cancel = cancel.clone();
-                        let (tx, rx) = mpsc::channel(); self.join.receiver = Some(rx); self.join.job.begin(); self.join.invalidated = false;
-                        std::thread::spawn(move || {
-                            let result = Dataset::parse(&input, format, delimiter).and_then(|right| combine(&left, &right, mode, lk, &rk, &cancel));
-                            let _ = tx.send(result.map_err(|e| e.to_string()));
-                        });
-                        ctx.request_repaint();
-                    }
+                    preview_requested = ui.button("生成合并预览").on_hover_text("Ctrl Enter；仅生成预览，不应用").clicked();
                 });
                 if busy {
                     ui.horizontal(|ui| { ui.spinner(); ui.label("正在生成预览…"); if ui.button("取消").clicked() { self.join.cancel.store(true, Ordering::Relaxed); self.join.job.cancelling(); } });
@@ -406,6 +423,12 @@ impl DataState {
                 if !self.join.message.is_empty() { ui.label(&self.join.message); }
             });
         self.join.force_open = false;
+        if preview_requested {
+            if let Err(error) = self.run_join_preview() {
+                self.join.message = error.to_string();
+            }
+            ctx.request_repaint();
+        }
         if apply && let Some(preview) = self.join.preview.take() {
             self.message = preview.report;
             self.replace_with_join(preview.data);

@@ -272,6 +272,34 @@ pub struct DataState {
     numeric_selector: numeric::Selector,
 }
 impl DataState {
+    pub fn primary_label(&self) -> Option<&'static str> {
+        match self.active_tool_id() {
+            "data" => Some("解析数据"),
+            "data-transform" => Some("预览转换"),
+            "csv-merge" => Some("生成合并预览"),
+            "pipeline" => Some("生成流程预览"),
+            "text-flow" => Some("运行工具流程"),
+            _ => None,
+        }
+    }
+    pub fn run_primary(&mut self) -> Result<()> {
+        anyhow::ensure!(
+            !self.busy() && !self.dialog_pending(),
+            "请先结束任务或关闭当前审核"
+        );
+        match self.active_tool_id() {
+            "data" => {
+                anyhow::ensure!(!self.input.trim().is_empty(), "请先输入待解析数据");
+                self.parse();
+                Ok(())
+            }
+            "data-transform" => self.run_transform_preview(),
+            "csv-merge" => self.run_join_preview(),
+            "pipeline" => self.start_workflow(),
+            "text-flow" => self.text_flow.start(),
+            _ => anyhow::bail!("此工作台请使用明确的审核或保存按钮"),
+        }
+    }
     pub fn dialog_pending(&self) -> bool {
         self.text_flow.modal_open() || self.workflow.modal_open() || self.sqlite_export.modal_open()
     }
@@ -334,6 +362,11 @@ impl DataState {
     pub fn show_text_flow(&mut self) {
         self.set_active_tool("text-flow");
         self.text_flow.open();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_idle(&self) {
+        assert_eq!(self.text_flow.job.phase, Phase::Idle);
+        assert!(!self.busy());
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_position(&self, index: usize) -> egui::Pos2 {
@@ -779,6 +812,86 @@ const WORKBENCH_VIEWS: &[(&str, &str)] = &[
 #[cfg(test)]
 mod focused_views_tests {
     use super::*;
+
+    fn finish_worker(state: &mut DataState) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.busy() {
+            assert!(std::time::Instant::now() < deadline);
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+
+    #[test]
+    fn primary_dispatch_parses_current_input_and_does_not_reenter_live_job() {
+        let mut state = DataState {
+            input: "id,name\n001,中文".into(),
+            ..Default::default()
+        };
+        assert_eq!(state.primary_label(), Some("解析数据"));
+        state.run_primary().unwrap();
+        assert!(state.run_primary().is_err());
+        finish_worker(&mut state);
+        assert_eq!(state.dataset.as_ref().unwrap().rows[0][0], "001");
+        assert_eq!(state.parse_job.phase, Phase::Done);
+    }
+
+    #[test]
+    fn preview_primary_actions_keep_source_until_explicit_application() {
+        let mut state = DataState {
+            input: "name\n padded ".into(),
+            ..Default::default()
+        };
+        state.dataset = Some(Dataset::parse(&state.input, DataFormat::Csv, b',').unwrap());
+        let original = state.dataset.clone();
+        state.show_transform();
+        state.run_primary().unwrap();
+        assert_eq!(state.dataset, original);
+        assert!(serde_json::to_value(&state).unwrap()["transform"]["proposal"].is_object());
+        let mut json = serde_json::to_value(&state).unwrap();
+        json["join"]["input"] = Value::String("name\npadded".into());
+        let mut state: DataState = serde_json::from_value(json).unwrap();
+        state.show_join();
+        state.run_primary().unwrap();
+        finish_worker(&mut state);
+        assert_eq!(state.dataset, original);
+        assert!(serde_json::to_value(&state).unwrap()["join"]["preview"].is_object());
+        state.show_workflow();
+        assert!(state.run_primary().is_err()); // Empty pipeline is never executed.
+        assert_eq!(state.dataset, original);
+        assert_eq!(state.workflow.job.phase, Phase::Idle);
+    }
+
+    #[test]
+    fn reviews_and_write_only_views_reject_primary_without_changing_work() {
+        let mut state = DataState::default();
+        state
+            .text_flow
+            .receive_recipe(crate::text_flow::Definition {
+                version: 1,
+                steps: vec![],
+            })
+            .unwrap();
+        state.show_text_flow();
+        let before = serde_json::to_value(&state).unwrap();
+        assert!(state.run_primary().is_err());
+        assert_eq!(serde_json::to_value(&state).unwrap(), before);
+        state.workflow.files.review = Some(workflow::Definition {
+            version: 2,
+            name: "review".into(),
+            steps: vec![],
+            output: None,
+        });
+        state.set_active_tool("pipeline");
+        assert!(state.run_primary().is_err());
+        for id in ["data-sqlite-export", "workspace-sessions"] {
+            let mut clean = DataState::default();
+            clean.set_active_tool(id);
+            assert_eq!(clean.primary_label(), None);
+            assert!(clean.run_primary().is_err());
+            assert!(!clean.busy());
+        }
+    }
 
     #[test]
     fn switching_preserves_drafts_parsed_snapshot_results_and_live_worker() {
