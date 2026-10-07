@@ -1,5 +1,6 @@
 use super::{workflow::*, *};
 
+mod inspector;
 #[cfg(feature = "ui-preview")]
 mod preview;
 mod row_editor;
@@ -15,8 +16,9 @@ pub(super) struct State {
     error: String,
     reveal: bool,
     scroll_until: Option<std::time::Instant>,
+    inspect: inspector::State,
     #[cfg(feature = "ui-preview")]
-    buttons: [Option<(egui::Rect, egui::Rect)>; 5],
+    buttons: [Option<(egui::Rect, egui::Rect)>; 10],
 }
 impl Default for State {
     fn default() -> Self {
@@ -35,8 +37,9 @@ impl Default for State {
             error: String::new(),
             reveal: false,
             scroll_until: None,
+            inspect: inspector::State::default(),
             #[cfg(feature = "ui-preview")]
-            buttons: [None; 5],
+            buttons: [None; 10],
         }
     }
 }
@@ -50,6 +53,7 @@ impl State {
         !self.definition.steps.is_empty() || self.files.review.is_some()
     }
     pub(super) fn invalidate(&mut self) {
+        self.inspect = inspector::State::default();
         self.proposal = None;
         self.source = None;
         if self.job.phase.active() {
@@ -475,6 +479,12 @@ impl DataState {
                     ui.colored_label(ui.visuals().error_fg_color, &self.workflow.error);
                 }
                 if let Some(preview) = &self.workflow.proposal {
+                    let inspect = ui.add_enabled(!active && !self.busy(), egui::Button::new("查看输入与结果表格…"));
+                    #[cfg(feature = "ui-preview")]
+                    { self.workflow.buttons[5] = Some((inspect.rect, ui.clip_rect())); }
+                    if inspect.clicked() {
+                        self.workflow.inspect.open(&preview.result);
+                    }
                     ui.strong(format!(
                         "预览完成：{}行 · {}列；尚未应用",
                         preview.result.rows.len(),
@@ -500,6 +510,7 @@ impl DataState {
             });
         self.workflow.reveal = false;
         self.workflow_import_modal(ui);
+        self.workflow_inspector(ui);
         if scroll {
             if let Some(body) = response.body_response {
                 ui.scroll_to_rect(body.rect, Some(egui::Align::Max));
@@ -689,6 +700,10 @@ fn step_schemas(headers: &[String], steps: &[Step]) -> Vec<Vec<String>> {
 }
 
 fn ensure_not_busy(state: &DataState) -> Result<()> {
+    anyhow::ensure!(
+        !state.workflow.inspect.open,
+        "请先关闭只读结果检查再运行或应用"
+    );
     anyhow::ensure!(!state.busy(), "请等待当前实例任务结束");
     anyhow::ensure!(
         state.workflow.files.review.is_none(),
@@ -743,6 +758,38 @@ mod tests {
             assert!(std::time::Instant::now() < deadline);
             std::thread::yield_now();
         }
+    }
+    #[test]
+    fn inspection_blocks_application_and_clears_with_stale_preview() {
+        let mut state = fixture();
+        let input = state.input.clone();
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        let original = state.dataset.clone();
+        state
+            .workflow
+            .inspect
+            .open(&state.workflow.proposal.as_ref().unwrap().result);
+        assert!(state.apply_workflow().is_err());
+        assert!(state.start_workflow().is_err());
+        assert_eq!(state.dataset, original);
+        assert_eq!(state.input, input);
+        state.workflow.inspect.open = false;
+        state.apply_workflow().unwrap();
+        assert!(!state.workflow.inspect.open);
+        assert!(state.workflow.proposal.is_none());
+        assert_eq!(state.input, input);
+        state.undo_transform();
+        assert_eq!(state.dataset, original);
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        state
+            .workflow
+            .inspect
+            .open(&state.workflow.proposal.as_ref().unwrap().result);
+        state.workflow.invalidate();
+        assert!(!state.workflow.inspect.open);
+        assert!(state.workflow.proposal.is_none());
     }
     #[test]
     fn definition_loads_without_input_and_survives_later_parsing() {

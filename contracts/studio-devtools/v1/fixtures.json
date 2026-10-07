@@ -1,0 +1,139 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "comparison": "Success compares full result; failure compares ok=false,data=null,error.code and validates message without matching wording. Byte limits must also be checked at runtime.",
+  "cases": [
+    {
+      "id": "base64-ascii",
+      "capabilityId": "devtools.text.base64.encode",
+      "input": {
+        "text": "hello"
+      },
+      "expectedText": "aGVsbG8="
+    },
+    {
+      "id": "base64-empty",
+      "capabilityId": "devtools.text.base64.encode",
+      "input": {
+        "text": ""
+      },
+      "expectedText": ""
+    },
+    {
+      "id": "decode-ascii",
+      "capabilityId": "devtools.text.base64.decode",
+      "input": {
+        "text": "aGVsbG8="
+      },
+      "expectedText": "hello"
+    },
+    {
+      "id": "decode-invalid",
+      "capabilityId": "devtools.text.base64.decode",
+      "input": {
+        "text": "%%%"
+      },
+      "expectedError": "INVALID_ENCODING"
+    },
+    {
+      "id": "decode-non-utf8",
+      "capabilityId": "devtools.text.base64.decode",
+      "input": {
+        "text": "/w=="
+      },
+      "expectedError": "INVALID_ENCODING"
+    },
+    {
+      "id": "digest",
+      "capabilityId": "devtools.text.sha256",
+      "input": {
+        "text": "abc"
+      },
+      "expectedText": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    {
+      "id": "format",
+      "capabilityId": "devtools.text.json.format",
+      "input": {
+        "text": "{\"b\":2,\"a\":1}"
+      },
+      "expectedText": "{\n  \"a\": 1,\n  \"b\": 2\n}"
+    },
+    {
+      "id": "minify",
+      "capabilityId": "devtools.text.json.minify",
+      "input": {
+        "text": " { \"b\": 2, \"a\": 1 } "
+      },
+      "expectedText": "{\"a\":1,\"b\":2}"
+    },
+    {
+      "id": "bad-json",
+      "capabilityId": "devtools.text.json.format",
+      "input": {
+        "text": "{"
+      },
+      "expectedError": "INVALID_INPUT"
+    },
+    {
+      "id": "duplicate-key",
+      "capabilityId": "devtools.text.json.minify",
+      "input": {
+        "text": "{\"a\":1,\"a\":2}"
+      },
+      "expectedError": "INVALID_INPUT"
+    },
+    {
+      "id": "unsafe-integer",
+      "capabilityId": "devtools.text.json.minify",
+      "input": {
+        "text": "9007199254740992"
+      },
+      "expectedError": "INVALID_INPUT"
+    },
+    {
+      "id": "extra-field",
+      "capabilityId": "devtools.text.sha256",
+      "input": {
+        "text": "abc",
+        "path": "unused"
+      },
+      "expectedError": "INVALID_INPUT"
+    },
+    {
+      "id": "utf8-byte-limit",
+      "capabilityId": "devtools.text.sha256",
+      "inputGenerator": {
+        "textRepeat": "中",
+        "count": 2731
+      },
+      "expectedError": "INPUT_TOO_LARGE"
+    },
+    {
+      "id": "max-ascii",
+      "capabilityId": "devtools.text.base64.encode",
+      "inputGenerator": {
+        "textRepeat": "a",
+        "count": 8192
+      },
+      "expectedRule": "base64_standard_padding_no_newline"
+    },
+    {
+      "id": "over-ascii",
+      "capabilityId": "devtools.text.sha256",
+      "inputGenerator": {
+        "textRepeat": "a",
+        "count": 8193
+      },
+      "expectedError": "INPUT_TOO_LARGE"
+    },
+    {
+      "id": "unknown-handler",
+      "capabilityId": "devtools.text.unknown",
+      "input": {
+        "text": ""
+      },
+      "expectedError": "UNSUPPORTED_OPERATION",
+      "layer": "direct-wasi; Host must reject undeclared capability before execution"
+    }
+  ]
+}

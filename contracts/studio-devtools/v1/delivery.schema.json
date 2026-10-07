@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ZiDevTools plugin delivery catalog",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "zicode.devtools-plugin/1.0.0-rc.1"
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^com\\.zicode\\.devtools\\.[a-z][a-z0-9-]*$"
+    },
+    "packageVersion": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "string"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "revision",
+        "dirty"
+      ],
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "sourceToolId": {
+            "type": "string"
+          },
+          "toolId": {
+            "type": "string"
+          },
+          "capabilityId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "candidate",
+              "accepted",
+              "blocked"
+            ]
+          },
+          "profile": {
+            "const": "compute.wasi.v1"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceToolId",
+          "toolId",
+          "capabilityId",
+          "version",
+          "status",
+          "profile",
+          "title"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "packageId",
+    "packageVersion",
+    "source",
+    "tools"
+  ],
+  "additionalProperties": false
+}

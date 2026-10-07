@@ -1,0 +1,56 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.text",
+  "packageVersion": "0.1.0",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "json",
+      "toolId": "devtools.text.json.format",
+      "capabilityId": "devtools.text.json.format",
+      "version": "1.0.0",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "JSON 格式化"
+    },
+    {
+      "sourceToolId": "json",
+      "toolId": "devtools.text.json.minify",
+      "capabilityId": "devtools.text.json.minify",
+      "version": "1.0.0",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "JSON 压缩"
+    },
+    {
+      "sourceToolId": "base64",
+      "toolId": "devtools.text.base64.encode",
+      "capabilityId": "devtools.text.base64.encode",
+      "version": "1.0.0",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "Base64 编码"
+    },
+    {
+      "sourceToolId": "base64",
+      "toolId": "devtools.text.base64.decode",
+      "capabilityId": "devtools.text.base64.decode",
+      "version": "1.0.0",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "Base64 解码"
+    },
+    {
+      "sourceToolId": "sha256",
+      "toolId": "devtools.text.sha256",
+      "capabilityId": "devtools.text.sha256",
+      "version": "1.0.0",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "SHA-256"
+    }
+  ]
+}

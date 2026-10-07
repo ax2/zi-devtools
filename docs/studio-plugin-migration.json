@@ -1,0 +1,1541 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "sourceCatalogVersion": "0.82.0-dev.56",
+  "acceptedCapabilities": 0,
+  "categories": {
+    "compute_candidate": "可迁移候选",
+    "overlap_integration": "重叠能力整合（未确认，不推定已有Host能力）",
+    "await_host": "等待Host接口",
+    "standalone_incomplete": "独立版未完成"
+  },
+  "tools": [
+    {
+      "sourceToolId": "json",
+      "title": "JSON",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [
+        "devtools.text.json.format",
+        "devtools.text.json.minify"
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "base64",
+      "title": "Base64",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [
+        "devtools.text.base64.encode",
+        "devtools.text.base64.decode"
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "url",
+      "title": "URL 编码",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "sha256",
+      "title": "SHA-256 文本摘要",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [
+        "devtools.text.sha256"
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "timestamp",
+      "title": "时间戳",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "uuid",
+      "title": "UUID",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "jwt",
+      "title": "JWT 内容查看",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "regex",
+      "title": "正则表达式",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "number",
+      "title": "进制转换",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "ascii-codes",
+      "title": "ASCII 码表",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "symbol-library",
+      "title": "特殊字符与表情",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "ascii-art",
+      "title": "ASCII Art 字符画",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "qr",
+      "title": "二维码",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "color",
+      "title": "颜色转换",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "text-stats",
+      "title": "文本统计",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "html-escape",
+      "title": "HTML 转义",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "text-escape",
+      "title": "文本转义",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "case-convert",
+      "title": "命名转换",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "yaml",
+      "title": "YAML / JSON",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "hex",
+      "title": "UTF-8 / Hex",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "lines",
+      "title": "文本行处理",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "url-inspect",
+      "title": "URL 解析",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "cidr",
+      "title": "IPv4 CIDR",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "data",
+      "title": "CSV / JSON 数据工作台",
+      "sourceVersion": "1.3.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "files",
+      "title": "批量文件校验",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "http",
+      "title": "HTTP 请求调试",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "diff",
+      "title": "文本差异对比",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "network",
+      "title": "网络诊断",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "services",
+      "title": "本地服务管理",
+      "sourceVersion": "1.8.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "json-path",
+      "title": "JSON 路径查询",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "json-diff",
+      "title": "结构化 JSON 对比",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "data-schema",
+      "title": "数据质量检查",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "data-transform",
+      "title": "数据列变换",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "csv-merge",
+      "title": "CSV 合并与关联",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "checksum-manifest",
+      "title": "校验清单",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "disk-inspector",
+      "title": "目录空间分析",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "duplicate-files",
+      "title": "重复文件检查",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "file-compare",
+      "title": "目录内容对比",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "cron",
+      "title": "Cron 表达式",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "random",
+      "title": "随机数据生成",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "sql-format",
+      "title": "SQL 格式化",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "json-schema",
+      "title": "JSON Schema 校验",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "log-viewer",
+      "title": "日志工作台",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "sqlite",
+      "title": "SQLite 浏览器",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "http-collections",
+      "title": "HTTP 集合与环境",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "curl-import",
+      "title": "cURL 导入",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "tls-inspect",
+      "title": "TLS 证书检查",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "encoding-detect",
+      "title": "文件编码转换",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "file-rename",
+      "title": "批量重命名",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "image-tools",
+      "title": "图片工作台",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-batch",
+      "title": "图片批处理",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-crop-annotate",
+      "title": "图片裁剪与标注",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-metadata",
+      "title": "图片元数据检查与清理",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "markdown",
+      "title": "Markdown 预览",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "unicode",
+      "title": "Unicode 字符检查",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "escape-suite",
+      "title": "转义与转码扩展",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "time-zone",
+      "title": "时区工作台",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "regex-replace",
+      "title": "正则替换",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "jwt-verify",
+      "title": "JWT 本地验签",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "crypto",
+      "title": "加密与签名实验台",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "pipeline",
+      "title": "可组合数据管线",
+      "sourceVersion": "0.3.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "file-search",
+      "title": "文件内容检索",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "pdf-text",
+      "title": "PDF 文本提取",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "openapi",
+      "title": "OpenAPI 请求生成",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugins",
+      "title": "插件与连接器",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "integrations",
+      "title": "本机集成发现",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "model-profiles",
+      "title": "模型连接配置",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "model-chat",
+      "title": "多轮模型工作台",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "model-compare",
+      "title": "模型对比评测",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "prompt-library",
+      "title": "提示词模板库",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "token-budget",
+      "title": "Token 与上下文预算",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "structured-output",
+      "title": "结构化输出验证",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "embedding-playground",
+      "title": "Embedding 工作台",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "model-benchmark",
+      "title": "本机模型性能测试",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "ollama-manager",
+      "title": "Ollama 模型管理",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-connections",
+      "title": "MCP 连接管理",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-inspector",
+      "title": "MCP 协议调试台",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-permissions",
+      "title": "MCP 工具权限",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "screen-recorder",
+      "title": "屏幕录制",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-multimonitor",
+      "title": "显示器选择录屏",
+      "sourceVersion": "0.1.1",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "screen-recorder-audio-mix",
+      "title": "双声源混录",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-audio-gain",
+      "title": "录屏独立音量调节",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-audio-meter",
+      "title": "录屏实时音频电平",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-long-audio",
+      "title": "录屏长时音频稳定性",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-export",
+      "title": "MCP 客户端配置导出",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "mcp-server",
+      "title": "Zi DevTools MCP Server",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "agent-runner",
+      "title": "Agent 任务工作台",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "agent-codex",
+      "title": "Codex CLI 适配器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "agent-claude",
+      "title": "Claude CLI 适配器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "agent-replay",
+      "title": "Agent 记录查看器",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "workflow-builder",
+      "title": "可视化工具工作流",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "agent-scheduler",
+      "title": "定时任务与触发器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "rag-sources",
+      "title": "本地知识源管理",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-ingestion",
+      "title": "文档解析与分块",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-index",
+      "title": "增量知识索引",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-vectors",
+      "title": "本机向量索引",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-keyword-search",
+      "title": "本机关键词检索",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-search",
+      "title": "混合检索工作台",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-answer",
+      "title": "带引用的知识问答",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-eval",
+      "title": "RAG 质量评测",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "anythingllm",
+      "title": "AnythingLLM 连接器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "obsidian-vault",
+      "title": "Obsidian / Markdown 库",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "ocr-documents",
+      "title": "本地 OCR 文档助手",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "browser-clipper",
+      "title": "网页与对话收集",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "plugin-updates",
+      "title": "插件版本与更新",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-sdk",
+      "title": "隔离进程插件 SDK",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-market",
+      "title": "插件目录与安装源",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-settings",
+      "title": "插件设置与凭据",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-health",
+      "title": "插件健康诊断",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "global-launcher",
+      "title": "全局快捷启动器",
+      "sourceVersion": "1.4.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "command-collections",
+      "title": "工作区与工具集合",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "clipboard-actions",
+      "title": "剪贴板动作",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "docker-panel",
+      "title": "Docker 本地面板",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "git-workbench",
+      "title": "Git 工作区面板",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "parquet-workbench",
+      "title": "Parquet / Arrow 工作台",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "java-trace",
+      "title": "Java 异常链",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "django-trace",
+      "title": "Django / Python 堆栈",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-thread-dump",
+      "title": "Java 线程转储分析",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-dependencies",
+      "title": "Maven / Gradle 依赖冲突",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "java-environment",
+      "title": "JDK / 构建环境诊断",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "java-gc-log",
+      "title": "Java GC 日志分析",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-jfr",
+      "title": "JFR 录制报告浏览",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "spring-config",
+      "title": "Spring 配置对比",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "spring-actuator",
+      "title": "Spring Actuator 只读诊断",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-environment",
+      "title": "Python / Django 环境诊断",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-migrations",
+      "title": "Django 迁移计划检查",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-sql",
+      "title": "Django SQL / N+1 分析",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-urls",
+      "title": "Django URL / reverse 检查",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-drf",
+      "title": "DRF OpenAPI 契约对比",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-checks",
+      "title": "Django 部署检查报告",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "celery-diagnostics",
+      "title": "Celery 任务故障分析",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "file-intake",
+      "title": "文件拖放入口",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "task-center",
+      "title": "后台任务中心",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "workspace-sessions",
+      "title": "项目空间与工作实例",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "artifact-hub",
+      "title": "类型化资料与结果",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "task-runtime",
+      "title": "统一后台运行管理",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "operation-permissions",
+      "title": "授权写入与变更预览",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "memos",
+      "title": "备忘录",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "calendar-planner",
+      "title": "万年历与日程",
+      "sourceVersion": "1.4.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "planner-interop",
+      "title": "日程进阶与互通",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "memo-library",
+      "title": "备忘资料库互通",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "data-sqlite-export",
+      "title": "表格另存 SQLite",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "recorder-tutorial",
+      "title": "教程录屏辅助",
+      "sourceVersion": "0.2.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "app-update-check",
+      "title": "程序更新检查",
+      "sourceVersion": "0.8.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "app-delta-update",
+      "title": "增量更新与回滚",
+      "sourceVersion": "0.2.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "advanced-calculator",
+      "title": "全能计算器",
+      "sourceVersion": "0.10.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "explorer-menu",
+      "title": "资源管理器统一右键入口",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "clock-workbench",
+      "title": "全功能时钟",
+      "sourceVersion": "0.4.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "screenshot-workbench",
+      "title": "截图与透明套索",
+      "sourceVersion": "0.3.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "unified-shortcuts",
+      "title": "统一前缀快捷键",
+      "sourceVersion": "0.6.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "super-clipboard",
+      "title": "超级剪贴板",
+      "sourceVersion": "0.5.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "clipboard-workflows",
+      "title": "剪贴板数据工作流",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "pilotCapabilities": [],
+      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    }
+  ]
+}

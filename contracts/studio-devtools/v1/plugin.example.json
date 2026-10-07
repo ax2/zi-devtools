@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "id": "com.zicode.devtools.text",
+  "name": "ZiDevTools Text",
+  "displayName": "ZiDevTools 文本工具",
+  "description": "Bounded local text utilities supplied as an independent WASI plugin.",
+  "version": "0.1.0",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "activationEvents": [
+    "onView:devtools.text.main",
+    "onCapability:devtools.text.json.format",
+    "onCapability:devtools.text.json.minify",
+    "onCapability:devtools.text.base64.encode",
+    "onCapability:devtools.text.base64.decode",
+    "onCapability:devtools.text.sha256"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm"
+  },
+  "contributes": {
+    "activities": [
+      {
+        "id": "devtools.text",
+        "title": "文本工具",
+        "order": 850
+      }
+    ],
+    "views": [
+      {
+        "id": "devtools.text.main",
+        "activity": "devtools.text",
+        "location": "main",
+        "title": "文本工具",
+        "entry": "views/main.html"
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "devtools.text.json.format",
+        "title": "JSON 格式化",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.text.json.minify",
+        "title": "JSON 压缩",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.text.base64.encode",
+        "title": "Base64 编码",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.text.base64.decode",
+        "title": "Base64 解码",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.text.sha256",
+        "title": "SHA-256",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "piTools": [
+      {
+        "name": "devtools_text_json_format",
+        "title": "JSON 格式化",
+        "description": "Run the bounded local JSON 格式化 utility on explicitly supplied text.",
+        "capability": "devtools.text.json.format",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_text_json_minify",
+        "title": "JSON 压缩",
+        "description": "Run the bounded local JSON 压缩 utility on explicitly supplied text.",
+        "capability": "devtools.text.json.minify",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_text_base64_encode",
+        "title": "Base64 编码",
+        "description": "Run the bounded local Base64 编码 utility on explicitly supplied text.",
+        "capability": "devtools.text.base64.encode",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_text_base64_decode",
+        "title": "Base64 解码",
+        "description": "Run the bounded local Base64 解码 utility on explicitly supplied text.",
+        "capability": "devtools.text.base64.decode",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_text_sha256",
+        "title": "SHA-256",
+        "description": "Run the bounded local SHA-256 utility on explicitly supplied text.",
+        "capability": "devtools.text.sha256",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "name": "pi.tools.register",
+        "reason": "显式授权后允许当前场景的 AI 使用文本工具"
+      }
+    ]
+  }
+}

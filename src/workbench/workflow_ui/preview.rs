@@ -2,6 +2,27 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_inspection(&mut self, phase: u8) {
+        assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 4);
+        assert_eq!(
+            self.workflow.proposal.as_ref().unwrap().result.rows.len(),
+            2
+        );
+        match phase {
+            0 => {
+                assert!(self.workflow.inspect.open);
+                assert!(self.start_workflow().is_err());
+                assert!(self.apply_workflow().is_err());
+            }
+            1 => {
+                assert!(self.workflow.inspect.open);
+                assert_eq!(self.workflow.inspect.selection(), Some((0, 0)));
+            }
+            2 => assert!(!self.workflow.inspect.open),
+            _ => panic!("unknown inspection phase"),
+        }
+        assert!(!self.can_undo_transform());
+    }
     pub fn preview_workflow_rows(&mut self, phase: u8) -> bool {
         match phase {
             0 => {

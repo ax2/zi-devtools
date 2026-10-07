@@ -19,6 +19,8 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: python scripts/sync_tools.py --check
+      - run: python scripts/verify_studio_contract.py
+      - run: python scripts/sync_studio_plugin_map.py --check
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - run: cargo test --locked

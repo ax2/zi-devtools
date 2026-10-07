@@ -1,0 +1,12 @@
+{
+  "catalog.example.json": "19a7fc620ae404d6e26e2ee0d6669666b9c9b557ee626974e63d24b28d5d1eef",
+  "package-format.md": "20a9790e54f7d22af4cedb55d434ed5f775c436d9a4dd03356926e92805f35ab",
+  "request.schema.json": "8149ad109970d8579de0ee57ad73024e760ef405461e37ce0fe1ff40036bb8c0",
+  "README.md": "5c58214b1cbf083bace7de39e7fca7396a9b8f932bc7ec4a2c448fdde45b252a",
+  "SPEC.md": "109c735a64e0245f34ba4a1a6d3759d305e94884ff65907887ff0032cd963854",
+  "plugin.example.json": "2fc693a8c661c689dd77942f0a795a20ba8bb655a5371774a0b28fc5b727d2b2",
+  "input.schema.json": "8cdb632eb4532a1575fa00a8d47580f71fcea9c9178552384ecdcaa54b53bd7b",
+  "fixtures.json": "6b36ed7bb777ca31742ce7a7dd9da19b78d8c86a4487016bb8f61c15c5f3cde4",
+  "result.schema.json": "ca41c8ddba049431662e75c8a0d3b7c78ee49cd8f4eb49d8f99d2e559151c30f",
+  "delivery.schema.json": "1c6cd9b5ecdea721cc28b4fdb0b3df2bb6619b619e7b034dfeb4e2af73f7a967"
+}

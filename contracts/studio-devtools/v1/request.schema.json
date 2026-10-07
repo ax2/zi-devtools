@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Host to WASI input (v1)",
+  "type": "object",
+  "properties": {
+    "pluginId": {
+      "const": "com.zicode.devtools.text"
+    },
+    "sceneId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilityId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "commandId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "input": {
+      "$ref": "input.schema.json"
+    }
+  },
+  "required": [
+    "pluginId",
+    "sceneId",
+    "capabilityId",
+    "commandId",
+    "input"
+  ],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "capabilityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commandId": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "properties": {
+        "capabilityId": {
+          "type": "null"
+        },
+        "commandId": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  ]
+}
