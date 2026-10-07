@@ -2866,13 +2866,13 @@ impl DevToolsApp {
                         self.clear_tool_confirm = true;
                     }
                 });
-                ui.label(
-                    RichText::new(self.tool_state.selected.description())
-                        .small()
-                        .color(p.muted),
-                );
-                ui.add_space(12.0);
                 let paired_text = self.tool_state.has_plugin_mode() && ui.available_width() >= 520.0;
+                if paired_text {
+                    ui.add_space(6.0);
+                } else {
+                    ui.label(RichText::new(self.tool_state.selected.description()).small().color(p.muted));
+                    ui.add_space(12.0);
+                }
                 match self.tool_state.selected {
                     ToolKind::Uuid => {
                         ui.horizontal(|ui| {
@@ -2999,6 +2999,7 @@ impl DevToolsApp {
                         self.tool_actions(ui);
                         ui.add_space(8.0);
                         if paired_text {
+                            let paired_height = (editor_height - 24.0).max(64.0);
                             ui.columns(2, |columns| {
                                 columns[0].horizontal(|ui| {
                                     ui.strong("输入");
@@ -3007,11 +3008,10 @@ impl DevToolsApp {
                                         format!("{} / {} 字节{}", self.tool_state.input.len(), zi_text_core::TEXT_LIMIT, if over { " · 超限" } else { "" })
                                     } else { format!("{} 字节", self.tool_state.input.len()) }).small().color(if over { p.red } else { p.muted }));
                                 });
-                                let width = columns[0].available_width();
-                                egui::ScrollArea::vertical().id_salt(("text-input", self.tool_state.selected.id())).max_height(editor_height).auto_shrink([false, false]).show(&mut columns[0], |ui| {
-                                    ui.add_sized([width, editor_height], egui::TextEdit::multiline(&mut self.tool_state.input).font(egui::TextStyle::Monospace).hint_text("粘贴需要处理的内容…"));
+                                egui::ScrollArea::vertical().id_salt(("text-input", self.tool_state.selected.id())).max_height(paired_height).auto_shrink([false, false]).show(&mut columns[0], |ui| {
+                                    ui.add_sized([ui.available_width(), paired_height], egui::TextEdit::multiline(&mut self.tool_state.input).font(egui::TextStyle::Monospace).hint_text("粘贴需要处理的内容…"));
                                 });
-                                self.tool_output(&mut columns[1], ctx, editor_height);
+                                self.tool_output(&mut columns[1], ctx, paired_height);
                             });
                         } else {
                             ui.horizontal(|ui| {

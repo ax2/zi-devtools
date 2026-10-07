@@ -51,6 +51,23 @@ impl eframe::App for Preview {
             self.app.preview_text_plugin(ctx, self.light, 4);
         }
         self.app.update(ctx, frame);
+        if self.frame == 145 {
+            if let Some(layer) = ctx.layer_id_at(egui::pos2(600.0, 400.0)) {
+                ctx.graphics(|layers| {
+                    if let Some(list) = layers.get(layer) {
+                        for item in list.all_entries() {
+                            let rect = item.shape.visual_bounding_rect();
+                            if rect.width() < 5.0 && rect.height() > 120.0 {
+                                println!(
+                                    "PAINT thin tall shape rect={rect:?} clip={:?} shape={:?}",
+                                    item.clip_rect, item.shape
+                                );
+                            }
+                        }
+                    }
+                });
+            }
+        }
         if matches!(self.frame, 35 | 75 | 120 | 145) {
             self.app.preview_text_plugin(
                 ctx,
