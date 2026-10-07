@@ -33,3 +33,9 @@ JSON/Base64/SHA-256源工具版本1.1.0，五项插件候选0.1.0；迁移表三
 候选目录已生成：release/text-plugin-0.1.0-dev57，13件文件，总250054字节；外部release/text-plugin-0.1.0-dev57-verification.json，逐件摘要/大小、源码修订与组件摘要、契约摘要、36条WASI/原生结果和View QA齐全。packageSha256=null，目录摘要不冒充签名包摘要。所有capability/catalog/Pi绑定及源工具1.1.0核对通过。未提供或借用正式私钥；不发布signed容器。
 
 独立GUI/MCP完整运行目录release/stage-82-text-plugin-6b23a71，程序0.82.0-dev.57；673/0/34、严格默认/全特性、8m29s优化构建、实际新EXE隔离服务启停、两主题原生Ctrl+Enter检查通过。Host真实安装、最大输出并发排空/fuel/权限、实际桥/Pi/scenes仍由Studio接收验收。当前模块正常_start返回，未调用proc_exit；不能用本候选推定其他插件的proc_exit(0)处理已修复。
+
+## dev.58 文本便捷性（验证中）
+
+当前源工具版本 JSON/Base64/SHA-256 1.1.1，目录版本 0.82.0-dev.58。原生操作前置、小窗口高度调整、兼容字节反馈与序列化前超限拒绝；View 增加大结果不可整段重用的说明，并实际检查六秒超时恢复。View 使用既有 WASI + SDK 测试替身通过两主题验证；原生最终检查仍在运行。
+
+上一轮 release/text-plugin-0.1.0-dev57 和外部验证文件保留且未覆盖，仍对应源工具1.1.0与固定源码6b23a71。迁移清单 sourceVersion 表示当前源工具版本，candidate 不表示该新版本已重新打包或被 Host 接收；acceptedCapabilities 仍为0。源工具修订、旧候选交付与真实Host验收是分别记录的进展。

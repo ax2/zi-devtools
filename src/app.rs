@@ -2809,6 +2809,8 @@ impl DevToolsApp {
             }
         });
         ui.add_space(12.0);
+        // Leave space for actions and results in the minimum desktop viewport.
+        let editor_height = ((ctx.screen_rect().height() - 440.0) / 2.0).clamp(72.0, 180.0);
         egui::Frame::new()
             .fill(p.card)
             .corner_radius(12.0)
@@ -3001,13 +3003,19 @@ impl DevToolsApp {
                                 .color(p.muted),
                             );
                         });
+                        if self.tool_state.plugin_compatible && self.tool_state.has_plugin_mode() {
+                            let over = self.tool_state.input.len() > zi_text_core::TEXT_LIMIT;
+                            ui.label(RichText::new(format!("{} / {} UTF-8 字节{}", self.tool_state.input.len(), zi_text_core::TEXT_LIMIT, if over { " · 请缩短输入" } else { "" })).small().color(if over { p.red } else { p.muted }));
+                        }
+                        self.tool_actions(ui);
+                        ui.add_space(8.0);
                         ui.add_sized(
                             [
                                 ui.available_width(),
                                 if self.tool_state.selected == ToolKind::JsonDiff {
                                     88.0
                                 } else {
-                                    160.0
+                                    editor_height
                                 },
                             ],
                             egui::TextEdit::multiline(&mut self.tool_state.input)
@@ -3024,7 +3032,6 @@ impl DevToolsApp {
                             );
                             ui.add_space(8.0);
                         }
-                        self.tool_actions(ui);
                     }
                 }
                 if !self.tool_state.message.is_empty() {
@@ -3061,7 +3068,7 @@ impl DevToolsApp {
                 });
                 let mut output = self.tool_state.output.as_str();
                 ui.add_sized(
-                    [ui.available_width(), 180.0],
+                    [ui.available_width(), editor_height],
                     egui::TextEdit::multiline(&mut output)
                         .font(egui::TextStyle::Monospace)
                         .hint_text("处理结果将显示在这里；可以选择文本或点击复制结果"),

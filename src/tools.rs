@@ -594,6 +594,12 @@ impl ToolState {
                 self.number_base,
             );
         }
+        // Reject a large paste before constructing/copying the JSON envelope.
+        if self.input.len() > zi_text_core::TEXT_LIMIT {
+            return Err(anyhow!(
+                "INPUT_TOO_LARGE：文本超过 8192 UTF-8 字节，请缩短后再处理"
+            ));
+        }
         let capability = match (self.selected, action) {
             (ToolKind::Json, 0 | 2) => "devtools.text.json.format",
             (ToolKind::Json, 1) => "devtools.text.json.minify",
@@ -885,6 +891,16 @@ mod tests {
         state.input = "abc".into();
         assert_eq!(state.run(0).unwrap(), super::sha256("abc"));
         state.input = "中".repeat(2731);
+        assert!(
+            state
+                .run(0)
+                .unwrap_err()
+                .to_string()
+                .contains("INPUT_TOO_LARGE")
+        );
+        state.input = "a".repeat(zi_text_core::TEXT_LIMIT);
+        assert_eq!(state.run(0).unwrap(), super::sha256(&state.input));
+        state.input.push('a');
         assert!(
             state
                 .run(0)

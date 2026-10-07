@@ -24,7 +24,14 @@
   const hints={json:'JSON 最多 64 层，拒绝重复键和超出 ±9007199254740991 的整数。对象键递归排序。',base64:'标准 Base64，保留 padding，不接受空白或缺失 padding；解码结果必须是 UTF-8。',sha256:'按原始 UTF-8 字节计算 SHA-256，包括首尾空白与换行。'};
   const samples={json:'{"name":"ZiDevTools","local":true,"tools":["JSON","Base64"]}',base64:'Hello, 字与码!',sha256:'abc'};
   function status(text,error=false){el('status').textContent=text;el('status').dataset.error=String(error)}
-  function controls(){el('run').disabled=!ready||busy||bytes(input.value)>8192;el('run').textContent=busy?'处理中…':'处理文本';el('select').disabled=result===null||result==='';el('reuse').disabled=result===null||bytes(result)>8192||busy;el('input-count').textContent=`${bytes(input.value)} / 8192 字节`;el('help').textContent=hints[operation.value.split('.')[0]];el('input-count').style.color=bytes(input.value)>8192?'var(--error)':''}
+  const reuseHelp=document.createElement('p');reuseHelp.id='reuse-help';reuseHelp.setAttribute('aria-live','polite');el('reuse').parentElement.after(reuseHelp);el('reuse').setAttribute('aria-describedby','reuse-help');
+  function controls(){
+    const inputBytes=bytes(input.value), resultBytes=result===null?0:bytes(result);
+    el('run').disabled=!ready||busy||inputBytes>8192;el('run').textContent=busy?'处理中…':'处理文本';
+    el('select').disabled=result===null||result==='';el('reuse').disabled=result===null||resultBytes>8192||busy;
+    reuseHelp.textContent=result!==null&&resultBytes>8192?`结果为 ${resultBytes} 字节，超过输入的 8192 字节限制，无法整段重用。可选中结果复制所需部分。`:'';
+    el('input-count').textContent=`${inputBytes} / 8192 字节`;el('help').textContent=hints[operation.value.split('.')[0]];el('input-count').style.color=inputBytes>8192?'var(--error)':'';
+  }
   function changed(){revision++;result=null;output.textContent='处理结果将显示在这里';el('output-count').textContent='等待处理';try{sdk?.setDirty(input.value.length>0)}catch{}controls();if(bytes(input.value)>8192)status('文本超过 8192 UTF-8 字节，请缩短后再处理。',true);else if(ready)status(busy?'输入已改变，本次返回结果将被忽略。':'可以处理文本。')}
   input.addEventListener('input',changed);operation.addEventListener('change',changed);
   el('sample').addEventListener('click',()=>{if(input.value && !confirm('用示例替换当前输入？'))return;input.value=operation.value==='base64.decode'?'SGVsbG8sIOS4juS4jueggSE=':samples[operation.value.split('.')[0]];changed()});
