@@ -50,6 +50,98 @@ mod tests {
             std::fs::remove_dir_all(&self.0).unwrap();
         }
     }
+    #[test]
+    fn mixed_recipe_library_bookmark_reload_routes_actual_content_and_keeps_drafts() {
+        let fixture = Fixture::new();
+        fixture.definition("table.json", "表格清洗");
+        let path = fixture.0.join("编码配方.json");
+        let definition = crate::text_flow::Definition {
+            version: 1,
+            steps: vec![crate::text_flow::Step {
+                action: "base64.encode".into(),
+                version: 1,
+            }],
+        };
+        std::fs::write(&path, serde_json::to_vec(&definition).unwrap()).unwrap();
+        let mut work = fixture.workspace();
+        work.input = "source table".into();
+        work.text_flow.receive("source tools".into()).unwrap();
+        let original = serde_json::to_value(&work.text_flow).unwrap();
+        work.workflow.files.list(fixture.0.clone()).unwrap();
+        wait(&mut work);
+        assert_eq!(work.workflow_matches("流程").total, 2);
+        let found = work.workflow_matches("工具 编码");
+        assert_eq!(found.total, 1);
+        let bookmark = work.workflow_bookmark(&found.entries[0]).unwrap();
+        let prefs_path = fixture.0.join("preferences.json");
+        let mut prefs = crate::preferences::Preferences::default();
+        prefs
+            .toggle_workflow(&prefs_path, bookmark.clone())
+            .unwrap();
+        let prefs = crate::preferences::Preferences::load(&prefs_path);
+        assert_eq!(prefs.workflow_favorites[0], bookmark);
+        work.open_workflow_bookmark(&prefs.workflow_favorites[0])
+            .unwrap();
+        wait(&mut work);
+        assert_eq!(work.active_tool_id(), "text-flow");
+        assert!(work.text_flow.modal_open());
+        assert_eq!(serde_json::to_value(&work.text_flow).unwrap(), original);
+        assert_eq!(work.input, "source table");
+        assert!(work.workflow.files.review.is_none());
+        assert_eq!(work.take_workflow_visits(), vec!["text-flow"]);
+        let events = work.take_workflow_loads();
+        assert_eq!(events, vec![bookmark.clone()]);
+        assert!(work.take_workflow_loads().is_empty());
+        let mut reopened = fixture.workspace();
+        reopened.input = "reopened draft".into();
+        reopened.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut reopened);
+        assert!(reopened.text_flow.modal_open());
+        assert_eq!(reopened.input, "reopened draft");
+        assert!(reopened.workflow.files.listing.is_none());
+        let mut changed = fixture.workspace();
+        changed.input = "never replace on failure".into();
+        std::fs::write(&path, b"bad").unwrap();
+        changed.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut changed);
+        assert!(changed.take_workflow_loads().is_empty());
+        assert!(changed.take_workflow_visits().is_empty());
+        assert!(!changed.text_flow.modal_open());
+        assert_eq!(changed.input, "never replace on failure");
+        assert_eq!(changed.active_tool_id(), "data");
+        fixture.definition("编码配方.json", "文件已改为表格配方");
+        changed.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut changed);
+        assert_eq!(
+            changed.workflow.files.review.as_ref().unwrap().name,
+            "文件已改为表格配方"
+        );
+        assert!(!changed.text_flow.modal_open());
+        assert_eq!(changed.take_workflow_visits(), vec!["pipeline"]);
+    }
+    #[test]
+    fn background_typed_recipe_read_keeps_owner_and_does_not_visit_other_instance() {
+        let fixture = Fixture::new();
+        let path = fixture.0.join("typed.json");
+        std::fs::write(
+            &path,
+            br#"{"version":1,"steps":[{"action":"sha256.digest","version":1}]}"#,
+        )
+        .unwrap();
+        let mut work = fixture.workspace();
+        let owner = work.active_id().to_owned();
+        work.workflow.files.read(path).unwrap();
+        let other = work.create("other").unwrap();
+        work.input = "other draft".into();
+        wait(&mut work);
+        assert_eq!(work.active_id(), other);
+        assert_eq!(work.input, "other draft");
+        assert!(work.take_workflow_visits().is_empty());
+        assert_eq!(work.take_workflow_loads().len(), 1);
+        let source = work.instances.iter().find(|i| i.id == owner).unwrap();
+        assert!(source.state.text_flow.modal_open());
+        assert_eq!(source.state.active_tool_id(), "text-flow");
+    }
     fn wait(workspace: &mut Workspace) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while workspace

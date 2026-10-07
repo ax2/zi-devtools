@@ -27,6 +27,7 @@ pub struct Workspace {
     status: String,
     workflow_search: workflows::Cache,
     workflow_loads: Vec<(String, crate::preferences::SavedWorkflow)>,
+    workflow_visits: Vec<(String, &'static str)>,
 }
 
 enum Reply {
@@ -181,6 +182,7 @@ impl Workspace {
             status: String::new(),
             workflow_search: workflows::Cache::default(),
             workflow_loads: Vec::new(),
+            workflow_visits: Vec::new(),
         }
     }
     pub fn active_id(&self) -> &str {
@@ -203,6 +205,7 @@ impl Workspace {
             || self.close_confirm.is_some()
             || self.delete_confirm.is_some()
             || self.text_flow.modal_open()
+            || self.workflow.files.tool_review.is_some()
     }
     pub fn open_library(&mut self) {
         if !self.operation_pending() {
@@ -278,6 +281,14 @@ impl Workspace {
         self.deref_mut().text_flow = state;
         self.deref_mut().set_active_tool("text-flow");
         Ok(())
+    }
+    pub fn take_workflow_visits(&mut self) -> Vec<&'static str> {
+        let active = self.active_id().to_owned();
+        std::mem::take(&mut self.workflow_visits)
+            .into_iter()
+            .filter(|(id, _)| *id == active)
+            .map(|(_, tool)| tool)
+            .collect()
     }
     pub fn snapshots(&self) -> Vec<crate::tasks::Row> {
         self.instances
@@ -389,7 +400,27 @@ impl Workspace {
     pub fn poll(&mut self) {
         for instance in &mut self.instances {
             instance.state.poll();
+            let mut loaded_entries = Vec::new();
+            if let Some(loaded) = instance.state.text_flow.loaded.take() {
+                loaded_entries.push(("text-flow", loaded));
+            }
             if let Some(loaded) = instance.state.workflow.files.loaded.take() {
+                loaded_entries.push((
+                    instance
+                        .state
+                        .workflow
+                        .files
+                        .loaded_tool
+                        .take()
+                        .unwrap_or("pipeline"),
+                    loaded,
+                ));
+            }
+            for (tool, loaded) in loaded_entries {
+                self.workflow_visits.push((instance.id.clone(), tool));
+                if self.workflow_visits.len() > 32 {
+                    self.workflow_visits.remove(0);
+                }
                 self.workflow_loads.push((instance.id.clone(), loaded));
                 if self.workflow_loads.len() > 32 {
                     self.workflow_loads.remove(0);

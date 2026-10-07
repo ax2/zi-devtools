@@ -766,6 +766,43 @@ impl DevToolsApp {
         self.open_startup_tool("text-flow");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_recipe_library_prepare(
+        &mut self,
+        ctx: &egui::Context,
+        light: bool,
+        folder: PathBuf,
+    ) {
+        self.preview_text_flow_prepare(ctx, light);
+        self.data_state.preview_recipe_library_prepare(folder);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_recipe_library_check(&mut self, phase: u8) {
+        if phase == 0 {
+            assert!(self.launcher_open);
+            assert_eq!(self.data_state.workflow_matches("教程编码").total, 1);
+        }
+        if phase == 1 {
+            assert_eq!(self.preferences.workflow_favorites.len(), 1);
+            assert_eq!(
+                Preferences::load(&self.preferences_path).workflow_favorites,
+                self.preferences.workflow_favorites
+            );
+        }
+        if phase >= 2 {
+            assert_eq!(self.data_state.active_tool_id(), "text-flow");
+            self.data_state.preview_recipe_library_check(phase);
+            assert_eq!(self.preferences.workflow_recent.len(), 1);
+            assert_eq!(
+                self.preferences.recent.first().map(String::as_str),
+                Some("text-flow")
+            );
+            assert_eq!(
+                Preferences::load(&self.preferences_path).workflow_recent,
+                self.preferences.workflow_recent
+            );
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_position(&self, index: usize) -> egui::Pos2 {
         self.data_state.preview_text_flow_position(index)
     }

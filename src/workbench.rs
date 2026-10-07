@@ -324,6 +324,19 @@ impl DataState {
         assert_eq!(self.visible, vec![0, 1]);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_recipe_library_prepare(&mut self, folder: PathBuf) {
+        self.text_flow
+            .receive("frozen tutorial text".into())
+            .unwrap();
+        self.workflow.files.list(folder).unwrap();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_recipe_library_check(&self, phase: u8) {
+        self.text_flow.preview_recipe_check(phase);
+        assert_eq!(self.input, "original table draft");
+        assert!(!self.workflow.has_content());
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_file_path(&mut self, path: PathBuf) {
         self.text_flow.preview_file_path(path);
     }
@@ -467,6 +480,10 @@ impl DataState {
             "CSV / TSV、JSON 对象数组或列结构 JSON · 筛选、排序与导出",
         );
         self.text_flow.ui(ui);
+        if self.active_tool_id() == "text-flow" {
+            egui::CollapsingHeader::new("配方库 · 文件夹 / 收藏 / 最近").id_salt("typed-recipe-library").show(ui,|ui|{ui.small("表格流程与工具配方共用目录；用Ctrl K搜索、收藏或查看最近。载入仍需审核，不自动执行。");self.workflow_library_ui(ui);});
+        }
+
         self.numeric_selector.toolbar(
             ui,
             self.dataset.as_ref(),

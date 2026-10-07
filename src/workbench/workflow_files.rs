@@ -11,6 +11,7 @@ fn save_new(definition: &Definition, path: &std::path::Path) -> Result<()> {
         .context("流程保存失败；已有文件不覆盖，当前步骤保留，请另选文件名")?;
     Ok(())
 }
+#[cfg(test)]
 fn load(path: &std::path::Path) -> Result<Definition> {
     anyhow::ensure!(path.is_absolute(), "请选择绝对路径");
     let file = crate::local_files::open_regular(path, LIMIT).context("无法打开普通流程文件")?;
@@ -20,7 +21,7 @@ fn load(path: &std::path::Path) -> Result<Definition> {
 }
 enum Reply {
     Saved(PathBuf),
-    Loaded(PathBuf, Definition),
+    Loaded(PathBuf, crate::workflow_document::Document),
     Listed(PathBuf, library::Listing),
 }
 #[derive(Default)]
@@ -28,6 +29,8 @@ pub(super) struct State {
     receiver: Option<Receiver<std::result::Result<Reply, String>>>,
     pub(super) job: Job,
     pub(super) review: Option<Definition>,
+    pub(super) tool_review: Option<crate::text_flow::Definition>,
+    pub(super) loaded_tool: Option<&'static str>,
     pub(super) message: String,
     pub(super) folder: Option<PathBuf>,
     pub(super) listing: Option<library::Listing>,
@@ -88,7 +91,7 @@ impl State {
         self.job.begin();
         std::thread::spawn(move || {
             let _ = tx.send(
-                load(&path)
+                crate::workflow_document::Document::load(&path)
                     .map(|definition| Reply::Loaded(path, definition))
                     .map_err(|e| format!("{e:#}")),
             );
@@ -110,15 +113,20 @@ impl State {
                 self.job.finish(Phase::Done, "流程定义已保存；未运行");
                 self.message = format!("流程已保存：{}；只含步骤与参数", path.display());
             }
-            Ok(Reply::Loaded(path, definition)) => {
-                self.loaded = Some(crate::preferences::SavedWorkflow {
-                    path,
-                    name: definition.name.clone(),
-                    steps: definition.steps.len(),
-                });
+            Ok(Reply::Loaded(path, document)) => {
+                self.loaded = Some(document.metadata(&path));
                 self.job
                     .finish(Phase::Done, "流程文件已读取，等待确认；未运行");
-                self.review = Some(definition);
+                match document {
+                    crate::workflow_document::Document::Table(definition) => {
+                        self.review = Some(definition);
+                        self.loaded_tool = Some("pipeline");
+                    }
+                    crate::workflow_document::Document::Tool(definition) => {
+                        self.tool_review = Some(definition);
+                        self.loaded_tool = Some("text-flow");
+                    }
+                }
             }
             Ok(Reply::Listed(folder, listing)) => {
                 self.listing_revision = self.listing_revision.wrapping_add(1);

@@ -53,7 +53,9 @@ impl Drop for State {
 }
 impl State {
     pub(super) fn has_content(&self) -> bool {
-        !self.definition.steps.is_empty() || self.files.review.is_some()
+        !self.definition.steps.is_empty()
+            || self.files.review.is_some()
+            || self.files.tool_review.is_some()
     }
     pub(super) fn invalidate(&mut self) {
         self.output.invalidate();
@@ -78,7 +80,6 @@ impl DataState {
     pub(super) fn open_bookmarked_workflow(&mut self, path: PathBuf) -> Result<()> {
         ensure_not_busy(self)?;
         self.workflow.files.read(path)?;
-        self.show_workflow();
         Ok(())
     }
     pub(super) fn open_searched_workflow(
@@ -106,7 +107,6 @@ impl DataState {
             .path
             .clone();
         self.workflow.files.read(path)?;
-        self.show_workflow();
         Ok(())
     }
     pub fn workflow_folder_settings(
@@ -232,6 +232,21 @@ impl DataState {
     pub(super) fn poll_workflow(&mut self) {
         self.workflow.output.poll();
         self.workflow.files.poll();
+        if self.workflow.files.loaded_tool == Some("pipeline") {
+            self.show_workflow();
+        }
+        if !self.text_flow.busy()
+            && !self.text_flow.modal_open()
+            && let Some(definition) = self.workflow.files.tool_review.take()
+        {
+            if let Err(e) = self.text_flow.receive_recipe(definition) {
+                self.workflow.error = e.to_string();
+            } else {
+                self.workflow.reveal = false;
+                self.set_active_tool("text-flow");
+            }
+        }
+
         let reply = self
             .workflow
             .receiver
@@ -649,7 +664,9 @@ impl DataState {
             self.workflow.files.memory_buttons = [None, None];
         }
         ui.horizontal_wrapped(|ui| {
-            let allowed = !self.busy() && self.workflow.files.review.is_none();
+            let allowed = !self.busy()
+                && self.workflow.files.review.is_none()
+                && !self.text_flow.modal_open();
             if ui
                 .add_enabled(
                     allowed && !self.workflow.definition.steps.is_empty(),
@@ -692,6 +709,13 @@ impl DataState {
                 ui.ctx()
                     .request_repaint_after(std::time::Duration::from_millis(30));
             }
+        });
+        self.workflow_library_ui(ui);
+    }
+    pub(super) fn workflow_library_ui(&mut self, ui: &mut egui::Ui) {
+        let allowed =
+            !self.busy() && self.workflow.files.review.is_none() && !self.text_flow.modal_open();
+        ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(allowed, egui::Button::new("流程文件夹…"))
                 .clicked()
@@ -712,7 +736,9 @@ impl DataState {
                 .on_hover_text(folder.display().to_string());
                 if ui
                     .add_enabled(
-                        !self.busy() && self.workflow.files.review.is_none(),
+                        !self.busy()
+                            && self.workflow.files.review.is_none()
+                            && !self.text_flow.modal_open(),
                         egui::Button::new("刷新列表"),
                     )
                     .clicked()
@@ -770,7 +796,8 @@ impl DataState {
             ui.label(&self.workflow.files.memory_message);
         }
         let mut selected = None;
-        let allowed = !self.busy() && self.workflow.files.review.is_none();
+        let allowed =
+            !self.busy() && self.workflow.files.review.is_none() && !self.text_flow.modal_open();
         if let Some(listing) = &self.workflow.files.listing {
             ui.add(
                 egui::TextEdit::singleline(&mut self.workflow.files.query)
@@ -966,7 +993,7 @@ fn ensure_not_busy(state: &DataState) -> Result<()> {
     );
     anyhow::ensure!(!state.busy(), "请等待当前实例任务结束");
     anyhow::ensure!(
-        state.workflow.files.review.is_none(),
+        state.workflow.files.review.is_none() && !state.text_flow.modal_open(),
         "请先确认或取消已读取的流程"
     );
     Ok(())

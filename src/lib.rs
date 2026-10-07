@@ -88,3 +88,5 @@ pub mod mcp_oauth_registration;
 mod mcp_oauth_tls_tests;
 pub mod mcp_oauth_token;
 pub mod workspace_store;
+
+pub(crate) mod workflow_document;

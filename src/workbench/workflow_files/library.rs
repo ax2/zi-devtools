@@ -1,4 +1,6 @@
-use super::{Definition, LIMIT};
+#[cfg(test)]
+use super::Definition;
+use super::LIMIT;
 use anyhow::{Context, Result, ensure};
 use std::{
     fs,
@@ -85,11 +87,12 @@ pub(super) fn scan(folder: &Path) -> Result<Listing> {
                 .read_to_end(&mut bytes)?;
             total += bytes.len();
             ensure!(bytes.len() <= LIMIT, "流程文件过大");
-            let definition = Definition::parse(&bytes)?;
+            let document = crate::workflow_document::Document::parse(&bytes)?;
+            let metadata = document.metadata(&path);
             Ok(Entry {
                 path,
-                name: definition.name,
-                steps: definition.steps.len(),
+                name: metadata.name,
+                steps: metadata.steps,
             })
         })();
         match result {

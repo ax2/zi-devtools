@@ -18,7 +18,7 @@ mod material;
 enum Reply {
     Run(Run),
     Input(String),
-    Definition(Definition),
+    Definition(std::path::PathBuf, Definition),
     Saved(std::path::PathBuf, usize),
 }
 pub use material::{ACTIONS, Action, Kind, Material};
@@ -171,6 +171,8 @@ pub struct State {
     #[serde(skip)]
     input_review: Option<String>,
     #[serde(skip)]
+    pub(crate) loaded: Option<crate::preferences::SavedWorkflow>,
+    #[serde(skip)]
     output_review: Option<files::Output>,
     #[serde(skip)]
     reveal: bool,
@@ -180,7 +182,7 @@ pub struct State {
     selected: usize,
     #[cfg(feature = "ui-preview")]
     #[serde(skip)]
-    buttons: [Option<(egui::Rect, egui::Rect)>; 12],
+    buttons: [Option<(egui::Rect, egui::Rect)>; 14],
     #[cfg(feature = "ui-preview")]
     #[serde(skip)]
     file_path: Option<std::path::PathBuf>,
@@ -200,6 +202,16 @@ impl State {
             || self.table_review.is_some()
             || self.input_review.is_some()
             || self.output_review.is_some()
+    }
+    pub(crate) fn receive_recipe(&mut self, definition: Definition) -> Result<()> {
+        definition.validate()?;
+        ensure!(
+            !self.busy() && !self.modal_open(),
+            "请先完成当前工具流程或审核"
+        );
+        self.review = Some(definition);
+        self.open();
+        Ok(())
     }
     pub(crate) fn receive(&mut self, input: String) -> Result<()> {
         ensure!(input.len() <= LIMIT, "文本流程输入最多1 MiB");
@@ -276,7 +288,7 @@ impl State {
         };
         self.receiver = None;
         match reply {
-            Ok(Reply::Input(_) | Reply::Definition(_)) if self.cancel.load(Ordering::Relaxed) => {
+            Ok(Reply::Input(_) | Reply::Definition(..)) if self.cancel.load(Ordering::Relaxed) => {
                 self.message = "文件读取已取消；原输入、步骤与结果保留".into();
                 self.job.finish(Phase::Cancelled, &self.message);
             }
@@ -311,7 +323,10 @@ impl State {
                 self.job.finish(Phase::Done, "材料已读取，待确认；未运行");
                 self.open();
             }
-            Ok(Reply::Definition(definition)) => {
+            Ok(Reply::Definition(path, definition)) => {
+                self.loaded = Some(
+                    crate::workflow_document::Document::Tool(definition.clone()).metadata(&path),
+                );
                 self.review = Some(definition);
                 self.job.finish(Phase::Done, "配方已读取，待确认；未运行");
                 self.open();
@@ -473,7 +488,7 @@ impl State {
                     }
                     if ui.add_enabled(!busy && !self.modal_open(),egui::Button::new("读取配方…")).clicked()
                         && let Some(path)=rfd::FileDialog::new().add_filter("工具流程配方",&["json"]).pick_file()
-                        && let Err(e)=self.file_task(move|cancel|files::recipe(&path,cancel).map(Reply::Definition)){self.message=e.to_string();}
+                        && let Err(e)=self.file_task(move|cancel|files::recipe(&path,cancel).map(|d|Reply::Definition(path,d))){self.message=e.to_string();}
                 });
                 ui.add(egui::TextEdit::multiline(&mut self.recipe).desired_rows(3).desired_width(f32::INFINITY).char_limit(65536));
                 if ui.add_enabled(!busy && !self.modal_open(),egui::Button::new("审核载入配方…")).clicked() {
@@ -595,7 +610,7 @@ impl State {
         let mut choice = None;
         if let Some(definition) = &self.review {
             egui::Modal::new(egui::Id::new("text-flow-import")).show(ui.ctx(), |ui| {
-                ui.heading("载入文本流程？");
+                ui.heading("载入工具流程？");
                 ui.label("只替换步骤，原输入保留；不会自动执行。当前步骤结果将清除。");
                 for (i, step) in definition.steps.iter().enumerate() {
                     ui.label(format!(
@@ -606,10 +621,16 @@ impl State {
                     ));
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("返回").clicked() {
-                        choice = Some(false);
+                    let back = ui.button("返回");
+                    let confirm = ui.button("确认载入");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.buttons[12] = Some((confirm.rect, ui.clip_rect()));
+                        self.buttons[13] = Some((back.rect, ui.clip_rect()));
                     }
-                    if ui.button("确认载入").clicked() {
+                    if back.clicked() {
+                        choice = Some(false);
+                    } else if confirm.clicked() {
                         choice = Some(true);
                     }
                 });
@@ -621,10 +642,30 @@ impl State {
                 self.definition = definition;
                 self.invalidate();
             }
+            self.open();
         }
         if self.busy() {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(50));
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_recipe_check(&self, phase: u8) {
+        assert_eq!(self.input, "frozen tutorial text");
+        assert!(self.result.is_none());
+        assert!(!self.busy());
+        if phase == 2 {
+            assert_eq!(
+                self.review.as_ref().unwrap().steps[0].action,
+                "base64.encode"
+            );
+            assert!(self.definition.steps.is_empty());
+        } else if phase == 4 {
+            assert!(self.review.is_none());
+            assert_eq!(self.definition.steps[0].action, "base64.encode");
+        } else {
+            assert!(self.review.is_none());
+            assert!(self.definition.steps.is_empty());
         }
     }
     #[cfg(feature = "ui-preview")]
@@ -715,6 +756,41 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn direct_recipe_file_read_emits_current_metadata_and_keeps_previous_materials() {
+        let root = std::env::temp_dir().join(format!("zi-direct-recipe-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("native.json");
+        let definition = recipe(&["sha256.digest"]);
+        std::fs::write(&path, serde_json::to_vec(&definition).unwrap()).unwrap();
+        let mut state = State::default();
+        state.input = "original".into();
+        state.definition = recipe(&["base64.encode"]);
+        state.result =
+            Some(execute(&state.definition, &state.input, &AtomicBool::new(false)).unwrap());
+        let task_path = path.clone();
+        state
+            .file_task(move |cancel| {
+                files::recipe(&task_path, cancel).map(|d| Reply::Definition(task_path, d))
+            })
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.busy() {
+            assert!(std::time::Instant::now() < deadline);
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(state.loaded.as_ref().unwrap().path, path);
+        assert!(state.loaded.as_ref().unwrap().valid());
+        assert_eq!(state.review, Some(definition));
+        assert_eq!(state.definition, recipe(&["base64.encode"]));
+        assert_eq!(state.input, "original");
+        assert!(state.result.is_some());
+        let saved = serde_json::to_string(&state).unwrap();
+        assert!(!saved.contains("native.json"));
+        assert!(!saved.contains("sha256.digest"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn file_reply_cancellation_preserves_draft_and_published_save_wins_late_cancel() {
         let mut state = State::default();

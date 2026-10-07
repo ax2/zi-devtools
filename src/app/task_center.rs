@@ -73,6 +73,13 @@ impl DevToolsApp {
         self.observe_tasks();
         let before = self.task_snapshots();
         self.data_state.poll();
+        let visits = self.data_state.take_workflow_visits();
+        if self.page == Page::Data {
+            for tool in visits {
+                self.visit(tool);
+            }
+        }
+
         let loads = self.data_state.take_workflow_loads();
         let mut history_error = None;
         if !loads.is_empty() {

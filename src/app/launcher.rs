@@ -92,7 +92,6 @@ impl DevToolsApp {
                     Ok(()) => {
                         self.page = Page::Data;
                         self.launcher_open = false;
-                        self.visit("pipeline");
                     }
                     Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
                 }
@@ -106,7 +105,6 @@ impl DevToolsApp {
                 Ok(()) => {
                     self.page = Page::Data;
                     self.launcher_open = false;
-                    self.visit("pipeline");
                 }
                 Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
             },
