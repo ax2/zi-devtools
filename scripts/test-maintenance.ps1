@@ -8,18 +8,28 @@ $ownedProcess=$null
 $junction=$null
 function Check([bool]$ok,[string]$name){if(-not $ok){throw "FAIL $name"};Write-Output "PASS $name"}
 try {
-    New-Item -ItemType Directory -Path "$project\scripts","$project\target","$external\debug","$external\release","$fixture\sentinel" -Force | Out-Null
+    New-Item -ItemType Directory -Path "$project\scripts","$project\target\debug\incremental","$project\target\release","$external\debug","$external\release","$fixture\sentinel" -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'maintenance.ps1') -Destination "$project\scripts\maintenance.ps1"
     $env:LOCALAPPDATA=Join-Path $fixture 'state'
     $script="$project\scripts\maintenance.ps1"
-    Set-Content "$project\target\rebuild.txt" 'cache'
+    Set-Content "$project\target\debug\rebuild.txt" 'cache'
+    Set-Content "$project\target\debug\incremental\keep.txt" 'useful incremental cache'
+    Set-Content "$project\target\release\keep.txt" 'release'
     Set-Content "$external\debug\rebuild.txt" 'cache'
     Set-Content "$external\release\keep.txt" 'release'
     Set-Content "$fixture\sentinel\keep.txt" 'sentinel'
     & pwsh -NoProfile -File $script -Deep -BuildCacheRoot $external
-    Check ($LASTEXITCODE -eq 0 -and (Test-Path "$project\target\rebuild.txt")) 'preview does not delete'
+    Check ($LASTEXITCODE -eq 0 -and (Test-Path "$project\target\debug\rebuild.txt")) 'preview does not delete'
     & pwsh -NoProfile -File $script -BudgetOnly -Apply -BudgetGiB 1 -BuildCacheRoot $external
     Check ($LASTEXITCODE -eq 0 -and (Test-Path "$external\debug\rebuild.txt")) 'under budget preserved'
+    Set-Content "$project\target\debug\large.txt" ('x'*4096)
+    & pwsh -NoProfile -File $script -BudgetOnly -Apply -BudgetGiB 0.000001 -BuildCacheRoot $external
+    $record=Get-Content "$env:LOCALAPPDATA\ZiDevTools\maintenance\last-run.json" -Raw | ConvertFrom-Json
+    Check ($LASTEXITCODE -eq 0 -and $record.usageBefore[0].overBudget -and $record.reclaimedBytes -eq 0 -and (Test-Path "$project\target\debug\incremental\keep.txt")) 'over reference capacity retains useful caches'
+    & pwsh -NoProfile -File $script -Deep -Apply -Scheduled -BuildCacheRoot $external
+    Check ($LASTEXITCODE -eq 0 -and (Test-Path "$project\target\debug\incremental\keep.txt") -and (Test-Path "$external\debug\rebuild.txt")) 'legacy monthly scheduled deep request is audit-only'
+    & pwsh -NoProfile -File $script -Apply -BuildCacheRoot $external
+    Check ($LASTEXITCODE -eq 0 -and (Test-Path "$project\target\debug\incremental\keep.txt")) 'default apply retains incremental caches'
     $junction="$project\target\unsafe"
     New-Item -ItemType Junction -Path $junction -Target "$fixture\sentinel" | Out-Null
     & pwsh -NoProfile -File $script -Deep -Apply 2>&1 | Out-Null
@@ -27,22 +37,21 @@ try {
     Remove-Item -LiteralPath $junction -Force
     $junction=$null
     & pwsh -NoProfile -File $script -Deep -Apply -BuildCacheRoot "$fixture\sentinel" 2>&1 | Out-Null
-    Check ($LASTEXITCODE -ne 0 -and (Test-Path "$project\target\rebuild.txt")) 'invalid external scope rejects all deletion'
+    Check ($LASTEXITCODE -ne 0 -and (Test-Path "$project\target\debug\rebuild.txt")) 'invalid external scope rejects all deletion'
     Copy-Item -LiteralPath "$env:SystemRoot\System32\cmd.exe" -Destination "$external\debug\fixture.exe"
     $ownedProcess=Start-Process -FilePath "$external\debug\fixture.exe" -ArgumentList '/c ping -n 30 127.0.0.1 >nul' -WindowStyle Hidden -PassThru
     & pwsh -NoProfile -File $script -Deep -Apply -Scheduled -BuildCacheRoot $external
     $record=Get-Content "$env:LOCALAPPDATA\ZiDevTools\maintenance\last-run.json" -Raw | ConvertFrom-Json
-    Check ($LASTEXITCODE -eq 0 -and $record.result -eq 'skipped-build-active' -and (Test-Path "$project\target\rebuild.txt")) 'running executable in cache skips entire cleanup'
+    Check ($LASTEXITCODE -eq 0 -and $record.result -eq 'skipped-build-active' -and (Test-Path "$project\target\debug\rebuild.txt")) 'running executable in cache skips entire cleanup'
+    & pwsh -NoProfile -File $script -Deep -Apply -BuildCacheRoot $external 2>&1 | Out-Null
+    Check ($LASTEXITCODE -ne 0 -and (Test-Path "$external\debug\rebuild.txt")) 'manual deletion blocked while cache executable runs'
     Stop-Process -Id $ownedProcess.Id -Force -ErrorAction SilentlyContinue
     $ownedProcess.WaitForExit()
     $ownedProcess=$null
     & pwsh -NoProfile -File $script -Deep -Apply -BuildCacheRoot $external
-    Check ($LASTEXITCODE -eq 0 -and -not (Test-Path "$project\target") -and -not (Test-Path "$external\debug") -and (Test-Path "$external\release\keep.txt")) 'deep cleanup preserves release and sentinel'
-    New-Item -ItemType Directory -Path "$project\target" -Force | Out-Null
-    $stream=[IO.File]::OpenWrite("$project\target\budget.bin")
-    try {$stream.SetLength(1GB+1)}finally{$stream.Dispose()}
-    & pwsh -NoProfile -File $script -BudgetOnly -Apply -BudgetGiB 1
-    Check ($LASTEXITCODE -eq 0 -and -not (Test-Path "$project\target")) 'over budget cleans rebuildable cache'
+    Check ($LASTEXITCODE -eq 0 -and -not (Test-Path "$project\target\debug") -and -not (Test-Path "$external\debug") -and (Test-Path "$project\target\release\keep.txt") -and (Test-Path "$external\release\keep.txt") -and (Test-Path "$fixture\sentinel\keep.txt")) 'explicit manual debug cleanup preserves both release directories and sentinel'
+    $launcher=Get-Content (Join-Path $PSScriptRoot 'dev.ps1') -Raw
+    Check ($launcher -notmatch 'maintenance.ps1|CARGO_INCREMENTAL') 'development launcher does not scan, clear or override caches'
 } finally {
     if($ownedProcess){Stop-Process -Id $ownedProcess.Id -Force -ErrorAction SilentlyContinue}
     if($junction -and (Test-Path -LiteralPath $junction)){Remove-Item -LiteralPath $junction -Force}

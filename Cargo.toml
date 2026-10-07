@@ -89,15 +89,15 @@ lto = "thin"
 strip = "symbols"
 codegen-units = 1
 
-# Keep local development caches bounded; symbols can be enabled explicitly
-# with CARGO_PROFILE_DEV_DEBUG=1 for a debugging session.
+# Reuse incremental compilation for fast local iteration. Symbols remain optional:
+# CARGO_PROFILE_DEV_DEBUG=1 enables them for a debugging session.
 [profile.dev]
 debug = 0
-incremental = false
+incremental = true
 
 [profile.test]
 debug = 0
-incremental = false
+incremental = true
 
 [[example]]
 name = "clipboard_fixture"

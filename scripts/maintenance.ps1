@@ -3,7 +3,7 @@ param(
     [switch]$Scheduled,
     [switch]$Deep,
     [switch]$BudgetOnly,
-    [ValidateRange(1, 1024)][double]$BudgetGiB = 6,
+    [ValidateRange(0, 1024)][double]$BudgetGiB = 0,
     [string]$BuildCacheRoot
 )
 $ErrorActionPreference = 'Stop'
@@ -90,19 +90,22 @@ if ($BuildCacheRoot) {
     }
     $roots += [pscustomobject]@{Root=$external; Relative='debug'}
 }
-$monthly = -not $BudgetOnly -and ($Deep -or ($Scheduled -and $lastDeepMonth -ne $month))
+# Legacy scheduled/budget invocations are always audit-only, even with -Apply/-Deep.
+# Rebuildable does not mean disposable: clearing useful caches slows development.
+$manualDeep = $Deep -and -not $Scheduled -and -not $BudgetOnly
 $targets = @()
 $usage = @()
 foreach ($root in $roots) {
     $whole = Safe-Target $root.Root $root.Relative
     $bytes = Size-Bytes $whole
-    $over = $bytes -gt ($BudgetGiB * 1GB)
+    $over = $BudgetGiB -gt 0 -and $bytes -gt ($BudgetGiB * 1GB)
     $usage += [pscustomobject]@{path=(Join-Path $root.Root $root.Relative); bytes=$bytes; overBudget=$over}
-    Write-Output ('{0}: {1:N3} GiB / {2} GiB' -f $usage[-1].path, ($bytes/1GB), $BudgetGiB)
-    if ($whole -and ($monthly -or $over)) { $targets += $whole }
-    elseif (-not $BudgetOnly) {
-        $parts = if ($root.Relative -eq 'target') { @('target\debug\incremental','target\release\incremental') } else { @('debug\incremental') }
-        foreach ($part in $parts) { $candidate = Safe-Target $root.Root $part; if ($candidate) { $targets += $candidate } }
+    Write-Output ('{0}: {1:N3} GiB；保留缓存，容量不触发删除。' -f $usage[-1].path, ($bytes/1GB))
+    if ($manualDeep) {
+        # Never remove the whole project target: release/WASI outputs remain intact.
+        $part = if ($root.Relative -eq 'target') { 'target\debug' } else { 'debug' }
+        $candidate = Safe-Target $root.Root $part
+        if ($candidate) { $targets += $candidate }
     }
 }
 function Assert-Idle {
@@ -120,8 +123,8 @@ function Assert-Idle {
     if ($busy.Count) { throw '检测到构建进程或缓存中的运行程序，跳过维护。' }
 }
 $reclaimed = [long]0
-$result = 'completed'
-if ($Apply -and $targets.Count) {
+$result = if ($manualDeep) { 'completed' } else { 'retained' }
+if ($Scheduled -or ($Apply -and $targets.Count)) {
     try { Assert-Idle } catch {
         if (-not $Scheduled) { throw }
         $result='skipped-build-active'
@@ -143,14 +146,14 @@ if ($Apply) {
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
     $record = [ordered]@{
         time=(Get-Date).ToString('o'); result=$result; reclaimedBytes=$reclaimed
-        mode=if($BudgetOnly){'budget'}elseif($monthly){'deep'}else{'incremental'}
+        mode=if($manualDeep){'manual-debug-cleanup'}else{'audit'}
         budgetGiB=$BudgetGiB; usageBefore=$usage
-        lastDeepMonth=if($result -eq 'completed' -and $monthly){$month}else{$lastDeepMonth}
+        lastDeepMonth=if($result -eq 'completed' -and $manualDeep){$month}else{$lastDeepMonth}
     }
         $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $statePath -Encoding utf8
     $record | ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath (Join-Path $stateDir 'history.jsonl') -Encoding utf8
     Write-Output ('释放 {0:N3} GiB；记录：{1}' -f ($reclaimed/1GB), $statePath)
-} else { Write-Output '仅预览；-Apply 执行。容量是维护触发阈值，构建期间不强制中断。' }
+} else { Write-Output '仅预览。默认保留缓存；只有手动 -Deep -Apply 才会删除 debug 缓存，定时任务始终不删除。' }
 
 } finally {
     if ($maintenanceLock) { $maintenanceLock.ReleaseMutex(); $maintenanceLock.Dispose() }

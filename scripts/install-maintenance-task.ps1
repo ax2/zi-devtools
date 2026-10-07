@@ -5,6 +5,7 @@ $shell = (Get-Command pwsh -ErrorAction Stop).Source
 $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $taskName = 'ZiDevTools-WeeklyMaintenance'
 
+# -Apply records the audit; -Scheduled never deletes caches.
 $action = New-ScheduledTaskAction -Execute $shell -Argument ('-NoProfile -NonInteractive -File "{0}" -Apply -Scheduled' -f $scriptPath) -WorkingDirectory $projectRoot
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '03:00'
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
