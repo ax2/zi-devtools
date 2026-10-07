@@ -224,6 +224,7 @@ impl State {
         }
         self.matrix.receive_numeric_into(table, slot);
         self.matrix_mode = true;
+        self.plot_mode = false;
         self.message = format!(
             "类型表格已填入{}；保留另一矩阵、算式和变量，尚未计算",
             slot.label()

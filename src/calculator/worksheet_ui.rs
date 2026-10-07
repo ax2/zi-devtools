@@ -34,6 +34,8 @@ impl State {
             expression: self.expression.clone(),
             degrees: self.degrees,
             matrix_mode: self.matrix_mode,
+            plot_mode: self.plot_mode,
+            plot: self.plot.saved.clone(),
             variables: self.variables.clone(),
             history: self.history.clone(),
             matrix: self.matrix.snapshot(),
@@ -45,13 +47,15 @@ impl State {
                 || self.expression != data.expression
                 || self.degrees != data.degrees
                 || self.matrix_mode != data.matrix_mode
+                || self.plot_mode != data.plot_mode
+                || self.plot.saved != data.plot
                 || self.variables != data.variables
                 || self.history != data.history
                 || !self.matrix.matches(&data.matrix)
         })
     }
     pub fn busy(&self) -> bool {
-        self.files.job.is_some()
+        self.files.job.is_some() || self.plot.busy()
     }
     pub fn awaiting_restore(&self) -> bool {
         self.files.incoming.is_some()
@@ -65,16 +69,20 @@ impl State {
         self.expression = data.expression.clone();
         self.degrees = data.degrees;
         self.matrix_mode = data.matrix_mode;
+        self.plot_mode = data.plot_mode;
+        self.plot = Default::default();
+        self.plot.saved = data.plot.clone();
         self.variables = data.variables.clone();
         self.history = data.history.clone();
         self.matrix.restore(data.matrix.clone());
         self.files.baseline = Some(data);
         self.files.incoming = None;
         self.files.allow_replace = false;
-        self.files.message = "已恢复工作表；未回放历史赋值，矩阵结果需重新计算".into();
+        self.files.message = "已恢复工作表；未回放历史赋值，矩阵和绘图结果需重新计算".into();
         self.files.error = false;
     }
     pub fn poll(&mut self, ctx: &egui::Context) {
+        self.plot.poll(ctx);
         let Some(job) = &self.files.job else {
             return;
         };
@@ -186,11 +194,11 @@ impl State {
                 }
             }
         });
-        ui.small("明文 JSON · 包含算式、变量 / ans、历史及两矩阵与粘贴草稿 · 另存不覆盖");
+        ui.small("明文 JSON · 包含算式、变量 / ans、历史、绘图参数及两矩阵与粘贴草稿 · 另存不覆盖");
         egui::CollapsingHeader::new("工作表名称与保存范围").id_salt("calculator-sheet-details").show(ui,|ui| {
             ui.add(egui::TextEdit::singleline(&mut self.sheet_name).char_limit(128).hint_text("工作表名称"));
-            ui.small("明文JSON，保存算式、变量/ans、历史及矩阵/粘贴草稿；请选择新文件。原子另存不覆盖，需NTFS等支持硬链接的文件系统。");
-            ui.small("不含矩阵派生结果或文件路径；读取不回放历史，确认恢复后仍需手动固定赋值及计算矩阵。");
+            ui.small("明文JSON，保存算式、变量/ans、历史、绘图参数及矩阵/粘贴草稿；请选择新文件。原子另存不覆盖，需NTFS等支持硬链接的文件系统。");
+            ui.small("不含矩阵/绘图派生结果或文件路径；读取不回放历史，确认恢复后仍需手动固定赋值及计算矩阵/绘图。");
         });
         if !self.files.message.is_empty() {
             if self.files.error {
@@ -206,7 +214,7 @@ impl State {
                 .show(ui, |ui| {
                     ui.checkbox(
                         &mut self.files.allow_discard,
-                        "确认放弃当前算式、变量、历史及矩阵/粘贴草稿的修改",
+                        "确认放弃当前算式、变量、历史、绘图参数、绘图参数及矩阵/粘贴草稿的修改",
                     );
                     discard = ui
                         .add_enabled(
@@ -246,7 +254,7 @@ impl State {
                     ui.monospace(&doc.data.expression);
                     ui.small(doc.data.matrix.describe());
                     ui.small(
-                        "替换名称、算式、变量、历史、角度和两矩阵；不会重放旧计算或自动保存。",
+                        "替换名称、算式、变量、历史、角度、绘图参数和两矩阵；不会重放旧计算或自动保存。",
                     );
                     if dirty {
                         let response = ui.checkbox(
@@ -357,6 +365,34 @@ impl State {
 mod tests {
     use super::*;
     use crate::calculator::Value;
+    #[test]
+    fn plot_configuration_is_dirty_restored_without_replaying_and_blocks_matrix_during_sampling() {
+        let mut state = State {
+            plot_mode: true,
+            ..Default::default()
+        };
+        state.plot.saved.curves[0].expression = "factor*x".into();
+        assert!(state.dirty());
+        let mut saved = state.snapshot();
+        saved.variables.insert("factor".into(), Value::Exact(3, 1));
+        state.apply(saved.clone());
+        assert_eq!(state.snapshot(), saved);
+        assert!(!state.dirty());
+        assert!(state.plot.output.is_none());
+        state
+            .plot
+            .start(&state.variables, state.degrees, &egui::Context::default());
+        assert!(state.busy());
+        let text = super::super::exchange::NumericTable::new(1, 1, vec![Value::Exact(7, 1)])
+            .unwrap()
+            .json(super::super::exchange::Representation::Typed)
+            .unwrap();
+        assert!(
+            state
+                .receive_numeric_with_policy(&text, super::super::exchange::MatrixSlot::B, true)
+                .is_err()
+        );
+    }
     #[test]
     fn pending_restore_cannot_be_bypassed_by_matrix_replacement_consent() {
         let mut state = State::default();

@@ -3,6 +3,11 @@ pub mod exchange;
 mod matrix;
 mod matrix_ui;
 mod parser;
+mod plot;
+#[cfg(feature = "ui-preview")]
+mod plot_preview;
+mod plot_render;
+mod plot_ui;
 mod ui;
 mod worksheet;
 mod worksheet_ui;

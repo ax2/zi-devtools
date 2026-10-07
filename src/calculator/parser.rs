@@ -12,7 +12,7 @@ enum Token {
     End,
 }
 struct Parser<'a> {
-    tokens: Vec<(Token, usize)>,
+    tokens: &'a [(Token, usize)],
     at: usize,
     depth: usize,
     variables: &'a BTreeMap<String, Value>,
@@ -46,7 +46,7 @@ pub(super) fn evaluate(
     }
     let tokens = lex(input)?;
     let mut p = Parser {
-        tokens,
+        tokens: &tokens,
         at: 0,
         depth: 0,
         variables,
@@ -57,6 +57,39 @@ pub(super) fn evaluate(
         return Err(p.error("存在多余内容"));
     }
     Ok(result)
+}
+
+/// Reuse bounded lexing when evaluating the same formula at many coordinates.
+pub(super) struct Prepared {
+    tokens: Vec<(Token, usize)>,
+}
+impl Prepared {
+    pub fn new(input: &str) -> Result<Self, String> {
+        if input.len() > 2048 || input.trim().is_empty() {
+            return Err("函数公式需为1–2048字节".into());
+        }
+        Ok(Self {
+            tokens: lex(input)?,
+        })
+    }
+    pub fn evaluate(
+        &self,
+        variables: &BTreeMap<String, Value>,
+        angle: Angle,
+    ) -> Result<Value, String> {
+        let mut p = Parser {
+            tokens: &self.tokens,
+            at: 0,
+            depth: 0,
+            variables,
+            angle,
+        };
+        let result = p.expression(0)?;
+        if !matches!(p.tokens[p.at].0, Token::End) {
+            return Err(p.error("存在多余内容"));
+        }
+        Ok(result)
+    }
 }
 
 fn unit_definition(unit: &str) -> Option<(&'static str, Value, Value)> {

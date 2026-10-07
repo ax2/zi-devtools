@@ -103,6 +103,10 @@ pub(super) struct Data {
     pub expression: String,
     pub degrees: bool,
     pub matrix_mode: bool,
+    #[serde(default)]
+    pub plot_mode: bool,
+    #[serde(default)]
+    pub plot: super::plot::Saved,
     #[serde(deserialize_with = "variables")]
     pub variables: BTreeMap<String, Value>,
     pub history: Vec<(String, Value)>,
@@ -130,6 +134,11 @@ impl Data {
             ensure!(expression.len() <= 2048, "历史表达式过长");
             validate_value(*value).map_err(anyhow::Error::msg)?;
         }
+        self.plot.validate().map_err(anyhow::Error::msg)?;
+        ensure!(
+            !(self.matrix_mode && self.plot_mode),
+            "矩阵和绘图工作区不能同时选中"
+        );
         self.matrix.validate().map_err(anyhow::Error::msg)
     }
 }
@@ -147,15 +156,15 @@ impl Document {
         data.validate()?;
         Ok(Self {
             format: "zi-devtools-calculator".into(),
-            schema: 2,
-            tool_version: "0.5.1".into(),
+            schema: 3,
+            tool_version: "0.6.0".into(),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.format == "zi-devtools-calculator" && matches!(self.schema, 1 | 2),
+            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=3),
             "不支持的计算工作表格式或版本"
         );
         ensure!(
@@ -203,12 +212,39 @@ pub(super) fn save(path: &Path, data: Data) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn plot_settings_roundtrip_and_legacy_defaults_do_not_store_sample_results() {
+        let mut settings = data();
+        settings.matrix_mode = false;
+        settings.plot_mode = true;
+        settings.plot.curves[0].expression = "factor*sin(x)".into();
+        settings.plot.points = 1025;
+        let document = Document::new(settings.clone()).unwrap();
+        assert_eq!(document.schema, 3);
+        let bytes = serde_json::to_vec(&document).unwrap();
+        let restored: Document = serde_json::from_slice(&bytes).unwrap();
+        restored.validate().unwrap();
+        assert_eq!(restored.data, settings);
+        let mut legacy = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
+        legacy["schema"] = 2.into();
+        legacy["data"].as_object_mut().unwrap().remove("plot");
+        legacy["data"].as_object_mut().unwrap().remove("plot_mode");
+        let restored: Document = serde_json::from_value(legacy).unwrap();
+        restored.validate().unwrap();
+        assert_eq!(restored.data.plot, super::super::plot::Saved::default());
+        assert!(!restored.data.plot_mode);
+        let mut invalid = settings;
+        invalid.plot.x_min = f64::INFINITY;
+        assert!(Document::new(invalid).is_err());
+    }
     fn data() -> Data {
         Data {
             name: "合成工作表".into(),
             expression: "1/3".into(),
             degrees: true,
             matrix_mode: true,
+            plot_mode: false,
+            plot: Default::default(),
             variables: BTreeMap::from([
                 ("ans".into(), Value::Exact(i128::MAX, 1)),
                 ("third".into(), Value::Exact(1, 3)),
@@ -224,6 +260,8 @@ mod tests {
         let mut doc = serde_json::to_value(Document::new(data).unwrap()).unwrap();
         doc["schema"] = 1.into();
         doc["tool_version"] = "0.3.0".into();
+        doc["data"].as_object_mut().unwrap().remove("plot");
+        doc["data"].as_object_mut().unwrap().remove("plot_mode");
         for input in ["a", "b"] {
             doc["data"]["matrix"][input]
                 .as_object_mut()
@@ -261,7 +299,7 @@ mod tests {
             assert!(serde_json::from_str::<Value>(text).is_err(), "{text}");
         }
         let mut doc = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
-        doc["schema"] = 3.into();
+        doc["schema"] = 4.into();
         assert!(
             serde_json::from_value::<Document>(doc.clone())
                 .unwrap()

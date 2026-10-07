@@ -2,6 +2,8 @@ use super::*;
 mod discovery;
 #[cfg(feature = "ui-preview")]
 mod numeric_preview;
+#[cfg(feature = "ui-preview")]
+mod plot_preview;
 use crate::calculator::exchange::{MatrixSlot, NumericTable, Representation};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -248,6 +250,45 @@ impl DevToolsApp {
         }
     }
     pub(super) fn handoff_bar(&mut self, ctx: &egui::Context) {
+        if self.page == Page::Calculator && self.calculator.plot_active() {
+            let result = self.calculator.plot_description();
+            let mut send = false;
+            egui::TopBottomPanel::top("result-handoff").show(ctx, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let response = ui.add_enabled(
+                        result.is_ok() && self.handoff.is_none(),
+                        egui::Button::new("发送采样表到工具…"),
+                    );
+                    send = response.clicked();
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.calculator.preview_numeric_send = Some(response.rect);
+                    }
+                    match &result {
+                        Ok(description) => {
+                            ui.small(description);
+                        }
+                        Err(e) => {
+                            ui.small(e);
+                        }
+                    }
+                });
+            });
+            if send {
+                match Transfer::new(
+                    "函数采样表 · 计算器v0.6.0 · 近似值".into(),
+                    self.calculator.plot_csv().unwrap(),
+                ) {
+                    Ok(mut transfer) => {
+                        transfer.target = Target::Csv;
+                        transfer.new_data_instance = true;
+                        self.handoff = Some(transfer);
+                    }
+                    Err(e) => self.toast = Some((e.to_string(), Instant::now())),
+                }
+            }
+            return;
+        }
         if self.page == Page::Calculator {
             let result = self.calculator.numeric_description();
             let mut send = false;
@@ -274,7 +315,7 @@ impl DevToolsApp {
             });
             if send {
                 match Transfer::numeric(
-                    "计算器结果快照 · v0.5.1".into(),
+                    "计算器结果快照 · v0.6.0".into(),
                     self.calculator.numeric_result().unwrap(),
                 ) {
                     Ok(t) => self.handoff = Some(t),

@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 pub struct State {
     pub expression: String,
     pub(super) matrix_mode: bool,
+    pub(super) plot_mode: bool,
+    pub(super) plot: super::plot_ui::State,
     pub(super) matrix: super::matrix_ui::State,
     pub(super) degrees: bool,
     pub(super) variables: BTreeMap<String, Value>,
@@ -22,6 +24,8 @@ impl Default for State {
         let mut state = Self {
             expression: "0.1 + 0.2".into(),
             matrix_mode: false,
+            plot_mode: false,
+            plot: Default::default(),
             matrix: Default::default(),
             degrees: false,
             variables: BTreeMap::new(),
@@ -39,6 +43,15 @@ impl Default for State {
     }
 }
 impl State {
+    pub fn plot_active(&self) -> bool {
+        self.plot_mode
+    }
+    pub fn plot_description(&self) -> Result<String, String> {
+        self.plot.description(&self.variables, self.degrees)
+    }
+    pub fn plot_csv(&self) -> Result<&str, String> {
+        self.plot.csv(&self.variables, self.degrees)
+    }
     pub(super) fn preview(&self) -> Result<(Option<String>, Value), String> {
         let angle = if self.degrees {
             Angle::Degrees
@@ -74,11 +87,25 @@ impl State {
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, version: &str) {
         ui.heading("全能计算器");
-        ui.label(format!(
-            "v{version} · 开发中：精确表达式 / 科学函数 / 单位 / 矩阵与线性方程 / 变量与历史"
-        ));
-        ui.small("精确模式采用 i128 有理数；科学函数为近似实数。可主动另存JSON工作表并恢复；默认只保留在内存。");
-        self.worksheet_ui(ui);
+        if self.plot_mode {
+            ui.small(format!("v{version} · 函数绘图 · 近似采样，不自动保存"));
+            let status = if self.busy() {
+                "后台任务中"
+            } else if self.dirty() {
+                "● 未保存修改"
+            } else {
+                "已保存 / 与基线一致"
+            };
+            egui::CollapsingHeader::new(format!("工作表管理 · {status}"))
+                .id_salt("plot-worksheet-management")
+                .show(ui, |ui| self.worksheet_ui(ui));
+        } else {
+            ui.label(format!(
+                "v{version} · 开发中：精确表达式 / 科学函数 / 单位 / 矩阵 / 函数绘图 / 变量与历史"
+            ));
+            ui.small("精确模式采用 i128 有理数；科学函数为近似实数。可主动另存JSON工作表并恢复；默认只保留在内存。");
+            self.worksheet_ui(ui);
+        }
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
             ui.label("三角函数角度");
@@ -86,9 +113,30 @@ impl State {
             ui.selectable_value(&mut self.degrees, true, "角度 DEG");
         });
         ui.horizontal_wrapped(|ui| {
-            ui.selectable_value(&mut self.matrix_mode, false, "表达式计算");
-            ui.selectable_value(&mut self.matrix_mode, true, "矩阵与线性方程");
+            if ui
+                .selectable_label(!self.matrix_mode && !self.plot_mode, "表达式计算")
+                .clicked()
+            {
+                self.matrix_mode = false;
+                self.plot_mode = false;
+            }
+            if ui
+                .selectable_label(self.matrix_mode && !self.plot_mode, "矩阵与线性方程")
+                .clicked()
+            {
+                self.matrix_mode = true;
+                self.plot_mode = false;
+            }
+            if ui.selectable_label(self.plot_mode, "函数绘图").clicked() {
+                self.matrix_mode = false;
+                self.plot_mode = true;
+            }
         });
+        if self.plot_mode {
+            let files_busy = self.busy() && !self.plot.busy();
+            self.plot.ui(ui, &self.variables, self.degrees, files_busy);
+            return;
+        }
         if self.matrix_mode {
             self.matrix.ui(ui, &self.variables, self.degrees);
             return;
@@ -178,7 +226,7 @@ impl State {
             ui.label("进制：0xff / 0b1010 / 0o17；科学计数法 1e-3；变量 price=19.90，后续 price*3。");
             ui.label("单位：mm/cm/m/km/in/ft/mi，mg/g/kg/lb，ms/s/min/h/day，B/KB/MB/GB/KiB/MiB/GiB，C/F/K。单位区分大小写。");
             ui.horizontal_wrapped(|ui| { for example in ["0.1+0.2","(128+64)*3","sin(30)","0xff & 0x0f","5 km -> m","25 C -> F","1 GiB -> MB","price = 19.90"] { if ui.button(example).clicked() { self.expression=example.into(); input.request_focus(); } } });
-            ui.small("矩阵及线性方程见上方工作区；复数、非线性方程、绘图、日期计算、原文件更新、任意精度与通用接力继续开发。");
+            ui.small("矩阵及线性方程见上方工作区；复数、非线性方程、日期计算、原文件更新、任意精度与通用接力继续开发。");
         });
         ui.collapsing(format!("变量（{}）", self.variables.len()), |ui| {
             for (name, v) in &self.variables {
@@ -218,6 +266,7 @@ impl State {
     #[cfg(feature = "ui-preview")]
     pub fn preview_matrix_fixture(&mut self) {
         self.matrix_mode = true;
+        self.plot_mode = false;
         self.matrix.preview_fixture();
     }
     #[cfg(feature = "ui-preview")]

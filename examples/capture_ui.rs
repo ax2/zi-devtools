@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 432] = [
+const NAMES: [&str; 436] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -442,6 +442,10 @@ const NAMES: [&str; 432] = [
     "numeric-picker-eight-light",
     "numeric-boundary-target-dark",
     "numeric-boundary-target-light",
+    "calculator-plot-dark",
+    "calculator-plot-light",
+    "calculator-plot-small-dark",
+    "calculator-plot-small-light",
 ];
 
 struct Capture {
@@ -831,6 +835,78 @@ impl eframe::App for Capture {
                     pressed: matches!(self.frames, 20 | 43 | 53 | 63 | 73 | 120),
                     modifiers: egui::Modifiers::NONE,
                 });
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("plot-smoke") {
+            let click = match self.frames {
+                10 | 11 | 90 | 91 => Some(1),
+                70 | 71 => Some(0),
+                110 | 111 => Some(3),
+                125 | 126 => Some(4),
+                _ => None,
+            };
+            if let Some(index) = click {
+                let pos = self.app.preview_plot_position(index);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(self.frames, 10 | 70 | 90 | 110 | 125),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 40 {
+                let pos = self.app.preview_plot_position(2);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, 140.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if matches!(self.frames, 55..=57) {
+                let start = self.app.preview_plot_position(2);
+                let pos = if self.frames == 55 {
+                    start
+                } else {
+                    start + egui::vec2(30.0, 18.0)
+                };
+                input.events.push(egui::Event::PointerMoved(pos));
+                if self.frames != 56 {
+                    input.events.push(egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: self.frames == 55,
+                        modifiers: egui::Modifiers::NONE,
+                    });
+                }
+            }
+            if self.frames == 73 {
+                let modifiers = egui::Modifiers {
+                    ctrl: true,
+                    command: true,
+                    ..Default::default()
+                };
+                input.modifiers = modifiers;
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+            if self.frames == 74 {
+                input.events.push(egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: false,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 76 {
+                input.events.push(egui::Event::Text("sin(x)*3".into()));
             }
         }
         if std::env::args().nth(3).as_deref() == Some("worksheet-smoke")
@@ -1971,6 +2047,60 @@ impl eframe::App for Capture {
             return;
         }
 
+        if smoke_mode.as_deref() == Some("plot-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(60),
+                "plot smoke timeout"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 432, self.fixture.clone());
+                self.app.preview_plot_fixture(false);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            if matches!(self.frames, 20 | 100) && !self.app.preview_plot_ready() {
+                ctx.request_repaint_after(Duration::from_millis(30));
+                return;
+            }
+            if self.frames == 25 {
+                self.app.preview_plot_check(0);
+            }
+            if self.frames == 40 {
+                self.started = Instant::now();
+            }
+            if self.frames == 41 && self.started.elapsed() < Duration::from_millis(400) {
+                ctx.request_repaint_after(Duration::from_millis(30));
+                return;
+            }
+            if self.frames == 65 {
+                self.app.preview_plot_check(1);
+            }
+            if self.frames == 80 {
+                self.app.preview_plot_check(2);
+            }
+            if self.frames == 120 {
+                self.app.preview_plot_handoff_check();
+            }
+            if self.frames == 145 {
+                if !self.app.preview_plot_received() {
+                    ctx.request_repaint_after(Duration::from_millis(30));
+                    return;
+                }
+                fs::write(
+                    self.folder.join("native-plot.svg"),
+                    self.app.preview_plot_svg(),
+                )
+                .unwrap();
+                println!(
+                    "PASS native plot: draw two functions; actual wheel zoom and drag pan; keyboard formula edit invalidates exports; redraw; CSV handoff new instance and actual parse of all 129x3 values; original work/ans/x/history retained; SVG rendering fixture saved"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("boundary-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 420, self.fixture.clone());
@@ -3329,6 +3459,7 @@ impl eframe::App for Capture {
                 || (148..=152).contains(&self.scene)
                 || (153..=154).contains(&self.scene)
                 || (400..=403).contains(&self.scene)
+                || (432..=433).contains(&self.scene)
                 || (406..=407).contains(&self.scene)
                 || matches!(self.scene, 410 | 411 | 414 | 415 | 418 | 419 | 422 | 423)
                 || (280..=281).contains(&self.scene)
@@ -3337,7 +3468,21 @@ impl eframe::App for Capture {
                 egui::vec2(1280.0, 1180.0)
             } else if matches!(
                 self.scene,
-                412 | 413 | 416 | 417 | 420 | 421 | 424 | 425 | 426 | 427 | 428 | 429 | 430 | 431
+                412 | 413
+                    | 416
+                    | 417
+                    | 420
+                    | 421
+                    | 424
+                    | 425
+                    | 426
+                    | 427
+                    | 428
+                    | 429
+                    | 430
+                    | 431
+                    | 434
+                    | 435
             ) {
                 egui::vec2(980.0, 760.0)
             } else if (134..=135).contains(&self.scene) {
