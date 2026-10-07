@@ -3,7 +3,7 @@ param(
     [switch]$Scheduled,
     [switch]$Deep,
     [switch]$BudgetOnly,
-    [ValidateRange(1, 1024)][double]$BudgetGiB = 12,
+    [ValidateRange(1, 1024)][double]$BudgetGiB = 6,
     [string]$BuildCacheRoot
 )
 $ErrorActionPreference = 'Stop'

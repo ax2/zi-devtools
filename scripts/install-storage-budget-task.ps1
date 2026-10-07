@@ -1,4 +1,4 @@
-param([string]$BuildCacheRoot, [ValidateRange(1,1024)][double]$BudgetGiB=12)
+param([string]$BuildCacheRoot, [ValidateRange(1,1024)][double]$BudgetGiB=6)
 $ErrorActionPreference='Stop'
 $scriptPath=Join-Path $PSScriptRoot 'maintenance.ps1'
 $shell=(Get-Command pwsh).Source

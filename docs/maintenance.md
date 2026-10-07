@@ -5,7 +5,7 @@
 ## 默认策略
 
 - 开发和测试 profile 关闭增量编译、调试符号，避免增量缓存和 PDB 持续增长。需要断点调试时临时设置 `CARGO_PROFILE_DEV_DEBUG=1`；完成后清理对应缓存。
-- 项目 `target/` 和显式指定的外置 `debug/` 各自采用 **12 GiB** 维护阈值。超限时，下一次空闲维护清理整个对应缓存。
+- 项目 `target/` 和显式指定的外置 `debug/` 各自采用 **6 GiB** 维护阈值。超限时，下一次空闲维护清理整个对应缓存。
 - 已有每周维护仍只检查项目 `target/`：按月深度清理，其余时间清理增量缓存；超限提前深度清理。
 - 新的每日容量任务 03:30 检查阈值；未超限不删除。外置缓存必须显式注册，外置 `release/` 始终保留。
 - 阈值不是文件系统硬配额：正在构建或缓存内有程序运行时跳过，不能保证构建期间始终低于阈值。空间不足前可主动运行维护；清理后首次构建会更慢。
@@ -20,7 +20,7 @@ pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -Apply
 pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -BuildCacheRoot D:\ZiBuildCache\zi-devtools
 pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -Apply -BuildCacheRoot D:\ZiBuildCache\zi-devtools
 # 只在超过容量阈值时清理，可调整 BudgetGiB。
-pwsh -NoProfile -File scripts/maintenance.ps1 -BudgetOnly -Apply -BudgetGiB 12
+pwsh -NoProfile -File scripts/maintenance.ps1 -BudgetOnly -Apply -BudgetGiB 6
 ```
 
 不要把其他数据目录传为构建缓存。外置目录必须名为 `zi-devtools`，与项目目录分离，且为无链接的普通目录。项目所在卷挂载路径通过 Windows 文件句柄解析为实际物理路径；候选目标及其父级、后代中的链接均被拒绝。所有候选目标先校验，再开始删除。Rust/WiX 构建进程、从待维护缓存运行的程序都会阻止删除；维护互斥锁防止两个任务同时删除。
