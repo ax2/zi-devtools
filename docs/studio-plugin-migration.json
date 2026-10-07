@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.73",
+  "sourceCatalogVersion": "0.82.0-dev.74",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -1540,7 +1540,7 @@
     {
       "sourceToolId": "text-flow",
       "title": "文本 / 表格流程",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.2.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",

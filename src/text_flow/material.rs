@@ -83,7 +83,7 @@ impl Material {
         Ok(prefix(&text, 8192))
     }
 }
-fn prefix(text: &str, limit: usize) -> String {
+pub(super) fn prefix(text: &str, limit: usize) -> String {
     let mut end = text.len().min(limit);
     while !text.is_char_boundary(end) {
         end -= 1;

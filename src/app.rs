@@ -781,6 +781,16 @@ impl DevToolsApp {
         assert_eq!(self.handoff.is_some(), sent);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_file_path(&mut self, path: PathBuf) {
+        self.data_state.preview_text_flow_file_path(path);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_file_check(&self, path: &std::path::Path, phase: u8) {
+        assert_eq!(self.data_state.instances.len(), 1);
+        assert_eq!(self.data_state.input, "original table draft");
+        self.data_state.preview_text_flow_file_check(path, phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_table_check(&self, phase: u8) {
         self.data_state.instances[0]
             .state

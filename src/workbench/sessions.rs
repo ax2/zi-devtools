@@ -314,7 +314,7 @@ impl Workspace {
                         .state
                         .text_flow
                         .job
-                        .snapshot("text-flow", "文本工具流程", true),
+                        .snapshot("text-flow", "工具流程与文件", true),
                 ]
                 .into_iter()
                 .flatten()

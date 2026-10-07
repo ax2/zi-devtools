@@ -323,6 +323,14 @@ impl DataState {
         );
         assert_eq!(self.visible, vec![0, 1]);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_file_path(&mut self, path: PathBuf) {
+        self.text_flow.preview_file_path(path);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_file_check(&self, path: &std::path::Path, phase: u8) {
+        self.text_flow.preview_file_check(path, phase);
+    }
     pub fn take_text_flow_send(&mut self) -> Option<String> {
         self.text_flow.take_send()
     }

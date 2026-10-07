@@ -13,7 +13,14 @@ const LIMIT: usize = 1024 * 1024;
 const TRACE_LIMIT: usize = 8 * LIMIT;
 const STEPS: usize = 16;
 
+mod files;
 mod material;
+enum Reply {
+    Run(Run),
+    Input(String),
+    Definition(Definition),
+    Saved(std::path::PathBuf, usize),
+}
 pub use material::{ACTIONS, Action, Kind, Material};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -140,7 +147,7 @@ pub struct State {
     #[serde(skip)]
     result: Option<Run>,
     #[serde(skip)]
-    receiver: Option<Receiver<std::result::Result<Run, String>>>,
+    receiver: Option<Receiver<std::result::Result<Reply, String>>>,
     #[serde(skip)]
     cancel: Arc<AtomicBool>,
     #[serde(skip)]
@@ -162,6 +169,10 @@ pub struct State {
     #[serde(skip)]
     review: Option<Definition>,
     #[serde(skip)]
+    input_review: Option<String>,
+    #[serde(skip)]
+    output_review: Option<files::Output>,
+    #[serde(skip)]
     reveal: bool,
     #[serde(skip)]
     scroll_until: Option<std::time::Instant>,
@@ -169,7 +180,10 @@ pub struct State {
     selected: usize,
     #[cfg(feature = "ui-preview")]
     #[serde(skip)]
-    buttons: [Option<(egui::Rect, egui::Rect)>; 6],
+    buttons: [Option<(egui::Rect, egui::Rect)>; 12],
+    #[cfg(feature = "ui-preview")]
+    #[serde(skip)]
+    file_path: Option<std::path::PathBuf>,
 }
 impl Drop for State {
     fn drop(&mut self) {
@@ -182,7 +196,10 @@ impl State {
         self.scroll_until = Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
     }
     pub(crate) fn modal_open(&self) -> bool {
-        self.review.is_some() || self.table_review.is_some()
+        self.review.is_some()
+            || self.table_review.is_some()
+            || self.input_review.is_some()
+            || self.output_review.is_some()
     }
     pub(crate) fn receive(&mut self, input: String) -> Result<()> {
         ensure!(input.len() <= LIMIT, "文本流程输入最多1 MiB");
@@ -196,7 +213,7 @@ impl State {
         self.receiver.is_some()
     }
     pub fn has_content(&self) -> bool {
-        !self.input.is_empty() || !self.definition.steps.is_empty()
+        !self.input.is_empty() || !self.definition.steps.is_empty() || self.modal_open()
     }
     pub fn validate(&self) -> Result<()> {
         ensure!(self.input.len() <= LIMIT, "文本流程输入最多1 MiB");
@@ -221,6 +238,8 @@ impl State {
         self.send = None;
         self.table_send = None;
         self.table_review = None;
+        self.input_review = None;
+        self.output_review = None;
         self.preview_cache = None;
         self.message.clear();
         self.selected = 0;
@@ -238,7 +257,11 @@ impl State {
         self.receiver = Some(rx);
         self.job.begin();
         std::thread::spawn(move || {
-            let _ = tx.send(execute(&definition, &input, &cancel).map_err(|e| format!("{e:#}")));
+            let _ = tx.send(
+                execute(&definition, &input, &cancel)
+                    .map(Reply::Run)
+                    .map_err(|e| format!("{e:#}")),
+            );
         });
         Ok(())
     }
@@ -253,7 +276,11 @@ impl State {
         };
         self.receiver = None;
         match reply {
-            Ok(mut run) => {
+            Ok(Reply::Input(_) | Reply::Definition(_)) if self.cancel.load(Ordering::Relaxed) => {
+                self.message = "文件读取已取消；原输入、步骤与结果保留".into();
+                self.job.finish(Phase::Cancelled, &self.message);
+            }
+            Ok(Reply::Run(mut run)) => {
                 if self.cancel.load(Ordering::Relaxed) {
                     run.cancelled = true;
                 }
@@ -279,10 +306,66 @@ impl State {
                 self.result = Some(run);
                 self.open();
             }
+            Ok(Reply::Input(input)) => {
+                self.input_review = Some(input);
+                self.job.finish(Phase::Done, "材料已读取，待确认；未运行");
+                self.open();
+            }
+            Ok(Reply::Definition(definition)) => {
+                self.review = Some(definition);
+                self.job.finish(Phase::Done, "配方已读取，待确认；未运行");
+                self.open();
+            }
+            Ok(Reply::Saved(path, bytes)) => {
+                self.message = format!(
+                    "完整文件已保存：{} · {}字节；流程材料与步骤结果保留",
+                    path.display(),
+                    bytes
+                );
+                self.job.finish(Phase::Done, "完整文件已保存");
+                self.open();
+            }
             Err(error) => {
-                self.job.finish(Phase::Failed, &error);
+                let phase = if self.cancel.load(Ordering::Relaxed) {
+                    Phase::Cancelled
+                } else {
+                    Phase::Failed
+                };
+                self.job.finish(phase, &error);
                 self.message = error;
             }
+        }
+    }
+    fn file_task(
+        &mut self,
+        task: impl FnOnce(&AtomicBool) -> Result<Reply> + Send + 'static,
+    ) -> Result<()> {
+        ensure!(!self.busy() && !self.modal_open(), "请先结束任务或当前审核");
+        self.cancel = Arc::new(AtomicBool::new(false));
+        let cancel = self.cancel.clone();
+        let (tx, rx) = mpsc::channel();
+        self.receiver = Some(rx);
+        self.message.clear();
+        self.job.begin();
+        std::thread::spawn(move || {
+            let _ = tx.send(task(&cancel).map_err(|e| format!("{e:#}")));
+        });
+        Ok(())
+    }
+    fn choose_path(&mut self, save: bool, name: &str) -> Option<std::path::PathBuf> {
+        #[cfg(feature = "ui-preview")]
+        if let Some(path) = self.file_path.take() {
+            return Some(path);
+        }
+        let dialog = rfd::FileDialog::new().set_title(if save {
+            "保存流程文件（选择新文件名）"
+        } else {
+            "读取流程文件（确认后载入）"
+        });
+        if save {
+            dialog.set_file_name(name).save_file()
+        } else {
+            dialog.pick_file()
         }
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -293,7 +376,14 @@ impl State {
             let busy = self.busy();
             let mut changed = false;
             ui.add_enabled_ui(!busy, |ui| {
-                ui.label("原输入");
+                ui.horizontal(|ui| {
+                    ui.label("原输入");
+                    let read=ui.add_enabled(!self.modal_open(),egui::Button::new("读取UTF-8文件…"));
+                    #[cfg(feature="ui-preview")] {self.buttons[9]=Some((read.rect,ui.clip_rect()));}
+                    if read.clicked()
+                        && let Some(path)=self.choose_path(false,"")
+                        && let Err(error)=self.file_task(move|cancel|files::input(&path,cancel).map(Reply::Input)) {self.message=error.to_string();}
+                });
                 egui::ScrollArea::vertical().id_salt("text-flow-input").max_height(75.0).show(ui, |ui| { changed |= ui.add(egui::TextEdit::multiline(&mut self.input).desired_rows(3).desired_width(f32::INFINITY).char_limit(LIMIT)).changed(); });
                 ui.horizontal(|ui| {
                     if ui.button("添加操作…").clicked() { self.picker_open = !self.picker_open; }
@@ -343,7 +433,7 @@ impl State {
                 if button.clicked() && let Err(error)=self.start() { self.message=error.to_string(); }
                 if ui.add_enabled(busy,egui::Button::new("取消")).on_hover_text("在当前操作返回后停止；已完成结果保留").clicked() { self.cancel(); }
             });
-            if busy { ui.horizontal(|ui| { ui.spinner(); ui.label("正在运行文本流程，原输入保留…"); }); }
+            if busy { ui.horizontal(|ui| { ui.spinner(); ui.label("正在处理流程或文件，原输入保留…"); }); }
             if !self.message.is_empty() {
                 if self.job.phase == Phase::Failed { ui.colored_label(ui.visuals().error_fg_color, &self.message); }
                 else { ui.label(&self.message); }
@@ -355,20 +445,38 @@ impl State {
                     ui.small("文本预览最多8192字节；表格仅前3行×6列，表头256/单元格1024字节；复制与接力使用完整材料。");
                     if self.preview_cache.as_ref().is_none_or(|(index,_)| *index!=self.selected) { self.preview_cache=Some((self.selected,output.preview().unwrap_or_else(|e|e.to_string()))); }
                     let mut preview=self.preview_cache.as_ref().unwrap().1.clone();
-                    ui.horizontal(|ui| {
+                    ui.add_enabled_ui(!busy && self.review.is_none() && self.input_review.is_none() && self.output_review.is_none() && self.table_review.is_none(),|ui| { ui.horizontal(|ui| {
                         if ui.button("复制完整结果").clicked() { match output.render() {Ok(text)=>ui.ctx().copy_text(text),Err(e)=>self.message=e.to_string()} }
                         let button=ui.button(if output.kind()==Kind::Table {"送到数据工作台…"} else {"发送到其他工具…"});
                         #[cfg(feature="ui-preview")] { self.buttons[2]=Some((button.rect,ui.clip_rect())); }
                         if button.clicked() { match output {Material::Text(text)=>self.send=Some(text.clone()),Material::Table(data)=>{self.table_review=Some(data.clone());self.table_review_preview=preview.clone();}} }
-                    });
+                        let save=ui.button("完整结果另存…");
+                        #[cfg(feature="ui-preview")] {self.buttons[6]=Some((save.rect,ui.clip_rect()));}
+                        if save.clicked(){
+                            #[cfg(feature="ui-preview")] let fixture=self.file_path.take();
+                            #[cfg(not(feature="ui-preview"))] let fixture:Option<std::path::PathBuf>=None;
+                            if let Some(path)=fixture.or_else(||rfd::FileDialog::new().set_title("保存完整步骤结果（选择新文件名）").set_file_name(if output.kind()==Kind::Table{"flow-result.json"}else{"flow-result.txt"}).save_file()) {
+                            match files::Output::prepare(output,path){Ok(review)=>self.output_review=Some(review),Err(e)=>self.message=e.to_string()}
+                        } }
+                    }); });
                     egui::ScrollArea::vertical().id_salt("text-flow-result").max_height(95.0).show(ui, |ui| { ui.add(egui::TextEdit::multiline(&mut preview).interactive(false).desired_width(f32::INFINITY).desired_rows(4)); });
                 }
             }
             egui::CollapsingHeader::new("流程配方 · 保存与载入").id_salt("text-flow-recipe").show(ui, |ui| {
                 ui.label("当前输入和步骤可随工作实例保存。配方仅包含版本和步骤，不包含输入、结果、文件目标或授权。");
                 if ui.button("复制当前配方").clicked() { match serde_json::to_string_pretty(&self.definition) { Ok(text)=>ui.ctx().copy_text(text),Err(e)=>self.message=e.to_string() } }
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(!busy && !self.modal_open(),egui::Button::new("配方另存…")).clicked()
+                        && let Some(path)=rfd::FileDialog::new().add_filter("工具流程配方",&["json"]).set_file_name("tool-flow.json").save_file(){
+                        let definition=self.definition.clone();
+                        if let Err(e)=self.file_task(move|cancel|files::save_recipe(&definition,&path,cancel).map(|path|Reply::Saved(path,serde_json::to_vec_pretty(&definition).unwrap().len()))){self.message=e.to_string();}
+                    }
+                    if ui.add_enabled(!busy && !self.modal_open(),egui::Button::new("读取配方…")).clicked()
+                        && let Some(path)=rfd::FileDialog::new().add_filter("工具流程配方",&["json"]).pick_file()
+                        && let Err(e)=self.file_task(move|cancel|files::recipe(&path,cancel).map(Reply::Definition)){self.message=e.to_string();}
+                });
                 ui.add(egui::TextEdit::multiline(&mut self.recipe).desired_rows(3).desired_width(f32::INFINITY).char_limit(65536));
-                if ui.add_enabled(!busy,egui::Button::new("审核载入配方…")).clicked() {
+                if ui.add_enabled(!busy && !self.modal_open(),egui::Button::new("审核载入配方…")).clicked() {
                     match serde_json::from_str::<Definition>(&self.recipe).map_err(anyhow::Error::from).and_then(|d| {d.validate()?;Ok(d)}) {
                         Ok(d)=>self.review=Some(d),Err(e)=>self.message=e.to_string()
                     }
@@ -389,6 +497,76 @@ impl State {
             self.reveal = false;
         }
 
+        let mut input_choice = None;
+        if let Some(input) = &self.input_review {
+            egui::Modal::new(egui::Id::new("text-flow-file-input")).show(ui.ctx(),|ui|{
+                ui.heading("载入文件内容？");ui.label(format!("完整UTF-8文本：{}字节。确认替换原输入，保留现有步骤，清除旧结果；不会自动运行。",input.len()));
+                let mut preview=material::prefix(input,8192);
+                egui::ScrollArea::vertical().max_height(180.0).show(ui,|ui|{ui.add(egui::TextEdit::multiline(&mut preview).interactive(false).desired_width(520.0));});
+                ui.horizontal(|ui|{let back=ui.button("返回");let confirm=ui.button("确认替换输入");
+                #[cfg(feature="ui-preview")] {self.buttons[10]=Some((confirm.rect,ui.clip_rect()));self.buttons[11]=Some((back.rect,ui.clip_rect()));}
+                if back.clicked(){input_choice=Some(false);}else if confirm.clicked(){input_choice=Some(true);}});
+            });
+        }
+        if let Some(confirm) = input_choice {
+            let input = self.input_review.take().unwrap();
+            if confirm {
+                self.input = input;
+                self.invalidate();
+            }
+            self.open();
+        }
+        let mut output_choice = None;
+        if let Some(review) = &self.output_review {
+            egui::Modal::new(egui::Id::new("text-flow-file-output")).show(ui.ctx(), |ui| {
+                ui.heading("保存完整步骤结果？");
+                ui.label(&review.summary);
+                ui.label(review.format);
+                ui.label(format!(
+                    "完整文件：{}字节；预览是有界样本。",
+                    review.bytes.len()
+                ));
+                ui.label(format!("目标：{}", review.path.display()));
+                ui.label("仅创建新文件。若目标已存在，保留已有文件和当前结果。确认不运行流程。");
+                let mut preview = review.preview.clone();
+                egui::ScrollArea::vertical()
+                    .max_height(150.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut preview)
+                                .interactive(false)
+                                .desired_width(520.0),
+                        );
+                    });
+                ui.horizontal(|ui| {
+                    let back = ui.button("返回");
+                    let confirm = ui.button("确认保存新文件");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.buttons[7] = Some((confirm.rect, ui.clip_rect()));
+                        self.buttons[8] = Some((back.rect, ui.clip_rect()));
+                    }
+                    if back.clicked() {
+                        output_choice = Some(false);
+                    } else if confirm.clicked() {
+                        output_choice = Some(true);
+                    }
+                });
+            });
+        }
+        if let Some(confirm) = output_choice {
+            let output = self.output_review.take().unwrap();
+            if confirm
+                && let Err(e) = self.file_task(move |cancel| {
+                    output
+                        .save(cancel)
+                        .map(|(path, bytes)| Reply::Saved(path, bytes))
+                })
+            {
+                self.message = e.to_string();
+            }
+            self.open();
+        }
         let mut table_choice = None;
         if let Some(data) = &self.table_review {
             egui::Modal::new(egui::Id::new("text-flow-table-send")).show(ui.ctx(),|ui| {
@@ -450,6 +628,47 @@ impl State {
         }
     }
     #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_file_path(&mut self, path: std::path::PathBuf) {
+        self.file_path = Some(path);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_file_check(&self, path: &std::path::Path, phase: u8) {
+        if phase < 4 {
+            self.preview_table_check(false);
+        }
+        match phase {
+            0 => {
+                assert!(self.output_review.is_some());
+                assert!(!path.exists());
+            }
+            1 => {
+                assert!(self.output_review.is_none());
+                assert!(!path.exists());
+            }
+            2 => {
+                assert!(!self.busy());
+                assert_eq!(self.job.phase, Phase::Done);
+                let stored = std::fs::read_to_string(path).unwrap();
+                assert_eq!(
+                    stored,
+                    self.result.as_ref().unwrap().outputs[3].render().unwrap()
+                );
+            }
+            3 => {
+                assert!(self.input_review.is_some());
+                assert!(self.input.contains(" Zi Tools "));
+            }
+            4 => {
+                assert!(self.result.is_none());
+                assert!(self.input_review.is_none());
+                assert_eq!(self.input, std::fs::read_to_string(path).unwrap());
+                assert_eq!(self.definition.steps.len(), 4);
+                assert!(!self.busy());
+            }
+            _ => panic!("unknown fixture phase"),
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_open(&mut self) {
         self.reveal = true;
     }
@@ -496,6 +715,35 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn file_reply_cancellation_preserves_draft_and_published_save_wins_late_cancel() {
+        let mut state = State::default();
+        state.input = "source".into();
+        state.definition = recipe(&["base64.encode"]);
+        state.result =
+            Some(execute(&state.definition, &state.input, &AtomicBool::new(false)).unwrap());
+        let (tx, rx) = mpsc::channel();
+        state.receiver = Some(rx);
+        state.job.begin();
+        tx.send(Ok(Reply::Input("replacement".into()))).unwrap();
+        state.cancel();
+        state.poll();
+        assert_eq!(state.input, "source");
+        assert!(state.input_review.is_none());
+        assert!(state.result.is_some());
+        assert_eq!(state.job.phase, Phase::Cancelled);
+        let (tx, rx) = mpsc::channel();
+        state.receiver = Some(rx);
+        state.job.begin();
+        tx.send(Ok(Reply::Saved(
+            std::path::PathBuf::from("published.txt"),
+            4,
+        )))
+        .unwrap();
+        state.poll();
+        assert_eq!(state.job.phase, Phase::Done);
+        assert!(state.result.is_some());
+    }
     fn recipe(ids: &[&str]) -> Definition {
         Definition {
             version: 1,
