@@ -544,10 +544,10 @@ mod tests {
 
     #[test]
     fn shortcuts_follow_history_and_filter_disabled_plugins() {
-        let mut prefs = crate::preferences::Preferences {
-            favorites: vec!["plugin:off/x".into(), "b".into(), "a".into(), "b".into()],
-            ..Default::default()
-        };
+        let mut prefs = crate::preferences::Preferences::default();
+        prefs
+            .favorites
+            .extend(["plugin:off/x", "b", "a", "b"].map(str::to_owned));
         prefs.visit("a");
         prefs.visit("a");
         prefs.visit("plugin:on/x");

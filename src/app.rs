@@ -213,6 +213,9 @@ pub struct DevToolsApp {
     refresh_generation: u64,
     refresh_cancel: Arc<AtomicBool>,
     last_refresh: Instant,
+    last_preferences_refresh: Instant,
+    #[cfg(feature = "ui-preview")]
+    preview_shared_theme: Option<Theme>,
     notification: String,
     notification_error: bool,
     startup_warning: Option<String>,
@@ -1672,6 +1675,39 @@ impl DevToolsApp {
         );
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_shared_preferences(&mut self, ready: bool) {
+        if !ready {
+            self.preview_shared_theme = Some(self.theme);
+            self.open_startup_tool("json");
+            let mut other = Preferences::load(&self.preferences_path);
+            if !other.favorites.contains(&"base64".to_owned()) {
+                other.toggle("base64");
+            }
+            other.visit("base64");
+            other.light = !self.preferences.light;
+            other.save(&self.preferences_path).unwrap();
+            self.last_preferences_refresh = Instant::now();
+            self.page = Page::Library;
+            self.home_filter = "收藏".into();
+            self.home_category = "全部分类".into();
+            self.library_query.clear();
+            assert!(!self.preferences.favorites.contains(&"base64".to_owned()));
+        } else {
+            assert!(self.preferences.favorites.contains(&"base64".to_owned()));
+            assert_eq!(self.preferences.recent[0], "base64");
+            assert_eq!(self.preferences.usage["base64"], 1);
+            assert!(
+                self.preview_shared_theme == Some(self.theme),
+                "external discovery refresh must not switch the running window theme"
+            );
+            assert!(
+                self.library_entries()
+                    .iter()
+                    .any(|entry| entry.id == "base64")
+            );
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_hidden_panel(&mut self, ctx: &egui::Context, light: bool) {
         self.quick_open = false;
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
@@ -1936,6 +1972,9 @@ impl DevToolsApp {
             refresh_generation: 0,
             refresh_cancel: Arc::new(AtomicBool::new(false)),
             last_refresh: Instant::now() - Duration::from_secs(30),
+            last_preferences_refresh: Instant::now(),
+            #[cfg(feature = "ui-preview")]
+            preview_shared_theme: None,
             notification: tray_error.clone().unwrap_or_default(),
             notification_error: tray_error.is_some(),
             startup_warning: (duplicate_count > 0).then(|| {
@@ -4117,6 +4156,16 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.last_preferences_refresh.elapsed() >= Duration::from_secs(2) {
+            self.last_preferences_refresh = Instant::now();
+            if self
+                .preferences
+                .refresh_discovery(&self.preferences_path)
+                .unwrap_or(false)
+            {
+                ctx.request_repaint();
+            }
+        }
         self.clock
             .persistence_tick(Instant::now(), chrono::Utc::now());
         if self.clock.poll(Instant::now(), chrono::Utc::now()) {

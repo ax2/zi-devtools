@@ -2,13 +2,18 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
 };
+mod storage;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
+    #[serde(skip)]
+    baseline: Option<serde_json::Value>,
+    #[serde(skip)]
+    pending_recent: Vec<String>,
     pub updates: crate::updates::Policy,
     pub command_bindings: crate::commands::Bindings,
     pub light: bool,
@@ -23,6 +28,8 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            baseline: None,
+            pending_recent: Vec::new(),
             updates: Default::default(),
             command_bindings: Default::default(),
             light: false,
@@ -55,6 +62,9 @@ impl Preferences {
         Ok(())
     }
     pub fn visit(&mut self, id: &str) {
+        self.pending_recent.retain(|item| item != id);
+        self.pending_recent.insert(0, id.to_owned());
+        self.pending_recent.truncate(20);
         self.recent.retain(|s| s != id);
         self.recent.insert(0, id.into());
         self.recent.truncate(20);
@@ -72,45 +82,32 @@ impl Preferences {
         } else {
             Self::default()
         };
+        value.normalize();
+        value.baseline = serde_json::to_value(&value).ok();
+        value
+    }
+    fn normalize(&mut self) {
         let normalize = |ids: &mut Vec<String>, limit: usize| {
             let mut seen = std::collections::HashSet::new();
             ids.retain(|id| !id.is_empty() && id.len() <= 512 && seen.insert(id.clone()));
             ids.truncate(limit);
         };
-        normalize(&mut value.favorites, 4096);
-        normalize(&mut value.recent, 20);
-        value.usage = value
-            .usage
+        normalize(&mut self.favorites, 4096);
+        normalize(&mut self.recent, 20);
+        self.usage = std::mem::take(&mut self.usage)
             .into_iter()
             .filter(|(id, count)| !id.is_empty() && id.len() <= 512 && *count > 0)
             .take(4096)
             .collect();
-        if ![0, 1, 5, 15, 30, 60].contains(&value.recorder_auto_stop_minutes) {
-            value.recorder_auto_stop_minutes = 0;
+        if ![0, 1, 5, 15, 30, 60].contains(&self.recorder_auto_stop_minutes) {
+            self.recorder_auto_stop_minutes = 0;
         }
-        value
     }
-    pub fn save(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            fs::create_dir_all(parent)?;
-        }
-        let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-        let result = (|| -> Result<()> {
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)?;
-            file.write_all(&serde_json::to_vec_pretty(self)?)?;
-            file.sync_all()?;
-            drop(file);
-            // Same-directory rename replaces the previous file without first deleting it.
-            fs::rename(&temporary, path)?;
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
-        }
-        result.context("无法保存界面偏好")
+    pub fn save(&mut self, path: &Path) -> Result<()> {
+        storage::save(self, path).context("无法保存界面偏好")
+    }
+    pub fn refresh_discovery(&mut self, path: &Path) -> Result<bool> {
+        storage::refresh_discovery(self, path)
     }
     pub fn toggle(&mut self, id: &str) {
         if self.favorites.iter().any(|s| s == id) {
@@ -142,7 +139,13 @@ mod tests {
             .unwrap();
         assert_eq!(Preferences::load(&path).command_bindings, bindings);
         assert_eq!(Preferences::load(&path).recent, ["json"]);
-        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        assert!(
+            !fs::read_dir(&dir).unwrap().any(|f| f
+                .unwrap()
+                .path()
+                .extension()
+                .is_some_and(|e| e == "tmp"))
+        );
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]
@@ -168,7 +171,13 @@ mod tests {
             restored.recorder_quality,
             crate::recorder::RecordingQuality::Detailed
         );
-        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        assert!(
+            !fs::read_dir(&dir).unwrap().any(|f| f
+                .unwrap()
+                .path()
+                .extension()
+                .is_some_and(|e| e == "tmp"))
+        );
         fs::write(&path, "invalid").unwrap();
         assert!(Preferences::load(&path).recent.is_empty());
         fs::write(&path, r#"{"recorder_auto_stop_minutes":999}"#).unwrap();

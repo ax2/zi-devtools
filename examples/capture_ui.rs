@@ -1740,6 +1740,22 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("shared-preferences-smoke") {
+            if self.frames == 0 {
+                self.app.preview_shared_preferences(false);
+            }
+            self.app.update(ctx, frame);
+            self.frames += 1;
+            if self.started.elapsed() >= Duration::from_millis(2300) {
+                self.app.preview_shared_preferences(true);
+                println!(
+                    "PASS native shared discovery: idle window refreshes external favorite, recent and frequency without switching local theme; favorite filter sees the new tool"
+                );
+                std::process::exit(0);
+            }
+            ctx.request_repaint_after(Duration::from_millis(50));
+            return;
+        }
         if smoke_mode.as_deref() == Some("tool-shortcuts-smoke") {
             self.app.preview_keyboard_fixture();
             self.app.preview_scene(ctx, 0, self.fixture.clone());
