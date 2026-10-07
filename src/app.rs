@@ -185,6 +185,8 @@ pub struct DevToolsApp {
     preview_tray_capture: Option<PathBuf>,
     #[cfg(feature = "ui-preview")]
     preview_tray_workflow: Option<(PathBuf, usize)>,
+    #[cfg(feature = "ui-preview")]
+    preview_text_copy: Option<(egui::Rect, bool)>,
     hotkey: crate::hotkey::Service,
     hotkey_edit: crate::hotkey::Setting,
     hotkey_status: String,
@@ -2271,6 +2273,8 @@ impl DevToolsApp {
             preview_tray_capture: None,
             #[cfg(feature = "ui-preview")]
             preview_tray_workflow: None,
+            #[cfg(feature = "ui-preview")]
+            preview_text_copy: None,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,
@@ -3476,7 +3480,7 @@ impl DevToolsApp {
         let empty_result = self.tool_state.has_result() && self.tool_state.output.is_empty();
         ui.horizontal_wrapped(|ui| {
             ui.label("上次结果");
-            if ui
+            let copy = ui
                 .add_enabled(
                     self.tool_state.has_result(),
                     egui::Button::new(if empty_result {
@@ -3490,9 +3494,12 @@ impl DevToolsApp {
                     "复制空结果会将当前剪贴板内容替换为空文本"
                 } else {
                     "复制完整处理结果"
-                })
-                .clicked()
+                });
+            #[cfg(feature = "ui-preview")]
             {
+                self.preview_text_copy = Some((copy.rect, copy.enabled()));
+            }
+            if copy.clicked() {
                 ctx.copy_text(self.tool_state.output.clone());
                 self.toast = Some(("结果已复制".into(), Instant::now()));
             }

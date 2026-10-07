@@ -222,8 +222,7 @@ impl Transfer {
             Target::Tool(kind) => {
                 tools.select(kind);
                 tools.input.clone_from(&self.text);
-                tools.output.clear();
-                tools.message.clear();
+                tools.clear_result();
                 tools.qr_image = None;
                 Ok((
                     if kind.is_encoding() {
@@ -261,6 +260,49 @@ impl Transfer {
 }
 
 impl DevToolsApp {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_handoff_result_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.tool_state.select(ToolKind::Base64);
+        self.tool_state.input.clear();
+        let result = self.tool_state.run(0);
+        assert!(self.tool_state.apply_result(result));
+        assert!(self.tool_state.has_result() && self.tool_state.output.is_empty());
+        self.tool_state.select(ToolKind::Json);
+        self.tool_state.input = r#"{"source":true}"#.into();
+        let result = self.tool_state.run(0);
+        assert!(self.tool_state.apply_result(result));
+        let mut transfer = Transfer::new("JSON source".into(), &self.tool_state.output).unwrap();
+        transfer.target = Target::Tool(ToolKind::Base64);
+        self.handoff = Some(transfer);
+        self.apply_handoff();
+        assert!(self.handoff.is_none());
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_handoff_result_copy_position(&self) -> egui::Pos2 {
+        self.preview_text_copy
+            .expect("rendered copy button")
+            .0
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_handoff_result_check(&mut self, ran: bool) {
+        assert_eq!(self.tool_state.selected, ToolKind::Base64);
+        assert_eq!(self.tool_state.input, "{\n  \"source\": true\n}");
+        assert_eq!(self.tool_state.has_result(), ran);
+        assert_eq!(self.preview_text_copy.expect("rendered copy button").1, ran);
+        if ran {
+            assert_eq!(self.tool_state.output, self.tool_state.run(0).unwrap());
+        } else {
+            assert!(self.tool_state.output.is_empty());
+        }
+        self.tool_state.select(ToolKind::Json);
+        assert_eq!(self.tool_state.input, r#"{"source":true}"#);
+        assert!(self.tool_state.has_result());
+        assert_eq!(self.tool_state.output, "{\n  \"source\": true\n}");
+        self.tool_state.select(ToolKind::Base64);
+    }
     pub(super) fn send_service_logs(&mut self, service_id: &str, filtered: bool) {
         if self.log_inflight || self.log_error || self.handoff.is_some() {
             return;
@@ -893,6 +935,55 @@ impl DevToolsApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn receiving_text_invalidates_empty_and_nonempty_success_without_running_target() {
+        for previous in ["", "older target input"] {
+            for same_tool in [false, true] {
+                let mut tools = ToolState::default();
+                tools.select(ToolKind::Base64);
+                tools.input = previous.into();
+                let result = tools.run(0);
+                assert!(tools.apply_result(result));
+                assert!(tools.has_result());
+                if !same_tool {
+                    tools.select(ToolKind::Json);
+                    tools.input = r#"{"source":true}"#.into();
+                    let result = tools.run(0);
+                    assert!(tools.apply_result(result));
+                }
+                let old_source = (tools.input.clone(), tools.output.clone());
+                let mut transfer = Transfer::new("fixture".into(), "新的资料🦀").unwrap();
+                transfer.target = Target::Tool(ToolKind::Base64);
+                transfer
+                    .apply(
+                        &mut tools,
+                        &mut DataState::default(),
+                        &mut DiffState::default(),
+                    )
+                    .unwrap();
+                assert_eq!(tools.input, "新的资料🦀");
+                assert!(
+                    !tools.has_result(),
+                    "new input has no completed result to copy or swap"
+                );
+                assert!(tools.output.is_empty() && tools.message.is_empty());
+                assert_eq!(transfer.text, "新的资料🦀");
+                if !same_tool {
+                    tools.select(ToolKind::Json);
+                    assert_eq!((tools.input.clone(), tools.output.clone()), old_source);
+                    assert!(
+                        tools.has_result(),
+                        "unrelated source draft remains completed"
+                    );
+                }
+                tools.select(ToolKind::Base64);
+                let result = tools.run(0);
+                assert!(tools.apply_result(result));
+                assert_eq!(tools.output, "5paw55qE6LWE5paZ8J+mgA==");
+                assert!(tools.has_result());
+            }
+        }
+    }
     #[test]
     fn transfer_preserves_source_and_other_drafts_without_running_target() {
         let mut tools = ToolState::default();
