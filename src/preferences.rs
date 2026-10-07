@@ -16,6 +16,10 @@ pub struct Preferences {
     baseline: Option<serde_json::Value>,
     #[serde(skip)]
     pending_recent: Vec<String>,
+    #[serde(skip)]
+    pending_workflow_loads: Vec<SavedWorkflow>,
+    #[serde(skip)]
+    removed_workflow_loads: Vec<PathBuf>,
     pub updates: crate::updates::Policy,
     pub command_bindings: crate::commands::Bindings,
     pub light: bool,
@@ -25,6 +29,7 @@ pub struct Preferences {
     pub usage: std::collections::BTreeMap<String, u32>,
     pub workflow_library_folder: Option<PathBuf>,
     pub workflow_favorites: Vec<SavedWorkflow>,
+    pub workflow_recent: Vec<SavedWorkflow>,
     pub recorder_auto_minimize: bool,
     pub recorder_auto_stop_minutes: u16,
     pub recorder_quality: crate::recorder::RecordingQuality,
@@ -34,6 +39,8 @@ impl Default for Preferences {
         Self {
             baseline: None,
             pending_recent: Vec::new(),
+            pending_workflow_loads: Vec::new(),
+            removed_workflow_loads: Vec::new(),
             updates: Default::default(),
             command_bindings: Default::default(),
             light: false,
@@ -43,6 +50,7 @@ impl Default for Preferences {
             usage: Default::default(),
             workflow_library_folder: None,
             workflow_favorites: Vec::new(),
+            workflow_recent: Vec::new(),
             recorder_auto_minimize: true,
             recorder_auto_stop_minutes: 0,
             recorder_quality: crate::recorder::RecordingQuality::default(),
@@ -107,6 +115,8 @@ impl Preferences {
     }
     fn normalize(&mut self) {
         workflows::normalize(&mut self.workflow_favorites);
+        workflows::normalize(&mut self.workflow_recent);
+        self.workflow_recent.truncate(20);
         if self
             .workflow_library_folder
             .as_ref()

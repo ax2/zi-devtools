@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.64"
+version = "0.82.0-dev.65"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -137,4 +137,8 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "search_scopes_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "workflow_recent_ui"
 required-features = ["ui-preview"]

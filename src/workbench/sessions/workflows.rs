@@ -62,6 +62,45 @@ mod tests {
         }
     }
     #[test]
+    fn successful_workflow_load_events_are_once_bound_to_live_owner_and_never_failure() {
+        let fixture = Fixture::new();
+        fixture.definition("a.json", "实际载入");
+        let mut workspace = fixture.workspace();
+        let owner = workspace.active_id().to_owned();
+        workspace
+            .workflow
+            .files
+            .read(fixture.0.join("a.json"))
+            .unwrap();
+        let other = workspace.create("另一个实例").unwrap();
+        workspace.input = "另一份数据".into();
+        wait(&mut workspace);
+        let events = workspace.take_workflow_loads();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].name, "实际载入");
+        assert_eq!(workspace.active_id(), other);
+        assert_eq!(workspace.input, "另一份数据");
+        assert!(workspace.take_workflow_loads().is_empty());
+        assert!(workspace.instances[0].state.workflow.files.review.is_some());
+        workspace
+            .workflow
+            .files
+            .read(fixture.0.join("missing.json"))
+            .unwrap();
+        wait(&mut workspace);
+        assert!(workspace.take_workflow_loads().is_empty());
+        workspace.instances[0].state.workflow.files.review = None;
+        workspace.instances[0]
+            .state
+            .workflow
+            .files
+            .read(fixture.0.join("a.json"))
+            .unwrap();
+        wait(&mut workspace);
+        workspace.instances.retain(|instance| instance.id != owner);
+        assert!(workspace.take_workflow_loads().is_empty());
+    }
+    #[test]
     fn workflow_bookmark_opens_without_scan_reloads_and_preserves_active_content_on_failures() {
         let fixture = Fixture::new();
         fixture.definition("daily.json", "收藏时摘要");
@@ -234,6 +273,15 @@ pub(super) struct Cache {
     value: WorkflowMatches,
 }
 impl Workspace {
+    pub fn take_workflow_loads(&mut self) -> Vec<crate::preferences::SavedWorkflow> {
+        std::mem::take(&mut self.workflow_loads)
+            .into_iter()
+            .filter(|(id, metadata)| {
+                metadata.valid() && self.instances.iter().any(|instance| &instance.id == id)
+            })
+            .map(|(_, metadata)| metadata)
+            .collect()
+    }
     pub fn workflow_is_bookmarked(
         &self,
         selected: &WorkflowMatch,

@@ -20,8 +20,14 @@ impl SavedWorkflow {
             && (1..=32).contains(&self.steps)
     }
     pub fn matches(&self, query: &str) -> bool {
+        self.matches_kind(query, "收藏 favorite bookmark")
+    }
+    pub fn matches_recent(&self, query: &str) -> bool {
+        self.matches_kind(query, "最近 载入 recent loaded")
+    }
+    fn matches_kind(&self, query: &str, kind: &str) -> bool {
         let text = format!(
-            "收藏 流程 workflow recipe {} {}",
+            "{kind} 流程 workflow recipe {} {}",
             self.name,
             self.path.file_name().unwrap_or_default().to_string_lossy()
         )
@@ -37,6 +43,35 @@ pub(super) fn normalize(entries: &mut Vec<SavedWorkflow>) {
     entries.truncate(100);
 }
 impl Preferences {
+    pub fn workflow_loaded(&mut self, entry: SavedWorkflow) {
+        if !entry.valid() {
+            return;
+        }
+        self.removed_workflow_loads
+            .retain(|path| path != &entry.path);
+        self.pending_workflow_loads
+            .retain(|item| item.path != entry.path);
+        self.pending_workflow_loads.insert(0, entry.clone());
+        self.pending_workflow_loads.truncate(20);
+        self.workflow_recent.retain(|item| item.path != entry.path);
+        self.workflow_recent.insert(0, entry);
+        self.workflow_recent.truncate(20);
+    }
+    pub fn workflow_history_pending(&self) -> bool {
+        !self.pending_workflow_loads.is_empty() || !self.removed_workflow_loads.is_empty()
+    }
+    pub fn forget_workflow_load(&mut self, config: &Path, entry: &SavedWorkflow) -> Result<()> {
+        let mut next = self.clone();
+        next.workflow_recent.retain(|item| item.path != entry.path);
+        next.pending_workflow_loads
+            .retain(|item| item.path != entry.path);
+        if !next.removed_workflow_loads.contains(&entry.path) {
+            next.removed_workflow_loads.push(entry.path.clone());
+        }
+        next.save(config)?;
+        *self = next;
+        Ok(())
+    }
     /// Persist before committing live state. File contents are never touched.
     pub fn toggle_workflow(&mut self, config: &Path, entry: SavedWorkflow) -> Result<bool> {
         anyhow::ensure!(entry.valid(), "流程收藏信息无效");
@@ -63,6 +98,79 @@ impl Preferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recent_workflow_merge_removal_retry_bounds_and_current_metadata() {
+        let dir = std::env::temp_dir().join(format!("zi-recent-flow-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let config = dir.join("prefs.json");
+        let a = SavedWorkflow {
+            path: dir.join("a.json"),
+            name: "旧摘要".into(),
+            steps: 1,
+        };
+        let b = SavedWorkflow {
+            path: dir.join("b.json"),
+            name: "另一个".into(),
+            steps: 2,
+        };
+        let mut first = Preferences::load(&config);
+        let mut stale = Preferences::load(&config);
+        first.workflow_loaded(a.clone());
+        assert!(first.save(&dir).is_err());
+        assert!(first.workflow_history_pending());
+        stale.workflow_loaded(b.clone());
+        stale.save(&config).unwrap();
+        assert!(!first.refresh_discovery(&config).unwrap());
+        first.save(&config).unwrap();
+        assert!(!first.workflow_history_pending());
+        assert_eq!(
+            Preferences::load(&config).workflow_recent,
+            [a.clone(), b.clone()]
+        );
+        let mut update = a.clone();
+        update.name = "实际新摘要".into();
+        update.steps = 3;
+        stale.workflow_loaded(update.clone());
+        stale.save(&config).unwrap();
+        assert_eq!(
+            Preferences::load(&config).workflow_recent,
+            [update, b.clone()]
+        );
+        first.forget_workflow_load(&config, &a).unwrap();
+        stale.light = true;
+        stale.save(&config).unwrap();
+        assert_eq!(Preferences::load(&config).workflow_recent, [b.clone()]);
+        assert!(first.forget_workflow_load(&dir, &b).is_err());
+        assert_eq!(first.workflow_recent, [b]);
+        for i in 0..25 {
+            first.workflow_loaded(SavedWorkflow {
+                path: dir.join(format!("{i}.json")),
+                name: format!("流程{i}"),
+                steps: 1,
+            });
+        }
+        fs::write(&config, "damaged").unwrap();
+        assert!(first.save(&config).is_err());
+        assert_eq!(fs::read_to_string(&config).unwrap(), "damaged");
+        assert_eq!(first.workflow_recent.len(), 20);
+        fs::write(&config, "{}").unwrap();
+        first.save(&config).unwrap();
+        let reloaded = Preferences::load(&config);
+        assert_eq!(reloaded.workflow_recent.len(), 20);
+        assert_eq!(reloaded.workflow_recent[0].name, "流程24");
+        assert!(reloaded.workflow_favorites.is_empty());
+        let document: serde_json::Value =
+            serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+        assert!(
+            document["workflow_recent"][0]
+                .get("steps")
+                .unwrap()
+                .is_number()
+        );
+        assert!(document["workflow_recent"][0].get("definition").is_none());
+        assert!(!a.path.exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn workflow_bookmarks_roundtrip_merge_remove_and_failure_without_reading_files() {
         let dir = std::env::temp_dir().join(format!("zi-bookmarks-{}", uuid::Uuid::new_v4()));

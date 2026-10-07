@@ -19,6 +19,7 @@ pub(super) struct Results {
     pub tools: Vec<ToolEntry>,
     pub workflows: crate::workbench::sessions::WorkflowMatches,
     pub saved: Vec<usize>,
+    pub recent: Vec<usize>,
 }
 pub(super) enum Choice {
     Tool(String),
@@ -58,10 +59,29 @@ impl DevToolsApp {
                 .map(|(index, _)| index)
                 .collect()
         };
+        let recent = if matches!(self.launcher_scope, Scope::All | Scope::Workflows) {
+            self.preferences
+                .workflow_recent
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| {
+                    entry.matches_recent(query)
+                        && !self
+                            .preferences
+                            .workflow_favorites
+                            .iter()
+                            .any(|favorite| favorite.path == entry.path)
+                })
+                .map(|(index, _)| index)
+                .collect()
+        } else {
+            Vec::new()
+        };
         Results {
             tools,
             workflows,
             saved,
+            recent,
         }
     }
     pub(super) fn open_search_choice(&mut self, choice: Choice) {

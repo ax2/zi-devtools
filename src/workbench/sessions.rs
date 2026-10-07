@@ -26,6 +26,7 @@ pub struct Workspace {
     delete_confirm: Option<Entry>,
     status: String,
     workflow_search: workflows::Cache,
+    workflow_loads: Vec<(String, crate::preferences::SavedWorkflow)>,
 }
 
 enum Reply {
@@ -154,6 +155,7 @@ impl Workspace {
             delete_confirm: None,
             status: String::new(),
             workflow_search: workflows::Cache::default(),
+            workflow_loads: Vec::new(),
         }
     }
     pub fn active_id(&self) -> &str {
@@ -315,6 +317,12 @@ impl Workspace {
     pub fn poll(&mut self) {
         for instance in &mut self.instances {
             instance.state.poll();
+            if let Some(loaded) = instance.state.workflow.files.loaded.take() {
+                self.workflow_loads.push((instance.id.clone(), loaded));
+                if self.workflow_loads.len() > 32 {
+                    self.workflow_loads.remove(0);
+                }
+            }
         }
         let reply = self.receiver.as_ref().and_then(|r| match r.try_recv() {
             Ok(reply) => Some(reply),

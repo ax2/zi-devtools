@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.64",
+  "sourceCatalogVersion": "0.82.0-dev.65",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -620,7 +620,7 @@
     {
       "sourceToolId": "pipeline",
       "title": "可组合数据管线",
-      "sourceVersion": "0.8.0",
+      "sourceVersion": "0.9.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",

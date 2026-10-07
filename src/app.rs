@@ -216,6 +216,7 @@ pub struct DevToolsApp {
     refresh_cancel: Arc<AtomicBool>,
     last_refresh: Instant,
     last_preferences_refresh: Instant,
+    last_workflow_retry: Instant,
     #[cfg(feature = "ui-preview")]
     preview_shared_theme: Option<Theme>,
     notification: String,
@@ -265,6 +266,8 @@ pub struct DevToolsApp {
     launcher_focus: bool,
     #[cfg(feature = "ui-preview")]
     workflow_bookmark_button: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    workflow_recent_button: Option<egui::Rect>,
     launcher_index: usize,
     launcher_scope: launcher::Scope,
     #[cfg(feature = "ui-preview")]
@@ -799,6 +802,61 @@ impl DevToolsApp {
         self.workflow_bookmark_button
             .expect("visible workflow bookmark button")
             .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_recent_position(&self) -> egui::Pos2 {
+        self.workflow_recent_button
+            .expect("visible recent removal button")
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_recent_check(&mut self, phase: u8) {
+        match phase {
+            0 => {
+                assert_eq!(self.preferences.workflow_recent.len(), 1);
+                assert!(self.preferences.workflow_favorites.is_empty());
+                self.data_state.preview_workflow_bookmark_state(0);
+            }
+            1 => {
+                assert_eq!(self.preferences.workflow_recent.len(), 1);
+                assert_eq!(self.preferences.workflow_recent[0].name, "每日资料清洗");
+                assert_eq!(
+                    Preferences::load(&self.preferences_path).workflow_recent,
+                    self.preferences.workflow_recent
+                );
+                assert!(self.preferences.workflow_recent[0].path.is_file());
+                self.data_state.preview_workflow_search_check(1);
+            }
+            2 => self.data_state.preview_workflow_search_check(2),
+            3 => {
+                assert!(self.launcher_open);
+                assert_eq!(self.launcher_query, "每日资料清洗");
+                let query = self.launcher_query.clone();
+                let results = self.launcher_results(&query);
+                assert_eq!(results.recent.len(), 1);
+                assert!(results.saved.is_empty());
+                assert!(results.tools.is_empty());
+                assert_eq!(results.workflows.total, 0);
+                self.data_state.preview_workflow_search_check(2);
+            }
+            4 => {
+                assert!(self.preferences.workflow_recent.is_empty());
+                assert!(
+                    Preferences::load(&self.preferences_path)
+                        .workflow_recent
+                        .is_empty()
+                );
+                assert!(
+                    self.preferences_path
+                        .parent()
+                        .unwrap()
+                        .join("workflow-library-fixture/daily.json")
+                        .is_file()
+                );
+                self.data_state.preview_workflow_search_check(2);
+            }
+            _ => panic!("unknown recent workflow fixture phase"),
+        }
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_search_scope_position(&self, index: usize) -> egui::Pos2 {
@@ -2230,6 +2288,7 @@ impl DevToolsApp {
             refresh_cancel: Arc::new(AtomicBool::new(false)),
             last_refresh: Instant::now() - Duration::from_secs(30),
             last_preferences_refresh: Instant::now(),
+            last_workflow_retry: Instant::now(),
             #[cfg(feature = "ui-preview")]
             preview_shared_theme: None,
             notification: tray_error.clone().unwrap_or_default(),
@@ -2276,6 +2335,8 @@ impl DevToolsApp {
             launcher_scope_buttons: [None; 4],
             #[cfg(feature = "ui-preview")]
             workflow_bookmark_button: None,
+            #[cfg(feature = "ui-preview")]
+            workflow_recent_button: None,
             data_state: crate::workbench::sessions::Workspace::new(preferences_path.with_file_name("workspace.sqlite3")), file_state: FileState::default(), clear_tool_confirm:false,
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
             mcp: crate::mcp_ui::McpState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
@@ -2850,6 +2911,7 @@ impl DevToolsApp {
         let mut open = true;
         let mut chosen = None;
         let mut bookmark_action = None;
+        let mut forget_recent = None;
         egui::Window::new("快速打开工具与流程")
             .open(&mut open)
             .collapsible(false)
@@ -2890,9 +2952,12 @@ impl DevToolsApp {
                     scroll_selection = true;
                 }
                 let query = self.launcher_query.to_lowercase();
-                let launcher::Results {tools: entries, workflows, saved} = self.launcher_results(&query);
-                let count = saved.len() + entries.len() + workflows.entries.len();
-                ui.label(RichText::new(format!("工具 {} · 收藏流程 {} · 已检查流程 {}", entries.len(), saved.len(), workflows.total))
+                let launcher::Results {tools: entries, workflows, saved, recent} = self.launcher_results(&query);
+                let count = saved.len() + recent.len() + entries.len() + workflows.entries.len();
+                if self.preferences.workflow_history_pending() {
+                    ui.colored_label(self.colors.amber, "最近载入记录尚未保存，保留在当前窗口并稍后重试。");
+                }
+                ui.label(RichText::new(format!("工具 {} · 收藏流程 {} · 最近载入 {} · 已检查流程 {}", entries.len(), saved.len(), recent.len(), workflows.total))
                     .size(12.0).color(self.colors.muted));
                 if count == 0 {
                     ui.label(match self.launcher_scope {
@@ -2964,8 +3029,26 @@ impl DevToolsApp {
                                 }
                                 ui.add_space(6.0);
                             }
+                            for (offset, index) in recent.iter().enumerate() {
+                                let entry = &self.preferences.workflow_recent[*index];
+                                let row_index = saved.len() + offset;
+                                let response = ui.horizontal(|ui| {
+                                    let response = ui.selectable_label(row_index == self.launcher_index,
+                                        format!("{} · 最近载入 · {}步", entry.name, entry.steps));
+                                    let remove = ui.small_button("×").on_hover_text("移除最近记录；保留原文件和当前数据");
+                                    #[cfg(feature = "ui-preview")]
+                                    if offset == 0 { self.workflow_recent_button = Some(remove.rect.intersect(ui.clip_rect())); }
+                                    if remove.clicked() {forget_recent = Some(entry.clone());}
+                                    response
+                                }).inner;
+                                ui.add(egui::Label::new(RichText::new(format!("{} · 载入记录不代表已应用；重新读到当前实例确认",
+                                    entry.path.file_name().unwrap_or_default().to_string_lossy())).size(12.0).color(self.colors.muted)).truncate()).on_hover_text(entry.path.display().to_string());
+                                if scroll_selection && row_index == self.launcher_index { response.scroll_to_me(Some(egui::Align::Center)); }
+                                if response.clicked() { chosen = Some(launcher::Choice::SavedWorkflow(entry.clone())); }
+                                ui.add_space(6.0);
+                            }
                             for (i, e) in entries.iter().enumerate() {
-                                let i = saved.len() + i;
+                                let i = saved.len() + recent.len() + i;
                                 let response = ui.selectable_label(
                                     i == self.launcher_index,
                                     format!("{}   ·   {}   ·   {}", e.title, e.category, e.badge()),
@@ -2991,7 +3074,7 @@ impl DevToolsApp {
                                 }
                             }
                             for (offset, workflow) in workflows.entries.iter().enumerate() {
-                                let index = saved.len() + entries.len() + offset;
+                                let index = saved.len() + recent.len() + entries.len() + offset;
                                 let response = ui
                                     .horizontal(|ui| {
                                         let response = ui.selectable_label(
@@ -3056,12 +3139,14 @@ impl DevToolsApp {
                             launcher::Choice::SavedWorkflow(
                                 self.preferences.workflow_favorites[*index].clone(),
                             )
-                        } else if let Some(entry) = entries.get(self.launcher_index - saved.len()) {
+                        } else if let Some(index) = recent.get(self.launcher_index - saved.len()) {
+                            launcher::Choice::SavedWorkflow(self.preferences.workflow_recent[*index].clone())
+                        } else if let Some(entry) = entries.get(self.launcher_index - saved.len() - recent.len()) {
                             launcher::Choice::Tool(entry.id.clone())
                         } else {
                             launcher::Choice::Workflow(
                                 workflows.entries
-                                    [self.launcher_index - saved.len() - entries.len()]
+                                    [self.launcher_index - saved.len() - recent.len() - entries.len()]
                                 .clone(),
                             )
                         });
@@ -3086,8 +3171,20 @@ impl DevToolsApp {
                 Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
             }
         }
+        if let Some(entry) = forget_recent {
+            self.forget_workflow_recent(entry);
+        }
     }
 
+    fn forget_workflow_recent(&mut self, entry: crate::preferences::SavedWorkflow) {
+        match self
+            .preferences
+            .forget_workflow_load(&self.preferences_path, &entry)
+        {
+            Ok(()) => self.toast = Some(("已移除最近载入记录，原文件保留".into(), Instant::now())),
+            Err(error) => self.toast = Some((format!("最近记录未移除：{error:#}"), Instant::now())),
+        }
+    }
     fn small_tools_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         self.tool_page(ui, ctx, false);
     }
@@ -4606,6 +4703,14 @@ impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.last_preferences_refresh.elapsed() >= Duration::from_secs(2) {
             self.last_preferences_refresh = Instant::now();
+            if self.preferences.workflow_history_pending()
+                && self.last_workflow_retry.elapsed() >= Duration::from_secs(30)
+            {
+                self.last_workflow_retry = Instant::now();
+                if let Err(error) = self.preferences.save(&self.preferences_path) {
+                    self.toast = Some((format!("最近载入记录尚未保存：{error:#}"), Instant::now()));
+                }
+            }
             if self
                 .preferences
                 .refresh_discovery(&self.preferences_path)

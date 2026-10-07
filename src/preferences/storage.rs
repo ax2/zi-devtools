@@ -40,7 +40,7 @@ fn merge_fields(latest: &mut Value, base: &Value, current: &Value, root: bool) {
             if root
                 && matches!(
                     key.as_str(),
-                    "favorites" | "recent" | "usage" | "workflow_favorites"
+                    "favorites" | "recent" | "usage" | "workflow_favorites" | "workflow_recent"
                 )
             {
                 continue;
@@ -133,6 +133,7 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
         .unwrap_or(serde_json::to_value(Preferences::default())?);
     let old: Preferences = serde_json::from_value(base.clone())?;
     if !prefs.pending_recent.is_empty()
+        || prefs.workflow_history_pending()
         || prefs.favorites != old.favorites
         || prefs.usage != old.usage
         || prefs.workflow_favorites != old.workflow_favorites
@@ -147,14 +148,22 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
     let changed = prefs.favorites != latest.favorites
         || prefs.recent != latest.recent
         || prefs.usage != latest.usage
-        || prefs.workflow_favorites != latest.workflow_favorites;
+        || prefs.workflow_favorites != latest.workflow_favorites
+        || prefs.workflow_recent != latest.workflow_recent;
     if changed {
         prefs.favorites = latest.favorites;
         prefs.recent = latest.recent;
         prefs.usage = latest.usage;
         prefs.workflow_favorites = latest.workflow_favorites;
+        prefs.workflow_recent = latest.workflow_recent;
         let current = serde_json::to_value(&*prefs)?;
-        for key in ["favorites", "recent", "usage", "workflow_favorites"] {
+        for key in [
+            "favorites",
+            "recent",
+            "usage",
+            "workflow_favorites",
+            "workflow_recent",
+        ] {
             base[key] = current[key].clone();
         }
         prefs.baseline = Some(base);
@@ -236,9 +245,27 @@ pub(super) fn save(prefs: &mut Preferences, path: &Path) -> Result<()> {
         );
         next.recent = recent;
     }
+    next.workflow_recent
+        .retain(|entry| !prefs.removed_workflow_loads.contains(&entry.path));
+    if !prefs.pending_workflow_loads.is_empty() {
+        let mut recent = prefs.pending_workflow_loads.clone();
+        recent.extend(next.workflow_recent.into_iter().filter(|entry| {
+            !prefs
+                .pending_workflow_loads
+                .iter()
+                .any(|pending| pending.path == entry.path)
+        }));
+        next.workflow_recent = recent;
+    }
     next.normalize();
     let clean = serde_json::to_value(&next)?;
-    for key in ["favorites", "recent", "usage", "workflow_favorites"] {
+    for key in [
+        "favorites",
+        "recent",
+        "usage",
+        "workflow_favorites",
+        "workflow_recent",
+    ] {
         document[key] = clean[key].clone();
     }
     let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));

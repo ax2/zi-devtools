@@ -67,6 +67,20 @@ impl DevToolsApp {
         self.observe_tasks();
         let before = self.task_snapshots();
         self.data_state.poll();
+        let loads = self.data_state.take_workflow_loads();
+        let mut history_error = None;
+        if !loads.is_empty() {
+            for loaded in loads {
+                self.preferences.workflow_loaded(loaded);
+            }
+            if let Err(error) = self.preferences.save(&self.preferences_path) {
+                self.last_workflow_retry = Instant::now();
+                history_error = Some((
+                    format!("流程已载入，最近记录尚未保存：{error:#}"),
+                    Instant::now(),
+                ));
+            }
+        }
         self.file_state.poll();
         let after = self.task_snapshots();
         for row in &after {
@@ -92,6 +106,9 @@ impl DevToolsApp {
         self.observe_tasks();
         if after.iter().any(|r| r.phase.active()) || self.data_state.operation_pending() {
             ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        if history_error.is_some() {
+            self.toast = history_error;
         }
     }
     pub(super) fn tasks_page(&mut self, ui: &mut egui::Ui) {

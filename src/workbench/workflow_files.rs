@@ -20,7 +20,7 @@ fn load(path: &std::path::Path) -> Result<Definition> {
 }
 enum Reply {
     Saved(PathBuf),
-    Loaded(Definition),
+    Loaded(PathBuf, Definition),
     Listed(PathBuf, library::Listing),
 }
 #[derive(Default)]
@@ -37,6 +37,7 @@ pub(super) struct State {
     pub(super) folder_request: Option<Option<PathBuf>>,
     pub(super) memory_message: String,
     pub(super) listing_revision: u64,
+    pub(super) loaded: Option<crate::preferences::SavedWorkflow>,
     #[cfg(feature = "ui-preview")]
     pub(super) memory_buttons: [Option<egui::Rect>; 2],
 }
@@ -86,7 +87,11 @@ impl State {
         self.message.clear();
         self.job.begin();
         std::thread::spawn(move || {
-            let _ = tx.send(load(&path).map(Reply::Loaded).map_err(|e| format!("{e:#}")));
+            let _ = tx.send(
+                load(&path)
+                    .map(|definition| Reply::Loaded(path, definition))
+                    .map_err(|e| format!("{e:#}")),
+            );
         });
         Ok(())
     }
@@ -105,7 +110,12 @@ impl State {
                 self.job.finish(Phase::Done, "流程定义已保存；未运行");
                 self.message = format!("流程已保存：{}；只含步骤与参数", path.display());
             }
-            Ok(Reply::Loaded(definition)) => {
+            Ok(Reply::Loaded(path, definition)) => {
+                self.loaded = Some(crate::preferences::SavedWorkflow {
+                    path,
+                    name: definition.name.clone(),
+                    steps: definition.steps.len(),
+                });
                 self.job
                     .finish(Phase::Done, "流程文件已读取，等待确认；未运行");
                 self.review = Some(definition);
