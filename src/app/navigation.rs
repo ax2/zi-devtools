@@ -32,6 +32,12 @@ impl DevToolsApp {
                 for key in ["title", "back", "category", "theme", "tray", "settings"] {
                     self.preview_sidebar_position(key);
                 }
+                let (_, scroll_clip) = self.preview_sidebar.get("scroll-clip").unwrap();
+                let (dock, _) = self.preview_sidebar.get("frequent").unwrap();
+                assert!(
+                    scroll_clip.bottom() <= dock.top() - 6.0,
+                    "navigation must have a visible gap above dock: {scroll_clip:?}, {dock:?}"
+                );
             }
             1 => assert_eq!(self.theme, Theme::Light),
             2 => {
@@ -169,6 +175,10 @@ impl DevToolsApp {
                         self.current_tool_navigation(ui);
                         self.navigation_footer(ui, ctx);
                     });
+                // The dock reduces layout space, but the parent paint clip still
+                // includes it. Bound the navigation paint to the remaining area
+                // so partially visible rows cannot draw over fixed actions.
+                ui.set_clip_rect(ui.clip_rect().intersect(ui.available_rect_before_wrap()));
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.label(
@@ -198,11 +208,16 @@ impl DevToolsApp {
                 }
                 ui.add_space(14.0);
                 ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
+                let navigation_height = (ui.available_height() - 12.0).max(0.0);
                 egui::ScrollArea::vertical()
                     .id_salt("sidebar-scroll")
                     .auto_shrink([false, false])
+                    .max_height(navigation_height)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
+                        #[cfg(feature = "ui-preview")]
+                        self.preview_sidebar
+                            .insert("scroll-clip", (ui.max_rect(), ui.clip_rect()));
                         for (page, label) in [
                             (Page::Home, "开始"),
                             (Page::Library, "工具库"),

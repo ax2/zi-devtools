@@ -115,10 +115,17 @@ enum ServiceFilter {
     Managed,
     External,
     Stopped,
+    Attention,
 }
 
 impl ServiceFilter {
-    const ALL: [Self; 4] = [Self::All, Self::Managed, Self::External, Self::Stopped];
+    const ALL: [Self; 5] = [
+        Self::All,
+        Self::Managed,
+        Self::External,
+        Self::Stopped,
+        Self::Attention,
+    ];
 
     fn label(self) -> &'static str {
         match self {
@@ -126,15 +133,17 @@ impl ServiceFilter {
             Self::Managed => "托管运行",
             Self::External => "外部占用",
             Self::Stopped => "已停止",
+            Self::Attention => "需要关注",
         }
     }
 
-    fn matches(self, state: ServiceState, managed: bool) -> bool {
+    fn matches(self, state: ServiceState, managed: bool, attention: bool) -> bool {
         match self {
             Self::All => true,
             Self::Managed => managed,
             Self::External => !managed && state.is_available(),
             Self::Stopped => state == ServiceState::Stopped,
+            Self::Attention => attention,
         }
     }
 }
@@ -716,6 +725,7 @@ impl DevToolsApp {
         match scene {
             444..=453 => self.preview_service_scene(ctx, scene, &fixture),
             454..=455 => self.preview_log_transfer_scene(),
+            456..=457 => self.preview_service_scene(ctx, scene, &fixture),
             432..=435 => self.preview_plot_fixture(true),
             436..=439 => {
                 self.page = Page::Calculator;
@@ -5024,11 +5034,20 @@ mod service_filter_tests {
     }
     #[test]
     fn separates_managed_external_and_stopped_services() {
-        assert!(ServiceFilter::Managed.matches(ServiceState::Running, true));
-        assert!(!ServiceFilter::Managed.matches(ServiceState::External, false));
-        assert!(ServiceFilter::External.matches(ServiceState::PortOpen, false));
-        assert!(!ServiceFilter::External.matches(ServiceState::Stopped, false));
-        assert!(ServiceFilter::Stopped.matches(ServiceState::Stopped, false));
+        assert!(ServiceFilter::Managed.matches(ServiceState::Running, true, false));
+        assert!(!ServiceFilter::Managed.matches(ServiceState::External, false, false));
+        assert!(ServiceFilter::External.matches(ServiceState::PortOpen, false, false));
+        assert!(!ServiceFilter::External.matches(ServiceState::Stopped, false, false));
+        assert!(ServiceFilter::Stopped.matches(ServiceState::Stopped, false, false));
+        for state in [
+            ServiceState::Running,
+            ServiceState::External,
+            ServiceState::PortOpen,
+            ServiceState::Stopped,
+        ] {
+            assert!(ServiceFilter::Attention.matches(state, false, true));
+            assert!(!ServiceFilter::Attention.matches(state, false, false));
+        }
     }
 }
 

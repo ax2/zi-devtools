@@ -112,13 +112,21 @@ pub struct ServiceStatus {
 }
 
 impl ServiceStatus {
+    pub fn unhealthy(&self) -> bool {
+        self.state.is_available() && self.health_url.is_some() && self.health.ok == Some(false)
+    }
+
+    pub fn needs_attention(&self) -> bool {
+        self.failed_exit() || self.unhealthy()
+    }
+
     pub fn failed_exit(&self) -> bool {
         self.state == ServiceState::Stopped
             && self.last_exit.as_ref().is_some_and(|exit| !exit.success)
     }
 
     pub fn display_state(&self) -> &'static str {
-        if self.state.is_available() && self.health_url.is_some() && self.health.ok == Some(false) {
+        if self.unhealthy() {
             if self.managed {
                 "进程运行 · 健康检查未通过"
             } else {
@@ -961,6 +969,73 @@ fn read_log_snapshot(file: &mut File, size: u64) -> Result<(u64, Vec<u8>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attention_distinguishes_failures_from_stopped_or_unknown_health() {
+        let mut status = ServiceStatus {
+            id: "fixture".into(),
+            name: "Fixture".into(),
+            description: String::new(),
+            repo: PathBuf::new(),
+            command: String::new(),
+            graceful_stop_timeout_ms: None,
+            health_url: Some("http://127.0.0.1:9/health".into()),
+            port: None,
+            tags: Vec::new(),
+            state: ServiceState::Stopped,
+            pid: None,
+            managed: false,
+            port_open: None,
+            health: HealthStatus::default(),
+            log_path: PathBuf::new(),
+            log_size: 0,
+            config_files: Vec::new(),
+            env_count: 0,
+            last_exit: None,
+        };
+        assert!(!status.needs_attention());
+        status.health.ok = Some(false);
+        assert!(
+            !status.needs_attention(),
+            "ordinary stopped service is not unhealthy"
+        );
+        for state in [
+            ServiceState::Running,
+            ServiceState::External,
+            ServiceState::PortOpen,
+        ] {
+            status.state = state;
+            assert!(status.needs_attention());
+            assert!(status.display_state().contains("健康检查未通过"));
+        }
+        status.health_url = None;
+        assert!(
+            !status.needs_attention(),
+            "no endpoint means no health failure"
+        );
+        status.health_url = Some("http://127.0.0.1:9/health".into());
+        for health in [None, Some(true)] {
+            status.health.ok = health;
+            assert!(!status.needs_attention());
+        }
+        status.state = ServiceState::Stopped;
+        status.last_exit = Some(ServiceExit {
+            at: "fixture".into(),
+            code: Some(37),
+            success: false,
+            status: "fixture".into(),
+        });
+        assert!(status.needs_attention());
+        assert_eq!(status.display_state(), "异常退出");
+        status.state = ServiceState::Running;
+        assert!(
+            !status.needs_attention(),
+            "old exit does not mark current healthy run"
+        );
+        status.state = ServiceState::Stopped;
+        status.last_exit.as_mut().unwrap().success = true;
+        assert!(!status.needs_attention());
+    }
 
     #[test]
     fn safe_ids_and_local_urls_match_legacy_contract() {

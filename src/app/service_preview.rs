@@ -6,6 +6,10 @@ impl DevToolsApp {
         self.notification.clear();
         self.selected_service = Some("demo".into());
         match scene {
+            456 | 457 => {
+                self.preview_service_attention_prepare();
+                self.service_filter = ServiceFilter::Attention;
+            }
             450..=453 => {
                 self.preview_service_scale_prepare();
                 if scene >= 452 {
@@ -77,6 +81,28 @@ impl DevToolsApp {
             "scale fixture log\n",
         )
         .unwrap();
+    }
+    pub fn preview_service_attention_prepare(&mut self) {
+        self.preview_service_scale_prepare();
+        let status = &mut self.statuses[499];
+        status.state = ServiceState::Running;
+        status.managed = true;
+        status.health_url = Some("http://127.0.0.1:9/health".into());
+        status.health.ok = Some(false);
+        status.health.status_code = Some(503);
+        assert_eq!(
+            self.statuses.iter().filter(|s| s.needs_attention()).count(),
+            1
+        );
+    }
+
+    pub fn preview_service_attention_check(&self, phase: u8) {
+        assert_eq!(self.statuses.len(), 500);
+        assert_eq!(self.service_filter, ServiceFilter::Attention);
+        assert_eq!(self.preview_service_rows, 1);
+        if phase == 1 {
+            assert_eq!(self.selected_service.as_deref(), Some("fixture-499"));
+        }
     }
     pub fn preview_service_scale_check(&mut self, phase: u8) {
         match phase {

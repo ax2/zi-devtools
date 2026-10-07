@@ -119,16 +119,36 @@ impl DevToolsApp {
             #[cfg(not(feature = "ui-preview"))]
             let _ = search;
         });
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for filter in ServiceFilter::ALL {
-                if ui
-                    .selectable_label(self.service_filter == filter, filter.label())
-                    .clicked()
-                {
+                let count = self
+                    .statuses
+                    .iter()
+                    .filter(|status| {
+                        filter.matches(status.state, status.managed, status.needs_attention())
+                    })
+                    .count();
+                let response = ui.selectable_label(
+                    self.service_filter == filter,
+                    format!("{} {count}", filter.label()),
+                );
+                #[cfg(feature = "ui-preview")]
+                if filter == ServiceFilter::Attention {
+                    self.preview_services
+                        .insert("attention", (response.rect, ui.clip_rect()));
+                }
+                if response.clicked() {
                     self.service_filter = filter;
                 }
             }
         });
+        if self.service_filter == ServiceFilter::Attention {
+            ui.label(
+                RichText::new("异常退出或健康检查未通过；按最近状态显示，不自动处理")
+                    .small()
+                    .color(p.muted),
+            );
+        }
 
         let query = self.search.to_lowercase();
         let statuses: Vec<usize> = self
@@ -136,7 +156,8 @@ impl DevToolsApp {
             .iter()
             .enumerate()
             .filter(|(_, status)| {
-                self.service_filter.matches(status.state, status.managed)
+                self.service_filter
+                    .matches(status.state, status.managed, status.needs_attention())
                     && (query.is_empty()
                         || status.name.to_lowercase().contains(&query)
                         || status.id.to_lowercase().contains(&query)
@@ -244,7 +265,7 @@ impl DevToolsApp {
         let pending = self.service_pending.get(&status.id).copied();
         let color = if status.failed_exit() {
             p.red
-        } else if status.state.is_available() && status.health.ok == Some(false) {
+        } else if status.unhealthy() {
             p.amber
         } else if status.managed {
             p.green
@@ -340,7 +361,7 @@ impl DevToolsApp {
                 ui.horizontal(|ui| {
                     let state_color = if status.failed_exit() {
                         p.red
-                    } else if status.managed && status.health.ok == Some(false) {
+                    } else if status.unhealthy() {
                         p.amber
                     } else {
                         match status.state {
@@ -375,10 +396,7 @@ impl DevToolsApp {
                             .color(if exit.success { p.muted } else { p.red }),
                     );
                 }
-                if status.state.is_available()
-                    && status.health_url.is_some()
-                    && status.health.ok == Some(false)
-                {
+                if status.unhealthy() {
                     let detail = status
                         .health
                         .status_code
