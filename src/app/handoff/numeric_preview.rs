@@ -15,6 +15,9 @@ impl DevToolsApp {
         }
     }
     pub fn preview_mapping_position(&self, index: usize) -> egui::Pos2 {
+        if index == 4 || index == 5 {
+            return self.data_state.preview_numeric_entry_position(index == 5);
+        }
         if index == 0 {
             self.data_state.preview_mapping_position()
         } else {
@@ -26,6 +29,11 @@ impl DevToolsApp {
                 _ => panic!("mapping control"),
             }
         }
+    }
+    pub fn preview_numeric_entry_cancelled(&self) {
+        self.data_state.preview_numeric_entry_cancelled();
+        assert!(self.handoff.is_none());
+        assert_eq!(self.calculator.expression, "preserve_price=19.90");
     }
     pub fn preview_mapping_check(&self, received: bool) {
         assert_eq!(self.data_state.output, "preserved export");

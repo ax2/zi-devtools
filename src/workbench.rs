@@ -368,6 +368,12 @@ impl DataState {
             "数据工作台",
             "CSV / TSV 与 JSON 对象数组 · 筛选、排序、预览和导出",
         );
+        self.numeric_selector.toolbar(
+            ui,
+            self.dataset.as_ref(),
+            &self.visible,
+            self.receiver.is_some(),
+        );
         card(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.selectable_value(&mut self.format, DataFormat::Csv, "CSV / TSV");

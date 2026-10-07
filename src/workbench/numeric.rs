@@ -111,6 +111,11 @@ pub(super) struct Selector {
     mode: TextMode,
     request: Option<(String, NumericTable)>,
     error: String,
+    dialog_open: bool,
+    #[cfg(feature = "ui-preview")]
+    entry_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    cancel_rect: Option<egui::Rect>,
     #[cfg(feature = "ui-preview")]
     reveal: bool,
     #[cfg(feature = "ui-preview")]
@@ -120,10 +125,8 @@ impl Selector {
     pub fn take(&mut self) -> Option<(String, NumericTable)> {
         self.request.take()
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, data: Option<&Dataset>, view: &[usize], busy: bool) {
-        let Some(data) = data else {
-            return;
-        };
+
+    fn sync(&mut self, data: &Dataset, view: &[usize]) {
         if self.headers != data.headers {
             self.headers = data.headers.clone();
             self.columns.clear();
@@ -131,46 +134,191 @@ impl Selector {
             self.count = view.len().clamp(1, 8);
             self.error.clear();
         }
+    }
+    pub fn toolbar(
+        &mut self,
+        ui: &mut egui::Ui,
+        data: Option<&Dataset>,
+        view: &[usize],
+        busy: bool,
+    ) {
+        if let Some(data) = data {
+            self.sync(data, view);
+        } else {
+            self.dialog_open = false;
+        }
+        let response = ui
+            .add_enabled(
+                data.is_some() && !busy && !view.is_empty(),
+                egui::Button::new("选取数值 → 计算器…"),
+            )
+            .on_hover_text("在独立窗口选取当前已解析视图的行列，再预览发送；不会立即计算");
+        #[cfg(feature = "ui-preview")]
+        {
+            self.entry_rect = Some(response.rect);
+        }
+        if response.clicked() {
+            self.dialog_open = true;
+        }
+    }
+    fn controls(&mut self, ui: &mut egui::Ui, data: &Dataset, view: &[usize]) {
+        ui.small("按当前已解析的筛选/排序视图选行。列按选择顺序组成矩阵，可调整；最多8×8。发送前不改变数据或计算器。");
+        ui.horizontal_wrapped(|ui| {
+            ui.label("视图开始行");
+            ui.add(egui::DragValue::new(&mut self.start).range(1..=view.len().max(1)));
+            ui.label("行数");
+            ui.add(egui::DragValue::new(&mut self.count).range(1..=8));
+            ui.selectable_value(&mut self.mode, TextMode::Exact, "精确数字文本");
+            ui.selectable_value(&mut self.mode, TextMode::Approximate, "文本转近似f64");
+        });
+        ui.small("CSV字符串仅接受数字/分数字面量；JSON在整数解析范围内保留整数及数值类型；JSON小数/超范围数字已是近似值。近似转换可能舍入、下溢或丢失大整数精度，不执行表达式。");
+        ui.small("选择列（最多8列；列表可滚动）");
+        egui::ScrollArea::vertical()
+            .id_salt("numeric-columns")
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+            .max_height(130.0)
+            .show(ui, |ui| {
+                for (index, name) in data.headers.iter().enumerate() {
+                    let mut checked = self.columns.contains(&index);
+                    if ui
+                        .add_enabled(
+                            checked || self.columns.len() < 8,
+                            egui::Checkbox::new(&mut checked, name),
+                        )
+                        .changed()
+                    {
+                        if checked {
+                            self.columns.push(index);
+                        } else {
+                            self.columns.retain(|i| *i != index);
+                        }
+                        self.error.clear();
+                    }
+                }
+            });
+        let mut move_column = None;
+        for pos in 0..self.columns.len() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(format!(
+                    "矩阵第{}列 ← {}",
+                    pos + 1,
+                    data.headers[self.columns[pos]]
+                ));
+                if ui.add_enabled(pos > 0, egui::Button::new("前移")).clicked() {
+                    move_column = Some((pos, pos - 1));
+                }
+                if ui
+                    .add_enabled(pos + 1 < self.columns.len(), egui::Button::new("后移"))
+                    .clicked()
+                {
+                    move_column = Some((pos, pos + 1));
+                }
+            });
+        }
+        if let Some((a, b)) = move_column {
+            self.columns.swap(a, b);
+        }
+    }
+    fn send(&mut self, ui: &mut egui::Ui, data: &Dataset, view: &[usize], busy: bool) {
+        let response = ui.add_enabled(
+            !busy && !view.is_empty() && !self.columns.is_empty(),
+            egui::Button::new("预览发送到计算器…"),
+        );
+        #[cfg(feature = "ui-preview")]
+        {
+            self.send_rect = Some(response.rect);
+        }
+        if response.clicked() {
+            match select(
+                data,
+                view,
+                self.start.saturating_sub(1),
+                self.count,
+                &self.columns,
+                self.mode,
+            ) {
+                Ok(table) => {
+                    let names = self
+                        .columns
+                        .iter()
+                        .map(|i| data.headers[*i].as_str())
+                        .collect::<Vec<_>>()
+                        .join(" → ");
+                    self.request = Some((
+                        format!(
+                            "数据视图第{}–{}行 · 列 {names} · {}",
+                            self.start,
+                            self.start + self.count - 1,
+                            if self.mode == TextMode::Exact {
+                                "精确文本模式"
+                            } else {
+                                "文本近似模式"
+                            }
+                        ),
+                        table,
+                    ));
+                    self.error.clear();
+                }
+                Err(e) => self.error = format!("{e:#}"),
+            }
+        }
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui, data: Option<&Dataset>, view: &[usize], busy: bool) {
+        let Some(data) = data else {
+            self.dialog_open = false;
+            return;
+        };
+        self.sync(data, view);
         #[cfg(feature = "ui-preview")]
         let open = self.reveal;
         #[cfg(not(feature = "ui-preview"))]
         let open = false;
-        egui::CollapsingHeader::new("选取数值区域 → 计算器").default_open(open).show(ui,|ui| {
-            ui.small("按当前已解析的筛选/排序视图选行。列按选择顺序组成矩阵，可调整；最多8×8。发送前不改变数据或计算器。");
-            ui.horizontal_wrapped(|ui| {
-                ui.label("视图开始行");ui.add(egui::DragValue::new(&mut self.start).range(1..=view.len().max(1)));
-                ui.label("行数");ui.add(egui::DragValue::new(&mut self.count).range(1..=8));
-                ui.selectable_value(&mut self.mode,TextMode::Exact,"精确数字文本");ui.selectable_value(&mut self.mode,TextMode::Approximate,"文本转近似f64");
-            });
-            ui.small("CSV字符串仅接受数字/分数字面量；JSON在整数解析范围内保留整数及数值类型；JSON小数/超范围数字已是近似值。近似转换可能舍入、下溢或丢失大整数精度，不执行表达式。");
-            egui::ScrollArea::vertical().id_salt("numeric-columns").max_height(130.0).show(ui,|ui| {
-                for (index,name) in data.headers.iter().enumerate() {
-                    let mut checked=self.columns.contains(&index);
-                    if ui.add_enabled(checked||self.columns.len()<8,egui::Checkbox::new(&mut checked,name)).changed() {
-                        if checked {self.columns.push(index);}else{self.columns.retain(|i|*i!=index);}self.error.clear();
-                    }
+        egui::CollapsingHeader::new("选取数值区域 → 计算器")
+            .default_open(open)
+            .show(ui, |ui| {
+                self.controls(ui, data, view);
+                self.send(ui, data, view, busy);
+                if !self.error.is_empty() {
+                    ui.colored_label(ui.visuals().error_fg_color, &self.error);
                 }
             });
-            let mut move_column=None;
-            for pos in 0..self.columns.len() {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(format!("矩阵第{}列 ← {}",pos+1,data.headers[self.columns[pos]]));
-                    if ui.add_enabled(pos>0,egui::Button::new("前移")).clicked(){move_column=Some((pos,pos-1));}
-                    if ui.add_enabled(pos+1<self.columns.len(),egui::Button::new("后移")).clicked(){move_column=Some((pos,pos+1));}
+        if self.dialog_open {
+            let ctx = ui.ctx().clone();
+            let modal =
+                egui::Modal::new(egui::Id::new("numeric-selection-modal")).show(&ctx, |ui| {
+                    ui.set_width((ctx.screen_rect().width() - 48.0).clamp(240.0, 560.0));
+                    ui.heading("选取数值区域");
+                    ui.small(format!(
+                        "当前解析视图：{} 行 · {} 列；发送前保留原数据与计算器",
+                        view.len(),
+                        data.headers.len()
+                    ));
+                    egui::ScrollArea::vertical()
+                        .id_salt("numeric-dialog-body")
+                        .max_height((ctx.screen_rect().height() - 190.0).max(100.0))
+                        .show(ui, |ui| {
+                            self.controls(ui, data, view);
+                            if !self.error.is_empty() {
+                                ui.colored_label(ui.visuals().error_fg_color, &self.error);
+                            }
+                        });
+                    ui.separator();
+                    ui.horizontal_wrapped(|ui| {
+                        let cancel = ui.button("取消");
+                        #[cfg(feature = "ui-preview")]
+                        {
+                            self.cancel_rect = Some(cancel.rect);
+                        }
+                        if cancel.clicked() {
+                            self.dialog_open = false;
+                        }
+                        self.send(ui, data, view, busy);
+                    });
                 });
+            if modal.should_close() || self.request.is_some() {
+                self.dialog_open = false;
             }
-            if let Some((a,b))=move_column {self.columns.swap(a,b);}
-            let response=ui.add_enabled(!busy&&!view.is_empty()&&!self.columns.is_empty(),egui::Button::new("预览发送到计算器…"));
-            #[cfg(feature="ui-preview")] {self.send_rect=Some(response.rect);}
-            if response.clicked() {
-                match select(data,view,self.start.saturating_sub(1),self.count,&self.columns,self.mode) {
-                    Ok(table)=>{let names=self.columns.iter().map(|i|data.headers[*i].as_str()).collect::<Vec<_>>().join(" → ");
-                        self.request=Some((format!("数据视图第{}–{}行 · 列 {names} · {}",self.start,self.start+self.count-1,if self.mode==TextMode::Exact{"精确文本模式"}else{"文本近似模式"}),table));self.error.clear();}
-                    Err(e)=>self.error=format!("{e:#}"),
-                }
-            }
-            if !self.error.is_empty(){ui.colored_label(ui.visuals().error_fg_color,&self.error);}
-        });
+        }
     }
 }
 
@@ -210,6 +358,34 @@ impl DataState {
     }
     pub fn preview_mapping_position(&self) -> egui::Pos2 {
         self.numeric_selector.send_rect.unwrap().center()
+    }
+    pub fn preview_numeric_entry_position(&self, cancel: bool) -> egui::Pos2 {
+        if cancel {
+            self.numeric_selector.cancel_rect.unwrap().center()
+        } else {
+            self.numeric_selector.entry_rect.unwrap().center()
+        }
+    }
+    pub fn preview_numeric_entry_cancelled(&self) {
+        assert!(!self.numeric_selector.dialog_open && self.numeric_selector.request.is_none());
+        assert_eq!(self.output, "preserved export");
+    }
+    pub fn preview_numeric_entry_dialog(&mut self, wide: bool) {
+        if wide {
+            let headers = (1..=8)
+                .map(|i| format!("指标{i} · 较长的具名列标题用于检查换行和顺序调整"))
+                .collect::<Vec<_>>();
+            let row = (1..=8).map(|i| i.to_string()).collect::<Vec<_>>().join(",");
+            self.input = format!("{}\n{}", headers.join(","), vec![row; 8].join("\n"));
+            let data = Dataset::parse(&self.input, DataFormat::Csv, b',').unwrap();
+            self.visible = (0..8).collect();
+            self.numeric_selector.headers = data.headers.clone();
+            self.numeric_selector.columns = (0..8).collect();
+            self.numeric_selector.start = 1;
+            self.numeric_selector.count = 8;
+            self.dataset = Some(data);
+        }
+        self.numeric_selector.dialog_open = true;
     }
 }
 

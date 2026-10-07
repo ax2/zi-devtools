@@ -688,6 +688,12 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            426..=429 => {
+                self.preview_mapping_scene(false);
+                if scene >= 428 {
+                    self.data_state.preview_numeric_entry_dialog(true);
+                }
+            }
             418..=421 => self.preview_mapping_scene(false),
             422..=425 => self.preview_mapping_scene(true),
             410..=417 => self.preview_numeric_scene(scene >= 414),
