@@ -50,6 +50,7 @@ impl DataState {
             || self.sqlite_export.job.phase.active()
             || self.workflow.job.phase.active()
             || self.workflow.files.job.phase.active()
+            || self.workflow.output.busy()
     }
     pub fn has_content(&self) -> bool {
         !self.input.is_empty()
@@ -268,6 +269,11 @@ impl Workspace {
                         "流程文件保存/读取",
                         false,
                     ),
+                    instance.state.workflow.output.job.snapshot(
+                        "workflow-output",
+                        "流程结果文件保存",
+                        true,
+                    ),
                 ]
                 .into_iter()
                 .flatten()
@@ -312,6 +318,19 @@ impl Workspace {
                 .is_some_and(|r| r.generation == generation)
         {
             instance.state.workflow.cancel();
+        }
+    }
+    pub fn cancel_workflow_output(&mut self, id: &str, generation: u64) {
+        if let Some(instance) = self.instances.iter_mut().find(|i| i.id == id)
+            && instance
+                .state
+                .workflow
+                .output
+                .job
+                .snapshot("workflow-output", "", true)
+                .is_some_and(|r| r.generation == generation)
+        {
+            instance.state.workflow.output.cancel();
         }
     }
     pub fn poll(&mut self) {

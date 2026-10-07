@@ -2,6 +2,25 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_output_prepare(&mut self, path: &std::path::Path, sqlite: bool) {
+        self.preview_workflow();
+        self.workflow.output.preview_prepare(path, sqlite);
+    }
+    pub fn preview_workflow_output_position(&self, index: usize) -> egui::Pos2 {
+        let rect = self.workflow.output.buttons[index].expect("output button missing");
+        assert!(rect.is_positive(), "output button is outside viewport");
+        rect.center()
+    }
+    pub fn preview_workflow_output_check(&self, phase: u8) -> bool {
+        let source = self.dataset.as_ref().unwrap();
+        assert_eq!(source.rows[0][1], " Zi Tools ");
+        assert_eq!(source.rows[0][2], "2");
+        let result = &self.workflow.proposal.as_ref().unwrap().result;
+        assert_eq!(result.rows[0][1], "Zi Tools");
+        assert_eq!(result.rows[0][2], serde_json::json!(2));
+        assert!(!self.can_undo_transform());
+        self.workflow.output.preview_check(phase)
+    }
     pub fn preview_workflow_bookmark_state(&mut self, phase: u8) {
         match phase {
             0 => assert!(self.workflow.files.listing.is_none()),

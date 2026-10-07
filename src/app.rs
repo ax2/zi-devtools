@@ -759,6 +759,28 @@ impl DevToolsApp {
         self.data_state.preview_workflow_position(index)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_output_prepare(
+        &mut self,
+        ctx: &egui::Context,
+        path: &Path,
+        sqlite: bool,
+        light: bool,
+    ) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.page = Page::Data;
+        self.data_state
+            .preview_workflow_output_prepare(path, sqlite);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_output_position(&self, index: usize) -> egui::Pos2 {
+        self.data_state.preview_workflow_output_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_output_check(&self, phase: u8) -> bool {
+        self.data_state.preview_workflow_output_check(phase)
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_check(&mut self, phase: u8) -> bool {
         self.data_state.preview_workflow_check(phase)
     }

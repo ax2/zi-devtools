@@ -13,6 +13,9 @@ impl DevToolsApp {
         let key = if key == "sqlite-export" {
             self.data_state.show_sqlite_export();
             "data"
+        } else if key == "workflow-output" {
+            self.data_state.show_workflow_output();
+            "data"
         } else if matches!(key, "pipeline" | "workflow-file") {
             self.data_state.show_workflow();
             "data"
@@ -199,6 +202,9 @@ impl DevToolsApp {
                 ("csv-merge", Some(id)) => self.data_state.cancel(&id, generation),
                 ("sqlite-export", Some(id)) => self.data_state.cancel_sqlite(&id, generation),
                 ("pipeline", Some(id)) => self.data_state.cancel_workflow(&id, generation),
+                ("workflow-output", Some(id)) => {
+                    self.data_state.cancel_workflow_output(&id, generation)
+                }
                 ("files", _) => self.file_state.cancel_task(),
                 ("services", _) => self.service_batch.cancel(generation),
                 _ => {}

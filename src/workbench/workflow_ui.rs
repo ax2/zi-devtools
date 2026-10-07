@@ -17,6 +17,7 @@ pub(super) struct State {
     reveal: bool,
     scroll_until: Option<std::time::Instant>,
     inspect: inspector::State,
+    pub(super) output: super::workflow_output::State,
     #[cfg(feature = "ui-preview")]
     buttons: [Option<(egui::Rect, egui::Rect)>; 10],
 }
@@ -38,6 +39,7 @@ impl Default for State {
             reveal: false,
             scroll_until: None,
             inspect: inspector::State::default(),
+            output: super::workflow_output::State::default(),
             #[cfg(feature = "ui-preview")]
             buttons: [None; 10],
         }
@@ -53,6 +55,7 @@ impl State {
         !self.definition.steps.is_empty() || self.files.review.is_some()
     }
     pub(super) fn invalidate(&mut self) {
+        self.output.invalidate();
         self.inspect = inspector::State::default();
         self.proposal = None;
         self.source = None;
@@ -67,6 +70,10 @@ impl State {
 }
 
 impl DataState {
+    pub fn show_workflow_output(&mut self) {
+        self.show_workflow();
+        self.workflow.output.reveal = true;
+    }
     pub(super) fn open_bookmarked_workflow(&mut self, path: PathBuf) -> Result<()> {
         ensure_not_busy(self)?;
         self.workflow.files.read(path)?;
@@ -221,6 +228,7 @@ impl DataState {
     }
 
     pub(super) fn poll_workflow(&mut self) {
+        self.workflow.output.poll();
         self.workflow.files.poll();
         let reply = self
             .workflow
@@ -304,7 +312,8 @@ impl DataState {
         let scroll = self
             .workflow
             .scroll_until
-            .is_some_and(|until| std::time::Instant::now() < until);
+            .is_some_and(|until| std::time::Instant::now() < until)
+            && !self.workflow.output.wants_scroll();
         let response = egui::CollapsingHeader::new("操作流程 · 连续预览")
             .id_salt("table-workflow")
             .open(scroll.then_some(true))
@@ -569,6 +578,10 @@ impl DataState {
                     ui.colored_label(ui.visuals().error_fg_color, &self.workflow.error);
                 }
                 if let Some(preview) = &self.workflow.proposal {
+                    let save = ui.add_enabled(!active && !self.busy(), egui::Button::new("保存流程结果为文件…"));
+                    #[cfg(feature = "ui-preview")]
+                    { self.workflow.buttons[6] = Some((save.rect, ui.clip_rect())); }
+                    if save.clicked() {self.workflow.output.reveal=true;}
                     let inspect = ui.add_enabled(!active && !self.busy(), egui::Button::new("查看输入与结果表格…"));
                     #[cfg(feature = "ui-preview")]
                     { self.workflow.buttons[5] = Some((inspect.rect, ui.clip_rect())); }
@@ -608,6 +621,16 @@ impl DataState {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(16));
         }
+        self.workflow.output.ui(
+            ui,
+            if self.dataset == self.workflow.source {
+                self.dataset.as_ref()
+            } else {
+                None
+            },
+            &self.workflow.definition,
+            self.workflow.proposal.as_ref().map(|p| &p.result),
+        );
         if start && let Err(error) = self.start_workflow() {
             self.workflow.error = format!("{error:#}");
         }

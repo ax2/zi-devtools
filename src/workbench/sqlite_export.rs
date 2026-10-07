@@ -367,7 +367,7 @@ fn sql_value(value: &Value) -> Result<SqlValue> {
 }
 
 #[derive(Debug)]
-struct Cancelled;
+pub(super) struct Cancelled;
 impl std::fmt::Display for Cancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("已取消，尚未发布新文件")
@@ -381,7 +381,7 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
     Ok(())
 }
 
-struct Temporary(PathBuf);
+pub(super) struct Temporary(pub(super) PathBuf);
 impl Drop for Temporary {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
@@ -389,11 +389,11 @@ impl Drop for Temporary {
 }
 
 pub(super) struct Receipt {
-    path: PathBuf,
-    rows: usize,
-    bytes: u64,
+    pub(super) path: PathBuf,
+    pub(super) rows: usize,
+    pub(super) bytes: u64,
 }
-fn write(review: &Review, cancel: &AtomicBool) -> Result<Receipt> {
+pub(super) fn write(review: &Review, cancel: &AtomicBool) -> Result<Receipt> {
     write_before_publish(review, cancel, || {})
 }
 fn write_before_publish(
