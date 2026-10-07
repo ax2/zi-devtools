@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::Context;
 
 impl State {
     #[cfg(feature = "ui-preview")]
@@ -14,6 +15,23 @@ impl State {
         assert_eq!(self.items.len(), 3);
         assert!(self.items[2].schedule.as_ref().unwrap().remind);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_date_received(&self, day: NaiveDate, text: &str) {
+        let draft = self.draft.as_ref().expect("received draft");
+        let schedule = draft.schedule.as_ref().unwrap();
+        assert!(
+            self.calendar && self.has_unsaved() && self.pending.is_none() && !self.path.exists()
+        );
+        assert_eq!(schedule.start, day.and_time(NaiveTime::MIN));
+        assert_eq!(
+            schedule.end,
+            Some(day.succ_opt().unwrap().and_time(NaiveTime::MIN))
+        );
+        assert!(schedule.all_day && !schedule.remind && schedule.repeat == Repeat::Once);
+        assert_eq!(self.selected, day);
+        assert_eq!(draft.body, text);
+        assert_eq!(self.items.len(), 3);
+    }
     pub fn incoming_event_date(&self) -> NaiveDate {
         self.selected
     }
@@ -24,7 +42,20 @@ impl State {
     pub fn receive_event_text(&mut self, source: &str, text: &str) -> Result<()> {
         self.receive_snapshot(source, text, true)
     }
+    pub fn receive_event_date(&mut self, source: &str, text: &str, date: NaiveDate) -> Result<()> {
+        self.receive_snapshot_at(source, text, Some(date), true)
+    }
     fn receive_snapshot(&mut self, source: &str, text: &str, event: bool) -> Result<()> {
+        self.receive_snapshot_at(source, text, event.then_some(self.selected), false)
+    }
+    fn receive_snapshot_at(
+        &mut self,
+        source: &str,
+        text: &str,
+        date: Option<NaiveDate>,
+        all_day: bool,
+    ) -> Result<()> {
+        let event = date.is_some();
         ensure!(
             self.loaded && self.pending.is_none(),
             "备忘 / 日程正在加载或保存，请稍后重试"
@@ -45,7 +76,7 @@ impl State {
             !text.is_empty() && text.len() <= MAX_BODY,
             "正文需要 1 字节至 128 KiB，请先缩小结果范围"
         );
-        let mut item = Item::new(event.then_some(self.selected));
+        let mut item = Item::new(date);
         item.title = format!("来自 {source}")
             .chars()
             .filter(|c| !c.is_control())
@@ -54,13 +85,30 @@ impl State {
         item.body = text.to_owned();
         if let Some(schedule) = &mut item.schedule {
             schedule.remind = false;
+            if all_day {
+                let day = date.context("日期快照缺少日期")?;
+                schedule.start = day.and_time(NaiveTime::MIN);
+                schedule.end = Some(
+                    day.succ_opt()
+                        .context("全天结束日期超出范围")?
+                        .and_time(NaiveTime::MIN),
+                );
+                schedule.all_day = true;
+                schedule.reminder_time = Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+                schedule.minutes = 0;
+            }
         }
         item.validate()?;
         self.edit(item);
+        if all_day {
+            self.select_date(date.unwrap());
+        }
         self.calendar = event;
         self.trash = false;
         self.query.clear();
-        self.message = if event {
+        self.message = if all_day {
+            "计算日期已填入单次全天日程草稿，提醒关闭；检查后保存到本机。"
+        } else if event {
             "结果已填入新日程草稿，提醒默认关闭；调整日期和时间后保存到本机。"
         } else {
             "结果已填入新备忘草稿；点击保存后才会保留到本机。"
@@ -76,6 +124,53 @@ mod tests {
     use super::*;
     use crate::planner::tests::{date, fixture, wait_state};
 
+    #[test]
+    fn typed_date_creates_all_day_without_write_and_rejects_invalid_or_dirty_targets() {
+        let path = fixture();
+        let mut state = State::new(path.clone());
+        wait_state(&mut state);
+        let before = state.selected;
+        assert!(
+            state
+                .receive_event_date("calculator", "snapshot", date("2500-01-01 00:00").date())
+                .is_err()
+        );
+        assert_eq!(state.selected, before);
+        assert!(state.draft.is_none() && !path.exists());
+        state.file_operation = true;
+        assert!(
+            state
+                .receive_event_date("calculator", "snapshot", date("2028-02-29 00:00").date())
+                .is_err()
+        );
+        state.file_operation = false;
+        let day = date("2028-02-29 00:00").date();
+        state
+            .receive_event_date("calculator0.10", "full calculation", day)
+            .unwrap();
+        let draft = state.draft.clone().unwrap();
+        let schedule = draft.schedule.as_ref().unwrap();
+        assert_eq!(state.selected, day);
+        assert_eq!(state.month, day.with_day(1).unwrap());
+        assert_eq!(schedule.start, date("2028-02-29 00:00"));
+        assert_eq!(schedule.end, Some(date("2028-03-01 00:00")));
+        assert!(schedule.all_day && !schedule.remind && schedule.repeat == Repeat::Once);
+        assert!(draft.calendar_uid.is_none() && state.has_unsaved() && !path.exists());
+        assert!(
+            state
+                .receive_event_date("next", "do not replace", date("2029-01-01 00:00").date())
+                .is_err()
+        );
+        assert_eq!(state.draft.as_ref(), Some(&draft));
+        assert_eq!(state.selected, day);
+        state.save_draft();
+        wait_state(&mut state);
+        let records = store::load(&path).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].schedule, draft.schedule);
+        assert_eq!(records[0].body, draft.body);
+        std::fs::remove_file(path).unwrap();
+    }
     #[test]
     fn incoming_event_is_unsaved_with_visible_date_and_reminder_off_until_explicit_save() {
         let path = fixture();

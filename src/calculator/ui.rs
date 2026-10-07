@@ -53,6 +53,16 @@ impl Default for State {
     }
 }
 impl State {
+    pub fn date_output_active(&self) -> bool {
+        self.date_mode && self.dates.date_operation()
+    }
+    pub fn take_date_transfer(&mut self) -> Result<Option<(chrono::NaiveDate, String)>, String> {
+        let snapshot = self.dates.take_transfer()?;
+        if snapshot.is_some() && !self.date_output_active() {
+            return Err("日期工作区已切换，请重新发送".into());
+        }
+        Ok(snapshot)
+    }
     pub fn plot_active(&self) -> bool {
         self.plot_mode
     }
@@ -378,6 +388,15 @@ impl State {
         self.dates.saved.amount = "3".into();
         self.variables.insert("ans".into(), Value::Exact(7, 1));
         self.history = vec![("old".into(), Value::Exact(7, 1))];
+    }
+    pub fn preview_date_send_position(&self) -> egui::Pos2 {
+        self.dates
+            .send_rect
+            .expect("date send button rendered")
+            .center()
+    }
+    pub fn preview_date_snapshot(&self) -> (chrono::NaiveDate, String) {
+        self.dates.date_snapshot().unwrap()
     }
     pub fn preview_date_position(&self) -> egui::Pos2 {
         self.dates

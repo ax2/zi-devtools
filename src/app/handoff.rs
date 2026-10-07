@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(feature = "ui-preview")]
+mod date_preview;
 mod discovery;
 #[cfg(feature = "ui-preview")]
 mod numeric_preview;
@@ -73,6 +75,7 @@ pub(super) struct Transfer {
     matrix_slot: MatrixSlot,
     allow_matrix_replace: bool,
     numeric: Option<NumericTable>,
+    event_date: Option<chrono::NaiveDate>,
     representation: Representation,
     numeric_rendered: Option<(Representation, Target)>,
     source: String,
@@ -109,6 +112,7 @@ impl Transfer {
             matrix_slot: MatrixSlot::A,
             allow_matrix_replace: false,
             numeric: None,
+            event_date: None,
             representation: Representation::Typed,
             numeric_rendered: None,
             source,
@@ -134,6 +138,14 @@ impl Transfer {
             #[cfg(feature = "ui-preview")]
             preview_log_target: None,
         })
+    }
+    fn dated(source: String, date: chrono::NaiveDate, text: &str) -> anyhow::Result<Self> {
+        use chrono::Datelike;
+        anyhow::ensure!((1..=9999).contains(&date.year()), "日期快照支持0001–9999年");
+        let mut transfer = Self::new(source, text)?;
+        transfer.event_date = Some(date);
+        transfer.target = Target::Event;
+        Ok(transfer)
     }
     fn numeric(source: String, table: NumericTable) -> anyhow::Result<Self> {
         let text = table
@@ -173,6 +185,9 @@ impl Transfer {
         }
     }
     fn compatible(&self) -> bool {
+        if self.event_date.is_some() && self.target == Target::Calculator {
+            return false;
+        }
         !(self.numeric.is_some()
             && self.representation == Representation::Typed
             && matches!(self.target, Target::Csv | Target::Tsv))
@@ -187,9 +202,10 @@ impl Transfer {
             .iter()
             .copied()
             .filter(|target| {
-                !(self.numeric.is_some()
-                    && self.representation == Representation::Typed
-                    && matches!(target, Target::Csv | Target::Tsv))
+                !(self.event_date.is_some() && *target == Target::Calculator
+                    || self.numeric.is_some()
+                        && self.representation == Representation::Typed
+                        && matches!(target, Target::Csv | Target::Tsv))
             })
             .collect()
     }
@@ -435,6 +451,9 @@ impl DevToolsApp {
         }
     }
     pub(super) fn handoff_bar(&mut self, ctx: &egui::Context) {
+        if self.page == Page::Calculator && self.calculator.date_output_active() {
+            return;
+        }
         if self.page == Page::Calculator && self.calculator.plot_active() {
             let result = self.calculator.plot_description();
             let mut send = false;
@@ -618,13 +637,19 @@ impl DevToolsApp {
             transfer.refresh_numeric();
             let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
             if transfer.target == Target::Event {
-                ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date()));
+                if let Some(date)=transfer.event_date { ui.label(format!("新日程：{date} 全天 · 不重复 · 提醒关闭")); }
+                else { ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date())); }
             }
             if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
             ui.small(if matches!(transfer.target, Target::Diagnostic(_)) {"替换该诊断主输入并清除旧结果，保留对照输入与其他参数；同目标执行中拒绝接收。接收不自动分析或执行命令。"} else if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
             });
             ui.separator();
             ui.label(format!("目标：{}", transfer.target.label()));
+            if let Some(date)=transfer.event_date {
+                ui.label(format!("日期快照：{date} · 日程目标使用此日期，不使用当前选中日期"));
+                if transfer.target==Target::Event { ui.small("创建单次全天草稿，提醒关闭，不自动保存。日程支持1901–2099年，范围外可选择备忘录或文本目标。"); }
+            }
+
             if transfer.target==Target::Calculator {
                 let previous_slot=transfer.matrix_slot;
                 ui.horizontal_wrapped(|ui| {ui.label("接收位置");let a=ui.selectable_value(&mut transfer.matrix_slot,MatrixSlot::A,"矩阵A");let b=ui.selectable_value(&mut transfer.matrix_slot,MatrixSlot::B,"矩阵B");
@@ -657,6 +682,20 @@ impl DevToolsApp {
             self.apply_handoff();
         }
     }
+    pub(super) fn finish_date_transfer(&mut self) {
+        match self.calculator.take_date_transfer() {
+            Ok(Some((date, text))) if self.handoff.is_none() => match Transfer::dated(
+                format!("计算器日期结果 · v{}", calculator_version()),
+                date,
+                &text,
+            ) {
+                Ok(transfer) => self.handoff = Some(transfer),
+                Err(error) => self.toast = Some((error.to_string(), Instant::now())),
+            },
+            Err(error) => self.toast = Some((error, Instant::now())),
+            _ => {}
+        }
+    }
     fn apply_handoff(&mut self) {
         if let Some(transfer) = self.handoff.as_ref() {
             if !transfer.compatible() {
@@ -686,9 +725,14 @@ impl DevToolsApp {
                         )
                     })
             } else if transfer.target == Target::Event {
-                self.planner
-                    .receive_event_text(&transfer.source, &transfer.text)
-                    .map(|_| (Page::Calendar, None))
+                (if let Some(date) = transfer.event_date {
+                    self.planner
+                        .receive_event_date(&transfer.source, &transfer.text, date)
+                } else {
+                    self.planner
+                        .receive_event_text(&transfer.source, &transfer.text)
+                })
+                .map(|_| (Page::Calendar, None))
             } else if transfer.target == Target::Memo {
                 self.planner
                     .receive_text(&transfer.source, &transfer.text)

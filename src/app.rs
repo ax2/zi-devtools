@@ -4766,6 +4766,7 @@ impl eframe::App for DevToolsApp {
                                     .unwrap_or("未声明"),
                             )
                         });
+                    self.finish_date_transfer();
                 }
                 Page::Commands => {
                     egui::ScrollArea::vertical()

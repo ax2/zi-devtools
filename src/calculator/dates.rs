@@ -82,6 +82,7 @@ impl Saved {
                 return Ok(Output {
                     text: format!("{days} 天"),
                     number: Some(days),
+                    date: None,
                 });
             }
             Operation::Offset => offset(start, amount(&self.amount)?, self.unit, self.clamp)?,
@@ -90,6 +91,7 @@ impl Saved {
         Ok(Output {
             text: format!("{} · {}", result.format("%Y-%m-%d"), weekday_name(result)),
             number: None,
+            date: Some(result),
         })
     }
 }
@@ -208,13 +210,17 @@ fn weekday_offset(start: NaiveDate, n: i64) -> Result<NaiveDate, String> {
 struct Output {
     text: String,
     number: Option<i64>,
+    date: Option<NaiveDate>,
 }
 #[derive(Default)]
 pub(super) struct State {
     pub saved: Saved,
+    send_requested: bool,
     result: Option<(Saved, Result<Output, String>)>,
     #[cfg(feature = "ui-preview")]
     pub compute_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    pub send_rect: Option<egui::Rect>,
 }
 impl State {
     pub fn calculate(&mut self) {
@@ -235,6 +241,52 @@ impl State {
         self.current()?
             .number
             .ok_or_else(|| "日期结果不是数值；请在日期工作台复制日期结果".into())
+    }
+    pub fn date_operation(&self) -> bool {
+        matches!(
+            self.saved.operation,
+            Operation::Offset | Operation::WeekdayOffset
+        )
+    }
+    pub fn date_snapshot(&self) -> Result<(NaiveDate, String), String> {
+        let result = self.current()?;
+        let date = result.date.ok_or("当前结果是天数，不是日期")?;
+        let unit = if self.saved.operation == Operation::WeekdayOffset {
+            "工作日"
+        } else {
+            match self.saved.unit {
+                Unit::Days => "天",
+                Unit::Months => "月",
+                Unit::Years => "年",
+            }
+        };
+        let policy = if self.saved.operation == Operation::WeekdayOffset {
+            "工作日仅周一至周五，不含节假日与调休；不计开始日期"
+        } else if self.saved.unit == Unit::Days {
+            "按公历天数偏移，不进行月末替代"
+        } else if self.saved.clamp {
+            "目标月份缺少同一天时截到月末"
+        } else {
+            "目标月份缺少同一天时报错"
+        };
+        Ok((
+            date,
+            format!(
+                "操作：{}\n开始日期：{}\n偏移：{} {}\n规则：{}\n结果：{}",
+                self.saved.operation.label(),
+                self.saved.start,
+                self.saved.amount,
+                unit,
+                policy,
+                result.text
+            ),
+        ))
+    }
+    pub fn take_transfer(&mut self) -> Result<Option<(NaiveDate, String)>, String> {
+        if !std::mem::take(&mut self.send_requested) {
+            return Ok(None);
+        }
+        self.date_snapshot().map(Some)
     }
     pub fn description(&self) -> Result<String, String> {
         Ok(format!("1×1 · 精确天数 {}", self.number()?))
@@ -333,19 +385,37 @@ impl State {
         if button.clicked() {
             self.calculate();
         }
+        let mut send = false;
+        #[cfg(feature = "ui-preview")]
+        let mut send_rect = None;
         egui::Frame::group(ui.style())
             .inner_margin(16.0)
             .show(ui, |ui| match self.current() {
                 Ok(result) => {
                     ui.label(egui::RichText::new(&result.text).size(26.0).strong());
-                    if ui.button("复制结果").clicked() {
-                        ui.ctx().copy_text(result.text.clone());
-                    }
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("复制结果").clicked() {
+                            ui.ctx().copy_text(result.text.clone());
+                        }
+                        if result.date.is_some() {
+                            let response = ui.button("发送日期到工具…");
+                            send = response.clicked();
+                            #[cfg(feature = "ui-preview")]
+                            {
+                                send_rect = Some(response.rect);
+                            }
+                        }
+                    });
                 }
                 Err(error) => {
                     ui.label(error);
                 }
             });
+        self.send_requested |= send;
+        #[cfg(feature = "ui-preview")]
+        {
+            self.send_rect = send_rect;
+        }
         ui.small("公历0001–9999年；无时区或夏令时换算。另存工作表会保存输入，恢复后需重新计算。");
     }
 }
@@ -354,6 +424,30 @@ mod tests {
     use super::*;
     fn d(s: &str) -> NaiveDate {
         parse(s).unwrap()
+    }
+    #[test]
+    fn date_handoff_captures_typed_snapshot_and_rechecks_same_frame_input() {
+        let mut state = State::default();
+        state.saved.operation = Operation::WeekdayOffset;
+        state.saved.start = "2026-10-09".into();
+        state.saved.amount = "3".into();
+        state.calculate();
+        state.send_requested = true;
+        let (day, text) = state.take_transfer().unwrap().unwrap();
+        assert_eq!(day, d("2026-10-14"));
+        assert!(text.contains("3 工作日") && text.contains("不含节假日"));
+        assert!(state.take_transfer().unwrap().is_none());
+        state.send_requested = true;
+        state.saved.amount = "4".into();
+        assert!(state.take_transfer().is_err());
+        assert!(state.take_transfer().unwrap().is_none());
+        assert_eq!(day, d("2026-10-14"));
+        assert!(text.contains("3 工作日"));
+        state.calculate();
+        assert_eq!(state.date_snapshot().unwrap().0, d("2026-10-15"));
+        state.saved.operation = Operation::Difference;
+        state.calculate();
+        assert!(state.date_snapshot().is_err());
     }
     #[test]
     fn strict_dates_leap_years_and_bounds() {
@@ -429,9 +523,12 @@ mod tests {
         assert_eq!(saved.compute().unwrap().number, Some(0));
         let mut state = State {
             saved: saved.clone(),
+            send_requested: false,
             result: Some((saved.clone(), saved.compute())),
             #[cfg(feature = "ui-preview")]
             compute_rect: None,
+            #[cfg(feature = "ui-preview")]
+            send_rect: None,
         };
         assert_eq!(state.number().unwrap(), 0);
         state.saved.start = "invalid draft".into();
