@@ -6,14 +6,8 @@ fn save_new(definition: &Definition, path: &std::path::Path) -> Result<()> {
     anyhow::ensure!(path.is_absolute(), "请选择绝对路径");
     let bytes = serde_json::to_vec_pretty(definition)?;
     anyhow::ensure!(bytes.len() <= LIMIT, "流程文件最多256 KiB");
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .context("无法创建流程文件；已有文件不覆盖，请另选新文件名")?;
-    file.write_all(&bytes)
-        .and_then(|_| file.sync_all())
-        .context("流程保存失败，目标可能留下不完整文件；请检查后另选新文件名")?;
+    crate::local_files::save_new_moved(path, &bytes, &AtomicBool::new(false))
+        .context("流程保存失败；已有文件不覆盖，当前步骤保留，请另选文件名")?;
     Ok(())
 }
 fn load(path: &std::path::Path) -> Result<Definition> {
