@@ -27,3 +27,9 @@ View位于plugins/text/views/main.html，自包含，无外部CSS/JS/图片。�
 JSON/Base64/SHA-256源工具版本1.1.0，五项插件候选0.1.0；迁移表三项pluginStatus更新为candidate，acceptedCapabilities仍为0。独立版默认宽整数、重复键旧策略与解码外层空白保留；插件模式用契约严格规则。后续资源/服务/桌面profile仍等待Host接口。
 
 实际最终模块220439字节，SHA-256 abfd0dbe45c064c4f8e40a5945c004694eb356cdf13688f8d7adf6536e64f20a；36组对照最大响应47191字节。当前模块在Node中_start正常返回，exitCode=0，未触发proc_exit；不据此宣称Studio的proc_exit(0)缺口已修复。候选目录计划release/text-plugin-0.1.0-dev57，包外text-plugin-0.1.0-dev57-verification.json，不生成额外ZIP。
+
+## 候选交付完成（独立版源码6b23a71）
+
+候选目录已生成：release/text-plugin-0.1.0-dev57，13件文件，总250054字节；外部release/text-plugin-0.1.0-dev57-verification.json，逐件摘要/大小、源码修订与组件摘要、契约摘要、36条WASI/原生结果和View QA齐全。packageSha256=null，目录摘要不冒充签名包摘要。所有capability/catalog/Pi绑定及源工具1.1.0核对通过。未提供或借用正式私钥；不发布signed容器。
+
+独立GUI/MCP完整运行目录release/stage-82-text-plugin-6b23a71，程序0.82.0-dev.57；673/0/34、严格默认/全特性、8m29s优化构建、实际新EXE隔离服务启停、两主题原生Ctrl+Enter检查通过。Host真实安装、最大输出并发排空/fuel/权限、实际桥/Pi/scenes仍由Studio接收验收。当前模块正常_start返回，未调用proc_exit；不能用本候选推定其他插件的proc_exit(0)处理已修复。
