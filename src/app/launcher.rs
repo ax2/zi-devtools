@@ -1,4 +1,28 @@
 use super::*;
+pub(super) enum Choice {
+    Tool(String),
+    Workflow(crate::workbench::sessions::WorkflowMatch),
+}
+
+impl DevToolsApp {
+    pub(super) fn open_search_choice(&mut self, choice: Choice) {
+        match choice {
+            Choice::Tool(id) => {
+                if let Some(entry) = self.entries("").into_iter().find(|entry| entry.id == id) {
+                    self.open_entry(&entry);
+                }
+            }
+            Choice::Workflow(selected) => match self.data_state.open_workflow_match(&selected) {
+                Ok(()) => {
+                    self.page = Page::Data;
+                    self.launcher_open = false;
+                    self.visit("pipeline");
+                }
+                Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
+            },
+        }
+    }
+}
 
 impl DevToolsApp {
     pub(super) fn open_quick(&mut self, ctx: &egui::Context) {

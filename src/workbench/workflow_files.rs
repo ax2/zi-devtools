@@ -37,6 +37,7 @@ pub(super) struct State {
     pub(super) folder_hydrated: bool,
     pub(super) folder_request: Option<Option<PathBuf>>,
     pub(super) memory_message: String,
+    pub(super) listing_revision: u64,
     #[cfg(feature = "ui-preview")]
     pub(super) memory_buttons: [Option<egui::Rect>; 2],
 }
@@ -48,6 +49,7 @@ impl State {
         self.receiver = Some(rx);
         self.message.clear();
         self.listing = None;
+        self.listing_revision = self.listing_revision.wrapping_add(1);
         self.folder = Some(folder.clone());
         self.job.begin();
         std::thread::spawn(move || {
@@ -110,6 +112,7 @@ impl State {
                 self.review = Some(definition);
             }
             Ok(Reply::Listed(folder, listing)) => {
+                self.listing_revision = self.listing_revision.wrapping_add(1);
                 self.job.finish(Phase::Done, "流程文件夹已检查；未运行");
                 self.folder = Some(folder);
                 self.listing = Some(listing);

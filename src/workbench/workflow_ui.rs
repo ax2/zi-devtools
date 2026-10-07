@@ -67,6 +67,34 @@ impl State {
 }
 
 impl DataState {
+    pub(super) fn open_searched_workflow(
+        &mut self,
+        file: &std::ffi::OsStr,
+        revision: u64,
+    ) -> Result<()> {
+        ensure_not_busy(self)?;
+        anyhow::ensure!(
+            self.workflow.files.listing_revision == revision,
+            "流程列表已变化，请重新搜索"
+        );
+        let path = self
+            .workflow
+            .files
+            .listing
+            .as_ref()
+            .and_then(|listing| {
+                listing
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path.file_name() == Some(file))
+            })
+            .context("流程列表已变化，请刷新目录并重新搜索")?
+            .path
+            .clone();
+        self.workflow.files.read(path)?;
+        self.show_workflow();
+        Ok(())
+    }
     pub fn workflow_folder_settings(
         &mut self,
         prefs: &mut crate::preferences::Preferences,

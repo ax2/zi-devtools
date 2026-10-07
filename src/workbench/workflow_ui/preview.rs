@@ -2,6 +2,37 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_search_check(&self, phase: u8) {
+        let original = Dataset::parse(
+            "编号,名称,数量\n001, Zi Tools ,2\n002, Local Notes ,3",
+            DataFormat::Csv,
+            b',',
+        )
+        .unwrap();
+        assert_eq!(self.dataset.as_ref().unwrap(), &original);
+        match phase {
+            1 => {
+                assert_eq!(
+                    self.workflow.files.review.as_ref().unwrap().name,
+                    "每日资料清洗"
+                );
+                assert_eq!(self.workflow.definition.name, "表格清洗");
+                assert!(self.workflow.proposal.is_some());
+            }
+            2 => {
+                assert!(self.workflow.files.review.is_none());
+                assert_eq!(self.workflow.definition.name, "表格清洗");
+                assert!(self.workflow.proposal.is_some());
+            }
+            3 => {
+                assert!(self.workflow.files.review.is_none());
+                assert_eq!(self.workflow.definition.name, "每日资料清洗");
+                assert!(self.workflow.proposal.is_none());
+                assert!(!self.can_undo_transform());
+            }
+            _ => panic!("unknown workflow search phase"),
+        }
+    }
     pub fn preview_workflow_memory_position(&self, index: usize) -> egui::Pos2 {
         let rect = self.workflow.files.memory_buttons[index].expect("memory button missing");
         assert!(rect.width() > 0.0 && rect.height() > 0.0);

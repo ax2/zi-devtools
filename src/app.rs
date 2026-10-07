@@ -774,6 +774,20 @@ impl DevToolsApp {
         assert!(folder.join("daily.json").is_file());
         assert!(folder.join("orders.json").is_file());
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_search_check(&mut self, phase: u8) {
+        if phase == 0 {
+            assert!(self.launcher_open);
+            assert_eq!(self.launcher_query, "每日资料清洗");
+            assert!(self.entries(&self.launcher_query).is_empty());
+            let results = self.data_state.workflow_matches(&self.launcher_query);
+            assert_eq!(results.total, 1);
+            assert_eq!(results.entries[0].instance_id, self.data_state.active_id());
+        } else {
+            assert!(!self.launcher_open);
+            self.data_state.preview_workflow_search_check(phase);
+        }
+    }
 
     #[cfg(feature = "ui-preview")]
     pub fn preview_text_plugin(&mut self, ctx: &egui::Context, light: bool, phase: u8) {
@@ -2702,7 +2716,7 @@ impl DevToolsApp {
         }
         let mut open = true;
         let mut chosen = None;
-        egui::Window::new("快速打开工具")
+        egui::Window::new("快速打开工具与流程")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -2712,7 +2726,7 @@ impl DevToolsApp {
                 let response = ui.add_sized(
                     [ui.available_width(), 38.0],
                     egui::TextEdit::singleline(&mut self.launcher_query)
-                        .hint_text("名称或用途，例如 压缩图片、合并表格…")
+                        .hint_text("工具用途或流程名称，例如 压缩图片、每日清洗…")
                         .char_limit(160),
                 );
                 let mut scroll_selection = self.launcher_focus;
@@ -2726,19 +2740,21 @@ impl DevToolsApp {
                 }
                 let query = self.launcher_query.to_lowercase();
                 let entries = self.entries(&query);
-                if entries.is_empty() {
-                    ui.label("没有匹配的工具");
+                let workflows = self.data_state.workflow_matches(&query);
+                let count = entries.len() + workflows.entries.len();
+                if count == 0 {
+                    ui.label("没有匹配的工具或已检查流程；可在数据工作台选择或刷新流程文件夹。");
                 } else {
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown))
                     {
                         scroll_selection = true;
-                        self.launcher_index = (self.launcher_index + 1).min(entries.len() - 1);
+                        self.launcher_index = (self.launcher_index + 1).min(count - 1);
                     }
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
                         scroll_selection = true;
                         self.launcher_index = self.launcher_index.saturating_sub(1);
                     }
-                    self.launcher_index = self.launcher_index.min(entries.len() - 1);
+                    self.launcher_index = self.launcher_index.min(count - 1);
                     egui::ScrollArea::vertical()
                         .max_height(380.0)
                         .show(ui, |ui| {
@@ -2750,7 +2766,7 @@ impl DevToolsApp {
                                 ui.add(
                                     egui::Label::new(
                                         RichText::new(&e.description)
-                                            .small()
+                                            .size(12.0)
                                             .color(self.colors.muted),
                                     )
                                     .truncate(),
@@ -2764,13 +2780,53 @@ impl DevToolsApp {
                                     response.scroll_to_me(Some(egui::Align::Center));
                                 }
                                 if response.clicked() {
-                                    chosen = Some(e.id.clone());
+                                    chosen = Some(launcher::Choice::Tool(e.id.clone()));
+                                }
+                            }
+                            for (offset, workflow) in workflows.entries.iter().enumerate() {
+                                let index = entries.len() + offset;
+                                let response = ui.selectable_label(
+                                    index == self.launcher_index,
+                                    format!(
+                                        "{} · 已保存流程 · {}步",
+                                        workflow.name, workflow.steps
+                                    ),
+                                );
+                                let detail = format!(
+                                    "{} · {} · 载入后确认，不自动执行",
+                                    workflow.instance_name,
+                                    workflow.file_name.to_string_lossy()
+                                );
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(&detail).size(12.0).color(self.colors.muted),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(detail);
+                                ui.add_space(6.0);
+                                if scroll_selection && index == self.launcher_index {
+                                    response.scroll_to_me(Some(egui::Align::Center));
+                                }
+                                if response.clicked() {
+                                    chosen = Some(launcher::Choice::Workflow(workflow.clone()));
                                 }
                             }
                         });
+                    if workflows.total > workflows.entries.len() {
+                        ui.small(format!(
+                            "流程匹配{}条，仅显示前100条；请细化名称或文件名。",
+                            workflows.total
+                        ));
+                    }
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-                        let e = &entries[self.launcher_index];
-                        chosen = Some(e.id.clone());
+                        chosen = Some(if let Some(entry) = entries.get(self.launcher_index) {
+                            launcher::Choice::Tool(entry.id.clone())
+                        } else {
+                            launcher::Choice::Workflow(
+                                workflows.entries[self.launcher_index - entries.len()].clone(),
+                            )
+                        });
                     }
                 }
                 ui.separator();
@@ -2783,10 +2839,8 @@ impl DevToolsApp {
         if !open || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.launcher_open = false;
         }
-        if let Some(id) = chosen
-            && let Some(entry) = self.entries("").into_iter().find(|e| e.id == id)
-        {
-            self.open_entry(&entry);
+        if let Some(choice) = chosen {
+            self.open_search_choice(choice);
         }
     }
 

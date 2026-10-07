@@ -2,6 +2,8 @@ use super::*;
 use crate::workspace_store::{Entry, MAX_SNAPSHOT, Store, validate_name};
 use std::ops::{Deref, DerefMut};
 mod ui;
+mod workflows;
+pub use workflows::{WorkflowMatch, WorkflowMatches};
 
 pub struct Instance {
     pub id: String,
@@ -23,6 +25,7 @@ pub struct Workspace {
     close_confirm: Option<String>,
     delete_confirm: Option<Entry>,
     status: String,
+    workflow_search: workflows::Cache,
 }
 
 enum Reply {
@@ -150,6 +153,7 @@ impl Workspace {
             close_confirm: None,
             delete_confirm: None,
             status: String::new(),
+            workflow_search: workflows::Cache::default(),
         }
     }
     pub fn active_id(&self) -> &str {
