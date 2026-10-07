@@ -127,7 +127,7 @@ impl State {
                 self.plot_mode = false;
             }
             if ui
-                .selectable_label(self.matrix_mode && !self.plot_mode, "矩阵与线性方程")
+                .selectable_label(self.matrix_mode && !self.plot_mode, "矩阵与数据统计")
                 .clicked()
             {
                 self.matrix_mode = true;

@@ -4,6 +4,8 @@ mod discovery;
 mod numeric_preview;
 #[cfg(feature = "ui-preview")]
 mod plot_preview;
+#[cfg(feature = "ui-preview")]
+mod table_statistics_preview;
 use crate::calculator::exchange::{MatrixSlot, NumericTable, Representation};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

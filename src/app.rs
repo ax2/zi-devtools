@@ -693,6 +693,7 @@ impl DevToolsApp {
                 self.page = Page::Calculator;
                 self.calculator.preview_statistics_fixture();
             }
+            440..=443 => self.preview_table_statistic_fixture(true),
             430..=431 => self.preview_boundary_scene(),
             426..=429 => {
                 self.preview_mapping_scene(false);

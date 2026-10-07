@@ -17,10 +17,17 @@ pub(super) enum Operation {
     Determinant,
     Inverse,
     Solve,
+    Sum,
+    Mean,
+    Median,
+    PopulationVariance,
+    SampleVariance,
+    PopulationDeviation,
+    SampleDeviation,
 }
 
 impl Operation {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 14] = [
         Self::Add,
         Self::Subtract,
         Self::Multiply,
@@ -28,6 +35,13 @@ impl Operation {
         Self::Determinant,
         Self::Inverse,
         Self::Solve,
+        Self::Sum,
+        Self::Mean,
+        Self::Median,
+        Self::PopulationVariance,
+        Self::SampleVariance,
+        Self::PopulationDeviation,
+        Self::SampleDeviation,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -38,6 +52,13 @@ impl Operation {
             Self::Determinant => "行列式 det(A)",
             Self::Inverse => "逆矩阵 A",
             Self::Solve => "解 AX = B",
+            Self::Sum => "A 区域总和",
+            Self::Mean => "A 区域平均数",
+            Self::Median => "A 区域中位数",
+            Self::PopulationVariance => "A 总体方差 · n",
+            Self::SampleVariance => "A 样本方差 · n−1",
+            Self::PopulationDeviation => "A 总体标准差 · n",
+            Self::SampleDeviation => "A 样本标准差 · n−1",
         }
     }
     pub fn needs_b(self) -> bool {
@@ -45,6 +66,18 @@ impl Operation {
             self,
             Self::Add | Self::Subtract | Self::Multiply | Self::Solve
         )
+    }
+    pub fn statistic(self) -> Option<&'static str> {
+        match self {
+            Self::Sum => Some("sum"),
+            Self::Mean => Some("mean"),
+            Self::Median => Some("median"),
+            Self::PopulationVariance => Some("varp"),
+            Self::SampleVariance => Some("vars"),
+            Self::PopulationDeviation => Some("stdp"),
+            Self::SampleDeviation => Some("stds"),
+            _ => None,
+        }
     }
 }
 
@@ -187,6 +220,10 @@ impl Matrix {
         Self::new(1, 1, vec![result])
     }
     pub fn apply(&self, operation: Operation, b: Option<&Self>) -> Result<Self, String> {
+        if let Some(name) = operation.statistic() {
+            let value = super::statistics::evaluate(name, &self.cells).ok_or("未知统计操作")??;
+            return Self::new(1, 1, vec![value]);
+        }
         if operation == Operation::Transpose {
             return Self::new(
                 self.cols,
@@ -250,6 +287,48 @@ impl Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn statistics_of_received_rectangles_are_scalar_and_need_no_b() {
+        let values: Vec<_> = (1..=64).collect();
+        let a = m(8, 8, &values);
+        for (op, expected) in [
+            (Operation::Sum, Value::Exact(2080, 1)),
+            (Operation::Mean, Value::Exact(65, 2)),
+            (Operation::Median, Value::Exact(65, 2)),
+            (Operation::PopulationVariance, Value::Exact(1365, 4)),
+            (Operation::SampleVariance, Value::Exact(1040, 3)),
+        ] {
+            assert!(!op.needs_b());
+            let result = a.apply(op, None).unwrap();
+            assert_eq!((result.rows, result.cols), (1, 1));
+            assert_eq!(result.cells, vec![expected]);
+        }
+        for op in [Operation::PopulationDeviation, Operation::SampleDeviation] {
+            assert!(
+                matches!(a.apply(op,None).unwrap().cells[0],Value::Approx(v) if v.is_finite() && v>0.0)
+            );
+        }
+        let single = m(1, 1, &[5]);
+        assert_eq!(
+            single.apply(Operation::PopulationVariance, None).unwrap(),
+            m(1, 1, &[0])
+        );
+        assert!(single.apply(Operation::SampleVariance, None).is_err());
+        assert_eq!(
+            m(2, 3, &[1, 2, 3, 4, 5, 6])
+                .apply(Operation::Mean, None)
+                .unwrap()
+                .cells[0],
+            Value::Exact(7, 2)
+        );
+        assert_eq!(
+            m(1, 2, &[i128::MAX, i128::MAX])
+                .apply(Operation::Mean, None)
+                .unwrap()
+                .cells[0],
+            Value::Exact(i128::MAX, 1)
+        );
+    }
     fn m(rows: usize, cols: usize, nums: &[i128]) -> Matrix {
         Matrix::new(
             rows,

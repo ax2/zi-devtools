@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 440] = [
+const NAMES: [&str; 444] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -450,6 +450,10 @@ const NAMES: [&str; 440] = [
     "calculator-statistics-light",
     "calculator-statistics-small-dark",
     "calculator-statistics-small-light",
+    "table-statistics-dark",
+    "table-statistics-light",
+    "table-statistics-small-dark",
+    "table-statistics-small-light",
 ];
 
 struct Capture {
@@ -911,6 +915,37 @@ impl eframe::App for Capture {
             }
             if self.frames == 76 {
                 input.events.push(egui::Event::Text("sin(x)*3".into()));
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("table-statistics-smoke") {
+            if self.frames == 90 {
+                let pos = self.app.preview_table_statistic_position(7);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -200.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            let control = match self.frames {
+                20 | 21 | 60 | 61 => Some(0),
+                40 | 41 => Some(1),
+                80 | 81 => Some(2),
+                100 | 101 => Some(3),
+                120 | 121 => Some(5),
+                140 | 141 => Some(6),
+                160 | 161 => Some(4),
+                _ => None,
+            };
+            if let Some(index) = control {
+                let pos = self.app.preview_table_statistic_position(index);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 2 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
             }
         }
         if std::env::args().nth(3).as_deref() == Some("worksheet-smoke")
@@ -2080,6 +2115,40 @@ impl eframe::App for Capture {
             return;
         }
 
+        if smoke_mode.as_deref() == Some("table-statistics-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(45),
+                "table statistics timeout"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 440, self.fixture.clone());
+                self.app.preview_table_statistic_fixture(false);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 1180.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                30 => self.app.preview_table_statistic_check(0),
+                70 => self.app.preview_table_statistic_check(1),
+                110 => self.app.preview_table_statistic_check(2),
+                130 => self.app.preview_table_statistic_check(3),
+                150 => self.app.preview_table_statistic_check(4),
+                180 => {
+                    if !self.app.preview_table_statistic_received() {
+                        ctx.request_repaint_after(Duration::from_millis(30));
+                        return;
+                    }
+                    println!(
+                        "PASS native table statistics: 64-value preview refusal/explicit consent receive A; actual categorized menu mean selection and manual compute; exact 65/2 result sent as typed scalar to new JSON instance; original source/B/expression/ans/history preserved"
+                    );
+                    std::process::exit(0);
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
         if smoke_mode.as_deref() == Some("plot-smoke") {
             assert!(
                 self.started.elapsed() < Duration::from_secs(60),
@@ -3521,6 +3590,7 @@ impl eframe::App for Capture {
                 || (400..=403).contains(&self.scene)
                 || (432..=433).contains(&self.scene)
                 || (436..=437).contains(&self.scene)
+                || (440..=441).contains(&self.scene)
                 || (406..=407).contains(&self.scene)
                 || matches!(self.scene, 410 | 411 | 414 | 415 | 418 | 419 | 422 | 423)
                 || (280..=281).contains(&self.scene)
@@ -3546,6 +3616,8 @@ impl eframe::App for Capture {
                     | 435
                     | 438
                     | 439
+                    | 442
+                    | 443
             ) {
                 egui::vec2(980.0, 760.0)
             } else if (134..=135).contains(&self.scene) {

@@ -338,6 +338,24 @@ impl Selector {
 
 #[cfg(feature = "ui-preview")]
 impl DataState {
+    pub fn preview_statistic_source(&mut self) -> (String, NumericTable) {
+        self.preview_numeric_boundary_fixture();
+        let headers = (1..=8).map(|n| format!("列{n}")).collect::<Vec<_>>();
+        let rows = (0..8)
+            .map(|r| {
+                (0..8)
+                    .map(|c| (r * 8 + c + 1).to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .collect::<Vec<_>>();
+        self.input = format!("{}\n{}", headers.join(","), rows.join("\n"));
+        let data = Dataset::parse(&self.input, DataFormat::Csv, b',').unwrap();
+        self.visible = data.view("", None, false);
+        self.numeric_selector.headers = data.headers.clone();
+        self.dataset = Some(data);
+        (self.input.clone(), self.preview_boundary_request())
+    }
     pub fn preview_numeric_boundary_fixture(&mut self) {
         self.preview_mapping_fixture();
         let headers = (1..=9).map(|i| format!("列{i}")).collect::<Vec<_>>();

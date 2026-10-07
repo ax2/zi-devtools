@@ -156,16 +156,20 @@ impl Document {
         data.validate()?;
         Ok(Self {
             format: "zi-devtools-calculator".into(),
-            schema: 3,
-            tool_version: "0.7.0".into(),
+            schema: 4,
+            tool_version: "0.8.0".into(),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=3),
+            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=4),
             "不支持的计算工作表格式或版本"
+        );
+        ensure!(
+            self.schema >= 4 || !self.data.matrix.uses_statistics(),
+            "区域统计操作要求工作表schema4"
         );
         ensure!(
             self.tool_version.len() <= 32
@@ -213,6 +217,29 @@ pub(super) fn save(path: &Path, data: Data) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn statistics_require_schema_four_and_legacy_matrix_files_still_validate() {
+        let mut document = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
+        for schema in [1, 2, 3] {
+            document["schema"] = schema.into();
+            serde_json::from_value::<Document>(document.clone())
+                .unwrap()
+                .validate()
+                .unwrap();
+        }
+        document["data"]["matrix"]["operation"] = "mean".into();
+        assert!(
+            serde_json::from_value::<Document>(document.clone())
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+        document["schema"] = 4.into();
+        let restored = serde_json::from_value::<Document>(document).unwrap();
+        restored.validate().unwrap();
+        assert!(restored.data.matrix.uses_statistics());
+        assert_eq!(Document::new(restored.data).unwrap().schema, 4);
+    }
+    #[test]
     fn plot_settings_roundtrip_and_legacy_defaults_do_not_store_sample_results() {
         let mut settings = data();
         settings.matrix_mode = false;
@@ -220,7 +247,7 @@ mod tests {
         settings.plot.curves[0].expression = "factor*sin(x)".into();
         settings.plot.points = 1025;
         let document = Document::new(settings.clone()).unwrap();
-        assert_eq!(document.schema, 3);
+        assert_eq!(document.schema, 4);
         let bytes = serde_json::to_vec(&document).unwrap();
         let restored: Document = serde_json::from_slice(&bytes).unwrap();
         restored.validate().unwrap();
@@ -299,7 +326,7 @@ mod tests {
             assert!(serde_json::from_str::<Value>(text).is_err(), "{text}");
         }
         let mut doc = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
-        doc["schema"] = 4.into();
+        doc["schema"] = 5.into();
         assert!(
             serde_json::from_value::<Document>(doc.clone())
                 .unwrap()

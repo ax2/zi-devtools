@@ -150,6 +150,9 @@ pub(super) struct Saved {
     operation: Operation,
 }
 impl Saved {
+    pub(super) fn uses_statistics(&self) -> bool {
+        self.operation.statistic().is_some()
+    }
     pub fn validate(&self) -> Result<(), String> {
         for input in [&self.a, &self.b] {
             if !(1..=8).contains(&input.rows)
@@ -200,6 +203,8 @@ pub(super) struct State {
     compute_rect: Option<egui::Rect>,
     #[cfg(feature = "ui-preview")]
     compute_count: u32,
+    #[cfg(feature = "ui-preview")]
+    operation_rects: [Option<(egui::Rect, egui::Rect)>; 2],
 }
 impl Default for State {
     fn default() -> Self {
@@ -221,6 +226,8 @@ impl Default for State {
             compute_rect: None,
             #[cfg(feature = "ui-preview")]
             compute_count: 0,
+            #[cfg(feature = "ui-preview")]
+            operation_rects: [None; 2],
         }
     }
 }
@@ -355,18 +362,40 @@ impl State {
         })
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, variables: &BTreeMap<String, Value>, degrees: bool) {
-        ui.label("矩阵运算与线性方程");
+        ui.label("矩阵、线性方程与数值区域统计");
         ui.small("每轴 1–8；单元格可输入表达式及现有变量。显式计算，不改写 ans 或变量。");
         ui.horizontal_wrapped(|ui| {
-            for op in Operation::ALL {
-                if ui
-                    .selectable_value(&mut self.operation, op, op.label())
-                    .changed()
-                {
-                    self.error.clear();
-                }
+            ui.label("运算");
+            let picker = egui::ComboBox::from_id_salt("calculator-matrix-operation")
+                .height(420.0)
+                .selected_text(self.operation.label())
+                .show_ui(ui, |ui| {
+                    ui.strong("矩阵与线性方程");
+                    for op in Operation::ALL {
+                        if op == Operation::Sum {
+                            ui.separator();
+                            ui.strong("数值区域统计 · 仅A");
+                        }
+                        let option = ui.selectable_value(&mut self.operation, op, op.label());
+                        #[cfg(feature = "ui-preview")]
+                        if op == Operation::Mean {
+                            self.operation_rects[1] = Some((option.rect, ui.clip_rect()));
+                        }
+                        if option.changed() {
+                            self.error.clear();
+                        }
+                    }
+                });
+            #[cfg(feature = "ui-preview")]
+            {
+                self.operation_rects[0] = Some((picker.response.rect, ui.clip_rect()));
             }
+            #[cfg(not(feature = "ui-preview"))]
+            let _ = picker;
         });
+        if self.operation.statistic().is_some() {
+            ui.small(format!("统计A当前{}×{}区域的全部{}个值；0计入，错误/空值不跳过，B不参与。样本至少2值；结果不写ans或变量。",self.a.rows,self.a.cols,self.a.rows*self.a.cols));
+        }
         ui.small(match self.operation {
             Operation::Multiply => "A 的列数需等于 B 的行数，结果为 A行 × B列。",
             Operation::Solve => {
@@ -374,13 +403,20 @@ impl State {
             }
             Operation::Add | Operation::Subtract => "A 与 B 的行列数需相同。",
             Operation::Transpose => "行列互换，适用于矩形矩阵。",
+            op if op.statistic().is_some() => {
+                "结果为1×1数值，可继续发送到工具；精确输入保持有理数，标准差或混合近似值标近似。"
+            }
             _ => "A 需为方阵；精确运算超出 i128 范围会报错。",
         });
         let current = self.current(variables, degrees);
         let mut compute = false;
         let mut copy = false;
         ui.horizontal_wrapped(|ui| {
-            let button = ui.button("计算矩阵结果");
+            let button = ui.button(if self.operation.statistic().is_some() {
+                "计算区域统计"
+            } else {
+                "计算矩阵结果"
+            });
             #[cfg(feature = "ui-preview")]
             {
                 self.compute_rect = Some(button.rect);
@@ -393,6 +429,9 @@ impl State {
                 self.fixture();
             }
         });
+        if self.operation.statistic().is_some() {
+            self.result_ui(ui, variables, degrees);
+        }
         if self.a.ui(ui, "A") {
             self.revision += 1;
             self.error.clear();
@@ -410,6 +449,11 @@ impl State {
         {
             ui.ctx().copy_text(result.value.tsv());
         }
+        if self.operation.statistic().is_none() {
+            self.result_ui(ui, variables, degrees);
+        }
+    }
+    fn result_ui(&self, ui: &mut egui::Ui, variables: &BTreeMap<String, Value>, degrees: bool) {
         if !self.error.is_empty() {
             ui.colored_label(ui.visuals().error_fg_color, &self.error);
         }
@@ -422,9 +466,9 @@ impl State {
                 );
             }
             egui::Frame::group(ui.style()).inner_margin(12.0).show(ui,|ui| {
-                ui.strong(format!("结果 · {} × {}",result.rows,result.cols));
+                ui.strong(format!("{} · {} × {}",snapshot.operation.label(),result.rows,result.cols));
                 if result.approximate() {
-                    ui.label("≈ 近似结果 · 使用浮点运算；未估计条件数，不保证病态矩阵误差。");
+                    ui.label(if snapshot.operation.statistic().is_some(){"≈ 近似统计 · f64受舍入影响；标准差为近似平方根。"}else{"≈ 近似结果 · 使用浮点运算；未估计条件数，不保证病态矩阵误差。"});
                 } else {ui.label("精确结果 · 有理数运算，无自动降精度");}
                 egui::ScrollArea::horizontal().id_salt("matrix-result-scroll").show(ui,|ui| {
                     egui::Grid::new("matrix-result-grid").spacing([18.0,8.0]).show(ui,|ui| {
@@ -516,6 +560,52 @@ impl State {
         self.compute_rect.expect("matrix compute rendered").center()
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_statistic_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) = self.operation_rects[if index == 2 { 1 } else { index }]
+            .expect("operation control rendered");
+        if index == 2 {
+            return egui::pos2(rect.center().x, clip.center().y);
+        }
+        assert!(
+            clip.contains(rect.center()),
+            "operation control clipped {rect:?} {clip:?}"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistic_fixture(&mut self, ready: bool) {
+        self.receive_numeric(
+            super::exchange::NumericTable::new(
+                8,
+                8,
+                (1..=64).map(|n| Value::Exact(n, 1)).collect(),
+            )
+            .unwrap(),
+        );
+        self.operation = Operation::Mean;
+        if ready {
+            self.compute(&BTreeMap::from([("ans".into(), Value::Exact(7, 1))]), false)
+                .unwrap();
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistic_check(&self, computed: bool) {
+        assert_eq!(self.operation, Operation::Mean);
+        assert_eq!(self.b, Self::default().b);
+        for i in 0..64 {
+            assert_eq!(self.a.typed[i], Some(Value::Exact((i + 1) as i128, 1)));
+        }
+        if computed {
+            assert_eq!(
+                self.result.as_ref().unwrap().value.cells,
+                vec![Value::Exact(65, 2)]
+            );
+            assert_eq!(self.compute_count, 1);
+        } else {
+            assert!(self.result.is_none());
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_check(&self) {
         assert!(
             self.compute_count >= 2,
@@ -533,6 +623,44 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn table_statistics_preserve_types_ignore_b_and_restore_without_execution() {
+        let mut state = State::default();
+        state.receive_numeric(
+            super::super::exchange::NumericTable::new(
+                8,
+                8,
+                (1..=64).map(|n| Value::Exact(n, 1)).collect(),
+            )
+            .unwrap(),
+        );
+        state.b.cells[0] = "1/0".into();
+        let b = state.b.clone();
+        let a = state.a.clone();
+        let vars = BTreeMap::from([("ans".into(), Value::Exact(7, 1))]);
+        state.operation = Operation::Mean;
+        assert!(state.numeric_result(&vars, false).is_err());
+        state.compute(&vars, false).unwrap();
+        assert_eq!(
+            state.numeric_result(&vars, false).unwrap().cells,
+            vec![Value::Exact(65, 2)]
+        );
+        assert_eq!(state.a, a);
+        assert_eq!(state.b, b);
+        assert_eq!(vars["ans"], Value::Exact(7, 1));
+        let saved = state.snapshot();
+        assert!(saved.uses_statistics());
+        saved.validate().unwrap();
+        state.restore(saved);
+        assert!(state.result.is_none());
+        state.compute(&vars, false).unwrap();
+        state.operation = Operation::SampleVariance;
+        assert!(!state.current(&vars, false));
+        state.a.rows = 1;
+        state.a.cols = 1;
+        assert!(state.compute(&vars, false).is_err());
+        assert!(state.result.is_none());
+    }
     #[test]
     fn variable_and_angle_changes_invalidate_result_and_error_removes_previous_solution() {
         let mut state = State::default();

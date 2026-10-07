@@ -180,6 +180,32 @@ pub(super) fn literal(value: Value) -> String {
     }
 }
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistic_state(&mut self, ready: bool) {
+        self.matrix_mode = true;
+        self.plot_mode = false;
+        self.variables.insert("ans".into(), Value::Exact(7, 1));
+        self.history = vec![("old history".into(), Value::Exact(7, 1))];
+        if ready {
+            self.matrix.preview_statistic_fixture(true);
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistic_operation_position(&self, index: usize) -> eframe::egui::Pos2 {
+        self.matrix.preview_statistic_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistic_state_check(&self, computed: bool) {
+        assert_eq!(self.variables.len(), 1);
+        assert_eq!(self.variables["ans"], Value::Exact(7, 1));
+        assert_eq!(
+            self.history,
+            vec![("old history".into(), Value::Exact(7, 1))]
+        );
+        if computed {
+            self.matrix.preview_statistic_check(true);
+        }
+    }
     pub fn numeric_description(&self) -> Result<String, String> {
         if self.matrix_mode {
             self.matrix
