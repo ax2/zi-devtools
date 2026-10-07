@@ -14,6 +14,7 @@ struct Preview {
     frame: u32,
     captured: u32,
     start: Instant,
+    saved_bytes: Vec<u8>,
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
@@ -22,6 +23,7 @@ impl eframe::App for Preview {
             30 | 31 | 80 | 81 => Some(0),
             60 | 61 => Some(1),
             110 | 111 => Some(2),
+            240 | 241 if self.sqlite => Some(5),
             _ => None,
         };
         if let Some(index) = button {
@@ -41,6 +43,21 @@ impl eframe::App for Preview {
                 pos,
                 button: egui::PointerButton::Primary,
                 pressed: self.frame == 190,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if self.sqlite && matches!(self.frame, 290 | 291 | 320 | 321 | 350 | 351 | 380 | 381) {
+            let index = match self.frame {
+                290 | 291 | 350 | 351 => 0,
+                320 | 321 => 1,
+                _ => 2,
+            };
+            let pos = self.app.preview_sqlite_transfer_position(index);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frame % 2 == 0,
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -81,8 +98,11 @@ impl eframe::App for Preview {
                 assert_eq!(&rows[0][1], "Zi Tools");
                 assert_eq!(&rows[0][2], "2");
             }
+            self.saved_bytes = std::fs::read(&self.target).unwrap();
         }
-        if matches!(self.frame, 15 | 45 | 145 | 185) {
+        if matches!(self.frame, 15 | 45 | 145 | 185)
+            || (self.sqlite && matches!(self.frame, 260 | 310 | 395))
+        {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         for event in ctx.input(|i| i.events.clone()) {
@@ -113,11 +133,31 @@ impl eframe::App for Preview {
         }
         if self.frame == 220 {
             assert_eq!(self.captured, 4);
+            if self.sqlite {
+                self.app.preview_workflow_browse_prepare();
+            }
             println!(
                 "PASS native workflow output sqlite={} light={}: actual remember/review/back/confirm; no write before confirm; independently read complete output; original table and proposal retained; real recipe save/read, import confirmed by actual button, declared settings restored with empty target and no new writer",
                 self.sqlite, self.light
             );
-            self.app.preview_tray_workflow_finish(ctx);
+            if !self.sqlite {
+                self.app.preview_tray_workflow_finish(ctx);
+            }
+        }
+        if self.sqlite {
+            for (frame, phase) in [(270, 0), (310, 1), (340, 2), (405, 3)] {
+                if self.frame == frame {
+                    self.app.preview_workflow_browse_check(phase);
+                }
+            }
+            if self.frame == 420 {
+                assert_eq!(self.captured, 7);
+                assert_eq!(std::fs::read(&self.target).unwrap(), self.saved_bytes);
+                println!(
+                    "PASS native workflow SQLite chain: actual saved-result open, current-page review/cancel/review/confirm creates exactly one typed instance; original workflow/source and database bytes retained"
+                );
+                self.app.preview_tray_workflow_finish(ctx);
+            }
         }
         self.frame += 1;
         ctx.request_repaint_after(Duration::from_millis(35));
@@ -152,6 +192,7 @@ fn main() -> eframe::Result<()> {
                 frame: 0,
                 captured: 0,
                 start: Instant::now(),
+                saved_bytes: Vec::new(),
             }))
         }),
     )

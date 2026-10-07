@@ -202,7 +202,7 @@ fn csv_write(
     })
 }
 enum Reply {
-    Done(sqlite_export::Receipt),
+    Done(Format, sqlite_export::Receipt),
     Cancelled,
     Failed(String),
 }
@@ -219,8 +219,10 @@ pub(super) struct State {
     cancel: Arc<AtomicBool>,
     status: String,
     receipt: Option<sqlite_export::Receipt>,
+    receipt_format: Option<Format>,
+    open_request: Option<PathBuf>,
     #[cfg(feature = "ui-preview")]
-    pub(super) buttons: [Option<egui::Rect>; 5],
+    pub(super) buttons: [Option<egui::Rect>; 6],
 }
 impl Default for State {
     fn default() -> Self {
@@ -237,8 +239,10 @@ impl Default for State {
             cancel: Arc::new(AtomicBool::new(false)),
             status: String::new(),
             receipt: None,
+            receipt_format: None,
+            open_request: None,
             #[cfg(feature = "ui-preview")]
-            buttons: [None; 5],
+            buttons: [None; 6],
         }
     }
 }
@@ -248,6 +252,14 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn take_open_request(&mut self) -> Option<PathBuf> {
+        self.open_request.take()
+    }
+    fn request_open(&mut self) {
+        if !self.busy() && self.receipt_format == Some(Format::Sqlite) {
+            self.open_request = self.receipt.as_ref().map(|r| r.path.clone());
+        }
+    }
     pub(super) fn load_settings(&mut self, output: Option<&workflow::Output>) {
         self.path.clear();
         self.review = None;
@@ -337,7 +349,7 @@ impl State {
         self.receiver = None;
         self.reveal = true;
         match reply {
-            Reply::Done(receipt) => {
+            Reply::Done(format, receipt) => {
                 self.status = format!(
                     "已保存完整流程结果：{}行 · {}字节 · {}；原表与预览保留",
                     receipt.rows,
@@ -347,6 +359,7 @@ impl State {
                 self.job
                     .finish(Phase::Done, format!("已保存{}行流程结果", receipt.rows));
                 self.receipt = Some(receipt);
+                self.receipt_format = Some(format);
             }
             Reply::Cancelled => {
                 self.status = "输出已取消，未发布新文件；原表与预览保留".into();
@@ -366,17 +379,20 @@ impl State {
         self.cancel = Arc::new(AtomicBool::new(false));
         self.status.clear();
         self.receipt = None;
+        self.receipt_format = None;
+        self.open_request = None;
         self.job.begin();
         let cancel = self.cancel.clone();
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         std::thread::spawn(move || {
+            let format = review.format;
             let result = match review.payload {
                 Payload::Csv(data, safe) => csv_write(&data, &review.path, safe, &cancel, || {}),
                 Payload::Sqlite(sqlite) => sqlite_export::write(&sqlite, &cancel),
             };
             let reply = match result {
-                Ok(receipt) => Reply::Done(receipt),
+                Ok(receipt) => Reply::Done(format, receipt),
                 Err(e) if e.downcast_ref::<sqlite_export::Cancelled>().is_some() => {
                     Reply::Cancelled
                 }
@@ -415,6 +431,17 @@ impl State {
                 ui.small("使用完整预览结果；选择新文件并确认。保存位置和授权不写入流程定义。");
                 if !self.status.is_empty() {
                     ui.label(&self.status);
+                }
+                if self.receipt_format == Some(Format::Sqlite) && self.receipt.is_some() {
+                    let open = ui
+                        .add_enabled(!self.busy(), egui::Button::new("查看已保存的 SQLite 结果…"));
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.buttons[5] = Some(open.rect.intersect(ui.clip_rect()));
+                    }
+                    if open.clicked() {
+                        self.request_open();
+                    }
                 }
                 ui.add_enabled_ui(!self.busy(), |ui| {
                     let settings_before = self.settings();
@@ -568,6 +595,48 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn result_open_uses_completed_kind_and_path_not_mutable_output_settings() {
+        for format in [Format::Csv, Format::Sqlite] {
+            let fixture = Fixture::new();
+            let (source, definition, result) = frozen();
+            let path = fixture.file(if format == Format::Csv {
+                "actual.csv"
+            } else {
+                "actual.sqlite"
+            });
+            let mut state = State::default();
+            state.review = Some(
+                Review::prepare(&source, &definition, &result, &path, format, "result", true)
+                    .unwrap(),
+            );
+            state.start();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while state.receiver.is_some() {
+                state.poll();
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+            assert_eq!(state.job.phase, Phase::Done);
+            state.format = if format == Format::Csv {
+                Format::Sqlite
+            } else {
+                Format::Csv
+            };
+            state.path = fixture.file("draft.other").display().to_string();
+            state.request_open();
+            assert_eq!(
+                state.take_open_request(),
+                if format == Format::Sqlite {
+                    Some(path.clone())
+                } else {
+                    None
+                }
+            );
+            assert!(state.take_open_request().is_none());
+            assert!(path.is_file());
+        }
+    }
     #[test]
     fn imported_output_settings_reset_target_without_starting_a_writer() {
         let mut state = State::default();

@@ -105,6 +105,30 @@ impl DataState {
 }
 
 impl Workspace {
+    pub(crate) fn import_table(&mut self, data: Dataset, name: &str) -> Result<()> {
+        data.validate_saved()?;
+        let input = data.export(
+            &(0..data.rows.len()).collect::<Vec<_>>(),
+            DataFormat::Json,
+            b',',
+        )?;
+        anyhow::ensure!(
+            input.len() <= INPUT_LIMIT,
+            "当前页JSON表示超过2 MiB，未创建实例"
+        );
+        let message = format!(
+            "已导入SQLite当前页：{}行 / {}列；未运行流程，不代表全表",
+            data.rows.len(),
+            data.headers.len()
+        );
+        self.create(name)?;
+        let state = self.deref_mut();
+        state.input = input;
+        state.format = DataFormat::Json;
+        state.replace_with_join(data);
+        state.message = message;
+        Ok(())
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, show_library: bool, show_save: bool) {
         self.instances.clear();
@@ -472,6 +496,48 @@ impl DerefMut for Workspace {
 mod tests {
     use super::*;
     use std::fs;
+    #[test]
+    fn typed_page_import_creates_independent_work_and_rejects_oversize_before_creation() {
+        let mut workspace = Workspace::new(
+            std::env::temp_dir().join(format!("zi-page-work-{}.db", uuid::Uuid::new_v4())),
+        );
+        workspace.input = "original draft".into();
+        let source = workspace.active_id().to_owned();
+        let data = Dataset::from_parts(
+            vec!["id".into(), "quantity".into()],
+            vec![vec![serde_json::json!("001"), serde_json::json!(2)]],
+        )
+        .unwrap();
+        workspace
+            .import_table(data.clone(), "SQLite current page")
+            .unwrap();
+        assert_ne!(workspace.active_id(), source);
+        assert_eq!(workspace.instances[0].state.input, "original draft");
+        assert_eq!(workspace.dataset.as_ref(), Some(&data));
+        assert_eq!(workspace.visible, vec![0]);
+        assert!(!workspace.busy());
+        let count = workspace.instances.len();
+        let huge = Dataset::from_parts(
+            vec!["id".into()],
+            vec![vec![serde_json::json!("x".repeat(INPUT_LIMIT + 1))]],
+        )
+        .unwrap();
+        assert!(workspace.import_table(huge, "too large").is_err());
+        assert_eq!(workspace.instances.len(), count);
+        assert_eq!(workspace.dataset.as_ref(), Some(&data));
+        let empty = Dataset::from_parts(vec!["id".into()], vec![]).unwrap();
+        workspace.import_table(empty.clone(), "empty page").unwrap();
+        assert_eq!(workspace.dataset.as_ref(), Some(&empty));
+        assert!(workspace.visible.is_empty());
+        while workspace.instances.len() < 16 {
+            workspace.create("capacity fixture").unwrap();
+        }
+        let active = workspace.active_id().to_owned();
+        assert!(workspace.import_table(data, "over capacity").is_err());
+        assert_eq!(workspace.instances.len(), 16);
+        assert_eq!(workspace.active_id(), active);
+        assert_eq!(workspace.instances[0].state.input, "original draft");
+    }
     fn wait(workspace: &mut Workspace) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while workspace.instances.iter().any(|i| i.state.busy()) || workspace.operation_pending() {

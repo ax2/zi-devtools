@@ -785,6 +785,37 @@ impl DevToolsApp {
         self.data_state.preview_workflow_output_reload(path, phase);
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_browse_prepare(&mut self) {
+        self.data_state.show_workflow_output();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_sqlite_transfer_position(&self, index: usize) -> egui::Pos2 {
+        self.sqlite_browser.preview_transfer_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_browse_check(&self, phase: u8) {
+        self.data_state.instances[0]
+            .state
+            .preview_page_handoff_source();
+        if phase < 3 {
+            assert_eq!(self.page, Page::SqliteBrowser);
+            assert_eq!(self.data_state.instances.len(), 1);
+            self.sqlite_browser.preview_workflow_result_check(phase);
+            assert_eq!(
+                self.preferences.recent.first().map(String::as_str),
+                Some("sqlite")
+            );
+        } else {
+            assert_eq!(self.page, Page::Data);
+            assert_eq!(self.data_state.instances.len(), 2);
+            self.data_state.preview_page_handoff_result();
+            assert_eq!(
+                self.preferences.recent.first().map(String::as_str),
+                Some("data")
+            );
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_check(&mut self, phase: u8) -> bool {
         self.data_state.preview_workflow_check(phase)
     }
@@ -5122,7 +5153,7 @@ impl eframe::App for DevToolsApp {
                         match self.sqlite_browser.open_path(path) {
                             Ok(()) => {
                                 self.page = Page::SqliteBrowser;
-                                self.visit("sqlite-browser");
+                                self.visit("sqlite");
                             }
                             Err(error) => self.data_state.message = error.to_string(),
                         }
@@ -5272,6 +5303,17 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("sqlite-browser-page")
                         .show(ui, |ui| self.sqlite_browser.ui(ui));
+                    if let Some((name, table)) = self.sqlite_browser.take_workbench_transfer() {
+                        match self.data_state.import_table(table, &name) {
+                            Ok(()) => {
+                                self.page = Page::Data;
+                                self.visit("data");
+                            }
+                            Err(error) => self
+                                .sqlite_browser
+                                .transfer_failed(format!("接力未完成：{error:#}")),
+                        }
+                    }
                 }
                 Page::AsciiCodes => {
                     egui::ScrollArea::vertical()

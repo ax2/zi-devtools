@@ -2,6 +2,21 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_page_handoff_source(&self) {
+        let source = self.dataset.as_ref().unwrap();
+        assert_eq!(source.rows[0][1], " Zi Tools ");
+        assert_eq!(source.rows[0][2], "2");
+        assert!(self.input.contains("001, Zi Tools ,2"));
+    }
+    pub fn preview_page_handoff_result(&self) {
+        let table = self.dataset.as_ref().unwrap();
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0][0], "001");
+        assert_eq!(table.rows[0][1], "Zi Tools");
+        assert_eq!(table.rows[0][2], serde_json::json!(2));
+        assert!(!self.busy());
+        assert_eq!(self.visible.len(), table.rows.len());
+    }
     pub fn preview_workflow_output_reload(&mut self, path: &std::path::Path, phase: u8) {
         match phase {
             0 => self

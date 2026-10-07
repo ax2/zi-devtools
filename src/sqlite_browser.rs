@@ -14,6 +14,7 @@ use std::{
 };
 
 use crate::disk_inspector::is_link;
+mod transfer;
 
 const PAGE_SIZE: usize = 50;
 const MAX_PAGES: usize = 200;
@@ -51,6 +52,8 @@ pub struct Cell {
     pub export: String,
     pub kind: &'static str,
     pub truncated: bool,
+    /// Exact representable SQLite value; None for truncated/invalid text, blobs, or nonfinite reals.
+    pub value: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug)]
@@ -135,18 +138,21 @@ fn bounded_text(bytes: &[u8], remaining: &mut usize) -> (String, bool) {
 fn cell(value: ValueRef<'_>, original_length: Option<i64>, remaining: &mut usize) -> Cell {
     match value {
         ValueRef::Null => Cell {
+            value: Some(serde_json::Value::Null),
             display: "NULL".into(),
             export: String::new(),
             kind: "NULL",
             truncated: false,
         },
         ValueRef::Integer(value) => Cell {
+            value: Some(value.into()),
             display: value.to_string(),
             export: value.to_string(),
             kind: "整数",
             truncated: false,
         },
         ValueRef::Real(value) => Cell {
+            value: serde_json::Number::from_f64(value).map(serde_json::Value::Number),
             display: value.to_string(),
             export: value.to_string(),
             kind: "浮点",
@@ -155,6 +161,11 @@ fn cell(value: ValueRef<'_>, original_length: Option<i64>, remaining: &mut usize
         ValueRef::Text(bytes) => {
             let (content, truncated) = bounded_text(bytes, remaining);
             Cell {
+                value: if truncated {
+                    None
+                } else {
+                    std::str::from_utf8(bytes).ok().map(|text| text.into())
+                },
                 display: content.clone(),
                 export: content,
                 kind: "文本",
@@ -176,6 +187,7 @@ fn cell(value: ValueRef<'_>, original_length: Option<i64>, remaining: &mut usize
                 if shown < length { "…" } else { "" }
             );
             Cell {
+                value: None,
                 display: content.clone(),
                 export: content,
                 kind: "二进制预览",
@@ -214,7 +226,7 @@ pub fn load_page(
     })?;
     for entry in structure_rows {
         columns.push(entry?);
-        ensure!(columns.len() <= MAX_COLUMNS, "列数超过 64，暂不支持预览");
+        ensure!(columns.len() <= MAX_COLUMNS, "列数超过128，暂不支持预览");
     }
     ensure!(!columns.is_empty(), "无法获取列结构");
     let header_sql = format!("SELECT * FROM {} LIMIT 0", quote_identifier(table));
@@ -223,7 +235,7 @@ pub fn load_page(
         .context("无法准备列清单查询")?;
     ensure!(
         header_statement.column_count() <= MAX_COLUMNS,
-        "结果列数超过 64"
+        "结果列数超过128"
     );
     let headers: Vec<String> = header_statement
         .column_names()
@@ -257,8 +269,8 @@ pub fn load_page(
         .map(|name| {
             let quoted = quote_identifier(name);
             format!(
-                "CASE typeof({quoted}) WHEN 'text' THEN substr({quoted},1,4097) \
-                 WHEN 'blob' THEN substr({quoted},1,25) ELSE {quoted} END, length({quoted})"
+                "CASE typeof({quoted}) WHEN 'text' THEN CAST(substr(CAST({quoted} AS BLOB),1,4097) AS TEXT) \
+                 WHEN 'blob' THEN substr({quoted},1,25) ELSE {quoted} END, length(CAST({quoted} AS BLOB))"
             )
         })
         .collect::<Vec<_>>()
@@ -341,6 +353,7 @@ enum Response {
 }
 
 pub struct State {
+    transfer: transfer::State,
     path: String,
     catalog: Option<Catalog>,
     table: String,
@@ -353,6 +366,7 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
+            transfer: transfer::State::default(),
             path: String::new(),
             catalog: None,
             table: String::new(),
@@ -365,6 +379,34 @@ impl Default for State {
 }
 
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_transfer_position(&self, index: usize) -> egui::Pos2 {
+        let rect = self.transfer.buttons[index].expect("SQLite transfer button missing");
+        assert!(
+            rect.is_positive(),
+            "SQLite transfer button {index} is clipped"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_result_check(&self, phase: u8) {
+        assert!(self.receiver.is_none());
+        let data = self.data.as_ref().unwrap();
+        assert_eq!(data.table, "workflow_result");
+        assert_eq!(data.rows.len(), 2);
+        assert_eq!(data.rows[0][0].value, Some(serde_json::json!("001")));
+        assert_eq!(data.rows[0][1].value, Some(serde_json::json!("Zi Tools")));
+        assert_eq!(data.rows[0][2].value, Some(serde_json::json!(2)));
+        assert_eq!(self.transfer.review.is_some(), phase == 1);
+    }
+    pub(crate) fn take_workbench_transfer(
+        &mut self,
+    ) -> Option<(String, crate::workbench::Dataset)> {
+        self.transfer.pending.take()
+    }
+    pub(crate) fn transfer_failed(&mut self, error: String) {
+        self.message = error;
+    }
     pub(crate) fn background_active(&self) -> bool {
         self.receiver.is_some()
     }
@@ -518,6 +560,7 @@ impl State {
                 values
                     .into_iter()
                     .map(|value| Cell {
+                        value: Some(value.into()),
                         display: value.into(),
                         export: value.into(),
                         kind: "文本",
@@ -534,6 +577,7 @@ impl State {
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll();
+        self.transfer.ui(ui);
         ui.heading("SQLite 浏览器");
         ui.label("选择本机数据库，只读查看表结构和每页最多 50 行；不执行任意 SQL 或修改数据。");
         ui.add_space(8.0);
@@ -655,6 +699,20 @@ impl State {
                 });
         });
         let mut requested_page = None;
+        let send = ui.add_enabled(
+            self.receiver.is_none(),
+            egui::Button::new("当前页送到数据工作台…"),
+        );
+        #[cfg(feature = "ui-preview")]
+        {
+            self.transfer.buttons[0] = Some(send.rect.intersect(ui.clip_rect()));
+        }
+        if send.clicked() {
+            match transfer::Review::prepare(data, &self.path) {
+                Ok(review) => self.transfer.review = Some(review),
+                Err(error) => self.message = format!("无法接力当前页：{error:#}"),
+            }
+        }
         ui.horizontal(|ui| {
             if ui
                 .add_enabled(
@@ -730,7 +788,7 @@ impl State {
                 });
         });
         ui.add_space(8.0);
-        ui.small("最多列出 200 个表/视图、64 列，预览前 10000 行。长文本与二进制仅显示有界内容；CSV 只导出当前页且不覆盖文件。数据库可能同时被其他程序修改，分页不是一致性快照。WAL 模式下 SQLite 可能管理辅助文件。");
+        ui.small("最多列出200个表/视图、128列，预览前10000行。长文本与二进制仅显示有界内容；CSV只导出当前页且不覆盖文件。数据库可能同时被其他程序修改，分页不是一致性快照。WAL模式下SQLite可能管理辅助文件。");
         if let Some(next) = requested_page {
             self.start_page(next);
         }

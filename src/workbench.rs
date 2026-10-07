@@ -44,6 +44,11 @@ pub struct Dataset {
     pub rows: Vec<Vec<Value>>,
 }
 impl Dataset {
+    pub(crate) fn from_parts(headers: Vec<String>, rows: Vec<Vec<Value>>) -> Result<Self> {
+        let data = Self { headers, rows };
+        data.validate_saved()?;
+        Ok(data)
+    }
     fn validate_saved(&self) -> Result<()> {
         anyhow::ensure!(
             !self.headers.is_empty() && self.headers.len() <= COLUMN_LIMIT,
@@ -254,7 +259,10 @@ impl DataState {
         self.numeric_selector.take()
     }
     pub fn take_sqlite_open_request(&mut self) -> Option<PathBuf> {
-        self.sqlite_export.open_request.take()
+        self.sqlite_export
+            .open_request
+            .take()
+            .or_else(|| self.workflow.output.take_open_request())
     }
     pub fn show_sqlite_export(&mut self) {
         self.sqlite_export.reveal = true;
