@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.32"
+version = "0.82.0-dev.33"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -81,6 +81,16 @@ winresource = "0.1"
 lto = "thin"
 strip = "symbols"
 codegen-units = 1
+
+# Keep local development caches bounded; symbols can be enabled explicitly
+# with CARGO_PROFILE_DEV_DEBUG=1 for a debugging session.
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false
 
 [[example]]
 name = "clipboard_fixture"

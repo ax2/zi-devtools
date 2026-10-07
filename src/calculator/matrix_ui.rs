@@ -130,6 +130,7 @@ impl Input {
                             let index=r*8+c;
                             let typed=self.typed[index].is_some();
                             let response=ui.add(egui::TextEdit::singleline(&mut self.cells[index]).id_salt((name,r,c)).desired_width(84.0).char_limit(512).font(egui::TextStyle::Monospace)).on_hover_text(if typed { "已保留原数值类型；修改此格会转回表达式。近似值编辑时请删除≈，改为科学函数表达式。" } else { "可输入表达式和现有变量，如 1/3、sin(30)、price；不执行赋值" });
+                            response.clone().on_hover_ui(|ui| {ui.strong("完整单元格");ui.monospace(&self.cells[index]);if typed {ui.small("保留原数值类型；修改后作为普通表达式解析。");}});
                             if response.changed() { self.typed[index]=None; changed=true; }
                         }
                         ui.end_row();
@@ -255,7 +256,15 @@ impl State {
         let value = &self.result.as_ref().ok_or("请先计算矩阵")?.value;
         super::exchange::NumericTable::new(value.rows, value.cols, value.cells.clone())
     }
+    #[cfg(any(test, feature = "ui-preview"))]
     pub(super) fn receive_numeric(&mut self, table: super::exchange::NumericTable) {
+        self.receive_numeric_into(table, super::exchange::MatrixSlot::A);
+    }
+    pub(super) fn receive_numeric_into(
+        &mut self,
+        table: super::exchange::NumericTable,
+        slot: super::exchange::MatrixSlot,
+    ) {
         let mut input = Input {
             rows: table.rows,
             cols: table.cols,
@@ -269,7 +278,10 @@ impl State {
                 input.typed[index] = Some(value);
             }
         }
-        self.a = input;
+        match slot {
+            super::exchange::MatrixSlot::A => self.a = input,
+            super::exchange::MatrixSlot::B => self.b = input,
+        };
         self.revision += 1;
         self.result = None;
         self.error.clear();
@@ -443,6 +455,16 @@ impl State {
         self.error.clear();
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_mapping_check(&self) {
+        assert_eq!(self.a, State::default().a);
+        assert!(self.result.is_none());
+        assert_eq!((self.b.rows, self.b.cols), (2, 2));
+        assert_eq!(self.b.typed[0], Some(Value::Exact(4, 1)));
+        assert_eq!(self.b.typed[1], Some(Value::Exact(5, 1)));
+        assert_eq!(self.b.typed[8], Some(Value::Exact(3, 1)));
+        assert_eq!(self.b.typed[9], Some(Value::Exact(1, 3)));
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_numeric_fixture(&mut self) {
         self.receive_numeric(
             super::exchange::NumericTable::new(
@@ -507,6 +529,27 @@ mod tests {
         state.a.cells[0] = "1/0".into();
         assert!(state.compute(&vars, false).is_err());
         assert!(state.result.is_none());
+    }
+    #[test]
+    fn receive_b_preserves_a_and_requires_manual_recalculation() {
+        let mut state = State::default();
+        let a = state.a.clone();
+        state.receive_numeric_into(
+            super::super::exchange::NumericTable::new(
+                3,
+                1,
+                vec![Value::Exact(2, 1), Value::Exact(3, 1), Value::Exact(4, 1)],
+            )
+            .unwrap(),
+            super::super::exchange::MatrixSlot::B,
+        );
+        assert_eq!(state.a, a);
+        assert!(state.result.is_none());
+        state.compute(&BTreeMap::new(), false).unwrap();
+        assert_eq!(
+            state.result.as_ref().unwrap().value.cells,
+            vec![Value::Exact(2, 1), Value::Exact(3, 1), Value::Exact(4, 1)]
+        );
     }
     #[test]
     fn typed_cells_survive_compute_storage_and_explicit_edit() {

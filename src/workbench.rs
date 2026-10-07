@@ -1,5 +1,6 @@
 use crate::tasks::{Job, Phase};
 mod join;
+mod numeric;
 pub mod sessions;
 mod sqlite_export;
 mod transform;
@@ -242,8 +243,15 @@ pub struct DataState {
     sqlite_export: sqlite_export::State,
     #[serde(skip)]
     workflow: workflow_ui::State,
+    #[serde(skip)]
+    numeric_selector: numeric::Selector,
 }
 impl DataState {
+    pub fn take_numeric_request(
+        &mut self,
+    ) -> Option<(String, crate::calculator::exchange::NumericTable)> {
+        self.numeric_selector.take()
+    }
     pub fn take_sqlite_open_request(&mut self) -> Option<PathBuf> {
         self.sqlite_export.open_request.take()
     }
@@ -429,6 +437,7 @@ impl DataState {
         self.transform_ui(ui);
         self.join_ui(ui, ctx);
         self.workflow_ui(ui);
+        let numeric_busy = self.busy();
         if let Some(data) = &self.dataset {
             ui.add_space(14.0);
             let mut changed = false;
@@ -465,6 +474,8 @@ impl DataState {
                 self.output.clear();
                 self.visible = data.view(&self.query, self.sort, self.descending);
             }
+            self.numeric_selector
+                .ui(ui, Some(data), &self.visible, numeric_busy);
             ui.label(
                 RichText::new(format!(
                     "筛选后 {} 行；下表最多预览 200 行，导出包含全部筛选结果",

@@ -53,6 +53,9 @@ impl State {
     pub fn busy(&self) -> bool {
         self.files.job.is_some()
     }
+    pub fn awaiting_restore(&self) -> bool {
+        self.files.incoming.is_some()
+    }
     pub fn has_work(&self) -> bool {
         self.dirty() || self.busy() || self.files.incoming.is_some()
     }
@@ -354,6 +357,22 @@ impl State {
 mod tests {
     use super::*;
     use crate::calculator::Value;
+    #[test]
+    fn pending_restore_cannot_be_bypassed_by_matrix_replacement_consent() {
+        let mut state = State::default();
+        state.files.incoming = Some(Document::new(state.snapshot()).unwrap());
+        let text =
+            super::super::exchange::NumericTable::new(1, 1, vec![super::super::Value::Exact(1, 3)])
+                .unwrap()
+                .json(super::super::exchange::Representation::Typed)
+                .unwrap();
+        assert!(
+            state
+                .receive_numeric_with_policy(&text, super::super::exchange::MatrixSlot::B, true)
+                .is_err()
+        );
+        assert!(state.awaiting_restore());
+    }
     #[test]
     fn restored_values_do_not_execute_assignments_or_reuse_matrix_results() {
         let mut state = State::default();

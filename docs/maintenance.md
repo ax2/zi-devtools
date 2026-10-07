@@ -1,38 +1,45 @@
-# 本机磁盘维护
+# 本机磁盘维护与容量控制
 
-项目根目录的 `target/` 是 Rust 构建缓存，可以重新生成。`scripts/maintenance.ps1` 每周清理 `target/debug/incremental` 和 `target/release/incremental`；每月首次成功运行计划任务时清理整个 `target/`，避免旧依赖产物长期累积。即使电脑错过当月第一个周日，下一次成功运行仍会补做月度清理。不会碰源码、`dist/Stage-*` 完整阶段版本、`release/` 安装包、技术博客档案、用户配置或知识索引。完整清理后第一次构建会更慢。
+`target/` 以及明确指定的独立 Zi DevTools 构建缓存 `debug/` 都可重建。完整阶段目录 `dist/`、`release/`、源码、备份、用户数据、知识索引、技术博客档案和截图保留；共享 `CARGO_HOME` 不属于清理范围。
 
-先预览占用：
+## 默认策略
+
+- 开发和测试 profile 关闭增量编译、调试符号，避免增量缓存和 PDB 持续增长。需要断点调试时临时设置 `CARGO_PROFILE_DEV_DEBUG=1`；完成后清理对应缓存。
+- 项目 `target/` 和显式指定的外置 `debug/` 各自采用 **12 GiB** 维护阈值。超限时，下一次空闲维护清理整个对应缓存。
+- 已有每周维护仍只检查项目 `target/`：按月深度清理，其余时间清理增量缓存；超限提前深度清理。
+- 新的每日容量任务 03:30 检查阈值；未超限不删除。外置缓存必须显式注册，外置 `release/` 始终保留。
+- 阈值不是文件系统硬配额：正在构建或缓存内有程序运行时跳过，不能保证构建期间始终低于阈值。空间不足前可主动运行维护；清理后首次构建会更慢。
+
+## 预览与手动清理
 
 ```powershell
 pwsh -NoProfile -File scripts/maintenance.ps1
-```
-
-确认后立即清理：
-
-```powershell
-pwsh -NoProfile -File scripts/maintenance.ps1 -Apply
-```
-
-手动预览或执行完整构建缓存清理：
-
-```powershell
 pwsh -NoProfile -File scripts/maintenance.ps1 -Deep
 pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -Apply
+# 本机实际使用的专属外置缓存；只删除其中 debug，不删除 release。
+pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -BuildCacheRoot D:\ZiBuildCache\zi-devtools
+pwsh -NoProfile -File scripts/maintenance.ps1 -Deep -Apply -BuildCacheRoot D:\ZiBuildCache\zi-devtools
+# 只在超过容量阈值时清理，可调整 BudgetGiB。
+pwsh -NoProfile -File scripts/maintenance.ps1 -BudgetOnly -Apply -BudgetGiB 12
 ```
 
-脚本在删除前检查目标绝对路径仍位于项目目录、目标是普通目录且内部没有链接。检测到 Cargo、rustc、rustdoc 或 WiX 构建进程时跳过定时维护，手动运行则报错，避免和构建同时操作。成功运行或因构建占用而跳过后，会将时间、清理模式、释放字节数与最近完成月度清理的月份写到 `%LOCALAPPDATA%\ZiDevTools\maintenance\last-run.json`；预览不写记录。可以用下面的命令检查：
+不要把其他数据目录传为构建缓存。外置目录必须名为 `zi-devtools`，与项目目录分离，且为无链接的普通目录。项目所在卷挂载路径通过 Windows 文件句柄解析为实际物理路径；候选目标及其父级、后代中的链接均被拒绝。所有候选目标先校验，再开始删除。Rust/WiX 构建进程、从待维护缓存运行的程序都会阻止删除；维护互斥锁防止两个任务同时删除。
+
+## 开发入口与定时任务
 
 ```powershell
-Get-Content "$env:LOCALAPPDATA\ZiDevTools\maintenance\last-run.json"
-Get-ScheduledTaskInfo -TaskName ZiDevTools-WeeklyMaintenance
-```
-
-在本机安装每周日 03:00 的当前用户计划任务（每月第一次成功运行时执行完整清理）：
-
-```powershell
+# 构建前执行容量检查；识别显式设置的 CARGO_TARGET_DIR。
+./scripts/dev.ps1 test --locked
+./scripts/dev.ps1 build --release --locked
+# 原有每周任务：仅项目 target。
 pwsh -NoProfile -File scripts/install-maintenance-task.ps1
-Get-ScheduledTask -TaskName ZiDevTools-WeeklyMaintenance
+# 每日容量任务；可省略外置缓存参数，只维护项目 target。
+pwsh -NoProfile -File scripts/install-storage-budget-task.ps1 -BuildCacheRoot D:\ZiBuildCache\zi-devtools
+Get-ScheduledTaskInfo -TaskName ZiDevTools-DailyStorageBudget
 ```
 
-任务使用当前登录用户的普通权限；错过执行时间后会在可运行时补跑。项目迁移目录后应重新运行安装脚本以更新路径。需要停用时运行 `Disable-ScheduledTask -TaskName ZiDevTools-WeeklyMaintenance`；需要移除时运行 `Unregister-ScheduledTask -TaskName ZiDevTools-WeeklyMaintenance -Confirm:$false`。只想扩大清理范围时，先审查目标及阶段归档，不要把知识索引或发布目录当成缓存。
+直接执行 `cargo` 仍可用，但不会执行构建前容量检查；Cargo profile 的增量与符号设置仍然生效。每日任务使用当前用户普通权限，错过时间后补跑，遇占用正常跳过。迁移项目或外置缓存后重新注册任务。停用：`Disable-ScheduledTask -TaskName ZiDevTools-DailyStorageBudget`。
+
+维护最新结果与追加历史保存在 `%LOCALAPPDATA%\ZiDevTools\maintenance\last-run.json` 和 `history.jsonl`。历史记录包含非敏感路径、字节数和维护状态。预览不写记录；实际任务失败可检查计划任务 `LastTaskResult`。维护安全性可用 `pwsh -NoProfile -File scripts/test-maintenance.ps1` 验证，测试只操作独立临时样本。
+
+完整阶段版本按项目档案规则长期保留，本轮未设置自动删除版本的策略。若版本累积成为主要占用，应单独制定归档迁移方案。

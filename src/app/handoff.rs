@@ -2,7 +2,7 @@ use super::*;
 mod discovery;
 #[cfg(feature = "ui-preview")]
 mod numeric_preview;
-use crate::calculator::exchange::{NumericTable, Representation};
+use crate::calculator::exchange::{MatrixSlot, NumericTable, Representation};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Target {
@@ -27,7 +27,7 @@ impl Target {
             Self::After => "文本对比 · 右侧新文",
             Self::Memo => "备忘录 · 新建草稿",
             Self::Event => "万年历 / 日程 · 新建草稿",
-            Self::Calculator => "计算器 · 类型表格填入矩阵A",
+            Self::Calculator => "计算器 · 数值表格填入矩阵",
         }
     }
     fn all() -> Vec<Self> {
@@ -50,6 +50,8 @@ impl Target {
 }
 
 pub(super) struct Transfer {
+    matrix_slot: MatrixSlot,
+    allow_matrix_replace: bool,
     numeric: Option<NumericTable>,
     representation: Representation,
     numeric_rendered: Option<(Representation, Target)>,
@@ -69,6 +71,8 @@ pub(super) struct Transfer {
     #[cfg(feature = "ui-preview")]
     numeric_mode_rects: [Option<egui::Rect>; 3],
     #[cfg(feature = "ui-preview")]
+    matrix_rects: [Option<egui::Rect>; 3],
+    #[cfg(feature = "ui-preview")]
     preview_recommendation_rect: Option<egui::Rect>,
 }
 impl Transfer {
@@ -79,6 +83,8 @@ impl Transfer {
             "结果超过 2 MiB，请先缩小范围"
         );
         Ok(Self {
+            matrix_slot: MatrixSlot::A,
+            allow_matrix_replace: false,
             numeric: None,
             representation: Representation::Typed,
             numeric_rendered: None,
@@ -97,6 +103,8 @@ impl Transfer {
             preview_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
             numeric_mode_rects: [None; 3],
+            #[cfg(feature = "ui-preview")]
+            matrix_rects: [None; 3],
             #[cfg(feature = "ui-preview")]
             preview_recommendation_rect: None,
         })
@@ -266,7 +274,7 @@ impl DevToolsApp {
             });
             if send {
                 match Transfer::numeric(
-                    "计算器结果快照 · v0.4.0".into(),
+                    "计算器结果快照 · v0.5.0".into(),
                     self.calculator.numeric_result().unwrap(),
                 ) {
                     Ok(t) => self.handoff = Some(t),
@@ -307,6 +315,17 @@ impl DevToolsApp {
         }
     }
     pub(super) fn handoff_dialog(&mut self, ctx: &egui::Context) {
+        if self.handoff.is_none()
+            && let Some((source, table)) = self.data_state.take_numeric_request()
+        {
+            match Transfer::numeric(source, table) {
+                Ok(mut transfer) => {
+                    transfer.target = Target::Calculator;
+                    self.handoff = Some(transfer);
+                }
+                Err(e) => self.toast = Some((e.to_string(), Instant::now())),
+            }
+        }
         let Some(transfer) = self.handoff.as_mut() else {
             return;
         };
@@ -314,6 +333,7 @@ impl DevToolsApp {
         let mut cancel = false;
         egui::Modal::new(egui::Id::new("handoff-modal")).show(ctx, |ui| {
             ui.set_width(480.0_f32.min(ctx.screen_rect().width() - 64.0));
+            egui::ScrollArea::vertical().id_salt("handoff-body").max_height((ctx.screen_rect().height()-130.0).max(100.0)).show(ui,|ui| {
             ui.heading("发送结果到工具");
             if let Some(table)=&transfer.numeric {
                 ui.label(format!("数值快照：{}",table.description()));
@@ -369,8 +389,15 @@ impl DevToolsApp {
             transfer.refresh_numeric();
             ui.label(format!("目标：{}", transfer.target.label()));
             if transfer.target==Target::Calculator {
-                match NumericTable::read_json(&transfer.text) {Ok(table)=>{ui.label(format!("将替换矩阵A：{}",table.description()));},Err(e)=>{ui.colored_label(self.colors.red,e);}}
-                ui.small("仅接受c1..cN规范数值类型JSON；请先保存或放弃计算器已有工作。保留B、算式和变量，不自动计算；接收后标记未保存。");
+                let previous_slot=transfer.matrix_slot;
+                ui.horizontal_wrapped(|ui| {ui.label("接收位置");let a=ui.selectable_value(&mut transfer.matrix_slot,MatrixSlot::A,"矩阵A");let b=ui.selectable_value(&mut transfer.matrix_slot,MatrixSlot::B,"矩阵B");
+                    #[cfg(feature="ui-preview")] {transfer.matrix_rects[0]=Some(a.rect);transfer.matrix_rects[1]=Some(b.rect);}
+                    #[cfg(not(feature="ui-preview"))] {let _=(a,b);}});
+                if previous_slot!=transfer.matrix_slot {transfer.allow_matrix_replace=false;}
+                if self.calculator.dirty() {let _response=ui.checkbox(&mut transfer.allow_matrix_replace,format!("允许替换未保存的{}（其他工作保留）",transfer.matrix_slot.label()));
+                    #[cfg(feature="ui-preview")] {transfer.matrix_rects[2]=Some(_response.rect);}}
+                match NumericTable::read_json(&transfer.text) {Ok(table)=>{ui.label(format!("将替换{}：{}",transfer.matrix_slot.label(),table.description()));},Err(e)=>{ui.colored_label(self.colors.red,e);}}
+                ui.small("仅接受c1..cN规范数值类型JSON；未保存内容须先保存或明确允许替换所选矩阵；待读取或后台I/O须先处理。保留另一矩阵、算式和变量，不自动计算；接收后标记未保存。");
             }
             let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
             if transfer.target == Target::Event {
@@ -379,6 +406,8 @@ impl DevToolsApp {
             if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
             ui.small(if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
             if !transfer.error.is_empty() { ui.colored_label(self.colors.red, &transfer.error); }
+            });
+            let data_target=matches!(transfer.target,Target::Csv|Target::Tsv|Target::JsonData);
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
                 let response = ui.add_enabled(transfer.compatible(),egui::Button::new(if transfer.target == Target::Event {"创建日程草稿"} else if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}));
@@ -404,7 +433,11 @@ impl DevToolsApp {
             }
             let result = if transfer.target == Target::Calculator {
                 self.calculator
-                    .receive_numeric(&transfer.text)
+                    .receive_numeric_with_policy(
+                        &transfer.text,
+                        transfer.matrix_slot,
+                        transfer.allow_matrix_replace,
+                    )
                     .map(|_| (Page::Calculator, None))
                     .map_err(anyhow::Error::msg)
             } else if transfer.target == Target::Event {

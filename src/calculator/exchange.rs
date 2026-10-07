@@ -23,6 +23,21 @@ impl Representation {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MatrixSlot {
+    #[default]
+    A,
+    B,
+}
+impl MatrixSlot {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::A => "矩阵A",
+            Self::B => "矩阵B",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct NumericTable {
     pub rows: usize,
@@ -189,22 +204,41 @@ impl State {
         }
     }
     pub fn receive_numeric(&mut self, text: &str) -> Result<(), String> {
+        self.receive_numeric_into(text, MatrixSlot::A)
+    }
+    pub fn receive_numeric_into(&mut self, text: &str, slot: MatrixSlot) -> Result<(), String> {
+        self.receive_numeric_with_policy(text, slot, false)
+    }
+    pub fn receive_numeric_with_policy(
+        &mut self,
+        text: &str,
+        slot: MatrixSlot,
+        allow_replace: bool,
+    ) -> Result<(), String> {
         let table = NumericTable::read_json(text)?;
-        if self.has_work() {
+        if self.busy() || self.awaiting_restore() || (self.dirty() && !allow_replace) {
             return Err(
                 "计算器有未保存工作、待读取确认或后台任务；请先保存、取消读取或放弃修改，再接收"
                     .into(),
             );
         }
-        self.matrix.receive_numeric(table);
+        self.matrix.receive_numeric_into(table, slot);
         self.matrix_mode = true;
-        self.message = "类型表格已填入矩阵A；保留B和变量，尚未计算".into();
+        self.message = format!(
+            "类型表格已填入{}；保留另一矩阵、算式和变量，尚未计算",
+            slot.label()
+        );
         Ok(())
     }
 }
 
 #[cfg(feature = "ui-preview")]
 impl State {
+    pub fn preview_mapping_check(&self) {
+        assert!(self.dirty());
+        assert!(!self.variables.contains_key("preserve_price"));
+        self.matrix.preview_mapping_check();
+    }
     pub fn preview_numeric_fixture(&mut self) {
         *self = Self::default();
         self.matrix_mode = true;
@@ -264,6 +298,29 @@ mod tests {
         assert!(NumericTable::new(1, 1, vec![Value::Exact(2, 6)]).is_err());
         assert!(NumericTable::new(1, 1, vec![Value::Approx(f64::NAN)]).is_err());
         assert!(NumericTable::read_json(&" ".repeat(128 * 1024 + 1)).is_err());
+    }
+    #[test]
+    fn explicit_replacement_only_changes_selected_matrix() {
+        let text = NumericTable::new(
+            3,
+            1,
+            vec![Value::Exact(2, 1), Value::Exact(3, 1), Value::Exact(4, 1)],
+        )
+        .unwrap()
+        .json(Representation::Typed)
+        .unwrap();
+        let mut state = State {
+            expression: "price=19.90".into(),
+            ..Default::default()
+        };
+        assert!(state.receive_numeric_into(&text, MatrixSlot::B).is_err());
+        state
+            .receive_numeric_with_policy(&text, MatrixSlot::B, true)
+            .unwrap();
+        assert_eq!(state.expression, "price=19.90");
+        assert!(!state.variables.contains_key("price"));
+        assert!(state.dirty());
+        assert!(state.numeric_result().is_err());
     }
     #[test]
     fn receiving_protects_work_and_preserves_other_inputs() {

@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 418] = [
+const NAMES: [&str; 426] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -428,6 +428,14 @@ const NAMES: [&str; 418] = [
     "numeric-received-light",
     "numeric-received-small-dark",
     "numeric-received-small-light",
+    "table-mapping-dark",
+    "table-mapping-light",
+    "table-mapping-small-dark",
+    "table-mapping-small-light",
+    "matrix-target-dark",
+    "matrix-target-light",
+    "matrix-target-small-dark",
+    "matrix-target-small-light",
 ];
 
 struct Capture {
@@ -696,6 +704,37 @@ impl eframe::App for Capture {
                     physical_key: None,
                     pressed: false,
                     repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        let mapping_mode = std::env::args().nth(3);
+        let mapping_small = mapping_mode.as_deref() == Some("mapping-small-smoke");
+        if mapping_small && matches!(self.frames, 8 | 11 | 14 | 17) {
+            input
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(760.0, 620.0)));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -560.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if mapping_small || mapping_mode.as_deref() == Some("mapping-smoke") {
+            let index = match self.frames {
+                20 | 21 => Some(0),
+                35 | 36 => Some(1),
+                45 | 46 | 65 | 66 => Some(3),
+                55 | 56 => Some(2),
+                _ => None,
+            };
+            if let Some(index) = index {
+                let pos = self.app.preview_mapping_position(index);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(self.frames, 20 | 35 | 45 | 55 | 65),
                     modifiers: egui::Modifiers::NONE,
                 });
             }
@@ -1852,6 +1891,64 @@ impl eframe::App for Capture {
                     std::process::exit(0);
                 }
                 _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("mapping-smoke" | "mapping-small-smoke")
+        ) {
+            let small = smoke_mode.as_deref() == Some("mapping-small-smoke");
+            if self.frames == 0 {
+                self.app
+                    .preview_scene(ctx, if small { 420 } else { 418 }, self.fixture.clone());
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(if small {
+                    egui::vec2(980.0, 760.0)
+                } else {
+                    egui::vec2(1280.0, 1180.0)
+                }));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            if small && matches!(self.frames, 8 | 11 | 14 | 17) {
+                self.started = Instant::now();
+            }
+            if small
+                && matches!(self.frames, 9 | 12 | 15 | 18)
+                && self.started.elapsed() < Duration::from_millis(400)
+            {
+                ctx.request_repaint_after(Duration::from_millis(30));
+                return;
+            }
+            if small && self.frames == 19 {
+                println!(
+                    "small mapping viewport={:?} send={:?}",
+                    ctx.screen_rect(),
+                    self.app.preview_mapping_position(0)
+                );
+                assert!(
+                    ctx.screen_rect()
+                        .shrink2(egui::vec2(0.0, 50.0))
+                        .contains(self.app.preview_mapping_position(0)),
+                    "scroll must reveal the send control inside the small viewport"
+                );
+            }
+            if self.frames == 50 {
+                self.app.preview_mapping_check(false);
+            }
+            if self.frames == 80 {
+                self.app.preview_mapping_check(true);
+                println!(
+                    "PASS mapping native: selected sorted-view rows and reordered named columns, source preserved, B selection, dirty replacement rejected before consent, explicit checkbox and receive, A/expression/variables preserved, exact fractions, no calculation"
+                );
+                if small {
+                    println!(
+                        "PASS small mapping: actual mouse-wheel scroll reveals send control; B selection, refusal, consent and footer actions complete at 980x760"
+                    );
+                }
+                std::process::exit(0);
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(60));
@@ -3092,12 +3189,12 @@ impl eframe::App for Capture {
                 || (153..=154).contains(&self.scene)
                 || (400..=403).contains(&self.scene)
                 || (406..=407).contains(&self.scene)
-                || matches!(self.scene, 410 | 411 | 414 | 415)
+                || matches!(self.scene, 410 | 411 | 414 | 415 | 418 | 419 | 422 | 423)
                 || (280..=281).contains(&self.scene)
                 || (276..=277).contains(&self.scene)
             {
                 egui::vec2(1280.0, 1180.0)
-            } else if matches!(self.scene, 412 | 413 | 416 | 417) {
+            } else if matches!(self.scene, 412 | 413 | 416 | 417 | 420 | 421 | 424 | 425) {
                 egui::vec2(980.0, 760.0)
             } else if (134..=135).contains(&self.scene) {
                 egui::vec2(1280.0, 1080.0)

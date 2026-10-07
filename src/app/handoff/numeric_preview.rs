@@ -1,6 +1,42 @@
 use super::*;
 
 impl DevToolsApp {
+    pub fn preview_mapping_scene(&mut self, modal: bool) {
+        self.page = Page::Data;
+        self.calculator = Default::default();
+        self.calculator.expression = "preserve_price=19.90".into();
+        self.data_state.preview_mapping_fixture();
+        if modal {
+            let (source, table) = self.data_state.preview_mapping_request();
+            let mut transfer = Transfer::numeric(source, table).unwrap();
+            transfer.target = Target::Calculator;
+            transfer.matrix_slot = MatrixSlot::B;
+            self.handoff = Some(transfer);
+        }
+    }
+    pub fn preview_mapping_position(&self, index: usize) -> egui::Pos2 {
+        if index == 0 {
+            self.data_state.preview_mapping_position()
+        } else {
+            let transfer = self.handoff.as_ref().unwrap();
+            match index {
+                1 => transfer.matrix_rects[1].unwrap().center(),
+                2 => transfer.matrix_rects[2].unwrap().center(),
+                3 => transfer.preview_rects[1].unwrap().center(),
+                _ => panic!("mapping control"),
+            }
+        }
+    }
+    pub fn preview_mapping_check(&self, received: bool) {
+        assert_eq!(self.data_state.output, "preserved export");
+        assert_eq!(self.calculator.expression, "preserve_price=19.90");
+        if !received {
+            assert!(self.handoff.as_ref().unwrap().error.contains("未保存"));
+        } else {
+            assert!(self.handoff.is_none() && self.page == Page::Calculator);
+            self.calculator.preview_mapping_check();
+        }
+    }
     pub fn preview_numeric_position(&self, index: usize) -> egui::Pos2 {
         if index == 4 {
             return self.calculator.preview_numeric_send.unwrap().center();
@@ -23,7 +59,7 @@ impl DevToolsApp {
                 .unwrap();
         } else {
             self.handoff =
-                Some(Transfer::numeric("计算器矩阵快照 · v0.4.0".into(), snapshot).unwrap());
+                Some(Transfer::numeric("计算器矩阵快照 · v0.5.0".into(), snapshot).unwrap());
         }
     }
     pub fn preview_numeric_smoke(&mut self, phase: u8) {
@@ -68,7 +104,7 @@ impl DevToolsApp {
                 let table = NumericTable::read_json(&text).unwrap();
                 assert_eq!(table, self.calculator.numeric_result().unwrap());
                 self.data_state.output = text.clone();
-                let mut transfer = Transfer::new("数据工作台导出 · v1.1.0".into(), &text).unwrap();
+                let mut transfer = Transfer::new("数据工作台导出 · v1.2.0".into(), &text).unwrap();
                 transfer.target = Target::Calculator;
                 self.handoff = Some(transfer);
                 self.apply_handoff();

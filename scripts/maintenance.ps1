@@ -1,93 +1,157 @@
 param(
     [switch]$Apply,
     [switch]$Scheduled,
-    [switch]$Deep
+    [switch]$Deep,
+    [switch]$BudgetOnly,
+    [ValidateRange(1, 1024)][double]$BudgetGiB = 12,
+    [string]$BuildCacheRoot
 )
-
 $ErrorActionPreference = 'Stop'
-$projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).ProviderPath.TrimEnd('\')
+if ($Deep -and $BudgetOnly) { throw '-Deep and -BudgetOnly are mutually exclusive.' }
+# Resolve the existing workspace volume mount before checking/deleting paths.
+if (-not ('ZiStorage.NativePath' -as [type])) {
+    Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace ZiStorage {
+ public static class NativePath {
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern SafeFileHandle CreateFile(string p, uint a, uint s, IntPtr x, uint c, uint f, IntPtr t);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern uint GetFinalPathNameByHandle(SafeFileHandle h, StringBuilder b, uint n, uint f);
+  public static string Get(string p) {
+   using(var h=CreateFile(p,0,7,IntPtr.Zero,3,0x02000000,IntPtr.Zero)) {
+    if(h.IsInvalid) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    var b=new StringBuilder(32768);
+    uint n=GetFinalPathNameByHandle(h,b,(uint)b.Capacity,0);
+    if(n==0 || n>=b.Capacity) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    string r=b.ToString();
+    if(r.StartsWith(@"\\?\UNC\")) return @"\\"+r.Substring(8);
+    return r.StartsWith(@"\\?\") ? r.Substring(4) : r;
+   }
+  }
+ }
+}
+"@
+}
+$maintenanceLock = $null
+if ($Apply) {
+    $maintenanceLock = [Threading.Mutex]::new($false, 'Local\ZiDevToolsStorageMaintenance')
+    try { $entered = $maintenanceLock.WaitOne(0) } catch [Threading.AbandonedMutexException] { $entered = $true }
+    if (-not $entered) {
+        $maintenanceLock.Dispose()
+        if ($Scheduled) { Write-Output '已有维护运行，跳过。'; exit 0 }
+        throw '已有维护运行，拒绝并发清理。'
+    }
+}
+try {
+$projectRoot = [ZiStorage.NativePath]::Get((Join-Path $PSScriptRoot '..')).TrimEnd('\')
 $stateDir = Join-Path $env:LOCALAPPDATA 'ZiDevTools\maintenance'
 $statePath = Join-Path $stateDir 'last-run.json'
-$now = Get-Date
-$month = $now.ToString('yyyy-MM')
+$month = (Get-Date).ToString('yyyy-MM')
 $lastDeepMonth = $null
 if (Test-Path -LiteralPath $statePath) {
-    try {
-        $lastDeepMonth = (Get-Content -LiteralPath $statePath -Raw -ErrorAction Stop |
-            ConvertFrom-Json -ErrorAction Stop).lastDeepMonth
-    } catch {
-        Write-Warning '上次维护记录无法读取，本轮将按尚未完成月度清理处理。'
+    $lastDeepMonth = (Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json).lastDeepMonth
+}
+function Assert-NoLinks([string]$path) {
+    $cursor = Get-Item -LiteralPath $path -Force
+    while ($null -ne $cursor) {
+        if ($cursor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "拒绝链接路径：$($cursor.FullName)" }
+        $cursor = $cursor.Parent
+    }
+    if (@(Get-ChildItem -LiteralPath $path -Recurse -Force -Attributes ReparsePoint).Count) {
+        throw "拒绝包含链接的目标：$path"
     }
 }
-$fullCleanup = $Deep -or ($Scheduled -and $lastDeepMonth -ne $month)
-$cleanupPaths = if ($fullCleanup) {
-    @('target')
-} else {
-    @('target\debug\incremental', 'target\release\incremental')
+function Safe-Target([string]$root, [string]$relative) {
+    $path = [IO.Path]::GetFullPath((Join-Path $root $relative))
+    if (-not $path.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "目标越界：$path" }
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    if (-not (Get-Item -LiteralPath $path -Force).PSIsContainer) { throw "不是目录：$path" }
+    Assert-NoLinks $path
+    return $path
 }
-
-function Save-MaintenanceRecord([string]$result, [long]$bytes) {
-    New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
-    $record = [ordered]@{
-        time = (Get-Date).ToString('o')
-        result = $result
-        mode = if ($fullCleanup) { 'deep' } else { 'incremental' }
-        reclaimedBytes = $bytes
-        lastDeepMonth = if ($result -eq 'completed' -and $fullCleanup) { $month } else { $lastDeepMonth }
-    }
-    $record | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
+function Size-Bytes([string]$path) {
+    if (-not $path) { return [long]0 }
+    return [long](Get-ChildItem -LiteralPath $path -Recurse -Force -File | Measure-Object Length -Sum).Sum
 }
-
-function Assert-SafeTarget([string]$relative) {
-    $absolute = [IO.Path]::GetFullPath((Join-Path $projectRoot $relative))
-    $prefix = $projectRoot + [IO.Path]::DirectorySeparatorChar
-    if (-not $absolute.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "清理目标超出项目目录：$relative"
+Assert-NoLinks $projectRoot
+$roots = @([pscustomobject]@{Root=$projectRoot; Relative='target'})
+if ($BuildCacheRoot) {
+    # Explicit external cache scope. Release builds and shared CARGO_HOME stay intact.
+    $external = [IO.Path]::GetFullPath($BuildCacheRoot).TrimEnd('\')
+    if ((Split-Path $external -Leaf) -ne 'zi-devtools') { throw '外置缓存目录必须名为 zi-devtools。' }
+    if (-not (Test-Path -LiteralPath $external -PathType Container)) { throw "外置缓存不存在：$external" }
+    Assert-NoLinks $external
+    if ($external -eq $projectRoot -or $external.StartsWith($projectRoot+'\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw '外置缓存必须与项目目录分离。'
     }
-    if (-not (Test-Path -LiteralPath $absolute)) { return $null }
-    $item = Get-Item -LiteralPath $absolute -Force
-    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        throw "清理目标不是普通目录：$absolute"
-    }
-    $links = @(Get-ChildItem -LiteralPath $absolute -Recurse -Force -Attributes ReparsePoint -ErrorAction Stop)
-    if ($links.Count -gt 0) { throw "清理目标包含链接，已停止：$absolute" }
-    return $absolute
+    $roots += [pscustomobject]@{Root=$external; Relative='debug'}
 }
-
-if ($Apply) {
-    $busy = @(Get-CimInstance Win32_Process -Filter "Name = 'cargo.exe' OR Name = 'rustc.exe' OR Name = 'rustdoc.exe' OR Name = 'wix.exe'" -ErrorAction Stop)
-    if ($busy.Count -gt 0) {
-        $message = '检测到 Rust/WiX 构建进程，跳过本轮维护。'
-        if ($Scheduled) {
-            Save-MaintenanceRecord 'skipped-build-active' 0
-            Write-Output $message
-            exit 0
+$monthly = -not $BudgetOnly -and ($Deep -or ($Scheduled -and $lastDeepMonth -ne $month))
+$targets = @()
+$usage = @()
+foreach ($root in $roots) {
+    $whole = Safe-Target $root.Root $root.Relative
+    $bytes = Size-Bytes $whole
+    $over = $bytes -gt ($BudgetGiB * 1GB)
+    $usage += [pscustomobject]@{path=(Join-Path $root.Root $root.Relative); bytes=$bytes; overBudget=$over}
+    Write-Output ('{0}: {1:N3} GiB / {2} GiB' -f $usage[-1].path, ($bytes/1GB), $BudgetGiB)
+    if ($whole -and ($monthly -or $over)) { $targets += $whole }
+    elseif (-not $BudgetOnly) {
+        $parts = if ($root.Relative -eq 'target') { @('target\debug\incremental','target\release\incremental') } else { @('debug\incremental') }
+        foreach ($part in $parts) { $candidate = Safe-Target $root.Root $part; if ($candidate) { $targets += $candidate } }
+    }
+}
+function Assert-Idle {
+    $busy = @(Get-CimInstance Win32_Process | Where-Object {
+        if ($_.Name -match '^(cargo|rustc|rustdoc|wix|light|candle)\.exe$') { return $true }
+        if ($_.ExecutablePath) {
+            $exe = [ZiStorage.NativePath]::Get($_.ExecutablePath)
+            foreach ($root in $roots) {
+                $prefix = (Join-Path $root.Root $root.Relative) + '\'
+                if ($exe.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+            }
         }
-        throw $message
+        return $false
+    })
+    if ($busy.Count) { throw '检测到构建进程或缓存中的运行程序，跳过维护。' }
+}
+$reclaimed = [long]0
+$result = 'completed'
+if ($Apply -and $targets.Count) {
+    try { Assert-Idle } catch {
+        if (-not $Scheduled) { throw }
+        $result='skipped-build-active'
+        $targets=@()
     }
 }
-
-$reclaimed = [long]0
-foreach ($relative in $cleanupPaths) {
-    $absolute = Assert-SafeTarget $relative
-    if (-not $absolute) {
-        Write-Output "跳过（不存在）：$relative"
-        continue
-    }
-    $bytes = [long](Get-ChildItem -LiteralPath $absolute -Recurse -Force -File -ErrorAction Stop |
-        Measure-Object -Property Length -Sum).Sum
-    Write-Output ('{0}: {1:N2} GiB' -f $relative, ($bytes / 1GB))
+foreach ($target in $targets) {
+    Write-Output "候选清理：$target"
     if ($Apply) {
-        Remove-Item -LiteralPath $absolute -Recurse -Force -ErrorAction Stop
-        if (Test-Path -LiteralPath $absolute) { throw "清理后目录仍存在：$absolute" }
+        Assert-Idle
+        Assert-NoLinks $target
+        $bytes = Size-Bytes $target
+        Remove-Item -LiteralPath $target -Recurse -Force
+        if (Test-Path -LiteralPath $target) { throw "清理后仍存在：$target" }
         $reclaimed += $bytes
     }
 }
-
 if ($Apply) {
-    Save-MaintenanceRecord 'completed' $reclaimed
-    Write-Output ('本轮已释放约 {0:N2} GiB；阶段归档、发布包、源码及知识索引未触及。' -f ($reclaimed / 1GB))
-    Write-Output "维护记录：$statePath"
-} else {
-    Write-Output '预览模式。加 -Apply 才会清理上述构建缓存；-Deep 预览或清理整个 target。'
+    New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+    $record = [ordered]@{
+        time=(Get-Date).ToString('o'); result=$result; reclaimedBytes=$reclaimed
+        mode=if($BudgetOnly){'budget'}elseif($monthly){'deep'}else{'incremental'}
+        budgetGiB=$BudgetGiB; usageBefore=$usage
+        lastDeepMonth=if($result -eq 'completed' -and $monthly){$month}else{$lastDeepMonth}
+    }
+        $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $statePath -Encoding utf8
+    $record | ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath (Join-Path $stateDir 'history.jsonl') -Encoding utf8
+    Write-Output ('释放 {0:N3} GiB；记录：{1}' -f ($reclaimed/1GB), $statePath)
+} else { Write-Output '仅预览；-Apply 执行。容量是维护触发阈值，构建期间不强制中断。' }
+
+} finally {
+    if ($maintenanceLock) { $maintenanceLock.ReleaseMutex(); $maintenanceLock.Dispose() }
 }

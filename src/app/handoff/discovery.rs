@@ -81,7 +81,7 @@ pub(super) fn recommendations(text: &str) -> Vec<Recommendation> {
     if NumericTable::read_json(text).is_ok() {
         suggestions.push(Recommendation {
             target: Target::Calculator,
-            reason: "完整规范数值类型表格，可确认接收为矩阵A，不执行计算",
+            reason: "完整规范数值类型表格，可选择接收为矩阵A或B，不执行计算",
         });
     }
     if text.len() <= 128 * 1024 {
