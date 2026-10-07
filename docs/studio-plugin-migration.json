@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.58",
+  "sourceCatalogVersion": "0.82.0-dev.59",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -12,7 +12,7 @@
     {
       "sourceToolId": "json",
       "title": "JSON",
-      "sourceVersion": "1.1.1",
+      "sourceVersion": "1.1.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
@@ -25,7 +25,7 @@
     {
       "sourceToolId": "base64",
       "title": "Base64",
-      "sourceVersion": "1.1.1",
+      "sourceVersion": "1.1.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
@@ -38,7 +38,7 @@
     {
       "sourceToolId": "url",
       "title": "URL 编码",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -48,7 +48,7 @@
     {
       "sourceToolId": "sha256",
       "title": "SHA-256 文本摘要",
-      "sourceVersion": "1.1.1",
+      "sourceVersion": "1.1.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
@@ -60,7 +60,7 @@
     {
       "sourceToolId": "timestamp",
       "title": "时间戳",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -70,7 +70,7 @@
     {
       "sourceToolId": "uuid",
       "title": "UUID",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -80,7 +80,7 @@
     {
       "sourceToolId": "jwt",
       "title": "JWT 内容查看",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -90,7 +90,7 @@
     {
       "sourceToolId": "regex",
       "title": "正则表达式",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -100,7 +100,7 @@
     {
       "sourceToolId": "number",
       "title": "进制转换",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -140,7 +140,7 @@
     {
       "sourceToolId": "qr",
       "title": "二维码",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -150,7 +150,7 @@
     {
       "sourceToolId": "color",
       "title": "颜色转换",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -160,7 +160,7 @@
     {
       "sourceToolId": "text-stats",
       "title": "文本统计",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -170,7 +170,7 @@
     {
       "sourceToolId": "html-escape",
       "title": "HTML 转义",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -180,7 +180,7 @@
     {
       "sourceToolId": "text-escape",
       "title": "文本转义",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -190,7 +190,7 @@
     {
       "sourceToolId": "case-convert",
       "title": "命名转换",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -200,7 +200,7 @@
     {
       "sourceToolId": "yaml",
       "title": "YAML / JSON",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -210,7 +210,7 @@
     {
       "sourceToolId": "hex",
       "title": "UTF-8 / Hex",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -220,7 +220,7 @@
     {
       "sourceToolId": "lines",
       "title": "文本行处理",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -230,7 +230,7 @@
     {
       "sourceToolId": "url-inspect",
       "title": "URL 解析",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -240,7 +240,7 @@
     {
       "sourceToolId": "cidr",
       "title": "IPv4 CIDR",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -310,7 +310,7 @@
     {
       "sourceToolId": "json-path",
       "title": "JSON 路径查询",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -320,7 +320,7 @@
     {
       "sourceToolId": "json-diff",
       "title": "结构化 JSON 对比",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -330,7 +330,7 @@
     {
       "sourceToolId": "data-schema",
       "title": "数据质量检查",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -400,7 +400,7 @@
     {
       "sourceToolId": "cron",
       "title": "Cron 表达式",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -410,7 +410,7 @@
     {
       "sourceToolId": "random",
       "title": "随机数据生成",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -560,7 +560,7 @@
     {
       "sourceToolId": "unicode",
       "title": "Unicode 字符检查",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -1170,7 +1170,7 @@
     {
       "sourceToolId": "java-trace",
       "title": "Java 异常链",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -1180,7 +1180,7 @@
     {
       "sourceToolId": "django-trace",
       "title": "Django / Python 堆栈",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",

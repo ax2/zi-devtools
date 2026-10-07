@@ -512,6 +512,7 @@ pub struct ToolState {
     pub selected: ToolKind,
     pub input: String,
     pub output: String,
+    pub result_ready: bool,
     pub message: String,
     pub pattern: String,
     pub number_base: u32,
@@ -524,6 +525,7 @@ pub struct ToolState {
 struct ToolDraft {
     input: String,
     output: String,
+    result_ready: bool,
     message: String,
     pattern: String,
     number_base: u32,
@@ -540,6 +542,7 @@ impl ToolState {
             ToolDraft {
                 input: std::mem::take(&mut self.input),
                 output: std::mem::take(&mut self.output),
+                result_ready: self.result_ready,
                 message: std::mem::take(&mut self.message),
                 pattern: std::mem::take(&mut self.pattern),
                 number_base: self.number_base,
@@ -550,6 +553,7 @@ impl ToolState {
         self.selected = kind;
         self.input = next.input;
         self.output = next.output;
+        self.result_ready = next.result_ready;
         self.message = next.message;
         self.plugin_compatible = next.plugin_compatible;
         self.pattern = next.pattern;
@@ -567,6 +571,7 @@ impl Default for ToolState {
             selected: ToolKind::default(),
             input: String::new(),
             output: String::new(),
+            result_ready: false,
             message: String::new(),
             pattern: String::new(),
             number_base: 10,
@@ -578,6 +583,32 @@ impl Default for ToolState {
 }
 
 impl ToolState {
+    pub fn has_result(&self) -> bool {
+        self.message.is_empty() && (self.result_ready || !self.output.is_empty())
+    }
+
+    pub fn clear_result(&mut self) {
+        self.output.clear();
+        self.message.clear();
+        self.result_ready = false;
+    }
+
+    pub fn apply_result(&mut self, result: Result<String>) -> bool {
+        match result {
+            Ok(output) => {
+                self.output = output;
+                self.message.clear();
+                self.result_ready = true;
+                true
+            }
+            Err(error) => {
+                self.clear_result();
+                self.message = error.to_string();
+                false
+            }
+        }
+    }
+
     pub fn has_plugin_mode(&self) -> bool {
         matches!(
             self.selected,
@@ -856,6 +887,29 @@ fn clipped(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn empty_success_is_distinct_from_idle_and_failure_and_survives_tool_switch() {
+        let mut state = super::ToolState::default();
+        state.select(super::ToolKind::Base64);
+        assert!(!state.has_result());
+        let result = state.run(0);
+        assert!(state.apply_result(result));
+        assert!(state.output.is_empty() && state.has_result());
+        state.select(super::ToolKind::Json);
+        assert!(!state.has_result());
+        let result = state.run(0);
+        assert!(!state.apply_result(result));
+        assert!(!state.has_result() && !state.message.is_empty());
+        state.select(super::ToolKind::Base64);
+        assert!(state.has_result() && state.output.is_empty());
+        state.plugin_compatible = true;
+        state.input = "bad!".into();
+        let result = state.run(1);
+        assert!(!state.apply_result(result));
+        assert!(!state.has_result());
+        state.clear_result();
+        assert!(!state.has_result() && state.message.is_empty());
+    }
     #[test]
     fn plugin_mode_preserves_legacy_and_tool_drafts() {
         let mut state = super::ToolState {

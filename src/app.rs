@@ -792,6 +792,17 @@ impl DevToolsApp {
                 assert!(self.tool_state.message.is_empty());
                 assert_eq!(self.tool_state.output.len(), 10002);
             }
+            6 => {
+                self.tool_state.select(ToolKind::Base64);
+                self.tool_state.input.clear();
+                self.tool_state.clear_result();
+                self.tool_state.plugin_compatible = true;
+            }
+            7 => {
+                assert!(self.tool_state.has_result());
+                assert!(self.tool_state.output.is_empty());
+                assert!(self.tool_state.message.is_empty());
+            }
             _ => unreachable!(),
         }
     }
@@ -2858,7 +2869,7 @@ impl DevToolsApp {
                     }
                     if ui
                         .add_enabled(
-                            !self.tool_state.input.is_empty() || !self.tool_state.output.is_empty(),
+                            !self.tool_state.input.is_empty() || self.tool_state.has_result() || !self.tool_state.message.is_empty(),
                             egui::Button::new("清空").small(),
                         )
                         .clicked()
@@ -2885,7 +2896,7 @@ impl DevToolsApp {
                                 )
                                 .clicked()
                             {
-                                self.tool_state.output = generate_uuid();
+                                self.tool_state.apply_result(Ok(generate_uuid()));
                             }
                             if ui.button("复制").clicked() {
                                 ctx.copy_text(self.tool_state.output.clone());
@@ -2989,8 +3000,7 @@ impl DevToolsApp {
                         let help = self.tool_state.selected.help();
                         if self.tool_state.has_plugin_mode()
                             && ui.checkbox(&mut self.tool_state.plugin_compatible, "插件兼容模式").on_hover_text("8192 UTF-8 字节；JSON 拒绝重复键、超过 64 层和不安全整数；Base64 严格校验，不忽略空白").changed() {
-                                self.tool_state.output.clear();
-                                self.tool_state.message.clear();
+                                self.tool_state.clear_result();
                         }
                         if !help.is_empty() {
                             ui.label(RichText::new(help).small().color(p.muted));
@@ -3044,13 +3054,24 @@ impl DevToolsApp {
 
     fn tool_output(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, editor_height: f32) {
         let p = self.colors;
+        let empty_result = self.tool_state.has_result() && self.tool_state.output.is_empty();
         ui.horizontal_wrapped(|ui| {
-            ui.label("结果");
+            ui.label("上次结果");
             if ui
                 .add_enabled(
-                    !self.tool_state.output.is_empty(),
-                    egui::Button::new("复制结果").small(),
+                    self.tool_state.has_result(),
+                    egui::Button::new(if empty_result {
+                        "复制空结果"
+                    } else {
+                        "复制结果"
+                    })
+                    .small(),
                 )
+                .on_hover_text(if empty_result {
+                    "复制空结果会将当前剪贴板内容替换为空文本"
+                } else {
+                    "复制完整处理结果"
+                })
                 .clicked()
             {
                 ctx.copy_text(self.tool_state.output.clone());
@@ -3058,7 +3079,7 @@ impl DevToolsApp {
             }
             if ui
                 .add_enabled(
-                    !self.tool_state.output.is_empty(),
+                    self.tool_state.has_result(),
                     egui::Button::new("交换输入 / 输出").small(),
                 )
                 .clicked()
@@ -3068,6 +3089,10 @@ impl DevToolsApp {
         });
         if !self.tool_state.message.is_empty() {
             ui.label(RichText::new(&self.tool_state.message).color(p.red));
+            return;
+        }
+        if self.tool_state.has_result() && self.tool_state.output.is_empty() {
+            ui.label(RichText::new("处理成功 · 结果为空文本（0 字节）").color(p.muted));
             return;
         }
         let mut output = self.tool_state.output.as_str();
@@ -3107,16 +3132,17 @@ impl DevToolsApp {
             }
         });
         if let Some(index) = selected {
-            match self.tool_state.run(index) {
-                Ok(output) => {
-                    self.tool_state.output = output;
-                    self.tool_state.message.clear();
-                    self.toast = Some(("处理完成".into(), Instant::now()));
-                }
-                Err(error) => {
-                    self.tool_state.message = error.to_string();
-                    self.tool_state.output.clear();
-                }
+            let result = self.tool_state.run(index);
+            if self.tool_state.apply_result(result) {
+                self.toast = Some((
+                    if self.tool_state.output.is_empty() {
+                        "处理完成，结果为空文本"
+                    } else {
+                        "处理完成"
+                    }
+                    .into(),
+                    Instant::now(),
+                ));
             }
         }
     }
@@ -5001,8 +5027,7 @@ impl eframe::App for DevToolsApp {
                         if ui.button("确认清空").clicked() {
                             self.tool_state.input.clear();
                             self.tool_state.pattern.clear();
-                            self.tool_state.output.clear();
-                            self.tool_state.message.clear();
+                            self.tool_state.clear_result();
                             self.tool_state.qr_image = None;
                             self.qr_texture = None;
                             self.clear_tool_confirm = false;

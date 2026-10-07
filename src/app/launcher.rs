@@ -237,8 +237,7 @@ impl DevToolsApp {
                     Some(kind),
                 );
                 self.tool_state.input = value.text;
-                self.tool_state.output.clear();
-                self.tool_state.message.clear();
+                self.tool_state.clear_result();
             }
             target => {
                 let tool = match target {

@@ -11,11 +11,12 @@ struct Preview {
     folder: PathBuf,
     light: bool,
     captured: u32,
+    copy_checked: bool,
     start: Instant,
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
-        if matches!(self.frame, 20 | 60 | 110) {
+        if matches!(self.frame, 20 | 60 | 110 | 180) {
             input.events.push(egui::Event::Key {
                 key: egui::Key::Enter,
                 physical_key: None,
@@ -34,9 +35,19 @@ impl eframe::App for Preview {
                 modifiers: egui::Modifiers::NONE,
             });
         }
+        if matches!(self.frame, 200 | 201) {
+            let pos = egui::pos2(720.0, 434.0);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frame == 200,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.frame > 160 {
+        if self.frame > 215 {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
@@ -50,7 +61,22 @@ impl eframe::App for Preview {
         if self.frame == 100 {
             self.app.preview_text_plugin(ctx, self.light, 4);
         }
+        if self.frame == 170 {
+            self.app.preview_text_plugin(ctx, self.light, 6);
+        }
         self.app.update(ctx, frame);
+        // Check the real copy button's command without changing the user's clipboard.
+        ctx.output_mut(|output| {
+            output.commands.retain(|command| {
+                if let egui::OutputCommand::CopyText(text) = command {
+                    assert!(text.is_empty());
+                    self.copy_checked = true;
+                    false
+                } else {
+                    true
+                }
+            });
+        });
         if self.frame == 145 {
             if let Some(layer) = ctx.layer_id_at(egui::pos2(600.0, 400.0)) {
                 ctx.graphics(|layers| {
@@ -68,13 +94,14 @@ impl eframe::App for Preview {
                 });
             }
         }
-        if matches!(self.frame, 35 | 75 | 120 | 145) {
+        if matches!(self.frame, 35 | 75 | 120 | 145 | 195) {
             self.app.preview_text_plugin(
                 ctx,
                 self.light,
                 match self.frame {
                     35 => 1,
                     75 => 3,
+                    195 => 7,
                     _ => 5,
                 },
             );
@@ -98,10 +125,14 @@ impl eframe::App for Preview {
                 self.captured += 1;
             }
         }
-        if self.frame == 160 {
-            assert_eq!(self.captured, 4);
+        if self.frame == 215 {
+            assert_eq!(self.captured, 5);
+            assert!(
+                self.copy_checked,
+                "empty-result button did not queue empty text"
+            );
             println!(
-                "PASS native plugin-compatible JSON Ctrl+Enter rejects duplicate keys then returns sorted JSON; 10002-byte result and synthetic wheel screenshots captured; light={}",
+                "PASS native plugin-compatible JSON duplicate/valid/10002-byte scrolling and Base64 empty-success Ctrl+Enter; no clipboard write; light={}",
                 self.light
             );
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -131,6 +162,7 @@ fn main() -> eframe::Result<()> {
                 folder,
                 light,
                 captured: 0,
+                copy_checked: false,
                 start: Instant::now(),
             }))
         }),
