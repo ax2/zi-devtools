@@ -1,6 +1,32 @@
 use super::*;
 
 impl DevToolsApp {
+    pub fn preview_boundary_scene(&mut self) {
+        self.preview_boundary_fixture();
+        let table = self.data_state.preview_boundary_request();
+        let mut transfer = Transfer::numeric("8×8数值边界合成夹具".into(), table).unwrap();
+        transfer.target = Target::Calculator;
+        transfer.matrix_slot = MatrixSlot::B;
+        transfer.refresh_numeric();
+        self.handoff = Some(transfer);
+        self.apply_handoff();
+        assert!(self.handoff.as_ref().unwrap().error.contains("未保存"));
+    }
+    pub fn preview_boundary_fixture(&mut self) {
+        self.preview_mapping_scene(false);
+        self.data_state.preview_numeric_boundary_fixture();
+    }
+    pub fn preview_boundary_position(&self, index: usize) -> egui::Pos2 {
+        self.data_state.preview_numeric_boundary_position(index)
+    }
+    pub fn preview_boundary_check(&self, phase: u8) {
+        self.data_state.preview_numeric_boundary_order(phase >= 1);
+        assert_eq!(self.calculator.expression, "preserve_price=19.90");
+        if phase == 2 {
+            assert!(self.handoff.is_none() && self.page == Page::Calculator);
+            self.calculator.preview_boundary_check();
+        }
+    }
     pub fn preview_mapping_scene(&mut self, modal: bool) {
         self.page = Page::Data;
         self.calculator = Default::default();
@@ -67,7 +93,7 @@ impl DevToolsApp {
                 .unwrap();
         } else {
             self.handoff =
-                Some(Transfer::numeric("计算器矩阵快照 · v0.5.0".into(), snapshot).unwrap());
+                Some(Transfer::numeric("计算器矩阵快照 · v0.5.1".into(), snapshot).unwrap());
         }
     }
     pub fn preview_numeric_smoke(&mut self, phase: u8) {

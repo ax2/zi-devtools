@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 430] = [
+const NAMES: [&str; 432] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -440,6 +440,8 @@ const NAMES: [&str; 430] = [
     "numeric-entry-small-light",
     "numeric-picker-eight-dark",
     "numeric-picker-eight-light",
+    "numeric-boundary-target-dark",
+    "numeric-boundary-target-light",
 ];
 
 struct Capture {
@@ -713,6 +715,42 @@ impl eframe::App for Capture {
             }
         }
 
+        if std::env::args().nth(3).as_deref() == Some("boundary-smoke") {
+            if matches!(self.frames, 20 | 25) {
+                input.events.push(egui::Event::PointerMoved(
+                    self.app.preview_boundary_position(0),
+                ));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -900.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            let action = match self.frames {
+                10 | 11 => Some((false, 4)),
+                30 | 31 => Some((true, 1)),
+                40 | 41 => Some((true, 2)),
+                50 | 51 => Some((false, 0)),
+                65 | 66 => Some((false, 1)),
+                75 | 76 | 95 | 96 => Some((false, 3)),
+                85 | 86 => Some((false, 2)),
+                _ => None,
+            };
+            if let Some((boundary, index)) = action {
+                let pos = if boundary {
+                    self.app.preview_boundary_position(index)
+                } else {
+                    self.app.preview_mapping_position(index)
+                };
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(self.frames, 10 | 30 | 40 | 50 | 65 | 75 | 85 | 95),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("entry-smoke") {
             let index = match self.frames {
                 20 | 21 | 40 | 41 => Some(4),
@@ -1933,6 +1971,42 @@ impl eframe::App for Capture {
             return;
         }
 
+        if smoke_mode.as_deref() == Some("boundary-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 420, self.fixture.clone());
+                self.app.preview_boundary_fixture();
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            if matches!(self.frames, 20 | 25) {
+                self.started = Instant::now();
+            }
+            if matches!(self.frames, 21 | 26) && self.started.elapsed() < Duration::from_millis(400)
+            {
+                ctx.request_repaint_after(Duration::from_millis(30));
+                return;
+            }
+            if self.frames == 35 {
+                self.app.preview_boundary_check(0);
+            }
+            if self.frames == 45 {
+                self.app.preview_boundary_check(1);
+            }
+            if self.frames == 80 {
+                self.app.preview_mapping_check(false);
+            }
+            if self.frames == 110 {
+                self.app.preview_boundary_check(2);
+                println!(
+                    "PASS numeric boundaries: actual column-list wheel scroll; ninth column disabled and rejected at eight; native column reorder and fixed footer; 8x8/64 exact values including fraction and i128 MAX received in B after refusal and consent; A/expression/variables/source preserved; no calculation at 980x760"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("entry-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 420, self.fixture.clone());
@@ -3263,7 +3337,7 @@ impl eframe::App for Capture {
                 egui::vec2(1280.0, 1180.0)
             } else if matches!(
                 self.scene,
-                412 | 413 | 416 | 417 | 420 | 421 | 424 | 425 | 426 | 427 | 428 | 429
+                412 | 413 | 416 | 417 | 420 | 421 | 424 | 425 | 426 | 427 | 428 | 429 | 430 | 431
             ) {
                 egui::vec2(980.0, 760.0)
             } else if (134..=135).contains(&self.scene) {

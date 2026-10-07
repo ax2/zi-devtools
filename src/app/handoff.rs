@@ -274,7 +274,7 @@ impl DevToolsApp {
             });
             if send {
                 match Transfer::numeric(
-                    "计算器结果快照 · v0.5.0".into(),
+                    "计算器结果快照 · v0.5.1".into(),
                     self.calculator.numeric_result().unwrap(),
                 ) {
                     Ok(t) => self.handoff = Some(t),
@@ -333,7 +333,8 @@ impl DevToolsApp {
         let mut cancel = false;
         egui::Modal::new(egui::Id::new("handoff-modal")).show(ctx, |ui| {
             ui.set_width(480.0_f32.min(ctx.screen_rect().width() - 64.0));
-            egui::ScrollArea::vertical().id_salt("handoff-body").max_height((ctx.screen_rect().height()-130.0).max(100.0)).show(ui,|ui| {
+            let footer_height = if transfer.target == Target::Calculator { 300.0 } else { 150.0 } + if transfer.error.is_empty() { 0.0 } else { 70.0 };
+            egui::ScrollArea::vertical().id_salt("handoff-body").max_height((ctx.screen_rect().height()-footer_height).max(100.0)).show(ui,|ui| {
             ui.heading("发送结果到工具");
             if let Some(table)=&transfer.numeric {
                 ui.label(format!("数值快照：{}",table.description()));
@@ -387,6 +388,14 @@ impl DevToolsApp {
             });
             ui.separator();
             transfer.refresh_numeric();
+            let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
+            if transfer.target == Target::Event {
+                ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date()));
+            }
+            if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
+            ui.small(if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
+            });
+            ui.separator();
             ui.label(format!("目标：{}", transfer.target.label()));
             if transfer.target==Target::Calculator {
                 let previous_slot=transfer.matrix_slot;
@@ -399,14 +408,9 @@ impl DevToolsApp {
                 match NumericTable::read_json(&transfer.text) {Ok(table)=>{ui.label(format!("将替换{}：{}",transfer.matrix_slot.label(),table.description()));},Err(e)=>{ui.colored_label(self.colors.red,e);}}
                 ui.small("仅接受c1..cN规范数值类型JSON；未保存内容须先保存或明确允许替换所选矩阵；待读取或后台I/O须先处理。保留另一矩阵、算式和变量，不自动计算；接收后标记未保存。");
             }
-            let data_target = matches!(transfer.target, Target::Csv | Target::Tsv | Target::JsonData);
-            if transfer.target == Target::Event {
-                ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date()));
+            if !transfer.error.is_empty() {
+                egui::ScrollArea::vertical().id_salt("handoff-error").max_height(56.0).show(ui, |ui| { ui.colored_label(self.colors.red, &transfer.error); });
             }
-            if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
-            ui.small(if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
-            if !transfer.error.is_empty() { ui.colored_label(self.colors.red, &transfer.error); }
-            });
             let data_target=matches!(transfer.target,Target::Csv|Target::Tsv|Target::JsonData);
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();

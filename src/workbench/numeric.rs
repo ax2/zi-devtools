@@ -120,6 +120,10 @@ pub(super) struct Selector {
     reveal: bool,
     #[cfg(feature = "ui-preview")]
     send_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    column_rects: Vec<(egui::Rect, egui::Rect, bool)>,
+    #[cfg(feature = "ui-preview")]
+    order_rects: Vec<(egui::Rect, egui::Rect)>,
 }
 impl Selector {
     pub fn take(&mut self) -> Option<(String, NumericTable)> {
@@ -162,6 +166,11 @@ impl Selector {
         }
     }
     fn controls(&mut self, ui: &mut egui::Ui, data: &Dataset, view: &[usize]) {
+        #[cfg(feature = "ui-preview")]
+        {
+            self.column_rects.clear();
+            self.order_rects.clear();
+        }
         ui.small("按当前已解析的筛选/排序视图选行。列按选择顺序组成矩阵，可调整；最多8×8。发送前不改变数据或计算器。");
         ui.horizontal_wrapped(|ui| {
             ui.label("视图开始行");
@@ -180,13 +189,16 @@ impl Selector {
             .show(ui, |ui| {
                 for (index, name) in data.headers.iter().enumerate() {
                     let mut checked = self.columns.contains(&index);
-                    if ui
-                        .add_enabled(
-                            checked || self.columns.len() < 8,
-                            egui::Checkbox::new(&mut checked, name),
-                        )
-                        .changed()
+                    let response = ui.add_enabled(
+                        checked || self.columns.len() < 8,
+                        egui::Checkbox::new(&mut checked, name),
+                    );
+                    #[cfg(feature = "ui-preview")]
                     {
+                        self.column_rects
+                            .push((response.rect, ui.clip_rect(), response.enabled()));
+                    }
+                    if response.changed() {
                         if checked {
                             self.columns.push(index);
                         } else {
@@ -207,10 +219,12 @@ impl Selector {
                 if ui.add_enabled(pos > 0, egui::Button::new("前移")).clicked() {
                     move_column = Some((pos, pos - 1));
                 }
-                if ui
-                    .add_enabled(pos + 1 < self.columns.len(), egui::Button::new("后移"))
-                    .clicked()
+                let after = ui.add_enabled(pos + 1 < self.columns.len(), egui::Button::new("后移"));
+                #[cfg(feature = "ui-preview")]
                 {
+                    self.order_rects.push((after.rect, ui.clip_rect()));
+                }
+                if after.clicked() {
                     move_column = Some((pos, pos + 1));
                 }
             });
@@ -324,6 +338,64 @@ impl Selector {
 
 #[cfg(feature = "ui-preview")]
 impl DataState {
+    pub fn preview_numeric_boundary_fixture(&mut self) {
+        self.preview_mapping_fixture();
+        let headers = (1..=9).map(|i| format!("列{i}")).collect::<Vec<_>>();
+        let rows = (0..8)
+            .map(|r| {
+                (0..9)
+                    .map(|c| {
+                        if r == 0 && c == 2 {
+                            "1/3".into()
+                        } else if r == 7 && c == 7 {
+                            i128::MAX.to_string()
+                        } else {
+                            (r * 100 + c + 1).to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .collect::<Vec<_>>();
+        self.input = format!("{}\n{}", headers.join(","), rows.join("\n"));
+        let data = Dataset::parse(&self.input, DataFormat::Csv, b',').unwrap();
+        self.sort = None;
+        self.descending = false;
+        self.query.clear();
+        self.visible = data.view(&self.query, self.sort, self.descending);
+        self.numeric_selector.headers = data.headers.clone();
+        self.numeric_selector.columns = (0..8).collect();
+        self.numeric_selector.start = 1;
+        self.numeric_selector.count = 8;
+        self.dataset = Some(data);
+    }
+    pub fn preview_numeric_boundary_position(&self, index: usize) -> egui::Pos2 {
+        if index == 0 {
+            let (rect, clip, _) = self.numeric_selector.column_rects[0];
+            return egui::pos2(rect.center().x, clip.center().y);
+        }
+        let (rect, clip) = if index == 1 {
+            let (r, c, enabled) = self.numeric_selector.column_rects[8];
+            assert!(!enabled, "ninth unselected column is disabled at eight");
+            (r, c)
+        } else {
+            self.numeric_selector.order_rects[0]
+        };
+        assert!(
+            clip.contains_rect(rect),
+            "boundary control must be visible: {rect:?} / {clip:?}"
+        );
+        rect.center()
+    }
+    pub fn preview_numeric_boundary_order(&self, moved: bool) {
+        let expected = if moved {
+            vec![1, 0, 2, 3, 4, 5, 6, 7]
+        } else {
+            (0..8).collect()
+        };
+        assert_eq!(self.numeric_selector.columns, expected);
+        assert_eq!(self.output, "preserved export");
+    }
     pub fn preview_mapping_fixture(&mut self) {
         let text = "客户,收入,成本\n甲,7,2\n乙,1/3,3\n丙,5,4";
         let data = Dataset::parse(text, DataFormat::Csv, b',').unwrap();
@@ -343,6 +415,17 @@ impl DataState {
         };
         self.dataset = Some(data);
         self.output = "preserved export".into();
+    }
+    pub fn preview_boundary_request(&self) -> NumericTable {
+        select(
+            self.dataset.as_ref().unwrap(),
+            &self.visible,
+            0,
+            8,
+            &(0..8).collect::<Vec<_>>(),
+            TextMode::Exact,
+        )
+        .unwrap()
     }
     pub fn preview_mapping_request(&self) -> (String, NumericTable) {
         let t = select(

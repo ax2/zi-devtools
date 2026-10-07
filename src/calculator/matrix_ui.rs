@@ -465,6 +465,25 @@ impl State {
         assert_eq!(self.b.typed[9], Some(Value::Exact(1, 3)));
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_boundary_check(&self) {
+        assert_eq!(self.a, State::default().a);
+        assert!(self.result.is_none());
+        assert_eq!((self.b.rows, self.b.cols), (8, 8));
+        let order = [1, 0, 2, 3, 4, 5, 6, 7];
+        for r in 0..8 {
+            for (c, &original) in order.iter().enumerate() {
+                let expected = if r == 0 && original == 2 {
+                    Value::Exact(1, 3)
+                } else if r == 7 && original == 7 {
+                    Value::Exact(i128::MAX, 1)
+                } else {
+                    Value::Exact((r * 100 + original + 1) as i128, 1)
+                };
+                assert_eq!(self.b.typed[r * 8 + c], Some(expected));
+            }
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_numeric_fixture(&mut self) {
         self.receive_numeric(
             super::exchange::NumericTable::new(

@@ -239,6 +239,11 @@ impl State {
         assert!(!self.variables.contains_key("preserve_price"));
         self.matrix.preview_mapping_check();
     }
+    pub fn preview_boundary_check(&self) {
+        assert!(self.dirty());
+        assert!(!self.variables.contains_key("preserve_price"));
+        self.matrix.preview_boundary_check();
+    }
     pub fn preview_numeric_fixture(&mut self) {
         *self = Self::default();
         self.matrix_mode = true;
