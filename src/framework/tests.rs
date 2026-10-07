@@ -188,3 +188,34 @@ fn imported_text_does_not_replace_a_running_diagnostic() {
     assert_eq!(state.drafts[&Tool::Threads].input, "original");
     assert_eq!(state.drafts[&Tool::Sql].input, "SELECT 1");
 }
+
+#[test]
+fn diagnostic_handoff_rejects_unsupported_and_large_inputs_without_mutation() {
+    let mut state = State::default();
+    state.import_text(Tool::Gc, "old gc".into()).unwrap();
+    let draft = state.drafts.get_mut(&Tool::Gc).unwrap();
+    draft.second = "comparison".into();
+    draft.output = "old result".into();
+    draft.summary = "old summary".into();
+    draft.executable = "preserved executable".into();
+    assert!(
+        state
+            .receive_handoff(Tool::JavaEnvironment, "incoming".into())
+            .is_err()
+    );
+    assert!(
+        state
+            .receive_handoff(Tool::Gc, "x".repeat(2 * 1024 * 1024 + 1))
+            .is_err()
+    );
+    assert_eq!(state.selected, Tool::Gc);
+    assert_eq!(state.drafts[&Tool::Gc].input, "old gc");
+    assert_eq!(state.drafts[&Tool::Gc].output, "old result");
+    state.receive_handoff(Tool::Gc, "new gc".into()).unwrap();
+    let draft = &state.drafts[&Tool::Gc];
+    assert_eq!(draft.input, "new gc");
+    assert!(draft.output.is_empty() && draft.summary.is_empty());
+    assert_eq!(draft.second, "comparison");
+    assert_eq!(draft.executable, "preserved executable");
+    assert!(!state.is_running());
+}

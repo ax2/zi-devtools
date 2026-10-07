@@ -206,6 +206,7 @@ pub struct DevToolsApp {
     startup_warning: Option<String>,
     log_view: Option<String>,
     log_text: String,
+    log_error: bool,
     log_lines: service_logs::LogLines,
     service_editor: service_editor::State,
     log_filter: String,
@@ -714,6 +715,7 @@ impl DevToolsApp {
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
             444..=453 => self.preview_service_scene(ctx, scene, &fixture),
+            454..=455 => self.preview_log_transfer_scene(),
             432..=435 => self.preview_plot_fixture(true),
             436..=439 => {
                 self.page = Page::Calculator;
@@ -1923,6 +1925,7 @@ impl DevToolsApp {
             }),
             log_view: None,
             log_text: String::new(),
+            log_error: false,
             log_lines: service_logs::LogLines::default(),
             service_editor: service_editor::State::default(),
             log_filter: String::new(),
@@ -2069,6 +2072,7 @@ impl DevToolsApp {
             return;
         }
         if self.log_view.as_deref() != Some(&service_id) {
+            self.log_error = false;
             self.log_text = "正在读取日志…".to_owned();
             self.log_lines.invalidate();
             self.log_filter.clear();
@@ -2149,6 +2153,7 @@ impl DevToolsApp {
                 BackgroundEvent::Logs(service_id, result) => {
                     if self.log_view.as_deref() == Some(&service_id) {
                         self.log_inflight = false;
+                        self.log_error = result.is_err();
                         self.log_text = result.unwrap_or_else(|error| format!("读取失败：{error}"));
                         self.log_lines.invalidate();
                     }
@@ -3670,6 +3675,30 @@ impl DevToolsApp {
                         {
                             ctx.copy_text(self.log_lines.copy_matches(&self.log_text));
                         }
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        let ready = !self.log_inflight && !self.log_error && self.handoff.is_none();
+                        let send_all = ui.add_enabled(
+                            ready && !self.log_text.is_empty(),
+                            egui::Button::new("发送全部预览到工具…"),
+                        );
+                        #[cfg(feature = "ui-preview")]
+                        self.preview_services
+                            .insert("log-send-all", (send_all.rect, ui.clip_rect()));
+                        if send_all.clicked() {
+                            self.send_service_logs(&service_id, false);
+                        }
+                        let send_filtered = ui.add_enabled(
+                            ready && self.log_lines.count() > 0,
+                            egui::Button::new("发送筛选结果到工具…"),
+                        );
+                        #[cfg(feature = "ui-preview")]
+                        self.preview_services
+                            .insert("log-send-filtered", (send_filtered.rect, ui.clip_rect()));
+                        if send_filtered.clicked() {
+                            self.send_service_logs(&service_id, true);
+                        }
+                        ui.small("发送时捕获快照；最大 2 MiB；选择目标后确认接收");
                     });
                     if self.log_lines.count() == 0 {
                         ui.label(if self.log_lines.total() == 0 {

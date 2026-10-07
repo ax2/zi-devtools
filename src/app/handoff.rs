@@ -11,6 +11,7 @@ use crate::calculator::exchange::{MatrixSlot, NumericTable, Representation};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Target {
     Tool(ToolKind),
+    Diagnostic(crate::framework::Tool),
     Csv,
     Tsv,
     JsonData,
@@ -24,6 +25,7 @@ impl Target {
     fn label(self) -> &'static str {
         match self {
             Self::Tool(tool) => tool.label(),
+            Self::Diagnostic(tool) => tool.label(),
             Self::Csv => "数据工作台 · CSV",
             Self::Tsv => "数据工作台 · TSV",
             Self::JsonData => "数据工作台 · JSON 对象数组",
@@ -49,6 +51,12 @@ impl Target {
                 Self::Event,
                 Self::Calculator,
             ])
+            .chain(
+                crate::framework::Tool::ALL
+                    .into_iter()
+                    .filter(|tool| tool.accepts_text_handoff())
+                    .map(Self::Diagnostic),
+            )
             .collect()
     }
 }
@@ -60,6 +68,7 @@ pub(super) struct Transfer {
     representation: Representation,
     numeric_rendered: Option<(Representation, Target)>,
     source: String,
+    origin_service: Option<String>,
     text: String,
     preview: String,
     query: String,
@@ -78,6 +87,8 @@ pub(super) struct Transfer {
     matrix_rects: [Option<egui::Rect>; 3],
     #[cfg(feature = "ui-preview")]
     preview_recommendation_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    preview_log_target: Option<egui::Rect>,
 }
 impl Transfer {
     pub(super) fn new(source: String, text: &str) -> anyhow::Result<Self> {
@@ -93,6 +104,7 @@ impl Transfer {
             representation: Representation::Typed,
             numeric_rendered: None,
             source,
+            origin_service: None,
             text: text.into(),
             preview: text.chars().take(1200).collect(),
             query: String::new(),
@@ -111,6 +123,8 @@ impl Transfer {
             matrix_rects: [None; 3],
             #[cfg(feature = "ui-preview")]
             preview_recommendation_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_log_target: None,
         })
     }
     fn numeric(source: String, table: NumericTable) -> anyhow::Result<Self> {
@@ -178,7 +192,7 @@ impl Transfer {
         diff: &mut DiffState,
     ) -> anyhow::Result<(Page, Option<ToolKind>)> {
         match self.target {
-            Target::Memo | Target::Event | Target::Calculator => {
+            Target::Memo | Target::Event | Target::Calculator | Target::Diagnostic(_) => {
                 anyhow::bail!("备忘 / 日程草稿需通过资料入口接收")
             }
             Target::Tool(kind) => {
@@ -223,6 +237,167 @@ impl Transfer {
 }
 
 impl DevToolsApp {
+    pub(super) fn send_service_logs(&mut self, service_id: &str, filtered: bool) {
+        if self.log_inflight || self.log_error || self.handoff.is_some() {
+            return;
+        }
+        self.log_lines.update(&self.log_text, &self.log_filter);
+        let text = if filtered {
+            self.log_lines.copy_matches(&self.log_text)
+        } else {
+            self.log_text.clone()
+        };
+        let source = format!(
+            "服务日志 · {service_id} · {} · 末尾有界快照",
+            if filtered {
+                "筛选结果"
+            } else {
+                "全部预览"
+            }
+        );
+        match Transfer::new(source, &text) {
+            Ok(mut transfer) => {
+                transfer.origin_service = Some(service_id.into());
+                self.handoff = Some(transfer);
+                self.log_view = None;
+            }
+            Err(error) => {
+                self.toast = Some((error.to_string(), Instant::now()));
+            }
+        }
+    }
+    fn cancel_handoff(&mut self) {
+        let origin = self
+            .handoff
+            .take()
+            .and_then(|transfer| transfer.origin_service);
+        if let Some(id) = origin.filter(|id| self.manager.service_spec(id).is_ok()) {
+            self.log_view = Some(id);
+            self.last_logs = Instant::now();
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_log_transfer_scene(&mut self) {
+        self.page = Page::Services;
+        self.startup_warning = None;
+        self.log_inflight = false;
+        self.log_error = false;
+        self.handoff = None;
+        self.log_text = crate::framework::Tool::Gc.sample().into();
+        self.log_lines.invalidate();
+        self.log_filter = "gc".into();
+        self.send_service_logs("demo", true);
+        let transfer = self.handoff.as_mut().unwrap();
+        transfer.target = Target::Diagnostic(crate::framework::Tool::Gc);
+        transfer.query = "gc".into();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_log_handoff_prepare(&mut self, round: usize) {
+        self.page = Page::Services;
+        self.startup_warning = None;
+        self.notification.clear();
+        self.handoff = None;
+        self.log_auto = false;
+        let text = match round {
+            0 => "noise\n[0.1s][gc] GC(0) Pause Young 10M->2M(20M) 1.0ms\n",
+            1 => {
+                "Traceback (most recent call last):\n  File \"demo.py\", line 1, in demo\nValueError: example\n"
+            }
+            _ => {
+                "Exception in thread \"main\" java.lang.IllegalStateException: example\n\tat demo.Main.run(Main.java:1)\n"
+            }
+        };
+        fs::write(
+            self.manager
+                .config_snapshot()
+                .state_dir
+                .join("logs/demo.log"),
+            text,
+        )
+        .unwrap();
+        self.request_logs("demo".into());
+        if round == 0 {
+            self.log_filter = "[gc]".into();
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_log_handoff_position(&self, index: usize) -> egui::Pos2 {
+        let transfer = self.handoff.as_ref().unwrap();
+        if index == 0 {
+            transfer.preview_log_target.unwrap().center()
+        } else {
+            transfer.preview_rects[index].unwrap().center()
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_log_handoff_check(&mut self, round: usize, phase: usize) {
+        match phase {
+            0 => {
+                assert!(!self.log_inflight && !self.log_error);
+                self.log_error = true;
+                self.send_service_logs("demo", false);
+                assert!(self.handoff.is_none());
+                self.log_error = false;
+                self.log_inflight = true;
+                self.send_service_logs("demo", false);
+                assert!(self.handoff.is_none());
+                self.log_inflight = false;
+                let filter = self.log_filter.clone();
+                let target_input = self.tool_state.input.clone();
+                self.send_service_logs("demo", true);
+                assert!(self.handoff.is_some() && self.log_view.is_none());
+                self.cancel_handoff();
+                assert_eq!(self.log_view.as_deref(), Some("demo"));
+                assert_eq!(self.log_filter, filter);
+                assert_eq!(self.tool_state.input, target_input);
+            }
+            1 => {
+                let transfer = self.handoff.as_mut().unwrap();
+                assert!(self.log_view.is_none());
+                if round == 0 {
+                    assert!(!transfer.text.contains("noise"));
+                    assert!(transfer.text.contains("[gc]"));
+                }
+                let snapshot = transfer.text.clone();
+                self.log_text = "later log update".into();
+                self.log_lines.invalidate();
+                assert_eq!(transfer.text, snapshot);
+                transfer.query = match round {
+                    0 => crate::framework::Tool::Gc.id().into(),
+                    1 => ToolKind::DjangoTrace.id().into(),
+                    _ => ToolKind::JavaTrace.id().into(),
+                };
+            }
+            2 => {
+                assert!(self.handoff.is_none());
+                if round == 0 {
+                    assert_eq!(self.page, Page::Java);
+                    self.frameworks
+                        .preview_received_log(crate::framework::Tool::Gc, "[gc]");
+                } else {
+                    assert_eq!(
+                        self.tool_state.selected,
+                        if round == 1 {
+                            ToolKind::DjangoTrace
+                        } else {
+                            ToolKind::JavaTrace
+                        }
+                    );
+                    assert!(self.tool_state.output.is_empty());
+                    assert!(self.tool_state.input.contains(if round == 1 {
+                        "Traceback"
+                    } else {
+                        "Exception in thread"
+                    }));
+                    assert!(
+                        run_tool(self.tool_state.selected, 0, &self.tool_state.input, "", 10)
+                            .is_ok()
+                    );
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
     fn handoff_source(&self) -> Option<(String, &str)> {
         match self.page {
             Page::SmallTools | Page::EncodingTools => Some((
@@ -426,6 +601,8 @@ impl DevToolsApp {
                     if _response.changed() { transfer.error.clear(); }
                     #[cfg(feature = "ui-preview")]
                     if target == Target::Event { transfer.preview_rects[0] = Some(_response.rect); }
+                    #[cfg(feature = "ui-preview")]
+                    if matches!(target, Target::Diagnostic(_) | Target::Tool(ToolKind::JavaTrace | ToolKind::DjangoTrace)) { transfer.preview_log_target = Some(_response.rect); }
                 }
                 if targets.is_empty() { ui.label("没有匹配的目标，请调整关键词或分类。已选目标仍显示在下方。"); }
             });
@@ -436,7 +613,7 @@ impl DevToolsApp {
                 ui.label(format!("新日程：{} 09:00 · 本机时区 · 不重复 · 提醒关闭", self.planner.incoming_event_date()));
             }
             if data_target { ui.checkbox(&mut transfer.new_data_instance,"在新数据实例中打开，保留已有工作"); }
-            ui.small(if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
+            ui.small(if matches!(transfer.target, Target::Diagnostic(_)) {"替换该诊断主输入并清除旧结果，保留对照输入与其他参数；同目标执行中拒绝接收。接收不自动分析或执行命令。"} else if transfer.target == Target::Event {"完整结果作为日程正文，最多 128 KiB；已有备忘/日程编辑需先保存或放弃。打开后调整日期时间并主动开启提醒，再保存到本机。"} else if transfer.target == Target::Memo {"创建备忘草稿，最多 128 KiB；已有编辑需先保存或放弃。点击备忘录中的保存后才会写入本机。"} else if data_target && transfer.new_data_instance {"创建新实例并解析预览；当前工作和原结果保留。"} else {"将替换目标输入并清除旧结果，保留其他参数。数据工作台会解析预览，其他工具需手动运行。"});
             });
             ui.separator();
             ui.label(format!("目标：{}", transfer.target.label()));
@@ -467,7 +644,7 @@ impl DevToolsApp {
             cancel = true;
         }
         if cancel {
-            self.handoff = None;
+            self.cancel_handoff();
         } else if apply {
             self.apply_handoff();
         }
@@ -487,6 +664,19 @@ impl DevToolsApp {
                     )
                     .map(|_| (Page::Calculator, None))
                     .map_err(anyhow::Error::msg)
+            } else if let Target::Diagnostic(tool) = transfer.target {
+                self.frameworks
+                    .receive_handoff(tool, transfer.text.clone())
+                    .map(|_| {
+                        (
+                            if tool.category() == "Java 与 JVM" {
+                                Page::Java
+                            } else {
+                                Page::Django
+                            },
+                            None,
+                        )
+                    })
             } else if transfer.target == Target::Event {
                 self.planner
                     .receive_event_text(&transfer.source, &transfer.text)

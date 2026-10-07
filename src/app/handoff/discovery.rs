@@ -10,6 +10,7 @@ impl Target {
     fn entry(self) -> &'static ToolEntry {
         let id = match self {
             Self::Tool(kind) => kind.id(),
+            Self::Diagnostic(tool) => tool.id(),
             Self::Csv | Self::Tsv | Self::JsonData => "data",
             Self::Before | Self::After => "diff",
             Self::Memo => "memos",
@@ -78,6 +79,24 @@ pub(super) fn search(query: &str, category: &str) -> Vec<Target> {
 /// Inspect only a bounded snapshot once, not the UI loop. Never run target actions.
 pub(super) fn recommendations(text: &str) -> Vec<Recommendation> {
     let mut suggestions = Vec::new();
+    if text.contains("Exception in thread") || text.contains("Caused by:") {
+        suggestions.push(Recommendation {
+            target: Target::Tool(ToolKind::JavaTrace),
+            reason: "可能包含 Java 异常堆栈，可选择本机结构解析；不自动运行",
+        });
+    }
+    if text.contains("Traceback (most recent call last):") {
+        suggestions.push(Recommendation {
+            target: Target::Tool(ToolKind::DjangoTrace),
+            reason: "可能包含 Python traceback，可选择 Django 异常结构解析；不自动运行",
+        });
+    }
+    if text.contains("[gc") {
+        suggestions.push(Recommendation {
+            target: Target::Diagnostic(crate::framework::Tool::Gc),
+            reason: "可能包含 JVM GC 日志，可选择 GC 诊断；需主动分析",
+        });
+    }
     if NumericTable::read_json(text).is_ok() {
         suggestions.push(Recommendation {
             target: Target::Calculator,
@@ -194,6 +213,43 @@ mod tests {
             !recommendations(&large)
                 .iter()
                 .any(|item| matches!(item.target, Target::Memo | Target::Event | Target::JsonData))
+        );
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    #[test]
+    fn offline_diagnostics_and_trace_hints_are_discoverable_without_running() {
+        assert!(search("java gc", "").contains(&Target::Diagnostic(crate::framework::Tool::Gc)));
+        assert!(
+            search("django sql", "").contains(&Target::Diagnostic(crate::framework::Tool::Sql))
+        );
+        assert_eq!(
+            Target::all()
+                .iter()
+                .filter(|target| matches!(target, Target::Diagnostic(_)))
+                .count(),
+            11
+        );
+        for tool in crate::framework::Tool::ALL {
+            assert_eq!(
+                Target::all().contains(&Target::Diagnostic(tool)),
+                tool.accepts_text_handoff()
+            );
+        }
+        assert_eq!(
+            recommendations("Exception in thread demo")[0].target,
+            Target::Tool(ToolKind::JavaTrace)
+        );
+        assert_eq!(
+            recommendations("Traceback (most recent call last):")[0].target,
+            Target::Tool(ToolKind::DjangoTrace)
+        );
+        assert_eq!(
+            recommendations("[0.1s][gc] GC(0)")[0].target,
+            Target::Diagnostic(crate::framework::Tool::Gc)
         );
     }
 }

@@ -65,6 +65,22 @@ impl Tool {
         Self::Checks,
         Self::Celery,
     ];
+    pub fn accepts_text_handoff(self) -> bool {
+        matches!(
+            self,
+            Self::Threads
+                | Self::Dependencies
+                | Self::Migrations
+                | Self::Sql
+                | Self::Gc
+                | Self::Jfr
+                | Self::SpringConfig
+                | Self::Urls
+                | Self::Drf
+                | Self::Checks
+                | Self::Celery
+        )
+    }
     pub fn id(self) -> &'static str {
         match self {
             Self::JavaEnvironment => "java-environment",
@@ -301,6 +317,15 @@ impl State {
             .map_or("", |draft| draft.output.as_str())
     }
 
+    pub fn receive_handoff(&mut self, tool: Tool, text: String) -> Result<()> {
+        ensure!(
+            tool.accepts_text_handoff(),
+            "该目标需要明确选择执行目标，不能接收文本接力"
+        );
+        bounded(&text)?;
+        self.import_text(tool, text)
+    }
+
     pub fn import_text(&mut self, tool: Tool, text: String) -> Result<()> {
         ensure!(
             !self
@@ -317,6 +342,15 @@ impl State {
         Ok(())
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_received_log(&self, tool: Tool, marker: &str) {
+        assert_eq!(self.selected, tool);
+        let draft = &self.drafts[&tool];
+        assert!(draft.input.contains(marker));
+        assert!(draft.output.is_empty() && draft.summary.is_empty());
+        assert!(!self.is_running());
+        assert!(analyze(tool, &draft.input, &draft.second).is_ok());
+    }
     pub fn select(&mut self, tool: Tool) {
         if self.selected != tool {
             self.token.clear();

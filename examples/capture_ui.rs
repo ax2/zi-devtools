@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 454] = [
+const NAMES: [&str; 456] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -464,6 +464,8 @@ const NAMES: [&str; 454] = [
     "service-list-light",
     "service-detail-dark",
     "service-detail-light",
+    "service-log-transfer-dark",
+    "service-log-transfer-light",
 ];
 
 struct Capture {
@@ -945,6 +947,28 @@ impl eframe::App for Capture {
                     pos,
                     button: egui::PointerButton::Primary,
                     pressed: self.frames % 2 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("service-log-handoff-smoke") {
+            let phase = self.frames % 120;
+            let pos = match phase {
+                40 | 41 => Some(self.app.preview_service_position(if self.frames < 120 {
+                    "log-send-filtered"
+                } else {
+                    "log-send-all"
+                })),
+                65 | 66 => Some(self.app.preview_log_handoff_position(0)),
+                85 | 86 => Some(self.app.preview_log_handoff_position(1)),
+                _ => None,
+            };
+            if let Some(pos) = pos {
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: matches!(phase, 40 | 65 | 85),
                     modifiers: egui::Modifiers::NONE,
                 });
             }
@@ -2190,6 +2214,37 @@ impl eframe::App for Capture {
                     path.display()
                 );
                 std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("service-log-handoff-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(60),
+                "log handoff timeout"
+            );
+            let round = self.frames / 120;
+            let phase = self.frames % 120;
+            if phase == 0 {
+                self.app.preview_log_handoff_prepare(round);
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1100.0, 850.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            match phase {
+                30 => self.app.preview_log_handoff_check(round, 0),
+                50 => self.app.preview_log_handoff_check(round, 1),
+                100 => {
+                    self.app.preview_log_handoff_check(round, 2);
+                    if round == 2 {
+                        println!(
+                            "PASS native log handoff: actual filtered/all log send, GC/Django/Java target selection and explicit receive clicks; snapshot fixed; loading/error send blocked; receiving does not run; offline samples parse separately"
+                        );
+                        std::process::exit(0);
+                    }
+                }
+                _ => {}
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(40));
@@ -3706,7 +3761,7 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (444..=453).contains(&self.scene)
+            let size = if (444..=455).contains(&self.scene)
                 || (308..=309).contains(&self.scene)
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)

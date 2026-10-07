@@ -1,5 +1,5 @@
 {
-  "version": "0.82.0-dev.44",
+  "version": "0.82.0-dev.45",
   "updated": "2026-10-07",
   "tools": [
     {
@@ -711,7 +711,7 @@
       "status": "implemented",
       "category": "系统能力",
       "priority": "—",
-      "scope": "固定侧栏入口；表单新增/编辑/删除与高级 YAML 选项；运行中编辑保护、配置冲突检查及原子保存；启停重启/健康状态/PID；日志自动刷新/筛选/跟随末尾与清空确认；删除保留目录及日志；每轮最多 8 个并发检查，保持列表顺序；会话内退出时间/退出码及异常退出提示；健康检查仅接受 HTTP 2xx；刷新轮次保护与旧轮次取消；运行中定义/状态目录重载保护；配置与日志实际有界读取；日志缓存筛选/可见行绘制、匹配计数、复制筛选结果与超长行预览提示；自动/卡片/紧凑列表，列表只绘制可见行，稳定标识选择独立完整详情",
+      "scope": "固定侧栏入口；表单新增/编辑/删除与高级 YAML 选项；运行中编辑保护、配置冲突检查及原子保存；启停重启/健康状态/PID；日志自动刷新/筛选/跟随末尾与清空确认；删除保留目录及日志；每轮最多 8 个并发检查，保持列表顺序；会话内退出时间/退出码及异常退出提示；健康检查仅接受 HTTP 2xx；刷新轮次保护与旧轮次取消；运行中定义/状态目录重载保护；配置与日志实际有界读取；日志缓存筛选/可见行绘制、匹配计数、复制筛选结果与超长行预览提示；自动/卡片/紧凑列表，列表只绘制可见行，稳定标识选择独立完整详情；服务日志全部预览/筛选结果可捕获快照发送到工具；读取中/失败禁止发送，超过2MiB拒绝；确认后接收，不自动运行。 取消接力返回原日志窗口并保留筛选。",
       "discovery": {
         "label": "本地服务",
         "summary": "服务增删改查、启停、健康状态和实时日志",
@@ -722,7 +722,7 @@
           "管理本地服务"
         ]
       },
-      "tool_version": "1.5.0",
+      "tool_version": "1.6.0",
       "version_history": [
         {
           "version": "1.0.0",
@@ -758,6 +758,11 @@
           "version": "1.5.0",
           "date": "2026-10-07",
           "changes": "30 项起自动使用紧凑虚拟列表；只克隆可见状态，按服务标识绑定行交互，保留搜索与状态筛选；独立详情复用全部诊断和管理操作。"
+        },
+        {
+          "version": "1.6.0",
+          "date": "2026-10-07",
+          "changes": "服务日志全部预览/筛选结果可捕获快照发送到工具；读取中/失败禁止发送，超过2MiB拒绝；确认后接收，不自动运行。 取消接力返回原日志窗口并保留筛选。"
         }
       ]
     },
@@ -2637,7 +2642,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "标准 jstack/jcmd 平台线程状态、监视器锁等待关系、循环线索与 JVM 明确死锁报告；不支持虚拟线程 JSON",
+      "scope": "标准 jstack/jcmd 平台线程状态、监视器锁等待关系、循环线索与 JVM 明确死锁报告；不支持虚拟线程 JSON；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Java 线程转储分析",
         "summary": "标准 jstack/jcmd 平台线程状态、监视器锁等待关系、循环线索与 JVM 明确死锁报告；不支持虚拟线程 JSON",
@@ -2645,12 +2650,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2660,7 +2670,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "Maven/Gradle 文本坐标、树路径与版本选择；insight 仅提取坐标，不执行 wrapper 或证明运行时冲突",
+      "scope": "Maven/Gradle 文本坐标、树路径与版本选择；insight 仅提取坐标，不执行 wrapper 或证明运行时冲突；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Maven / Gradle 依赖冲突",
         "summary": "Maven/Gradle 文本坐标、树路径与版本选择；insight 仅提取坐标，不执行 wrapper 或证明运行时冲突",
@@ -2668,12 +2678,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2706,7 +2721,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "JDK 11–21 G1/Parallel/Serial 统一日志 Pause 完成行统计、堆变化和时间线；不解析所有收集器",
+      "scope": "JDK 11–21 G1/Parallel/Serial 统一日志 Pause 完成行统计、堆变化和时间线；不解析所有收集器；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Java GC 日志分析",
         "summary": "JDK 11–21 G1/Parallel/Serial 统一日志 Pause 完成行统计、堆变化和时间线；不解析所有收集器",
@@ -2714,12 +2729,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2729,7 +2749,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "解析 jfr print JSON，或调用所选可信 jfr 读取 ≤64 MiB 录制；采样顶层热点、事件时间线，非完整 profiler",
+      "scope": "解析 jfr print JSON，或调用所选可信 jfr 读取 ≤64 MiB 录制；采样顶层热点、事件时间线，非完整 profiler；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "JFR 录制报告浏览",
         "summary": "解析 jfr print JSON，或调用所选可信 jfr 读取 ≤64 MiB 录制；采样顶层热点、事件时间线，非完整 profiler",
@@ -2737,12 +2757,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2752,7 +2777,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "比较两份 JSON/单文档 YAML 配置与占位符，敏感键值遮盖；不推导实际生效优先级，不直接解析 properties",
+      "scope": "比较两份 JSON/单文档 YAML 配置与占位符，敏感键值遮盖；不推导实际生效优先级，不直接解析 properties；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Spring 配置对比",
         "summary": "比较两份 JSON/单文档 YAML 配置与占位符，敏感键值遮盖；不推导实际生效优先级，不直接解析 properties",
@@ -2760,12 +2785,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2821,7 +2851,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "解析 showmigrations 列表/带显式依赖的 plan 与 migrate plan；标记依赖循环/状态不一致和 SQL 风险，不执行迁移",
+      "scope": "解析 showmigrations 列表/带显式依赖的 plan 与 migrate plan；标记依赖循环/状态不一致和 SQL 风险，不执行迁移；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Django 迁移计划检查",
         "summary": "解析 showmigrations 列表/带显式依赖的 plan 与 migrate plan；标记依赖循环/状态不一致和 SQL 风险，不执行迁移",
@@ -2829,12 +2859,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2844,7 +2879,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "导入 requestId/sql/durationMs JSON，按请求聚合 SQL 指纹、耗时与疑似 N+1；不执行 SQL 或断言根因",
+      "scope": "导入 requestId/sql/durationMs JSON，按请求聚合 SQL 指纹、耗时与疑似 N+1；不执行 SQL 或断言根因；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Django SQL / N+1 分析",
         "summary": "导入 requestId/sql/durationMs JSON，按请求聚合 SQL 指纹、耗时与疑似 N+1；不执行 SQL 或断言根因",
@@ -2852,12 +2887,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2867,7 +2907,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "导入 URL JSON 清单，检查完整命名空间、名称重复和 reverse kwargs 名称；不运行 resolver 或验证转换器值",
+      "scope": "导入 URL JSON 清单，检查完整命名空间、名称重复和 reverse kwargs 名称；不运行 resolver 或验证转换器值；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Django URL / reverse 检查",
         "summary": "导入 URL JSON 清单，检查完整命名空间、名称重复和 reverse kwargs 名称；不运行 resolver 或验证转换器值",
@@ -2875,12 +2915,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2890,7 +2935,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "比较 OpenAPI 3.x JSON 端点、字段、共享组件与潜在兼容性变化；不展开外部/循环引用、不验证权限",
+      "scope": "比较 OpenAPI 3.x JSON 端点、字段、共享组件与潜在兼容性变化；不展开外部/循环引用、不验证权限；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "DRF OpenAPI 契约对比",
         "summary": "比较 OpenAPI 3.x JSON 端点、字段、共享组件与潜在兼容性变化；不展开外部/循环引用、不验证权限",
@@ -2898,12 +2943,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2913,7 +2963,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "按 Django check 编号阅读脱敏输出，分类并解释常见部署问题；不执行项目或改设置",
+      "scope": "按 Django check 编号阅读脱敏输出，分类并解释常见部署问题；不执行项目或改设置；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Django 部署检查报告",
         "summary": "按 Django check 编号阅读脱敏输出，分类并解释常见部署问题；不执行项目或改设置",
@@ -2921,12 +2971,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
@@ -2936,7 +2991,7 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "解析标准 worker Task name[id] 文本日志，关联失败、重试、耗时和最后观测状态；不连接 broker/重放任务",
+      "scope": "解析标准 worker Task name[id] 文本日志，关联失败、重试、耗时和最后观测状态；不连接 broker/重放任务；接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。",
       "discovery": {
         "label": "Celery 任务故障分析",
         "summary": "解析标准 worker Task name[id] 文本日志，关联失败、重试、耗时和最后观测状态；不连接 broker/重放任务",
@@ -2944,12 +2999,17 @@
         "keywords": "",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-07",
+          "changes": "接力目标可接收主输入；最大2MiB，同目标执行中拒绝；清除旧结果并保留对照/其他参数，不自动执行。"
         }
       ]
     },
