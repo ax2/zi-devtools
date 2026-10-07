@@ -4,6 +4,7 @@ mod launcher;
 mod navigation;
 mod registry;
 mod service_editor;
+mod service_logs;
 #[cfg(feature = "ui-preview")]
 mod service_preview;
 mod services;
@@ -202,6 +203,7 @@ pub struct DevToolsApp {
     startup_warning: Option<String>,
     log_view: Option<String>,
     log_text: String,
+    log_lines: service_logs::LogLines,
     service_editor: service_editor::State,
     log_filter: String,
     log_follow: bool,
@@ -1915,6 +1917,7 @@ impl DevToolsApp {
             }),
             log_view: None,
             log_text: String::new(),
+            log_lines: service_logs::LogLines::default(),
             service_editor: service_editor::State::default(),
             log_filter: String::new(),
             log_follow: true,
@@ -2061,6 +2064,7 @@ impl DevToolsApp {
         }
         if self.log_view.as_deref() != Some(&service_id) {
             self.log_text = "正在读取日志…".to_owned();
+            self.log_lines.invalidate();
             self.log_filter.clear();
             self.log_clear_confirm = false;
         }
@@ -2140,6 +2144,7 @@ impl DevToolsApp {
                     if self.log_view.as_deref() == Some(&service_id) {
                         self.log_inflight = false;
                         self.log_text = result.unwrap_or_else(|error| format!("读取失败：{error}"));
+                        self.log_lines.invalidate();
                     }
                 }
                 BackgroundEvent::ConfigPreview(path, result) => {
@@ -3601,7 +3606,7 @@ impl DevToolsApp {
                         if self.log_clear_confirm && ui.small_button("取消清空").clicked() {
                             self.log_clear_confirm = false;
                         }
-                        if ui.button("复制").clicked() {
+                        if ui.button("复制全部预览").clicked() {
                             ctx.copy_text(self.log_text.clone());
                         }
                         if ui
@@ -3636,28 +3641,38 @@ impl DevToolsApp {
                             .color(p.muted),
                     );
                     ui.separator();
-                    egui::ScrollArea::both()
-                        .stick_to_bottom(self.log_follow)
-                        .max_height(480.0)
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            let filtered;
-                            let text = if self.log_filter.trim().is_empty() {
-                                &self.log_text
-                            } else {
-                                let query = self.log_filter.to_lowercase();
-                                filtered = self
-                                    .log_text
-                                    .lines()
-                                    .filter(|line| line.to_lowercase().contains(&query))
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
-                                &filtered
-                            };
-                            ui.add(
-                                egui::Label::new(RichText::new(text).monospace()).selectable(true),
-                            );
+                    self.log_lines.update(&self.log_text, &self.log_filter);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(format!(
+                            "匹配 {} / {} 行",
+                            self.log_lines.count(),
+                            self.log_lines.total()
+                        ));
+                        if ui
+                            .add_enabled(!self.log_filter.is_empty(), egui::Button::new("清除筛选"))
+                            .clicked()
+                        {
+                            self.log_filter.clear();
+                            self.log_lines.update(&self.log_text, "");
+                        }
+                        if ui
+                            .add_enabled(
+                                self.log_lines.count() > 0,
+                                egui::Button::new("复制筛选结果"),
+                            )
+                            .clicked()
+                        {
+                            ctx.copy_text(self.log_lines.copy_matches(&self.log_text));
+                        }
+                    });
+                    if self.log_lines.count() == 0 {
+                        ui.label(if self.log_lines.total() == 0 {
+                            "日志尚无内容"
+                        } else {
+                            "没有匹配的日志行，请调整筛选条件"
                         });
+                    }
+                    service_logs::show(ui, &self.log_lines, &self.log_text, self.log_follow);
                 });
             if !open {
                 self.log_view = None;
