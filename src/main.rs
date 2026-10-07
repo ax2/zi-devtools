@@ -79,11 +79,17 @@ fn main() -> Result<()> {
         import_config(&source, &arguments.config_path, arguments.force_import)?;
         return Ok(());
     }
+    if let Some(id) = &arguments.tool {
+        zi_devtools::tool_shortcuts::set_process_identity(id)?;
+    }
 
     let (rgba, width, height) = tray::rgba_icon();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Zi DevTools")
+            .with_title(arguments.tool.as_ref().map_or_else(
+                || "Zi DevTools".to_owned(),
+                |id| format!("Zi DevTools — {id}"),
+            ))
             .with_inner_size([1280.0, 820.0])
             .with_min_inner_size([980.0, 640.0])
             .with_icon(Arc::new(egui::IconData {
@@ -97,17 +103,18 @@ fn main() -> Result<()> {
         "Zi DevTools",
         options,
         Box::new(move |cc| {
-            Ok(Box::new(DevToolsApp::new(
-                cc,
-                arguments.config_path,
-                arguments.restore_services,
-            )))
+            let mut app = DevToolsApp::new(cc, arguments.config_path, arguments.restore_services);
+            if let Some(id) = arguments.tool {
+                app.open_startup_tool(&id);
+            }
+            Ok(Box::new(app))
         }),
     )
     .map_err(|error| anyhow::anyhow!(error.to_string()))
 }
 
 struct Arguments {
+    tool: Option<String>,
     config_path: std::path::PathBuf,
     restore_services: bool,
     fixture_port: Option<u16>,
@@ -117,22 +124,49 @@ struct Arguments {
 }
 
 fn parse_args() -> Result<Arguments> {
+    parse_args_from(std::env::args_os().skip(1))
+}
+
+fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Result<Arguments> {
+    let mut tool = None;
     let mut config_path = default_config_path();
     let mut restore_services = true;
     let mut fixture_port = None;
     let mut fixture_shutdown_port = None;
     let mut import_config = None;
     let mut force_import = false;
-    let mut args = std::env::args().skip(1);
+    let mut args = input.into_iter();
     while let Some(arg) = args.next() {
-        match arg.as_str() {
+        match arg.to_str().context("参数不是有效 Unicode")? {
+            "--tool" => {
+                let id = args
+                    .next()
+                    .context("--tool requires a tool ID")?
+                    .into_string()
+                    .map_err(|_| anyhow::anyhow!("工具编号不是有效 Unicode"))?;
+                zi_devtools::tool_shortcuts::validate_id(&id)?;
+                anyhow::ensure!(tool.is_none(), "--tool cannot be repeated");
+                tool = Some(id);
+            }
             "--fixture-server" => {
                 let value = args.next().context("--fixture-server requires a port")?;
-                fixture_port = Some(value.parse().context("invalid fixture port")?);
+                fixture_port = Some(
+                    value
+                        .to_str()
+                        .context("invalid port")?
+                        .parse()
+                        .context("invalid fixture port")?,
+                );
             }
             "--fixture-shutdown" => {
                 let value = args.next().context("--fixture-shutdown requires a port")?;
-                fixture_shutdown_port = Some(value.parse().context("invalid fixture port")?);
+                fixture_shutdown_port = Some(
+                    value
+                        .to_str()
+                        .context("invalid port")?
+                        .parse()
+                        .context("invalid fixture port")?,
+                );
             }
             "--config" => {
                 config_path = args
@@ -153,8 +187,9 @@ fn parse_args() -> Result<Arguments> {
         }
     }
     Ok(Arguments {
+        restore_services: restore_services && tool.is_none(),
+        tool,
         config_path,
-        restore_services,
         fixture_port,
         fixture_shutdown_port,
         import_config,
@@ -163,3 +198,24 @@ fn parse_args() -> Result<Arguments> {
 }
 
 use std::sync::Arc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn tool_launch_is_explicit_and_does_not_restore_services() {
+        let parse = |args: &[&str]| parse_args_from(args.iter().map(std::ffi::OsString::from));
+        let args = parse(&[
+            "--tool",
+            "json",
+            "--config",
+            "C:\\资料 folder\\services.yml",
+        ])
+        .unwrap();
+        assert_eq!(args.tool.as_deref(), Some("json"));
+        assert!(!args.restore_services);
+        assert!(parse(&["--tool"]).is_err());
+        assert!(parse(&["--tool", "json", "--tool", "base64"]).is_err());
+        assert!(parse(&[]).unwrap().restore_services);
+    }
+}

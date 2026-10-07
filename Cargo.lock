@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.82.0-dev.46"
+version = "0.82.0-dev.47"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -5605,6 +5605,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "wasapi",
+ "windows 0.62.2",
  "windows-capture",
  "windows-sys 0.59.0",
  "winresource",

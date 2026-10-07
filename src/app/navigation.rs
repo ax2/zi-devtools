@@ -576,7 +576,7 @@ impl DevToolsApp {
                             self.toggle_favorite(&entry.id);
                         }
                         let wide = ui.available_width() >= 640.0;
-                        let reserve = if wide { 290.0 } else { 240.0 };
+                        let reserve = if wide { 390.0 } else { 340.0 };
                         let title_width = (ui.available_width() - reserve).max(100.0);
                         ui.allocate_ui_with_layout(
                             egui::vec2(title_width, 28.0),
@@ -599,6 +599,31 @@ impl DevToolsApp {
                             if ui.small_button("打开 →").clicked() {
                                 self.open_entry(entry);
                             }
+                            ui.menu_button("快捷方式", |ui| {
+                                ui.label("工具入口保留当前配置位置");
+                                ui.separator();
+                                if ui.button("创建桌面快捷方式").clicked() {
+                                    self.create_tool_shortcut(entry, false);
+                                    ui.close();
+                                }
+                                if ui.button("创建用于任务栏的快捷方式…").clicked() {
+                                    self.create_tool_shortcut(entry, true);
+                                    ui.close();
+                                }
+                                if ui.button("复制启动参数").clicked() {
+                                    match crate::tool_shortcuts::arguments(
+                                        &entry.id,
+                                        &self.manager.config_snapshot().path,
+                                    ) {
+                                        Ok(args) => ui.ctx().copy_text(args),
+                                        Err(e) => {
+                                            self.toast =
+                                                Some((e.to_string(), std::time::Instant::now()))
+                                        }
+                                    }
+                                    ui.close();
+                                }
+                            });
                             ui.label(RichText::new(entry.badge()).small().color(
                                 if entry.in_progress {
                                     self.colors.amber
@@ -655,6 +680,41 @@ impl DevToolsApp {
                 rect.height()
             );
         });
+    }
+
+    fn create_tool_shortcut(&mut self, entry: &ToolEntry, taskbar: bool) {
+        let result = (|| -> anyhow::Result<std::path::PathBuf> {
+            let directory = if taskbar {
+                dirs::data_local_dir()
+                    .ok_or_else(|| anyhow::anyhow!("无法定位用户应用目录"))?
+                    .join("ZiDevTools")
+                    .join("Tool Shortcuts")
+            } else {
+                dirs::desktop_dir().ok_or_else(|| anyhow::anyhow!("无法定位桌面目录"))?
+            };
+            let path = crate::tool_shortcuts::create(
+                &directory,
+                &std::env::current_exe()?,
+                &self.manager.config_snapshot().path,
+                &entry.id,
+                &entry.title,
+            )?;
+            if taskbar {
+                open::that(&directory)?;
+            }
+            Ok(path)
+        })();
+        self.toast = Some((
+            match result {
+                Ok(path) if taskbar => format!(
+                    "已创建 {}。请右键该快捷方式，在 Windows 菜单中选择“固定到任务栏”（可能位于“显示更多选项”）。",
+                    path.display()
+                ),
+                Ok(path) => format!("桌面快捷方式已创建：{}", path.display()),
+                Err(e) => format!("创建快捷方式失败：{e}"),
+            },
+            std::time::Instant::now(),
+        ));
     }
 }
 

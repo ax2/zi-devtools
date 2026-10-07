@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 458] = [
+const NAMES: [&str; 460] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -468,6 +468,8 @@ const NAMES: [&str; 458] = [
     "service-log-transfer-light",
     "service-attention-dark",
     "service-attention-light",
+    "service-batch-dark",
+    "service-batch-light",
 ];
 
 struct Capture {
@@ -971,6 +973,23 @@ impl eframe::App for Capture {
                     pos,
                     button: egui::PointerButton::Primary,
                     pressed: matches!(phase, 40 | 65 | 85),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("service-batch-smoke") {
+            let key = match self.frames {
+                20 | 21 => Some("batch-stop"),
+                30 | 31 => Some("batch-cancel"),
+                _ => None,
+            };
+            if let Some(key) = key {
+                let pos = self.app.preview_service_position(key);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 2 == 0,
                     modifiers: egui::Modifiers::NONE,
                 });
             }
@@ -1721,6 +1740,15 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("tool-shortcuts-smoke") {
+            self.app.preview_keyboard_fixture();
+            self.app.preview_scene(ctx, 0, self.fixture.clone());
+            self.app.preview_catalog_routes();
+            println!(
+                "PASS native startup routes: built-ins and enabled plugins, exact subtools, usage, disabled and unknown IDs rejected"
+            );
+            std::process::exit(0);
+        }
         if smoke_mode.as_deref() == Some("clipboard-media-smoke") {
             if self.frames == 0 {
                 self.app.preview_clipboard_media_smoke(ctx, 0);
@@ -2259,6 +2287,34 @@ impl eframe::App for Capture {
                     if round == 2 {
                         println!(
                             "PASS native log handoff: actual filtered/all log send, GC/Django/Java target selection and explicit receive clicks; snapshot fixed; loading/error send blocked; receiving does not run; offline samples parse separately"
+                        );
+                        std::process::exit(0);
+                    }
+                }
+                _ => {}
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("service-batch-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(60),
+                "batch native timeout"
+            );
+            if self.frames == 0 {
+                self.app.preview_service_batch_prepare();
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                24 => {
+                    self.app.preview_service_batch_check(0);
+                }
+                _ if self.frames >= 90 => {
+                    if self.app.preview_service_batch_check(1) {
+                        println!(
+                            "PASS native batch: actual stop/cancel clicks; remaining items unassigned; duplicate tray batch and single start refused; no command marker; cancelled task-center row"
                         );
                         std::process::exit(0);
                     }
@@ -3805,7 +3861,7 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (444..=457).contains(&self.scene)
+            let size = if (444..=459).contains(&self.scene)
                 || (308..=309).contains(&self.scene)
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)

@@ -3,6 +3,7 @@ mod handoff;
 mod launcher;
 mod navigation;
 mod registry;
+mod service_batch;
 mod service_editor;
 mod service_logs;
 #[cfg(feature = "ui-preview")]
@@ -152,6 +153,7 @@ enum BackgroundEvent {
     Statuses(u64, Vec<ServiceStatus>),
     Action(Result<ActionResult, String>),
     ServiceAction(String, Result<ActionResult, String>),
+    ServiceBatch(u64, service_batch::Event),
     Logs(String, Result<String, String>),
     ConfigPreview(String, Result<String, String>),
     RestoreFinished(String),
@@ -204,6 +206,7 @@ pub struct DevToolsApp {
     service_filter: ServiceFilter,
     service_compact: Option<bool>,
     service_pending: std::collections::HashMap<String, &'static str>,
+    service_batch: service_batch::State,
     event_tx: Sender<BackgroundEvent>,
     event_rx: Receiver<BackgroundEvent>,
     refresh_inflight: bool,
@@ -726,6 +729,7 @@ impl DevToolsApp {
             444..=453 => self.preview_service_scene(ctx, scene, &fixture),
             454..=455 => self.preview_log_transfer_scene(),
             456..=457 => self.preview_service_scene(ctx, scene, &fixture),
+            458..=459 => self.preview_service_batch_report_scene(),
             432..=435 => self.preview_plot_fixture(true),
             436..=439 => {
                 self.page = Page::Calculator;
@@ -1603,7 +1607,7 @@ impl DevToolsApp {
         self.library_query = "压缩图片".into();
         for entry in &entries {
             let before = self.preferences.usage.get(&entry.id).copied().unwrap_or(0);
-            self.open_entry(entry);
+            self.open_startup_tool(&entry.id);
             assert_eq!(self.page, entry.page, "{}", entry.id);
             assert_eq!(self.preferences.recent.first(), Some(&entry.id));
             assert_eq!(self.preferences.usage[&entry.id], before + 1);
@@ -1620,6 +1624,11 @@ impl DevToolsApp {
         }
         assert_eq!(self.preferences.favorites, favorites);
         self.plugins.store.set_enabled("local-text", false).unwrap();
+        self.open_startup_tool("plugin:local-text/uppercase");
+        assert_eq!(self.page, Page::Library);
+        assert!(self.toast.as_ref().unwrap().0.contains("尚未启用"));
+        self.open_startup_tool("unknown-no-such-tool");
+        assert_eq!(self.page, Page::Library);
         assert!(
             !self
                 .entries("")
@@ -1920,6 +1929,7 @@ impl DevToolsApp {
             service_filter: ServiceFilter::All,
             service_compact: None,
             service_pending: Default::default(),
+            service_batch: service_batch::State::default(),
             event_tx,
             event_rx,
             refresh_inflight: false,
@@ -2044,7 +2054,7 @@ impl DevToolsApp {
     }
 
     fn run_action(&mut self, service_id: String, action: &'static str) {
-        if self.service_pending.contains_key(&service_id) {
+        if self.service_batch.busy() || self.service_pending.contains_key(&service_id) {
             return;
         }
         self.service_pending.insert(service_id.clone(), action);
@@ -2064,16 +2074,42 @@ impl DevToolsApp {
         });
     }
 
-    fn run_all(&mut self, start: bool) {
+    fn run_all(&mut self, start: bool, ctx: &egui::Context) {
+        if self.service_batch.busy() || !self.service_pending.is_empty() {
+            self.toast = Some(("已有服务操作进行中，请等待完成".into(), Instant::now()));
+            return;
+        }
+        let config = self.manager.config_snapshot();
+        if config.services.len() > 10_000 {
+            self.toast = Some(("单次批量最多10000项，请缩小配置范围".into(), Instant::now()));
+            return;
+        }
+        let generation = self.service_batch.begin(config.services.len());
+        let cancel = Arc::clone(&self.service_batch.cancel);
         let manager = Arc::clone(&self.manager);
         let tx = self.event_tx.clone();
+        let ctx = ctx.clone();
+        let window_handle = self.window_handle;
         self.notification = if start {
             "正在启动全部服务…".to_owned()
         } else {
             "正在停止全部服务…".to_owned()
         };
         std::thread::spawn(move || {
-            let _ = tx.send(BackgroundEvent::Action(execute_batch(&manager, start)));
+            service_batch::run(
+                config.services.values().cloned().collect(),
+                &cancel,
+                |event| {
+                    let _ = tx.send(BackgroundEvent::ServiceBatch(generation, event));
+                    wake_main_window(window_handle, &ctx);
+                },
+                |spec| {
+                    manager
+                        .execute_bound_batch_item(spec, &config.path, &config.state_dir, start)
+                        .map(|result| result.map(|r| r.message))
+                        .map_err(|e| e.to_string())
+                },
+            );
         });
     }
 
@@ -2127,6 +2163,24 @@ impl DevToolsApp {
     fn drain_events(&mut self, ctx: &egui::Context) {
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
+                BackgroundEvent::ServiceBatch(generation, event) => {
+                    if self.service_batch.apply(generation, event) {
+                        let row = self
+                            .service_batch
+                            .job
+                            .snapshot("services", "服务批量操作", true)
+                            .unwrap();
+                        let result = if row.phase == crate::tasks::Phase::Failed {
+                            Err(row.summary)
+                        } else {
+                            Ok(ActionResult {
+                                service_id: "all".into(),
+                                message: row.summary,
+                            })
+                        };
+                        let _ = self.event_tx.send(BackgroundEvent::Action(result));
+                    }
+                }
                 BackgroundEvent::ServiceAction(id, result) => {
                     self.service_pending.remove(&id);
                     let _ = self.event_tx.send(BackgroundEvent::Action(result));
@@ -2186,6 +2240,11 @@ impl DevToolsApp {
                     self.request_refresh();
                 }
                 BackgroundEvent::TrayNavigate(action) => match action {
+                    TrayAction::Start(id) => self.run_action(id, "start"),
+                    TrayAction::Stop(id) => self.run_action(id, "stop"),
+                    TrayAction::Restart(id) => self.run_action(id, "restart"),
+                    TrayAction::StartAll => self.run_all(true, ctx),
+                    TrayAction::StopAll => self.run_all(false, ctx),
                     TrayAction::RecorderTogglePause => self.recorder.toggle_pause(),
                     TrayAction::RecorderStop => self.recorder.request_stop(),
                     TrayAction::QuickPanel => self.open_quick(ctx),
@@ -2387,6 +2446,18 @@ impl DevToolsApp {
         ));
         if let Err(e) = self.preferences.save(&self.preferences_path) {
             self.toast = Some((e.to_string(), Instant::now()));
+        }
+    }
+
+    pub fn open_startup_tool(&mut self, id: &str) {
+        if let Some(entry) = self.entries("").into_iter().find(|e| e.id == id) {
+            self.open_entry(&entry);
+        } else {
+            self.page = Page::Library;
+            self.toast = Some((
+                format!("工具“{id}”不存在或插件尚未启用，请在工具库中选择。"),
+                Instant::now(),
+            ));
         }
     }
 
@@ -3744,52 +3815,8 @@ impl DevToolsApp {
     }
 }
 
-fn execute_batch(manager: &ServiceManager, start: bool) -> Result<ActionResult, String> {
-    let mut ok = 0;
-    let mut skipped = 0;
-    let mut failures = Vec::new();
-    for id in manager.service_ids() {
-        match manager.service_status(&id) {
-            Ok(status)
-                if (start && status.state == ServiceState::Stopped)
-                    || (!start && status.managed) =>
-            {
-                let result = if start {
-                    manager.start(&id)
-                } else {
-                    manager.stop(&id)
-                };
-                match result {
-                    Ok(_) => ok += 1,
-                    Err(error) => failures.push(format!("{id}: {error}")),
-                }
-            }
-            Ok(_) => skipped += 1,
-            Err(error) => failures.push(format!("{id}: {error}")),
-        }
-    }
-    let operation = if start { "启动" } else { "停止" };
-    if failures.is_empty() {
-        Ok(ActionResult {
-            service_id: "all".to_owned(),
-            message: format!("批量{operation}完成：成功 {ok}，跳过 {skipped}"),
-        })
-    } else {
-        let detail = failures
-            .iter()
-            .take(3)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("；");
-        Err(format!(
-            "批量{operation}完成：成功 {ok}，跳过 {skipped}，失败 {}。{detail}",
-            failures.len()
-        ))
-    }
-}
-
 fn start_tray_bridge(
-    manager: Arc<ServiceManager>,
+    _manager: Arc<ServiceManager>,
     tx: Sender<BackgroundEvent>,
     ctx: egui::Context,
     window_handle: Option<isize>,
@@ -3832,38 +3859,8 @@ fn start_tray_bridge(
                         restore_main_window(window_handle, &ctx);
                     }
                     action => {
-                        let manager = Arc::clone(&manager);
-                        let tx = tx.clone();
-                        let ctx = ctx.clone();
-                        std::thread::spawn(move || {
-                            let result = match action {
-                                TrayAction::Start(id) => {
-                                    manager.start(&id).map_err(|error| format!("{id}: {error}"))
-                                }
-                                TrayAction::Stop(id) => {
-                                    manager.stop(&id).map_err(|error| format!("{id}: {error}"))
-                                }
-                                TrayAction::Restart(id) => manager
-                                    .restart(&id)
-                                    .map_err(|error| format!("{id}: {error}")),
-                                TrayAction::StartAll | TrayAction::StopAll => {
-                                    execute_batch(&manager, matches!(action, TrayAction::StartAll))
-                                }
-                                TrayAction::QuickPanel
-                                | TrayAction::ContextPanel
-                                | TrayAction::ShowWindow
-                                | TrayAction::OpenTool(_)
-                                | TrayAction::Search
-                                | TrayAction::Settings
-                                | TrayAction::OpenEntry(_)
-                                | TrayAction::Collection(_)
-                                | TrayAction::RecorderTogglePause
-                                | TrayAction::RecorderStop
-                                | TrayAction::Exit => unreachable!(),
-                            };
-                            let _ = tx.send(BackgroundEvent::Action(result));
-                            ctx.request_repaint();
-                        });
+                        let _ = tx.send(BackgroundEvent::TrayNavigate(action));
+                        wake_main_window(window_handle, &ctx);
                     }
                 }
             }
@@ -4297,6 +4294,7 @@ impl eframe::App for DevToolsApp {
                 || self.clipboard.has_pending()
                 || self.calculator.has_work()
                 || self.service_editor.has_work()
+                || self.service_batch.busy()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
@@ -4332,6 +4330,7 @@ impl eframe::App for DevToolsApp {
                 || self.clipboard.has_pending()
                 || self.calculator.has_work()
                 || self.service_editor.has_work()
+                || self.service_batch.busy()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
@@ -4360,8 +4359,12 @@ impl eframe::App for DevToolsApp {
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
                     if self.service_editor.has_work() && ui.button("返回本地服务保存").clicked() {self.workspace_exit_confirm=false;self.page=Page::Services;}
+                    if self.service_batch.busy() {
+                        ui.label("批量服务任务正在执行，请等待完成，或取消剩余操作后退出。");
+                        if ui.button("返回本地服务任务").clicked() { self.workspace_exit_confirm=false; self.page=Page::Services; }
+                    }
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.clipboard.saving() && !self.calculator.busy() && !self.service_editor.busy() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.clipboard.saving() && !self.calculator.busy() && !self.service_editor.busy() && !self.service_batch.busy() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });

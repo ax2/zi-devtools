@@ -119,7 +119,9 @@ impl DevToolsApp {
                                 ui.horizontal_wrapped(|ui| {
                                     if ui
                                         .add_enabled(
-                                            !status.state.is_available(),
+                                            !status.state.is_available()
+                                                && !self.service_batch.busy()
+                                                && !self.service_pending.contains_key(&status.id),
                                             egui::Button::new("启动"),
                                         )
                                         .clicked()
@@ -127,13 +129,23 @@ impl DevToolsApp {
                                         self.run_action(status.id.clone(), "start");
                                     }
                                     if ui
-                                        .add_enabled(status.managed, egui::Button::new("停止"))
+                                        .add_enabled(
+                                            status.managed
+                                                && !self.service_batch.busy()
+                                                && !self.service_pending.contains_key(&status.id),
+                                            egui::Button::new("停止"),
+                                        )
                                         .clicked()
                                     {
                                         self.run_action(status.id.clone(), "stop");
                                     }
                                     if ui
-                                        .add_enabled(status.managed, egui::Button::new("重启"))
+                                        .add_enabled(
+                                            status.managed
+                                                && !self.service_batch.busy()
+                                                && !self.service_pending.contains_key(&status.id),
+                                            egui::Button::new("重启"),
+                                        )
                                         .clicked()
                                     {
                                         self.run_action(status.id.clone(), "restart");

@@ -356,6 +356,34 @@ impl ServiceManager {
         self.start_inner(service_id)
     }
 
+    /// Validate and act under the same lifecycle lock as configuration mutations.
+    pub fn execute_bound_batch_item(
+        &self,
+        spec: &ServiceSpec,
+        config_path: &Path,
+        state_dir: &Path,
+        start: bool,
+    ) -> Result<Option<ActionResult>> {
+        let _gate = self.lifecycle.lock();
+        let config = self.config.read();
+        if config.path != config_path
+            || config.state_dir != state_dir
+            || config.services.get(&spec.id) != Some(spec)
+        {
+            bail!("服务定义或配置位置已变化；本项未执行");
+        }
+        drop(config);
+        let status = self.service_status(&spec.id)?;
+        if (start && status.state != ServiceState::Stopped) || (!start && !status.managed) {
+            return Ok(None);
+        }
+        if start {
+            self.start_inner(&spec.id).map(Some)
+        } else {
+            self.stop_inner(&spec.id).map(Some)
+        }
+    }
+
     fn start_inner(&self, service_id: &str) -> Result<ActionResult> {
         let spec = self.service_spec(service_id)?;
         let status = self.service_status(service_id)?;

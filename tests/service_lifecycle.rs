@@ -184,6 +184,56 @@ use zi_devtools::{
     service::{ServiceManager, ServiceState},
 };
 
+#[test]
+fn bound_batch_rejects_changed_definition_and_config_locations() {
+    let root = std::env::temp_dir().join(format!("zi-bound-batch-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("services.yml");
+    fs::write(
+        &path,
+        format!(
+            "state_dir: {}\nservices:\n  fixture:\n    repo: {}\n    command: echo forbidden\n",
+            root.join("state").display(),
+            root.display()
+        ),
+    )
+    .unwrap();
+    let config = load_config(&path).unwrap();
+    let manager = ServiceManager::new(config.clone()).unwrap();
+    let spec = config.services["fixture"].clone();
+    assert!(
+        manager
+            .execute_bound_batch_item(&spec, &config.path, &root.join("other-state"), true)
+            .is_err()
+    );
+    assert!(
+        manager
+            .execute_bound_batch_item(&spec, &root.join("other.yml"), &config.state_dir, true)
+            .is_err()
+    );
+    let mut changed = config.clone();
+    changed.services.get_mut("fixture").unwrap().command = "echo changed".into();
+    manager.replace_config(changed).unwrap();
+    assert!(
+        manager
+            .execute_bound_batch_item(&spec, &config.path, &config.state_dir, true)
+            .is_err()
+    );
+    assert!(
+        !config.state_dir.join("logs/fixture.log").exists(),
+        "rejected definitions must not execute"
+    );
+    manager.replace_config(config.clone()).unwrap();
+    assert!(
+        manager
+            .execute_bound_batch_item(&spec, &config.path, &config.state_dir, false)
+            .unwrap()
+            .is_none()
+    );
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
+
 // Each fixture reserves an ephemeral port only until its child binds it. Running
 // these tests in parallel can hand the same released port to another fixture.
 fn network_fixture_guard() -> MutexGuard<'static, ()> {
@@ -401,7 +451,19 @@ fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
     .unwrap();
 
     let manager = ServiceManager::new(load_config(&config_path).unwrap()).unwrap();
-    manager.start("fixture").unwrap();
+    let bound_config = manager.config_snapshot();
+    let bound_spec = manager.service_spec("fixture").unwrap();
+    assert!(
+        manager
+            .execute_bound_batch_item(
+                &bound_spec,
+                &bound_config.path,
+                &bound_config.state_dir,
+                true
+            )
+            .unwrap()
+            .is_some()
+    );
 
     let mut ready = false;
     for _ in 0..30 {
@@ -429,7 +491,17 @@ fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
     assert!(manager.delete_service(&original).is_err());
     assert_eq!(manager.service_spec("fixture").unwrap(), original);
 
-    manager.stop("fixture").unwrap();
+    assert!(
+        manager
+            .execute_bound_batch_item(
+                &bound_spec,
+                &bound_config.path,
+                &bound_config.state_dir,
+                false
+            )
+            .unwrap()
+            .is_some()
+    );
     thread::sleep(Duration::from_millis(200));
     assert!(
         manager

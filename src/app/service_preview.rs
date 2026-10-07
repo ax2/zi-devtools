@@ -1,6 +1,124 @@
 use super::*;
 
 impl DevToolsApp {
+    pub fn preview_service_batch_report_scene(&mut self) {
+        let mut config = self.manager.config_snapshot();
+        let base = config.services["demo"].clone();
+        for index in 1..3 {
+            let mut spec = base.clone();
+            spec.id = format!("sample-{index:02}");
+            spec.name = format!("本地示例 {index}");
+            config.services.insert(spec.id.clone(), spec);
+        }
+        self.manager.replace_config(config).unwrap();
+        self.statuses = self.manager.list_services();
+        self.page = Page::Services;
+        self.startup_warning = None;
+        self.notification.clear();
+        let generation = self.service_batch.begin(3);
+        for (id, outcome, message) in [
+            ("demo", service_batch::Outcome::Done, "服务已停止"),
+            (
+                "sample-01",
+                service_batch::Outcome::Skipped,
+                "当前状态无需执行",
+            ),
+            (
+                "sample-02",
+                service_batch::Outcome::Failed,
+                "服务定义或配置位置已变化；本项未执行",
+            ),
+        ] {
+            self.service_batch.apply(
+                generation,
+                service_batch::Event::Item(service_batch::Item {
+                    id: id.into(),
+                    outcome,
+                    message: message.into(),
+                }),
+            );
+        }
+        self.service_batch
+            .apply(generation, service_batch::Event::Finished(false));
+    }
+    pub fn preview_service_batch_prepare(&mut self) {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let stream = stream.unwrap();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(800));
+                    drop(stream);
+                });
+            }
+        });
+        let mut config = self.manager.config_snapshot();
+        let base = config.services["demo"].clone();
+        config.services.clear();
+        for index in 0..3 {
+            let mut spec = base.clone();
+            spec.id = format!("batch-{index:02}");
+            spec.name = spec.id.clone();
+            spec.command = "echo unexpected > batch-unexpected.txt".into();
+            spec.health_url = Some(format!("http://127.0.0.1:{port}/health"));
+            config.services.insert(spec.id.clone(), spec);
+        }
+        self.manager.replace_config(config).unwrap();
+        self.page = Page::Services;
+        self.notification.clear();
+        self.startup_warning = None;
+        self.refresh_cancel.store(true, Ordering::Release);
+        self.refresh_generation = self.refresh_generation.wrapping_add(1);
+        self.refresh_inflight = true;
+        self.statuses.clear();
+    }
+    pub fn preview_service_batch_check(&mut self, phase: u8) -> bool {
+        if phase != 0 && self.service_batch.busy() {
+            return false;
+        }
+        if phase == 0 {
+            assert!(self.service_batch.busy());
+            assert_eq!(self.service_batch.generation, 1);
+            self.event_tx
+                .send(BackgroundEvent::TrayNavigate(TrayAction::StopAll))
+                .unwrap();
+            self.event_tx
+                .send(BackgroundEvent::TrayNavigate(TrayAction::Start(
+                    "batch-02".into(),
+                )))
+                .unwrap();
+        } else {
+            assert_eq!(self.service_batch.job.phase, crate::tasks::Phase::Cancelled);
+            assert_eq!(
+                self.service_batch.generation, 1,
+                "duplicate tray batch must be refused"
+            );
+            assert!((1..3).contains(&self.service_batch.rows.len()));
+            assert!(
+                self.service_batch
+                    .rows
+                    .iter()
+                    .all(|r| r.outcome == service_batch::Outcome::Skipped)
+            );
+            assert!(self.service_pending.is_empty());
+            assert!(
+                !self.manager.config_snapshot().services["batch-02"]
+                    .repo
+                    .join("batch-unexpected.txt")
+                    .exists()
+            );
+            self.observe_tasks();
+            assert!(
+                self.tasks
+                    .rows
+                    .iter()
+                    .any(|r| r.key == "services" && r.phase == crate::tasks::Phase::Cancelled)
+            );
+        }
+        true
+    }
     pub fn preview_service_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: &Path) {
         self.page = Page::Services;
         self.notification.clear();

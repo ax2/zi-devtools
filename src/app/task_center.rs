@@ -51,6 +51,11 @@ impl DevToolsApp {
     fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
         let mut rows = self.data_state.snapshots();
         rows.extend(self.file_state.job.snapshot("files", "批量文件校验", true));
+        rows.extend(
+            self.service_batch
+                .job
+                .snapshot("services", "服务批量操作", true),
+        );
         rows
     }
     pub(super) fn observe_tasks(&mut self) {
@@ -178,6 +183,7 @@ impl DevToolsApp {
                 ("sqlite-export", Some(id)) => self.data_state.cancel_sqlite(&id, generation),
                 ("pipeline", Some(id)) => self.data_state.cancel_workflow(&id, generation),
                 ("files", _) => self.file_state.cancel_task(),
+                ("services", _) => self.service_batch.cancel(generation),
                 _ => {}
             }
         }

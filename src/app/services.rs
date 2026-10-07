@@ -33,17 +33,25 @@ impl DevToolsApp {
                 if add.clicked() {
                     self.service_editor.new_service();
                 }
-                if ui.button("全部停止").clicked() {
-                    self.run_all(false);
+                let stop = ui.add_enabled(
+                    !self.service_batch.busy() && self.service_pending.is_empty(),
+                    egui::Button::new("全部停止"),
+                );
+                #[cfg(feature = "ui-preview")]
+                self.preview_services
+                    .insert("batch-stop", (stop.rect, ui.clip_rect()));
+                if stop.clicked() {
+                    self.run_all(false, ui.ctx());
                 }
                 if ui
-                    .add(
+                    .add_enabled(
+                        !self.service_batch.busy() && self.service_pending.is_empty(),
                         egui::Button::new(RichText::new("全部启动").color(Color32::WHITE))
                             .fill(p.accent),
                     )
                     .clicked()
                 {
-                    self.run_all(true);
+                    self.run_all(true, ui.ctx());
                 }
                 if ui.button("↻ 刷新").clicked() {
                     self.last_refresh = Instant::now() - Duration::from_secs(30);
@@ -51,6 +59,67 @@ impl DevToolsApp {
             });
         });
         ui.add_space(18.0);
+        if self.service_batch.total > 0 {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(format!(
+                    "批量任务 · {} · 已处理 {} / {}",
+                    self.service_batch.job.phase.label(),
+                    self.service_batch.rows.len(),
+                    self.service_batch.total
+                ));
+                if let Some(id) = &self.service_batch.current {
+                    ui.label(format!("当前：{id}"));
+                }
+                if self.service_batch.busy() {
+                    let cancel = ui.add_enabled(
+                        self.service_batch.job.phase == crate::tasks::Phase::Running,
+                        egui::Button::new(
+                            if self.service_batch.job.phase == crate::tasks::Phase::Cancelling {
+                                "正在取消…"
+                            } else {
+                                "取消剩余操作"
+                            },
+                        ),
+                    );
+                    #[cfg(feature = "ui-preview")]
+                    self.preview_services
+                        .insert("batch-cancel", (cancel.rect, ui.clip_rect()));
+                    if cancel.clicked() {
+                        self.service_batch.cancel(self.service_batch.generation);
+                    }
+                }
+            });
+            if self.service_batch.busy() {
+                ui.add(
+                    egui::ProgressBar::new(self.service_batch.job.progress.unwrap_or(0.0))
+                        .show_percentage(),
+                );
+                ui.small("取消只停止安排剩余项，当前启停正常结束；已完成操作保留。");
+            }
+            egui::CollapsingHeader::new("逐项结果")
+                .default_open(true)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("batch-results")
+                        .max_height(160.0)
+                        .show_rows(ui, 22.0, self.service_batch.rows.len(), |ui, range| {
+                            for index in range {
+                                let row = &self.service_batch.rows[index];
+                                ui.add(
+                                    egui::Label::new(format!(
+                                        "{} · {} — {}",
+                                        row.outcome.label(),
+                                        row.id,
+                                        row.message
+                                    ))
+                                    .truncate(),
+                                )
+                                .on_hover_text(&row.message);
+                            }
+                        });
+                });
+            ui.add_space(8.0);
+        }
         ui.horizontal(|ui| {
             metric(ui, "托管运行", running, p.green);
             metric(ui, "外部/占用", external, p.amber);
@@ -262,7 +331,11 @@ impl DevToolsApp {
 
     fn compact_service_row_content(&mut self, ui: &mut egui::Ui, status: ServiceStatus) {
         let p = self.colors;
-        let pending = self.service_pending.get(&status.id).copied();
+        let pending = self
+            .service_pending
+            .get(&status.id)
+            .copied()
+            .or_else(|| self.service_batch.busy().then_some("batch"));
         let color = if status.failed_exit() {
             p.red
         } else if status.unhealthy() {
@@ -351,7 +424,11 @@ impl DevToolsApp {
 
     fn service_card(&mut self, ui: &mut egui::Ui, status: ServiceStatus) {
         let p = self.colors;
-        let pending = self.service_pending.get(&status.id).copied();
+        let pending = self
+            .service_pending
+            .get(&status.id)
+            .copied()
+            .or_else(|| self.service_batch.busy().then_some("batch"));
         egui::Frame::new()
             .fill(p.card)
             .corner_radius(12.0)
@@ -454,7 +531,10 @@ impl DevToolsApp {
                             self.request_logs(status.id.clone());
                         }
                         let edit = ui
-                            .add_enabled(!status.managed, egui::Button::new("编辑"))
+                            .add_enabled(
+                                !status.managed && !self.service_batch.busy(),
+                                egui::Button::new("编辑"),
+                            )
                             .on_disabled_hover_text("请先停止托管服务");
                         #[cfg(feature = "ui-preview")]
                         if status.id == "native" {
@@ -465,7 +545,10 @@ impl DevToolsApp {
                             self.service_editor.edit(&self.manager, &status.id);
                         }
                         let delete = ui
-                            .add_enabled(!status.managed, egui::Button::new("删除"))
+                            .add_enabled(
+                                !status.managed && !self.service_batch.busy(),
+                                egui::Button::new("删除"),
+                            )
                             .on_disabled_hover_text("请先停止托管服务");
                         #[cfg(feature = "ui-preview")]
                         if status.id == "native" {

@@ -52,6 +52,7 @@ pub mod vector_index;
 pub mod workbench;
 
 pub mod tasks;
+pub mod tool_shortcuts;
 
 pub mod credentials;
 
