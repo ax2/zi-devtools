@@ -2,6 +2,7 @@ use super::{workflow::*, *};
 
 #[cfg(feature = "ui-preview")]
 mod preview;
+mod row_editor;
 
 pub(super) struct State {
     definition: Definition,
@@ -21,7 +22,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             definition: Definition {
-                version: 1,
+                version: 2,
                 name: "表格清洗".into(),
                 steps: vec![],
             },
@@ -362,6 +363,7 @@ impl DataState {
                                                 );
                                             }
                                         }
+                                        step => { changed |= row_editor::edit(ui, step, available); }
                                     }
                                 });
                             }
@@ -404,6 +406,23 @@ impl DataState {
                             });
                             changed = true;
                         }
+                        ui.add_enabled_ui(self.workflow.definition.steps.len() < 32, |ui| {
+                            ui.menu_button("添加行步骤", |ui| {
+                                let name = schemas.last().and_then(|s| s.first()).cloned().unwrap_or_default();
+                                for (title, step) in [
+                                    ("筛选行", Step::Filter { column: name.clone(), predicate: Predicate::Contains, value: String::new(), case_sensitive: false }),
+                                    ("多列排序", Step::Sort { keys: vec![SortKey { column: name.clone(), descending: false }] }),
+                                    ("按列去重", Step::Deduplicate { columns: vec![name] }),
+                                ] {
+                                    if ui.button(title).clicked() {
+                                        self.workflow.definition.steps.push(step);
+                                        self.workflow.definition.version = 2;
+                                        changed = true;
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        });
                     });
                 });
                 if changed {
@@ -587,6 +606,7 @@ impl DataState {
                             Step::SelectColumns { columns } => {
                                 ui.label(format!("保留列：{}", columns.join("、")));
                             }
+                            step => row_editor::review(ui, step),
                         }
                     }
                 });

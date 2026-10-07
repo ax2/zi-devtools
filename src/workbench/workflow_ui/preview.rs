@@ -2,6 +2,74 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_rows(&mut self, phase: u8) -> bool {
+        match phase {
+            0 => {
+                self.workflow.files.review = None;
+                self.input = "编号,名称,数量\n001,Zi,2\n002,Zi,3\n003,Other,9\n004,Zip,1".into();
+                self.dataset = Some(Dataset::parse(&self.input, DataFormat::Csv, b',').unwrap());
+                self.workflow.definition = Definition {
+                    version: 2,
+                    name: "教程：筛选排序去重".into(),
+                    steps: vec![
+                        Step::Column {
+                            column: "数量".into(),
+                            operation: ColumnOperation::ToInteger,
+                            value: String::new(),
+                        },
+                        Step::Filter {
+                            column: "名称".into(),
+                            predicate: Predicate::Contains,
+                            value: "Zi".into(),
+                            case_sensitive: true,
+                        },
+                        Step::Sort {
+                            keys: vec![SortKey {
+                                column: "数量".into(),
+                                descending: true,
+                            }],
+                        },
+                        Step::Deduplicate {
+                            columns: vec!["名称".into()],
+                        },
+                    ],
+                };
+                self.workflow.invalidate();
+                self.show_workflow();
+            }
+            1 => {
+                if self.busy() || self.workflow.proposal.is_none() {
+                    return false;
+                }
+                assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 4);
+                let preview = self.workflow.proposal.as_ref().unwrap();
+                assert_eq!(preview.steps.len(), 4);
+                assert_eq!(
+                    preview.result.rows[0],
+                    [
+                        serde_json::json!("002"),
+                        serde_json::json!("Zi"),
+                        serde_json::json!(3)
+                    ]
+                );
+                assert_eq!(preview.result.rows.len(), 2);
+            }
+            2 => {
+                assert!(self.workflow.proposal.is_none());
+                assert!(self.can_undo_transform());
+                assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 2);
+                assert_eq!(self.dataset.as_ref().unwrap().rows[0][0], "002");
+            }
+            3 => {
+                assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 4);
+                assert_eq!(self.dataset.as_ref().unwrap().rows[0][2], "2");
+                assert!(!self.can_undo_transform());
+            }
+            _ => panic!("unknown row workflow phase"),
+        }
+        assert!(self.input.contains("001,Zi,2"));
+        true
+    }
     pub fn preview_workflow_empty(&mut self, review: bool) {
         if review {
             self.preview_workflow_import();

@@ -144,4 +144,51 @@ mod tests {
         assert!(save_new(&definition(), std::path::Path::new("relative.json")).is_err());
         std::fs::remove_file(path).unwrap();
     }
+
+    #[test]
+    fn row_recipe_disk_roundtrip_reuses_new_tables_and_keeps_source() {
+        use super::super::workflow::{Predicate, SortKey, Step};
+        let path = std::env::temp_dir().join(format!("zi-row-flow-{}.json", uuid::Uuid::new_v4()));
+        let definition = Definition {
+            version: 2,
+            name: "行处理".into(),
+            steps: vec![
+                Step::Filter {
+                    column: "name".into(),
+                    predicate: Predicate::IsNotNull,
+                    value: String::new(),
+                    case_sensitive: true,
+                },
+                Step::Sort {
+                    keys: vec![SortKey {
+                        column: "n".into(),
+                        descending: true,
+                    }],
+                },
+                Step::Deduplicate {
+                    columns: vec!["name".into()],
+                },
+            ],
+        };
+        save_new(&definition, &path).unwrap();
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded, definition);
+        for n in [3, 9] {
+            let input = format!(
+                r#"[{{"name":"Zi","n":1}},{{"name":"Zi","n":{n}}},{{"name":null,"n":99}}]"#
+            );
+            let source =
+                super::super::Dataset::parse(&input, super::super::DataFormat::Json, b',').unwrap();
+            let original = source.clone();
+            let result = loaded
+                .preview(&source, &std::sync::atomic::AtomicBool::new(false))
+                .unwrap();
+            assert_eq!(
+                result.result.rows,
+                vec![vec![serde_json::json!(n), serde_json::json!("Zi")]]
+            );
+            assert_eq!(source, original);
+        }
+        std::fs::remove_file(path).unwrap();
+    }
 }

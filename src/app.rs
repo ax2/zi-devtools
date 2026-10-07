@@ -748,6 +748,10 @@ impl DevToolsApp {
     pub fn preview_workflow_check(&mut self, phase: u8) -> bool {
         self.data_state.preview_workflow_check(phase)
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_rows(&mut self, phase: u8) -> bool {
+        self.data_state.preview_workflow_rows(phase)
+    }
 
     #[cfg(feature = "ui-preview")]
     pub fn preview_scene(&mut self, ctx: &egui::Context, scene: usize, fixture: PathBuf) {

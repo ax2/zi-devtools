@@ -3,6 +3,37 @@ use super::{Dataset, transform};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
+mod rows;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Predicate {
+    Contains,
+    NotContains,
+    Equals,
+    NotEquals,
+    IsNull,
+    IsNotNull,
+}
+impl Predicate {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Contains => "包含文本",
+            Self::NotContains => "不包含文本",
+            Self::Equals => "等于JSON值",
+            Self::NotEquals => "不等于JSON值",
+            Self::IsNull => "是null",
+            Self::IsNotNull => "不是null",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SortKey {
+    pub column: String,
+    pub descending: bool,
+}
 
 const MAX_STEPS: usize = 32;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -49,7 +80,21 @@ pub enum Step {
         value: String,
     },
     /// Columns stay in source order, matching the existing projection UI.
-    SelectColumns { columns: Vec<String> },
+    SelectColumns {
+        columns: Vec<String>,
+    },
+    Filter {
+        column: String,
+        predicate: Predicate,
+        value: String,
+        case_sensitive: bool,
+    },
+    Sort {
+        keys: Vec<SortKey>,
+    },
+    Deduplicate {
+        columns: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -85,7 +130,7 @@ impl Definition {
     }
 
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.version == 1, "不支持的流程定义版本");
+        ensure!(matches!(self.version, 1 | 2), "不支持的流程定义版本");
         ensure!(
             !self.name.trim().is_empty() && self.name.chars().count() <= 120,
             "流程名称须为1–120字"
@@ -98,7 +143,7 @@ impl Definition {
             let valid_column = |name: &str| !name.trim().is_empty() && name.len() <= 256;
             let valid = match step {
                 Step::Column { column, value, .. } => valid_column(column) && value.len() <= 4096,
-                Step::SelectColumns { columns } => {
+                Step::SelectColumns { columns } | Step::Deduplicate { columns } => {
                     !columns.is_empty()
                         && columns.len() <= 128
                         && columns.iter().all(|column| valid_column(column))
@@ -108,7 +153,40 @@ impl Definition {
                             .len()
                             == columns.len()
                 }
+                Step::Filter {
+                    column,
+                    predicate,
+                    value,
+                    ..
+                } => {
+                    valid_column(column)
+                        && value.len() <= 4096
+                        && match predicate {
+                            Predicate::Equals | Predicate::NotEquals => {
+                                serde_json::from_str::<serde_json::Value>(value).is_ok()
+                            }
+                            Predicate::IsNull | Predicate::IsNotNull => value.is_empty(),
+                            _ => !value.is_empty(),
+                        }
+                }
+                Step::Sort { keys } => {
+                    !keys.is_empty()
+                        && keys.len() <= 4
+                        && keys.iter().all(|key| valid_column(&key.column))
+                        && keys
+                            .iter()
+                            .map(|key| &key.column)
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .len()
+                            == keys.len()
+                }
             };
+            ensure!(
+                self.version == 2
+                    || matches!(step, Step::Column { .. } | Step::SelectColumns { .. }),
+                "第{}步的行操作需要格式版本2",
+                index + 1
+            );
             ensure!(valid, "第{}步的列或参数无效", index + 1);
         }
         Ok(())
@@ -150,6 +228,7 @@ impl Definition {
                             .collect::<Vec<_>>();
                         transform::select_columns(&current, &keep)
                     }
+                    _ => rows::propose(&current, step, cancel),
                 }
             })()
             .with_context(|| format!("第{}步失败；来源未修改", index + 1))?;
