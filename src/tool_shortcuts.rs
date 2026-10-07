@@ -44,6 +44,7 @@ fn quote(value: &str) -> String {
 
 pub fn arguments(id: &str, config: &Path) -> Result<String> {
     validate_id(id)?;
+    let config = std::path::absolute(config).context("无法确定配置的绝对位置")?;
     let config = config.to_str().context("配置路径不是有效 Unicode")?;
     ensure!(!config.contains('\0'), "配置路径包含无效字符");
     Ok(format!(
@@ -176,6 +177,10 @@ mod tests {
             "--tool \"json\" --config \"C:\\资料 folder\\config.yml\" --no-restore"
         );
         assert!(arguments("json\" --bad", Path::new("x")).is_err());
+        let relative = Path::new("local fixtures/services.yml");
+        assert!(arguments("json", relative).unwrap().contains(&quote(
+            std::path::absolute(relative).unwrap().to_str().unwrap()
+        )));
         assert_ne!(app_id("json"), app_id("base64"));
         assert_eq!(quote("x\\"), "\"x\\\\\"");
     }
