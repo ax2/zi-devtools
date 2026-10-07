@@ -5,6 +5,7 @@ mod actions_preview;
 mod agenda;
 mod backup;
 mod backup_ui;
+mod conflict_copy;
 mod convert;
 #[cfg(feature = "ui-preview")]
 mod cutoff_preview;
@@ -248,6 +249,7 @@ enum Reply {
     IcsSaved(PathBuf, usize),
     IcsImported(Vec<Item>, usize),
     Loaded(Vec<Item>),
+    SavedCopy(Box<Item>, std::result::Result<Vec<Item>, String>),
     Imported(Item),
     Exported(PathBuf, usize),
     BackupReady(Box<backup::Review>),
@@ -317,6 +319,8 @@ pub struct State {
     pub preview_convert_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
     pub preview_duplicate_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_conflict_copy_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
     preview_duplicate_source: Option<Item>,
     #[cfg(feature = "ui-preview")]
@@ -507,6 +511,8 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_duplicate_rect: None,
             #[cfg(feature = "ui-preview")]
+            preview_conflict_copy_rect: None,
+            #[cfg(feature = "ui-preview")]
             preview_duplicate_source: None,
         };
         state.reload();
@@ -600,6 +606,7 @@ impl State {
                 })
     }
     fn edit(&mut self, item: Item) {
+        self.shared.clear_conflict();
         self.focus_editor = true;
         self.date_text = item
             .schedule
@@ -655,9 +662,36 @@ impl State {
         }
     }
     fn save_draft(&mut self) {
-        let Some(mut item) = self.draft.clone() else {
+        if self.draft.is_none() {
             return;
-        };
+        }
+        match self.prepared_draft(false) {
+            Ok(item) => self.launch(Some(item)),
+            Err(e) => {
+                self.message = e.to_string();
+                self.error = true;
+            }
+        }
+    }
+    fn prepared_draft(&self, as_copy: bool) -> Result<Item> {
+        let mut item = self
+            .draft
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("请先打开记录"))?;
+        if as_copy {
+            item.id = uuid::Uuid::new_v4().to_string();
+            item.revision = 0;
+            item.updated = 0;
+            item.calendar_uid = None;
+            item.pinned = false;
+            item.trash = false;
+            if let Some(schedule) = &mut item.schedule {
+                schedule.remind = false;
+                schedule.done = false;
+                schedule.handled = None;
+                schedule.snooze = None;
+            }
+        }
         let result = (|| -> Result<()> {
             if let Some(s) = &mut item.schedule {
                 let start = NaiveDateTime::parse_from_str(
@@ -761,13 +795,8 @@ impl State {
             item.validate()?;
             Ok(())
         })();
-        match result {
-            Ok(()) => self.launch(Some(item)),
-            Err(e) => {
-                self.message = e.to_string();
-                self.error = true;
-            }
-        }
+        result?;
+        Ok(item)
     }
     /// Runs before hidden-window early returns. Returns true only for newly due alarms.
     pub fn poll(&mut self, ctx: &egui::Context) -> bool {
@@ -784,6 +813,7 @@ impl State {
                 self.pending = None;
                 self.file_operation = false;
                 match reply {
+                    Ok(Reply::SavedCopy(saved, rows)) => self.accept_saved_copy(*saved, rows),
                     Ok(Reply::IcsReady(review)) => {
                         self.ics_review = Some(*review);
                         self.message.clear();

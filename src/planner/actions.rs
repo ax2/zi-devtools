@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy)]
 pub(super) enum Action {
     Save,
+    SaveConflictCopy,
     Discard,
     Duplicate,
     Convert,
@@ -45,8 +46,11 @@ impl State {
         let in_trash = item.trash;
         let dirty = self.has_unsaved();
         let available = external_enabled && self.editor_actions_available();
+        let conflict = self.shared_conflict();
         let status = if self.pending.is_some() {
             "正在读写…"
+        } else if conflict {
+            "编辑冲突 · 修改已保留"
         } else if revision == 0 {
             "尚未保存"
         } else if dirty {
@@ -58,6 +62,7 @@ impl State {
         let mut discard = false;
         let mut duplicate = false;
         let mut convert = false;
+        let mut save_copy = false;
         if self.calendar {
             ui.horizontal(|ui| {
                 for (index, label) in ["返回日程视图", "查看当前编辑"].into_iter().enumerate()
@@ -78,9 +83,27 @@ impl State {
                 }
             });
         }
+        if conflict {
+            ui.push_id("planner-conflict-copy-actions", |ui| {
+            ui.horizontal_wrapped(|ui| {
+                let response = ui.add_enabled(available && revision > 0 && !in_trash,
+                    egui::Button::new("将修改另存为新记录").selected(true));
+                save_copy = response.clicked();
+                #[cfg(feature = "ui-preview")]
+                {
+                    self.preview_conflict_copy_rect = Some((response.rect, ui.clip_rect()));
+
+                }
+                response.on_hover_text("保存当前标题、正文和有效日程为独立新记录，原记录保留；新日程提醒关闭。失败时保留当前修改。");
+                ui.small("保留双方内容；日程副本不会自动开启提醒。");
+            });
+            });
+        }
         ui.horizontal(|ui| {
-            let response =
-                ui.add_enabled(available, egui::Button::new("保存到本机").selected(dirty));
+            let response = ui.add_enabled(
+                available,
+                egui::Button::new("保存到本机").selected(dirty && !conflict),
+            );
             save = response.clicked();
             #[cfg(feature = "ui-preview")]
             {
@@ -150,7 +173,9 @@ impl State {
             )
             .on_hover_text(&self.message);
         }
-        if save {
+        if save_copy {
+            self.queue_editor_action(Action::SaveConflictCopy);
+        } else if save {
             self.queue_editor_action(Action::Save);
         } else if discard {
             self.queue_editor_action(Action::Discard);
@@ -170,6 +195,12 @@ impl State {
         {
             match action {
                 Action::Save => self.save_draft(),
+                Action::SaveConflictCopy => {
+                    if let Err(error) = self.save_conflict_copy() {
+                        self.message = error.to_string();
+                        self.error = true;
+                    }
+                }
                 Action::Discard => self.discard(),
                 Action::Convert => {
                     if let Err(error) = self.convert_draft() {

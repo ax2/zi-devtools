@@ -506,6 +506,26 @@ impl Capture {
 }
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
+        input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("planner-conflict-smoke")
+            && (55..=61).contains(&self.frames)
+        {
+            input.focused = true;
+            if let Some(viewport) = input.viewports.get_mut(&input.viewport_id) {
+                viewport.focused = Some(true);
+            }
+            let pos = self.app.preview_conflict_copy_position();
+            input.events.push(egui::Event::PointerMoved(pos));
+            if matches!(self.frames, 60 | 61) && self.sqlite_input_frame != Some(self.frames) {
+                self.sqlite_input_frame = Some(self.frames);
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames == 60,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("screenshot-overlay-smoke") {
             input.focused = true;
             if let Some(viewport) = input.viewports.get_mut(&input.viewport_id) {
@@ -527,7 +547,6 @@ impl eframe::App for Capture {
                 });
             }
         }
-        input.events.push(egui::Event::PointerGone);
         if std::env::args().nth(3).as_deref() == Some("clock-audio-smoke") {
             let index = match self.frames {
                 20 | 21 => Some(0),
@@ -1740,6 +1759,65 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("planner-conflict-smoke") {
+            if self.frames == 0 {
+                self.app
+                    .preview_scene(ctx, self.scene, self.fixture.clone());
+                self.app.preview_conflict_copy(0);
+            }
+            self.app.update(ctx, frame);
+            if matches!(self.frames, 60 | 61) && self.sqlite_input_frame != Some(self.frames) {
+                ctx.request_repaint_after(Duration::from_millis(50));
+                return;
+            }
+            if self.frames == 1 && !self.app.preview_conflict_copy(1)
+                || self.frames == 50 && !self.app.preview_conflict_copy(2)
+                || self.frames == 70 && !self.app.preview_conflict_copy(3)
+            {
+                assert!(self.started.elapsed() < Duration::from_secs(30));
+                ctx.request_repaint_after(Duration::from_millis(50));
+                return;
+            }
+            if self.frames == 52 {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            }
+            let captured = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            });
+            if let Some(image) = captured {
+                let filename = if self.scene % 2 == 0 {
+                    "conflict-dark.png"
+                } else {
+                    "conflict-light.png"
+                };
+                let file = fs::File::create(self.folder.join(filename)).unwrap();
+                let mut encoder =
+                    png::Encoder::new(file, image.size[0] as u32, image.size[1] as u32);
+                encoder.set_color(png::ColorType::Rgba);
+                encoder.set_depth(png::BitDepth::Eight);
+                let bytes = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect::<Vec<_>>();
+                encoder
+                    .write_header()
+                    .unwrap()
+                    .write_image_data(&bytes)
+                    .unwrap();
+            }
+            if self.frames >= 75 {
+                self.app.preview_conflict_copy(4);
+                std::process::exit(0);
+            }
+            assert!(self.started.elapsed() < Duration::from_secs(30));
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(50));
+            return;
+        }
         if smoke_mode.as_deref() == Some("shared-preferences-smoke") {
             if self.frames == 0 {
                 self.app.preview_shared_preferences(false);

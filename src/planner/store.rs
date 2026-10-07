@@ -80,7 +80,10 @@ fn load_connection(conn: &Connection) -> Result<Vec<Item>> {
     });
     Ok(result)
 }
-pub(super) fn save(path: &Path, mut item: Item) -> Result<()> {
+pub(super) fn save(path: &Path, item: Item) -> Result<()> {
+    save_returning(path, item).map(|_| ())
+}
+pub(super) fn save_returning(path: &Path, mut item: Item) -> Result<Item> {
     item.validate()?;
     let mut conn = connect(path, true)?;
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -110,7 +113,7 @@ pub(super) fn save(path: &Path, mut item: Item) -> Result<()> {
         );
     }
     tx.commit()?;
-    Ok(())
+    Ok(item)
 }
 
 /// Delete only the reviewed snapshot; a conflicting row rolls back the whole batch.

@@ -261,6 +261,9 @@ impl Default for Shared {
     }
 }
 impl Shared {
+    pub(super) fn clear_conflict(&mut self) {
+        self.conflict = false;
+    }
     #[cfg(test)]
     pub(super) fn expedite(&mut self) {
         self.checked -= std::time::Duration::from_secs(3);

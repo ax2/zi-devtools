@@ -124,7 +124,7 @@ impl State {
             ui.colored_label(ui.visuals().error_fg_color, &self.shared.notice);
         }
         if self.shared_conflict() {
-            ui.colored_label(ui.visuals().warn_fg_color, "此记录已被另一窗口修改或删除；当前编辑已保留。请复制内容，放弃编辑并重新加载后重试。");
+            ui.colored_label(ui.visuals().warn_fg_color, "此记录已被另一窗口修改或删除；当前编辑已保留。可在底部将修改另存为新记录，或复制内容后重新加载。");
         }
         ui.horizontal(|ui| {
             if ui.selectable_label(!self.calendar, "备忘录").clicked() {

@@ -561,6 +561,23 @@ impl DevToolsApp {
             .center()
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_conflict_copy(&mut self, phase: u8) -> bool {
+        self.page = Page::Notes;
+        self.planner.preview_conflict_copy(phase)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_conflict_copy_position(&self) -> egui::Pos2 {
+        let (rect, clip) = self
+            .planner
+            .preview_conflict_copy_rect
+            .expect("conflict button rendered");
+        assert!(
+            clip.contains_rect(rect),
+            "conflict action must fit fixed dock"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_snooze_smoke(&mut self, phase: u8) -> bool {
         self.page = Page::Home;
         self.planner.preview_snooze_smoke(phase)
