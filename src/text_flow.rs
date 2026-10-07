@@ -15,6 +15,7 @@ const STEPS: usize = 16;
 
 mod files;
 mod material;
+mod picker;
 enum Reply {
     Run(Run),
     Input(String),
@@ -141,7 +142,7 @@ pub struct State {
     input: String,
     definition: Definition,
     #[serde(skip)]
-    query: String,
+    picker: picker::Picker,
     #[serde(skip)]
     picker_open: bool,
     #[serde(skip)]
@@ -402,7 +403,7 @@ impl State {
                 });
                 egui::ScrollArea::vertical().id_salt("text-flow-input").max_height(75.0).show(ui, |ui| { changed |= ui.add(egui::TextEdit::multiline(&mut self.input).desired_rows(3).desired_width(f32::INFINITY).char_limit(LIMIT)).changed(); });
                 ui.horizontal(|ui| {
-                    if ui.button("添加操作…").clicked() { self.picker_open = !self.picker_open; }
+                    if ui.button("添加操作…").clicked() { self.picker_open = !self.picker_open; if self.picker_open { self.picker.focus(); } }
                     let button=ui.add_enabled(self.input.is_empty() && self.definition.steps.is_empty(), egui::Button::new("示例"))
                         .on_hover_text("已有草稿时保留内容；可在新实例中载入示例");
                     #[cfg(feature="ui-preview")] { self.buttons[0]=Some((button.rect,ui.clip_rect())); }
@@ -413,19 +414,13 @@ impl State {
 
                 });
                 if self.picker_open || self.definition.steps.is_empty() {
-                ui.horizontal(|ui| { ui.label("搜索操作"); ui.text_edit_singleline(&mut self.query); });
-                let query=self.query.trim().to_lowercase();
                 let next_kind=self.definition.output_kind().ok();
-                ui.small(format!("下一步输入：{}；类型不匹配时请先导出或解析材料",next_kind.map_or("先修正步骤顺序",Kind::label)));
-                egui::ScrollArea::vertical().id_salt("text-flow-actions").max_height(95.0).show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        for action in ACTIONS.iter().filter(|a| query.is_empty() || a.id.contains(&query) || a.label.to_lowercase().contains(&query)) {
-                            if ui.add_enabled(self.definition.steps.len()<STEPS && next_kind==Some(action.input), egui::Button::new(action.label)).on_hover_text(format!("{} · 操作契约v{} · {} → {}\n{}",action.id,action.version,action.input.label(),action.output.label(),action.note)).clicked() {
-                                self.definition.steps.push(Step{action:action.id.into(),version:action.version}); if action.typed() { self.definition.version=2; } changed=true;
-                            }
-                        }
-                    });
-                });
+                if let Some(action)=self.picker.ui(ui,next_kind,self.definition.steps.len()<STEPS) {
+                    self.definition.steps.push(Step{action:action.id.into(),version:action.version});
+                    if action.typed() { self.definition.version=2; }
+                    self.picker.added();
+                    changed=true;
+                }
                 }
                 let mut edit = None;
                 egui::ScrollArea::vertical().id_salt("text-flow-step-list").max_height(125.0).show(ui, |ui| {
@@ -708,6 +703,37 @@ impl State {
                 assert!(!self.busy());
             }
             _ => panic!("unknown fixture phase"),
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_picker_prepare(&mut self) {
+        self.input = "编号,名称\n001, 本地工具 ".into();
+        self.picker_open = true;
+        self.open();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_picker_check(&self, phase: usize) {
+        assert_eq!(self.input, "编号,名称\n001, 本地工具 ");
+        let expected = &["table.parse_csv", "table.trim", "table.export_schema"][..phase.min(3)];
+        assert_eq!(
+            self.definition
+                .steps
+                .iter()
+                .map(|step| step.action.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        if phase == 4 {
+            assert_eq!(self.job.phase, Phase::Done);
+            let run = self.result.as_ref().unwrap();
+            assert_eq!(run.outputs.len(), 3);
+            let data: crate::workbench::Dataset =
+                serde_json::from_str(run.outputs[2].text().unwrap()).unwrap();
+            assert_eq!(data.rows[0][1], "本地工具");
+            assert!(run.failure.is_none());
+        } else {
+            assert!(!self.busy());
+            assert!(self.result.is_none());
         }
     }
     #[cfg(feature = "ui-preview")]

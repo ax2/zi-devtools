@@ -364,6 +364,15 @@ impl DataState {
         self.text_flow.open();
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_action_picker_prepare(&mut self) {
+        self.text_flow.preview_picker_prepare();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_action_picker_check(&self, phase: usize) {
+        assert_eq!(self.input, "original table draft");
+        self.text_flow.preview_picker_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_idle(&self) {
         assert_eq!(self.text_flow.job.phase, Phase::Idle);
         assert!(!self.busy());

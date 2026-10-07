@@ -759,6 +759,15 @@ impl DevToolsApp {
         self.data_state.preview_workflow_position(index)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_action_picker_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.preview_text_flow_prepare(ctx, light);
+        self.data_state.preview_action_picker_prepare();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_action_picker_check(&self, phase: usize) {
+        self.data_state.preview_action_picker_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_launcher_blocked(&self) {
         assert!(self.launcher_open);
         self.data_state.preview_text_flow_idle();
