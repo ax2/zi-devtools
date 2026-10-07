@@ -107,14 +107,17 @@ impl DataState {
 impl Workspace {
     pub(crate) fn import_table(&mut self, data: Dataset, name: &str) -> Result<()> {
         data.validate_saved()?;
-        let input = data.export(
-            &(0..data.rows.len()).collect::<Vec<_>>(),
-            DataFormat::Json,
-            b',',
-        )?;
+        // An empty JSON array has no header schema. CSV carries the headers
+        // without inventing a row; nonempty tables keep their typed JSON values.
+        let format = if data.rows.is_empty() {
+            DataFormat::Csv
+        } else {
+            DataFormat::Json
+        };
+        let input = data.export(&(0..data.rows.len()).collect::<Vec<_>>(), format, b',')?;
         anyhow::ensure!(
             input.len() <= INPUT_LIMIT,
-            "当前页JSON表示超过2 MiB，未创建实例"
+            "当前页输入表示超过2 MiB，未创建实例"
         );
         let message = format!(
             "已导入SQLite当前页：{}行 / {}列；未运行流程，不代表全表",
@@ -124,7 +127,7 @@ impl Workspace {
         self.create(name)?;
         let state = self.deref_mut();
         state.input = input;
-        state.format = DataFormat::Json;
+        state.format = format;
         state.replace_with_join(data);
         state.message = message;
         Ok(())
@@ -545,6 +548,48 @@ mod tests {
             assert!(std::time::Instant::now() < deadline, "worker timed out");
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
+    }
+    #[test]
+    fn empty_sqlite_page_reparses_after_snapshot_restore_without_losing_headers() {
+        let mut workspace = Workspace::new(
+            std::env::temp_dir().join(format!("zi-empty-page-{}.db", uuid::Uuid::new_v4())),
+        );
+        workspace.input = "original draft".into();
+        let source = workspace.active_id().to_owned();
+        let data = Dataset::from_parts(
+            vec![
+                "中文🦀".into(),
+                "comma,name".into(),
+                "quote\"name".into(),
+                "line\nname".into(),
+            ],
+            vec![],
+        )
+        .unwrap();
+        workspace
+            .import_table(data.clone(), "empty SQLite page")
+            .unwrap();
+        assert!(workspace.format == DataFormat::Csv);
+        let snapshot = workspace.snapshot().unwrap();
+        let mut restored = DataState::restore(&snapshot).unwrap();
+        restored.parse();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while restored.busy() {
+            restored.poll();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(
+            restored.parse_job.phase,
+            Phase::Done,
+            "{}",
+            restored.message
+        );
+        assert_eq!(restored.dataset.as_ref(), Some(&data));
+        assert!(restored.visible.is_empty());
+        workspace.select(&source).unwrap();
+        assert_eq!(workspace.input, "original draft");
+        assert_eq!(workspace.instances.len(), 2);
     }
     #[test]
     fn independent_work_continues_and_saved_snapshot_restores_without_execution() {

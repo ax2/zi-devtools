@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.70",
+  "sourceCatalogVersion": "0.82.0-dev.71",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -250,7 +250,7 @@
     {
       "sourceToolId": "data",
       "title": "CSV / JSON 数据工作台",
-      "sourceVersion": "1.4.0",
+      "sourceVersion": "1.4.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
