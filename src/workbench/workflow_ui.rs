@@ -52,6 +52,12 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn modal_open(&self) -> bool {
+        self.files.review.is_some()
+            || self.files.tool_review.is_some()
+            || self.inspect.open
+            || self.output.modal_open()
+    }
     pub(super) fn has_content(&self) -> bool {
         !self.definition.steps.is_empty()
             || self.files.review.is_some()

@@ -766,6 +766,19 @@ impl DevToolsApp {
         self.open_startup_tool("text-flow");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_focused_view_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.preview_text_flow_prepare(ctx, light);
+        self.data_state.preview_workflow();
+        self.data_state.input = "original table draft".into();
+        self.data_state.show_text_flow();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_focused_view_check(&self, id: &str) {
+        assert_eq!(self.data_state.active_tool_id(), id);
+        assert_eq!(self.data_state.input, "original table draft");
+        assert!(!self.data_state.busy());
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_recipe_library_prepare(
         &mut self,
         ctx: &egui::Context,
@@ -5238,10 +5251,18 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.start_page(ui));
                 }
                 Page::Data => {
+                    if let Some(id) = self.data_state.view_toolbar(ui) {
+                        self.visit(id);
+                    }
                     self.data_state
                         .workflow_folder_settings(&mut self.preferences, &self.preferences_path);
+                    let scroll_id = (
+                        "data-page",
+                        self.data_state.active_id().to_owned(),
+                        self.data_state.active_tool_id().to_owned(),
+                    );
                     egui::ScrollArea::vertical()
-                        .id_salt("data-page")
+                        .id_salt(scroll_id)
                         .show(ui, |ui| self.data_state.ui(ui, ctx));
                     self.data_state
                         .workflow_folder_settings(&mut self.preferences, &self.preferences_path);

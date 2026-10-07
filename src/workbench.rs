@@ -272,6 +272,44 @@ pub struct DataState {
     numeric_selector: numeric::Selector,
 }
 impl DataState {
+    pub fn dialog_pending(&self) -> bool {
+        self.text_flow.modal_open() || self.workflow.modal_open() || self.sqlite_export.modal_open()
+    }
+    pub fn switch_view(&mut self, id: &str) -> bool {
+        if self.dialog_pending() || !WORKBENCH_VIEWS.iter().any(|(key, _)| *key == id) {
+            return false;
+        }
+        match id {
+            "text-flow" => self.show_text_flow(),
+            "pipeline" => self.show_workflow(),
+            "data-transform" => self.show_transform(),
+            "csv-merge" => self.show_join(),
+            "data-sqlite-export" => self.show_sqlite_export(),
+            _ => self.set_active_tool(id),
+        }
+        true
+    }
+    pub fn view_toolbar(&mut self, ui: &mut egui::Ui) -> Option<&'static str> {
+        let mut requested = None;
+        ui.add_enabled_ui(!self.dialog_pending(), |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.weak("工作台");
+                for &(id, label) in WORKBENCH_VIEWS {
+                    let response = ui.selectable_label(self.active_tool_id() == id, label);
+                    #[cfg(feature = "ui-preview")]
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::new(("workbench-view", id)), response.rect)
+                    });
+                    if response.clicked() {
+                        requested = Some(id);
+                    }
+                }
+            });
+        });
+        ui.small("切换保留当前实例的草稿、结果和后台任务；审核窗口关闭后可切换。");
+        ui.separator();
+        requested.filter(|id| self.switch_view(id))
+    }
     pub fn active_tool_id(&self) -> &str {
         if self.active_tool.is_empty() {
             "data"
@@ -474,16 +512,60 @@ impl DataState {
         self.poll_workflow();
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let view = self.active_tool_id().to_owned();
+        if view == "text-flow" {
+            heading(
+                ui,
+                "工具流程",
+                "串联本机工具 · 输入、步骤与结果保留在当前工作实例",
+            );
+            self.text_flow.ui(ui);
+            egui::CollapsingHeader::new("配方库 · 文件夹 / 收藏 / 最近").id_salt("typed-recipe-library").show(ui,|ui|{ui.small("表格流程与工具配方共用目录；用Ctrl K搜索、收藏或查看最近。载入仍需审核，不自动执行。");self.workflow_library_ui(ui);});
+            return;
+        }
+        if view == "workspace-sessions" {
+            heading(
+                ui,
+                "工作实例",
+                "在上方管理独立草稿，保存快照或打开已保存实例",
+            );
+            ui.label("每个实例独立保留输入、工具配置与后台任务。选好实例后，使用顶部工作台切换栏继续操作。");
+            return;
+        }
+        let title = WORKBENCH_VIEWS
+            .iter()
+            .find(|(id, _)| *id == view)
+            .map(|(_, label)| *label)
+            .unwrap_or("数据工作台");
         heading(
             ui,
-            "数据工作台",
+            title,
             "CSV / TSV、JSON 对象数组或列结构 JSON · 筛选、排序与导出",
         );
-        self.text_flow.ui(ui);
-        if self.active_tool_id() == "text-flow" {
-            egui::CollapsingHeader::new("配方库 · 文件夹 / 收藏 / 最近").id_salt("typed-recipe-library").show(ui,|ui|{ui.small("表格流程与工具配方共用目录；用Ctrl K搜索、收藏或查看最近。载入仍需审核，不自动执行。");self.workflow_library_ui(ui);});
+        if view == "data" {
+            self.input_ui(ui);
+        } else {
+            egui::CollapsingHeader::new("共享表格输入")
+                .id_salt("shared-table-input")
+                .default_open(self.dataset.is_none())
+                .show(ui, |ui| self.input_ui(ui));
         }
-
+        match view.as_str() {
+            "data-transform" => self.transform_ui(ui),
+            "csv-merge" => self.join_ui(ui, ctx),
+            "pipeline" => self.workflow_ui(ui),
+            "data-sqlite-export" => self
+                .sqlite_export
+                .ui(ui, self.dataset.as_ref(), &self.visible),
+            _ => {}
+        }
+        self.table_ui(ui, ctx);
+        if !self.message.is_empty() {
+            ui.add_space(8.0);
+            ui.label(&self.message);
+        }
+    }
+    fn input_ui(&mut self, ui: &mut egui::Ui) {
         self.numeric_selector.toolbar(
             ui,
             self.dataset.as_ref(),
@@ -556,9 +638,8 @@ impl DataState {
                 .weak(),
             );
         });
-        self.transform_ui(ui);
-        self.join_ui(ui, ctx);
-        self.workflow_ui(ui);
+    }
+    fn table_ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let numeric_busy = self.busy();
         if let Some(data) = &self.dataset {
             ui.add_space(14.0);
@@ -682,12 +763,99 @@ impl DataState {
                     );
                 });
         }
-        self.sqlite_export
-            .ui(ui, self.dataset.as_ref(), &self.visible);
-        if !self.message.is_empty() {
-            ui.add_space(8.0);
-            ui.label(&self.message);
+    }
+}
+
+const WORKBENCH_VIEWS: &[(&str, &str)] = &[
+    ("data", "数据工作台"),
+    ("data-transform", "表格转换"),
+    ("csv-merge", "表格合并"),
+    ("pipeline", "表格流水线"),
+    ("data-sqlite-export", "SQLite 导出"),
+    ("text-flow", "工具流程"),
+    ("workspace-sessions", "工作实例"),
+];
+
+#[cfg(test)]
+mod focused_views_tests {
+    use super::*;
+
+    #[test]
+    fn switching_preserves_drafts_parsed_snapshot_results_and_live_worker() {
+        let mut state = DataState::default();
+        state.input = "id,name\n001,中文".into();
+        state.dataset = Some(Dataset::parse(&state.input, DataFormat::Csv, b',').unwrap());
+        state.visible = vec![0];
+        state.output = "previous export".into();
+        let snapshot = |state: &DataState| {
+            let mut value = serde_json::to_value(state).unwrap();
+            // Existing persisted expansion flags are presentation, not drafts.
+            for section in ["join", "transform"] {
+                value[section].as_object_mut().unwrap().remove("force_open");
+            }
+            value
+        };
+        let before = snapshot(&state);
+        let (tx, rx) = mpsc::channel();
+        state.receiver = Some(rx);
+        for &(id, _) in WORKBENCH_VIEWS {
+            assert!(state.switch_view(id));
+            assert_eq!(state.active_tool_id(), id);
+            assert_eq!(snapshot(&state), before);
+            assert!(state.receiver.is_some());
+            assert_eq!(state.visible, vec![0]);
         }
+        assert!(!state.switch_view("unknown"));
+        tx.send(Ok(state.dataset.clone().unwrap())).unwrap();
+        state.poll();
+        assert!(state.receiver.is_none());
+        assert_eq!(state.dataset.as_ref().unwrap().rows.len(), 1);
+    }
+
+    #[test]
+    fn pending_recipe_review_blocks_switch_until_decision_is_closed() {
+        let mut state = DataState::default();
+        state.show_workflow();
+        state.workflow.files.review = Some(workflow::Definition {
+            version: 2,
+            name: "review".into(),
+            steps: vec![],
+            output: None,
+        });
+        assert!(state.dialog_pending());
+        assert!(!state.switch_view("text-flow"));
+        assert_eq!(state.active_tool_id(), "pipeline");
+        state.workflow.files.review = None;
+        assert!(state.switch_view("text-flow"));
+    }
+
+    #[test]
+    fn tool_flow_view_does_not_render_unrelated_table_controls() {
+        let ctx = egui::Context::default();
+        let mut state = DataState::default();
+        state.show_text_flow();
+        let result = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| state.ui(ui, ctx));
+        });
+        fn collect(shape: &egui::Shape, text: &mut String) {
+            match shape {
+                egui::Shape::Text(shape) => text.push_str(shape.galley.text()),
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        collect(shape, text);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut text = String::new();
+        for shape in result.shapes {
+            collect(&shape.shape, &mut text);
+        }
+        assert!(text.contains("工具流程"));
+        assert!(!text.contains("解析数据"));
+        assert!(!text.contains("另存为 SQLite"));
+        assert!(!text.contains("筛选所有列"));
     }
 }
 

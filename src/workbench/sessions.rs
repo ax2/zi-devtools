@@ -204,8 +204,7 @@ impl Workspace {
         self.save_confirm
             || self.close_confirm.is_some()
             || self.delete_confirm.is_some()
-            || self.text_flow.modal_open()
-            || self.workflow.files.tool_review.is_some()
+            || self.dialog_pending()
     }
     pub fn open_library(&mut self) {
         if !self.operation_pending() {

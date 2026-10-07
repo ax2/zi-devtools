@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.75",
+  "sourceCatalogVersion": "0.82.0-dev.76",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -250,7 +250,7 @@
     {
       "sourceToolId": "data",
       "title": "CSV / JSON 数据工作台",
-      "sourceVersion": "1.6.0",
+      "sourceVersion": "1.7.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -340,7 +340,7 @@
     {
       "sourceToolId": "data-transform",
       "title": "数据列变换",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -350,7 +350,7 @@
     {
       "sourceToolId": "csv-merge",
       "title": "CSV 合并与关联",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -620,7 +620,7 @@
     {
       "sourceToolId": "pipeline",
       "title": "可组合数据管线",
-      "sourceVersion": "0.14.0",
+      "sourceVersion": "0.15.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -1350,7 +1350,7 @@
     {
       "sourceToolId": "workspace-sessions",
       "title": "项目空间与工作实例",
-      "sourceVersion": "0.1.0",
+      "sourceVersion": "0.2.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -1430,7 +1430,7 @@
     {
       "sourceToolId": "data-sqlite-export",
       "title": "表格另存 SQLite",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1540,7 +1540,7 @@
     {
       "sourceToolId": "text-flow",
       "title": "文本 / 表格流程",
-      "sourceVersion": "1.3.0",
+      "sourceVersion": "1.4.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",

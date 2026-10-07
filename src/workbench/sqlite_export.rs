@@ -493,6 +493,9 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn modal_open(&self) -> bool {
+        self.review.is_some()
+    }
     #[cfg(feature = "ui-preview")]
     pub(super) fn preview_review(&mut self, data: &Dataset, indices: &[usize], path: PathBuf) {
         self.path = path.display().to_string();

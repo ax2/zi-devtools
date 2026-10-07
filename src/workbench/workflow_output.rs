@@ -252,6 +252,9 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn modal_open(&self) -> bool {
+        self.review.is_some()
+    }
     pub(super) fn take_open_request(&mut self) -> Option<PathBuf> {
         self.open_request.take()
     }
