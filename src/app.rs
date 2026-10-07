@@ -3,6 +3,10 @@ mod handoff;
 mod launcher;
 mod navigation;
 mod registry;
+mod service_editor;
+#[cfg(feature = "ui-preview")]
+mod service_preview;
+mod services;
 mod task_center;
 
 use registry::{Page, ToolEntry, catalog};
@@ -137,6 +141,7 @@ impl ServiceFilter {
 enum BackgroundEvent {
     Statuses(Vec<ServiceStatus>),
     Action(Result<ActionResult, String>),
+    ServiceAction(String, Result<ActionResult, String>),
     Logs(String, Result<String, String>),
     ConfigPreview(String, Result<String, String>),
     RestoreFinished(String),
@@ -158,6 +163,10 @@ pub struct DevToolsApp {
     preview_panel_frames: usize,
     #[cfg(feature = "ui-preview")]
     preview_sidebar: std::collections::HashMap<&'static str, (egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    preview_services: std::collections::HashMap<&'static str, (egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    preview_tray_capture: Option<PathBuf>,
     hotkey: crate::hotkey::Service,
     hotkey_edit: crate::hotkey::Setting,
     hotkey_status: String,
@@ -169,6 +178,7 @@ pub struct DevToolsApp {
     quick_had_focus: bool,
     quick_opened: Instant,
     quick_tab: String,
+    quick_context: bool,
     quick_position: Option<egui::Pos2>,
     quick_size: egui::Vec2,
     intake: crate::intake::State,
@@ -180,6 +190,7 @@ pub struct DevToolsApp {
     selected_service: Option<String>,
     search: String,
     service_filter: ServiceFilter,
+    service_pending: std::collections::HashMap<String, &'static str>,
     event_tx: Sender<BackgroundEvent>,
     event_rx: Receiver<BackgroundEvent>,
     refresh_inflight: bool,
@@ -189,6 +200,13 @@ pub struct DevToolsApp {
     startup_warning: Option<String>,
     log_view: Option<String>,
     log_text: String,
+    service_editor: service_editor::State,
+    log_filter: String,
+    log_follow: bool,
+    log_auto: bool,
+    log_inflight: bool,
+    log_clear_confirm: bool,
+    last_logs: Instant,
     config_view: Option<(String, String)>,
     config_text: String,
     tool_state: ToolState,
@@ -688,6 +706,7 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            444..=449 => self.preview_service_scene(ctx, scene, &fixture),
             432..=435 => self.preview_plot_fixture(true),
             436..=439 => {
                 self.page = Page::Calculator;
@@ -1863,10 +1882,14 @@ impl DevToolsApp {
             preview_panel_frames: 0,
             #[cfg(feature = "ui-preview")]
             preview_sidebar: Default::default(),
+            #[cfg(feature = "ui-preview")]
+            preview_services: Default::default(),
+            #[cfg(feature = "ui-preview")]
+            preview_tray_capture: None,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,
-            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), tasks: Default::default(), handoff: None,
+            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_context: false, quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), tasks: Default::default(), handoff: None,
             manager,
             tray,
             page: Page::Home,
@@ -1874,6 +1897,7 @@ impl DevToolsApp {
             selected_service: None,
             search: String::new(),
             service_filter: ServiceFilter::All,
+            service_pending: Default::default(),
             event_tx,
             event_rx,
             refresh_inflight: false,
@@ -1887,6 +1911,13 @@ impl DevToolsApp {
             }),
             log_view: None,
             log_text: String::new(),
+            service_editor: service_editor::State::default(),
+            log_filter: String::new(),
+            log_follow: true,
+            log_auto: true,
+            log_inflight: false,
+            log_clear_confirm: false,
+            last_logs: Instant::now(),
             config_view: None,
             config_text: String::new(),
             tool_state: ToolState::default(),
@@ -1979,6 +2010,10 @@ impl DevToolsApp {
     }
 
     fn run_action(&mut self, service_id: String, action: &'static str) {
+        if self.service_pending.contains_key(&service_id) {
+            return;
+        }
+        self.service_pending.insert(service_id.clone(), action);
         let manager = Arc::clone(&self.manager);
         let tx = self.event_tx.clone();
         self.notification = format!("正在{} {}…", action_label(action), service_id);
@@ -1991,7 +2026,7 @@ impl DevToolsApp {
                 _ => unreachable!(),
             }
             .map_err(|error| format!("{service_id}: {error}"));
-            let _ = tx.send(BackgroundEvent::Action(result));
+            let _ = tx.send(BackgroundEvent::ServiceAction(service_id, result));
         });
     }
 
@@ -2009,8 +2044,17 @@ impl DevToolsApp {
     }
 
     fn request_logs(&mut self, service_id: String) {
+        if self.log_view.as_deref() == Some(&service_id) && self.log_inflight {
+            return;
+        }
+        if self.log_view.as_deref() != Some(&service_id) {
+            self.log_text = "正在读取日志…".to_owned();
+            self.log_filter.clear();
+            self.log_clear_confirm = false;
+        }
         self.log_view = Some(service_id.clone());
-        self.log_text = "正在读取日志…".to_owned();
+        self.log_inflight = true;
+        self.last_logs = Instant::now();
         let manager = Arc::clone(&self.manager);
         let tx = self.event_tx.clone();
         std::thread::spawn(move || {
@@ -2047,6 +2091,10 @@ impl DevToolsApp {
     fn drain_events(&mut self, ctx: &egui::Context) {
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
+                BackgroundEvent::ServiceAction(id, result) => {
+                    self.service_pending.remove(&id);
+                    let _ = self.event_tx.send(BackgroundEvent::Action(result));
+                }
                 BackgroundEvent::Statuses(statuses) => {
                     self.refresh_inflight = false;
                     if let Some(tray) = &self.tray {
@@ -2075,6 +2123,7 @@ impl DevToolsApp {
                 }
                 BackgroundEvent::Logs(service_id, result) => {
                     if self.log_view.as_deref() == Some(&service_id) {
+                        self.log_inflight = false;
                         self.log_text = result.unwrap_or_else(|error| format!("读取失败：{error}"));
                     }
                 }
@@ -2097,6 +2146,7 @@ impl DevToolsApp {
                     TrayAction::RecorderTogglePause => self.recorder.toggle_pause(),
                     TrayAction::RecorderStop => self.recorder.request_stop(),
                     TrayAction::QuickPanel => self.open_quick(ctx),
+                    TrayAction::ContextPanel => self.open_tray_context(ctx),
                     TrayAction::ShowWindow => {
                         self.quick_open = false;
                     }
@@ -2455,335 +2505,6 @@ impl DevToolsApp {
         {
             self.open_entry(&entry);
         }
-    }
-
-    fn services_page(&mut self, ui: &mut egui::Ui) {
-        let p = self.colors;
-        let running = self
-            .statuses
-            .iter()
-            .filter(|status| status.state == ServiceState::Running)
-            .count();
-        let external = self
-            .statuses
-            .iter()
-            .filter(|status| {
-                matches!(
-                    status.state,
-                    ServiceState::External | ServiceState::PortOpen
-                )
-            })
-            .count();
-        let stopped = self.statuses.len().saturating_sub(running + external);
-
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.heading(RichText::new("本地服务").size(28.0));
-                ui.label(RichText::new("管理开发环境进程、健康状态与日志").color(p.muted));
-            });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("全部停止").clicked() {
-                    self.run_all(false);
-                }
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new("全部启动").color(Color32::WHITE))
-                            .fill(p.accent),
-                    )
-                    .clicked()
-                {
-                    self.run_all(true);
-                }
-                if ui.button("↻ 刷新").clicked() {
-                    self.last_refresh = Instant::now() - Duration::from_secs(30);
-                }
-            });
-        });
-        ui.add_space(18.0);
-        ui.horizontal(|ui| {
-            metric(ui, "托管运行", running, p.green);
-            metric(ui, "外部/占用", external, p.amber);
-            metric(ui, "已停止", stopped, p.muted);
-            metric(ui, "服务总数", self.statuses.len(), p.accent);
-        });
-        ui.add_space(16.0);
-        if let Some(warning) = self.startup_warning.clone() {
-            egui::Frame::new()
-                .fill(Color32::from_rgb(69, 55, 34))
-                .corner_radius(8.0)
-                .inner_margin(12.0)
-                .show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new(warning).color(Color32::WHITE));
-                        if ui.small_button("关闭提示").clicked() {
-                            self.startup_warning = None;
-                        }
-                    });
-                });
-            ui.add_space(12.0);
-        }
-        if let Some(error) = self.config_error.clone() {
-            egui::Frame::new()
-                .fill(Color32::from_rgb(69, 37, 44))
-                .corner_radius(8.0)
-                .inner_margin(12.0)
-                .show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(format!("服务配置无法加载：{error}"));
-                        if ui.button("打开设置").clicked() {
-                            self.page = Page::Settings;
-                        }
-                    });
-                });
-            ui.add_space(12.0);
-        }
-        if !self.notification.is_empty() {
-            egui::Frame::new()
-                .fill(if self.notification_error {
-                    Color32::from_rgb(69, 37, 44)
-                } else {
-                    Color32::from_rgb(27, 65, 54)
-                })
-                .corner_radius(8.0)
-                .inner_margin(12.0)
-                .show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new(&self.notification).color(Color32::WHITE));
-                        if ui.small_button("关闭提示").clicked() {
-                            self.notification.clear();
-                        }
-                    });
-                });
-            ui.add_space(12.0);
-        }
-        ui.horizontal(|ui| {
-            ui.label("筛选服务");
-            ui.add_sized(
-                [420.0, 32.0],
-                egui::TextEdit::singleline(&mut self.search).hint_text("名称、标签或端口"),
-            );
-        });
-        ui.horizontal(|ui| {
-            for filter in ServiceFilter::ALL {
-                if ui
-                    .selectable_label(self.service_filter == filter, filter.label())
-                    .clicked()
-                {
-                    self.service_filter = filter;
-                }
-            }
-        });
-
-        let query = self.search.to_lowercase();
-        let statuses: Vec<ServiceStatus> = self
-            .statuses
-            .iter()
-            .filter(|status| {
-                self.service_filter.matches(status.state, status.managed)
-                    && (query.is_empty()
-                        || status.name.to_lowercase().contains(&query)
-                        || status.id.to_lowercase().contains(&query)
-                        || status
-                            .tags
-                            .iter()
-                            .any(|tag| tag.to_lowercase().contains(&query))
-                        || status
-                            .port
-                            .is_some_and(|port| port.to_string().contains(&query)))
-            })
-            .cloned()
-            .collect();
-        ui.label(
-            RichText::new(format!(
-                "显示 {} / {} 项",
-                statuses.len(),
-                self.statuses.len()
-            ))
-            .small()
-            .color(p.muted),
-        );
-        ui.add_space(8.0);
-        if statuses.is_empty() {
-            ui.add_space(24.0);
-            ui.label(
-                RichText::new(if self.statuses.is_empty() {
-                    "没有加载到服务。请在“设置”中检查配置文件。"
-                } else {
-                    "没有匹配的服务，请调整筛选词。"
-                })
-                .color(p.muted),
-            );
-        }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for status in statuses {
-                self.service_card(ui, status);
-                ui.add_space(10.0);
-            }
-        });
-    }
-
-    fn service_card(&mut self, ui: &mut egui::Ui, status: ServiceStatus) {
-        let p = self.colors;
-        egui::Frame::new()
-            .fill(p.card)
-            .corner_radius(12.0)
-            .inner_margin(16.0)
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    let state_color = if status.managed && status.health.ok == Some(false) {
-                        p.amber
-                    } else {
-                        match status.state {
-                            ServiceState::Running => p.green,
-                            ServiceState::External | ServiceState::PortOpen => p.amber,
-                            ServiceState::Stopped => p.muted,
-                        }
-                    };
-                    ui.label(RichText::new("●").color(state_color).size(17.0));
-                    ui.vertical(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(&status.name).size(17.0).strong());
-                            ui.label(
-                                RichText::new(status.display_state())
-                                    .color(state_color)
-                                    .small(),
-                            );
-                            for tag in status.tags.iter().take(3) {
-                                ui.label(RichText::new(tag).color(p.muted).small());
-                            }
-                        });
-                        if !status.description.is_empty() {
-                            ui.label(RichText::new(&status.description).color(p.muted));
-                        }
-                    });
-                });
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    if status.managed {
-                        if ui.button("停止").clicked() {
-                            self.run_action(status.id.clone(), "stop");
-                        }
-                        if ui.button("重启").clicked() {
-                            self.run_action(status.id.clone(), "restart");
-                        }
-                    } else if status.state == ServiceState::Stopped
-                        && ui
-                            .add(
-                                egui::Button::new(RichText::new("启动").color(Color32::WHITE))
-                                    .fill(p.accent),
-                            )
-                            .clicked()
-                    {
-                        self.run_action(status.id.clone(), "start");
-                    }
-                    if matches!(
-                        status.state,
-                        ServiceState::External | ServiceState::PortOpen
-                    ) {
-                        ui.label(
-                            RichText::new("外部进程占用：不执行启停")
-                                .small()
-                                .color(p.amber),
-                        );
-                    }
-                    if ui.button("查看日志").clicked() {
-                        self.request_logs(status.id.clone());
-                    }
-                });
-                ui.horizontal_wrapped(|ui| {
-                    if let Some(port) = status.port {
-                        ui.label(RichText::new(format!("端口 {port}")).color(p.muted));
-                    }
-                    if let Some(pid) = status.pid {
-                        ui.label(RichText::new(format!("PID {pid}")).color(p.muted));
-                    }
-                    if status.managed {
-                        ui.label(RichText::new("本程序托管").color(p.green));
-                    } else if status.port_open == Some(true) {
-                        ui.label(RichText::new("检测到外部监听").color(p.amber));
-                    }
-                    if let Some(timeout) = status.graceful_stop_timeout_ms {
-                        ui.label(RichText::new(format!("优雅停止 {timeout} ms")).color(p.muted));
-                    }
-                    if let Some(code) = status.health.status_code {
-                        ui.label(RichText::new(format!("HTTP {code}")).color(p.muted));
-                    }
-                    if let Some(ms) = status.health.elapsed_ms {
-                        ui.label(RichText::new(format!("{ms} ms")).color(p.muted));
-                    }
-                    ui.label(RichText::new(status.repo.display().to_string()).color(p.muted));
-                });
-
-                let expanded = self.selected_service.as_deref() == Some(&status.id);
-                if ui
-                    .small_button(if expanded {
-                        "收起详情"
-                    } else {
-                        "查看详情"
-                    })
-                    .clicked()
-                {
-                    self.selected_service = if expanded {
-                        None
-                    } else {
-                        Some(status.id.clone())
-                    };
-                }
-                if expanded {
-                    ui.separator();
-                    ui.label(RichText::new("启动命令").small().color(p.muted));
-                    ui.monospace(&status.command);
-                    if let Some(url) = &status.health_url {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("健康检查").small().color(p.muted));
-                            if ui.link(url).clicked() {
-                                let _ = open::that(url);
-                            }
-                        });
-                    }
-                    ui.label(
-                        RichText::new(format!(
-                            "日志 {} · {} bytes · 环境变量 {} 项（值已隐藏）",
-                            status.log_path.display(),
-                            status.log_size,
-                            status.env_count
-                        ))
-                        .small()
-                        .color(p.muted),
-                    );
-                    if let Some(message) = &status.health.message {
-                        ui.label(RichText::new(message).small().color(p.muted));
-                    }
-                    if !status.config_files.is_empty() {
-                        ui.label(RichText::new("配置文件").small().color(p.muted));
-                        for file in &status.config_files {
-                            ui.horizontal(|ui| {
-                                let marker = if file.exists { "●" } else { "○" };
-                                ui.label(
-                                    RichText::new(format!(
-                                        "{marker} {} · {} bytes",
-                                        file.configured_path, file.size
-                                    ))
-                                    .small()
-                                    .color(if file.exists { p.muted } else { p.red }),
-                                );
-                                if file.exists && ui.small_button("查看").clicked() {
-                                    self.request_config_preview(
-                                        status.id.clone(),
-                                        file.configured_path.clone(),
-                                    );
-                                }
-                                if file.exists && ui.small_button("打开所在目录").clicked() {
-                                    if let Some(parent) = file.absolute_path.parent() {
-                                        let _ = open::that(parent);
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-            });
     }
 
     fn small_tools_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -3802,7 +3523,30 @@ impl DevToolsApp {
 
     fn overlays(&mut self, ctx: &egui::Context) {
         let p = self.colors;
+        if let Some(result) = self.service_editor.poll() {
+            self.notification_error = result.is_err();
+            self.notification = result.err().unwrap_or_else(|| "服务定义已更新".into());
+            if !self.notification_error {
+                self.config_error = None;
+                match TrayController::new(self.manager.config_snapshot().services.values()) {
+                    Ok(tray) => self.tray = Some(tray),
+                    Err(e) => {
+                        self.notification = format!("定义已保存，托盘重建失败：{e}");
+                        self.notification_error = true;
+                    }
+                }
+                self.last_refresh = Instant::now() - Duration::from_secs(30);
+                self.request_refresh();
+            }
+        }
+        self.service_editor.ui(ctx, &self.manager);
         if let Some(service_id) = self.log_view.clone() {
+            if self.log_auto
+                && self.last_logs.elapsed() >= Duration::from_secs(2)
+                && !self.log_inflight
+            {
+                self.request_logs(service_id.clone());
+            }
             let log_path = self
                 .statuses
                 .iter()
@@ -3813,13 +3557,27 @@ impl DevToolsApp {
                 .open(&mut open)
                 .default_size([900.0, 580.0])
                 .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         if ui.button("刷新").clicked() {
                             self.request_logs(service_id.clone());
                         }
-                        if ui.button("清空日志").clicked() {
-                            self.clear_logs(service_id.clone());
-                            self.log_text.clear();
+                        if ui
+                            .button(if self.log_clear_confirm {
+                                "确认清空"
+                            } else {
+                                "清空日志…"
+                            })
+                            .clicked()
+                        {
+                            if self.log_clear_confirm {
+                                self.clear_logs(service_id.clone());
+                                self.log_clear_confirm = false;
+                            } else {
+                                self.log_clear_confirm = true;
+                            }
+                        }
+                        if self.log_clear_confirm && ui.small_button("取消清空").clicked() {
+                            self.log_clear_confirm = false;
                         }
                         if ui.button("复制").clicked() {
                             ctx.copy_text(self.log_text.clone());
@@ -3837,6 +3595,19 @@ impl DevToolsApp {
                             self.notification_error = true;
                         }
                     });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.checkbox(&mut self.log_auto, "自动刷新（2 秒）");
+                        ui.checkbox(&mut self.log_follow, "跟随末尾");
+                        if self.log_inflight {
+                            ui.spinner();
+                        }
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.log_filter)
+                                .hint_text("筛选日志行…")
+                                .char_limit(160)
+                                .desired_width(200.0),
+                        );
+                    });
                     ui.label(
                         RichText::new("预览末尾最多 5000 行 / 4 MiB；原始文件不截断")
                             .small()
@@ -3844,12 +3615,25 @@ impl DevToolsApp {
                     );
                     ui.separator();
                     egui::ScrollArea::both()
+                        .stick_to_bottom(self.log_follow)
                         .max_height(480.0)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
+                            let filtered;
+                            let text = if self.log_filter.trim().is_empty() {
+                                &self.log_text
+                            } else {
+                                let query = self.log_filter.to_lowercase();
+                                filtered = self
+                                    .log_text
+                                    .lines()
+                                    .filter(|line| line.to_lowercase().contains(&query))
+                                    .collect::<Vec<_>>()
+                                    .join("\n");
+                                &filtered
+                            };
                             ui.add(
-                                egui::Label::new(RichText::new(&self.log_text).monospace())
-                                    .selectable(true),
+                                egui::Label::new(RichText::new(text).monospace()).selectable(true),
                             );
                         });
                 });
@@ -3938,8 +3722,8 @@ fn start_tray_bridge(
             }
             for action in TrayController::poll_actions() {
                 match action {
-                    TrayAction::QuickPanel => {
-                        let _ = tx.send(BackgroundEvent::TrayNavigate(TrayAction::QuickPanel));
+                    TrayAction::QuickPanel | TrayAction::ContextPanel => {
+                        let _ = tx.send(BackgroundEvent::TrayNavigate(action));
                         wake_main_window(window_handle, &ctx);
                     }
                     TrayAction::ShowWindow => {
@@ -3984,6 +3768,7 @@ fn start_tray_bridge(
                                     execute_batch(&manager, matches!(action, TrayAction::StartAll))
                                 }
                                 TrayAction::QuickPanel
+                                | TrayAction::ContextPanel
                                 | TrayAction::ShowWindow
                                 | TrayAction::OpenTool(_)
                                 | TrayAction::Search
@@ -4428,6 +4213,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.saving()
                 || self.clipboard.has_pending()
                 || self.calculator.has_work()
+                || self.service_editor.has_work()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
@@ -4462,6 +4248,7 @@ impl eframe::App for DevToolsApp {
                 || self.clock.saving()
                 || self.clipboard.has_pending()
                 || self.calculator.has_work()
+                || self.service_editor.has_work()
                 || self.delta_update.has_work()
                 || self.updates.download_has_work()
                 || self.portable_update.busy()
@@ -4489,8 +4276,9 @@ impl eframe::App for DevToolsApp {
                     if (self.clock.has_work() || self.clock.saving()) && ui.button("返回时钟工作台").clicked(){self.workspace_exit_confirm=false;self.page=Page::Clock;}
                     if self.prefix.has_work(&self.preferences.command_bindings) && ui.button("返回快捷指令保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Commands; }
                     if self.data_state.has_work() && ui.button("返回数据工作台保存").clicked() { self.workspace_exit_confirm=false; self.page=Page::Data; }
+                    if self.service_editor.has_work() && ui.button("返回本地服务保存").clicked() {self.workspace_exit_confirm=false;self.page=Page::Services;}
                     if self.planner.has_unsaved() && ui.button("返回备忘 / 日程保存").clicked() { self.workspace_exit_confirm=false; self.page=if self.planner.calendar { Page::Calendar } else { Page::Notes }; }
-                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.clipboard.saving() && !self.calculator.busy() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
+                    if ui.add_enabled(!self.data_state.has_active_tasks() && !self.planner.saving() && !self.prefix.files.busy() && !self.clock.saving() && !self.clipboard.saving() && !self.calculator.busy() && !self.service_editor.busy() && !self.images.screenshot_busy() && !self.delta_update.busy() && !self.updates.download_busy() && !self.portable_update.busy() && !self.msi_update.busy(), egui::Button::new("放弃未保存修改并退出")).clicked() {
                         self.workspace_exit_confirm=false;self.quit_requested=true;ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });

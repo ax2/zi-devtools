@@ -34,6 +34,7 @@ pub enum TrayTool {
 pub enum TrayAction {
     ShowWindow,
     QuickPanel,
+    ContextPanel,
     Search,
     Settings,
     OpenEntry(String),
@@ -158,6 +159,7 @@ fn fill_shortcuts(
 
 pub struct TrayController {
     _icon: TrayIcon,
+    _menu: Menu,
     navigation: Submenu,
     favorites: Submenu,
     recent: Submenu,
@@ -263,7 +265,6 @@ impl TrayController {
         ])?;
 
         let icon = TrayIconBuilder::new()
-            .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)
             .with_tooltip(format!("Zi DevTools v{}", env!("CARGO_PKG_VERSION")))
             .with_icon(make_icon()?)
@@ -271,6 +272,7 @@ impl TrayController {
             .context("创建 Windows 托盘图标失败")?;
         Ok(Self {
             _icon: icon,
+            _menu: menu,
             navigation,
             favorites,
             recent,
@@ -360,6 +362,11 @@ impl TrayController {
         let mut actions = Vec::new();
         while let Ok(event) = TrayIconEvent::receiver().try_recv() {
             match event {
+                TrayIconEvent::Click {
+                    button: MouseButton::Right,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } => actions.push(TrayAction::ContextPanel),
                 TrayIconEvent::Click {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,

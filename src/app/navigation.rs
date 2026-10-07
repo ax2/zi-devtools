@@ -154,8 +154,18 @@ impl DevToolsApp {
                 egui::TopBottomPanel::bottom("sidebar-dock")
                     .frame(egui::Frame::NONE)
                     .show_separator_line(false)
-                    .default_height(210.0)
+                    .default_height(246.0)
                     .show_inside(ui, |ui| {
+                        let frequent = ui.add_sized(
+                            [ui.available_width(), 30.0],
+                            egui::Button::new("常用排行 →"),
+                        );
+                        #[cfg(feature = "ui-preview")]
+                        self.preview_sidebar
+                            .insert("frequent", (frequent.rect, ui.clip_rect()));
+                        if frequent.clicked() {
+                            self.open_library("常用", "全部分类");
+                        }
                         self.current_tool_navigation(ui);
                         self.navigation_footer(ui, ctx);
                     });
@@ -196,16 +206,20 @@ impl DevToolsApp {
                         for (page, label) in [
                             (Page::Home, "开始"),
                             (Page::Library, "工具库"),
+                            (Page::Services, "本地服务"),
                             (Page::Tasks, "后台任务"),
                             (Page::Plugins, "扩展与连接器"),
                         ] {
-                            if ui
-                                .add_sized(
-                                    [ui.available_width(), 38.0],
-                                    egui::Button::new(label).selected(self.page == page),
-                                )
-                                .clicked()
-                            {
+                            let button = ui.add_sized(
+                                [ui.available_width(), 38.0],
+                                egui::Button::new(label).selected(self.page == page),
+                            );
+                            #[cfg(feature = "ui-preview")]
+                            if page == Page::Services {
+                                self.preview_services
+                                    .insert("sidebar", (button.rect, ui.clip_rect()));
+                            }
+                            if button.clicked() {
                                 if page == Page::Library {
                                     self.open_library("全部", "全部分类");
                                 } else {
@@ -228,16 +242,6 @@ impl DevToolsApp {
                                 self.open_library("最近", "全部分类");
                             }
                         });
-                        let frequent = ui.add_sized(
-                            [ui.available_width(), 30.0],
-                            egui::Button::new("常用排行 →"),
-                        );
-                        #[cfg(feature = "ui-preview")]
-                        self.preview_sidebar
-                            .insert("frequent", (frequent.rect, ui.clip_rect()));
-                        if frequent.clicked() {
-                            self.open_library("常用", "全部分类");
-                        }
                         let entries = self.entries("");
                         let pinned: Vec<_> = self
                             .preferences

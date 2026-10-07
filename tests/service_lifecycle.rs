@@ -65,6 +65,17 @@ fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
     assert!(logs.contains("fixture listening"));
     assert!(logs.contains("GET /health"));
 
+    let original = manager.service_spec("fixture").unwrap();
+    let mut edited = original.clone();
+    edited.name = "Edited fixture".into();
+    assert!(
+        manager
+            .save_service(Some(&original), edited.clone())
+            .is_err()
+    );
+    assert!(manager.delete_service(&original).is_err());
+    assert_eq!(manager.service_spec("fixture").unwrap(), original);
+
     manager.stop("fixture").unwrap();
     thread::sleep(Duration::from_millis(200));
     assert_eq!(
@@ -77,6 +88,110 @@ fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
         serde_json::json!([])
     );
 
+    manager
+        .save_service(Some(&original), edited.clone())
+        .unwrap();
+    assert_eq!(
+        load_config(&config_path).unwrap().services["fixture"].name,
+        "Edited fixture"
+    );
+    manager.delete_service(&edited).unwrap();
+    assert!(load_config(&config_path).unwrap().services.is_empty());
+    assert!(state.join("logs/fixture.log").is_file());
+    assert!(repo.is_dir());
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn service_crud_retains_yaml_options_and_rejects_stale_or_duplicate_edits() {
+    let root = std::env::temp_dir().join(format!("zi-service-crud-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("services.yml");
+    fs::write(
+        &path,
+        format!(
+            "state_dir: '{}'\ncustom_option: retained\nservices: {{}}\n",
+            root.join("state").display()
+        ),
+    )
+    .unwrap();
+    let manager = ServiceManager::new(load_config(&path).unwrap()).unwrap();
+    let spec: zi_devtools::config::ServiceSpec = serde_yaml_ng::from_str(&format!(
+        "name: One\nrepo: '{}'\ncommand: echo fixture\nenv: {{TEST: original}}\n",
+        root.display()
+    ))
+    .unwrap();
+    let mut spec = spec;
+    spec.id = "one".into();
+    manager.save_service(None, spec.clone()).unwrap();
+    assert!(manager.save_service(None, spec.clone()).is_err());
+    let saved = manager.service_spec("one").unwrap();
+    let mut changed = saved.clone();
+    changed.description = "changed".into();
+    manager.save_service(Some(&saved), changed.clone()).unwrap();
+    assert!(manager.save_service(Some(&saved), saved.clone()).is_err());
+    assert!(manager.delete_service(&saved).is_err());
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("custom_option: retained"));
+    // Preserve extensions attached to the service as well as top-level options.
+    let mut document: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).unwrap();
+    document["services"]["one"]["extension"] = serde_yaml_ng::Value::String("keep".into());
+    fs::write(&path, serde_yaml_ng::to_string(&document).unwrap()).unwrap();
+    manager.replace_config(load_config(&path).unwrap()).unwrap();
+    manager
+        .save_service(Some(&changed), changed.clone())
+        .unwrap();
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("extension: keep")
+    );
+    let mut external = load_config(&path).unwrap().services["one"].clone();
+    external.command = "echo external".into();
+    document = serde_yaml_ng::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    document["services"]["one"]["command"] = serde_yaml_ng::Value::String(external.command.clone());
+    fs::write(&path, serde_yaml_ng::to_string(&document).unwrap()).unwrap();
+    let bytes = fs::read(&path).unwrap();
+    assert!(
+        manager
+            .save_service(Some(&changed), changed.clone())
+            .is_err()
+    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    manager.replace_config(load_config(&path).unwrap()).unwrap();
+    manager.delete_service(&external).unwrap();
+    assert!(manager.service_ids().is_empty());
+    assert!(load_config(&path).unwrap().services.is_empty());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn first_service_creates_independent_config_and_rejects_invalid_inputs() {
+    let root = std::env::temp_dir().join(format!("zi-service-first-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("new/services.yml");
+    let manager = ServiceManager::new(zi_devtools::config::DashboardConfig {
+        path: path.clone(),
+        state_dir: root.join("state"),
+        services: Default::default(),
+        modified: None,
+    })
+    .unwrap();
+    let mut spec: zi_devtools::config::ServiceSpec = serde_yaml_ng::from_str(&format!(
+        "repo: '{}'\ncommand: echo fixture",
+        root.display()
+    ))
+    .unwrap();
+    spec.id = "../escape".into();
+    assert!(manager.save_service(None, spec.clone()).is_err());
+    assert!(!path.exists());
+    spec.id = "first".into();
+    spec.port = Some(0);
+    assert!(manager.save_service(None, spec.clone()).is_err());
+    spec.port = None;
+    manager.save_service(None, spec).unwrap();
+    assert!(load_config(&path).unwrap().services.contains_key("first"));
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -217,7 +332,35 @@ fn run_stop_scenario(graceful: bool) {
     assert!(ready, "fixture not ready");
     drop(manager);
     let manager = ServiceManager::new(load_config(&config_path).unwrap()).unwrap();
-    let result = manager.stop("fixture").unwrap();
+    let result = if graceful {
+        manager.stop("fixture").unwrap()
+    } else {
+        let stopping = manager.clone();
+        let task = thread::spawn(move || stopping.stop("fixture"));
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !manager
+            .logs("fixture", 100)
+            .unwrap()
+            .contains("Zi DevTools graceful stop")
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "stop never entered graceful wait"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        let config = load_config(&config_path).unwrap();
+        let began = std::time::Instant::now();
+        assert!(
+            manager.replace_config(config).is_err(),
+            "hot reload must defer during stop"
+        );
+        assert!(
+            began.elapsed() < Duration::from_millis(250),
+            "hot reload blocked the UI during stop"
+        );
+        task.join().unwrap().unwrap()
+    };
     assert_eq!(
         result.message.contains("优雅停止"),
         graceful,

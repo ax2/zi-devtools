@@ -112,10 +112,6 @@ pub fn load_config(path: &Path) -> Result<DashboardConfig> {
         .with_context(|| format!("无法读取配置文件 {}", path.display()))?;
     let mut raw: RawConfig = serde_yaml_ng::from_str(&text)
         .with_context(|| format!("YAML 配置无效 {}", path.display()))?;
-    if raw.services.is_empty() {
-        bail!("配置必须包含非空 services 映射");
-    }
-
     for (id, service) in &mut raw.services {
         service.id.clone_from(id);
         if service.name.trim().is_empty() {
@@ -157,6 +153,119 @@ fn validate_stop_options(id: &str, service: &ServiceSpec) -> Result<()> {
         bail!("服务 {id} 的 stop_timeout_ms 必须为 100 到 60000 毫秒");
     }
     Ok(())
+}
+
+/// Change only the service mapping, retaining unrelated YAML settings. The
+/// caller holds the service lifecycle gate. Do not delete the old file first.
+pub fn save_services(
+    config: &DashboardConfig,
+    services: BTreeMap<String, ServiceSpec>,
+) -> Result<DashboardConfig> {
+    use std::io::Write;
+    let original = match fs::read(&config.path) {
+        Ok(bytes) => Some(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && config.services.is_empty() => None,
+        Err(e) => return Err(e.into()),
+    };
+    if original.is_some() {
+        let disk = load_config(&config.path)?;
+        if disk.services != config.services || disk.state_dir != config.state_dir {
+            bail!("配置已被其他程序修改，请刷新后重试");
+        }
+    }
+    let mut document: serde_yaml_ng::Value = if let Some(bytes) = &original {
+        serde_yaml_ng::from_slice(bytes)?
+    } else {
+        serde_yaml_ng::to_value(RawConfig {
+            state_dir: Some(config.state_dir.clone()),
+            services: BTreeMap::new(),
+        })?
+    };
+    let map = document
+        .as_mapping_mut()
+        .ok_or_else(|| anyhow::anyhow!("配置根节点必须是映射"))?;
+    let key = serde_yaml_ng::Value::String("services".into());
+    let old = map
+        .get(&key)
+        .and_then(|v| v.as_mapping())
+        .cloned()
+        .unwrap_or_default();
+    let mut changed = serde_yaml_ng::Mapping::new();
+    for (id, spec) in services {
+        let service_key = serde_yaml_ng::Value::String(id);
+        let mut entry = old
+            .get(&service_key)
+            .and_then(|v| v.as_mapping())
+            .cloned()
+            .unwrap_or_default();
+        if let serde_yaml_ng::Value::Mapping(fields) = serde_yaml_ng::to_value(spec)? {
+            entry.extend(fields);
+        }
+        changed.insert(service_key, serde_yaml_ng::Value::Mapping(entry));
+    }
+    map.insert(key, serde_yaml_ng::Value::Mapping(changed));
+    if let Some(parent) = config.path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temporary = config
+        .path
+        .with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+    let result = (|| -> Result<DashboardConfig> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(serde_yaml_ng::to_string(&document)?.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        let mut next = load_config(&temporary)?;
+        let current = match fs::read(&config.path) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        };
+        if current != original {
+            bail!("配置写入前发生变化，未覆盖，请刷新后重试");
+        }
+        fs::rename(&temporary, &config.path).context("无法原子替换服务配置")?;
+        next.path = config.path.clone();
+        next.modified = fs::metadata(&config.path).and_then(|m| m.modified()).ok();
+        Ok(next)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+pub fn validate_service_edit(spec: &ServiceSpec) -> Result<()> {
+    if spec.id.is_empty()
+        || spec.id.len() > 64
+        || !spec
+            .id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+        || spec.id == "."
+        || spec.id == ".."
+    {
+        bail!("服务标识须为 1–64 个字母、数字、点、下划线或短横线");
+    }
+    if spec.command.trim().is_empty() || spec.command.len() > 16_384 {
+        bail!("启动命令不能为空，最长 16 KiB");
+    }
+    if !expand_path(&spec.repo).is_dir() {
+        bail!("工作目录不存在");
+    }
+    if spec.port == Some(0) {
+        bail!("端口必须为 1–65535");
+    }
+    if let Some(url) = &spec.health_url {
+        let parsed = reqwest::Url::parse(url).context("健康检查地址无效")?;
+        if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+            bail!("健康检查地址必须是 HTTP/HTTPS 地址");
+        }
+    }
+    validate_stop_options(&spec.id, spec)
 }
 
 pub fn expand_path(path: &Path) -> PathBuf {

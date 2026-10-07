@@ -2,6 +2,7 @@ use super::*;
 
 impl DevToolsApp {
     pub(super) fn open_quick(&mut self, ctx: &egui::Context) {
+        self.quick_context = false;
         self.prefix.active = false;
         self.quick_open = true;
         self.quick_active.store(true, Ordering::Release);
@@ -22,6 +23,126 @@ impl DevToolsApp {
             self.quick_size = size;
         }
         ctx.request_repaint();
+    }
+
+    pub(super) fn open_tray_context(&mut self, ctx: &egui::Context) {
+        self.open_quick(ctx);
+        self.quick_context = true;
+        if self.preferences.recent.is_empty() && self.preferences.favorites.is_empty() {
+            self.quick_tab = "全部".into();
+        }
+    }
+
+    fn tray_panel_actions(&mut self, ui: &mut egui::Ui, show_main: &mut bool) {
+        ui.horizontal_wrapped(|ui| {
+            if ui.small_button("本地服务").clicked() {
+                self.quick_tab = "服务".into();
+                self.launcher_query.clear();
+            }
+            if ui.small_button("设置").clicked() {
+                self.page = Page::Settings;
+                *show_main = true;
+            }
+            if ui.small_button("退出…").clicked() {
+                self.quick_open = false;
+                self.tray_exit_requested.store(true, Ordering::Release);
+            }
+            ui.small("跟随系统主题");
+        });
+        if !self.notification.is_empty() {
+            ui.add(egui::Label::new(&self.notification).truncate())
+                .on_hover_text(&self.notification);
+        }
+    }
+
+    fn tray_services(&mut self, ui: &mut egui::Ui, show_main: &mut bool) {
+        if ui.button("打开服务管理 · 新增 / 编辑 / 删除 ↗").clicked() {
+            self.navigate(Page::Services, None);
+            *show_main = true;
+        }
+        let query = self.launcher_query.to_lowercase();
+        let statuses: Vec<_> = self
+            .statuses
+            .iter()
+            .filter(|s| {
+                format!("{} {} {:?}", s.name, s.id, s.port)
+                    .to_lowercase()
+                    .contains(&query)
+            })
+            .cloned()
+            .collect();
+        egui::ScrollArea::vertical()
+            .id_salt("tray-services")
+            .max_height((ui.available_height() - 40.0).max(50.0))
+            .show(ui, |ui| {
+                if statuses.is_empty() {
+                    ui.label("没有匹配的服务，可在服务管理中添加。");
+                }
+                for status in statuses {
+                    ui.push_id(&status.id, |ui| {
+                        egui::Frame::new()
+                            .fill(self.colors.card)
+                            .corner_radius(9)
+                            .inner_margin(10.0)
+                            .show(ui, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.strong(&status.name);
+                                    ui.colored_label(
+                                        if status.managed {
+                                            self.colors.green
+                                        } else {
+                                            self.colors.muted
+                                        },
+                                        status.display_state(),
+                                    );
+                                });
+                                if status.pid.is_some() || status.port.is_some() {
+                                    ui.small(format!(
+                                        "{}{}",
+                                        status
+                                            .pid
+                                            .map(|p| format!("PID {p}  "))
+                                            .unwrap_or_default(),
+                                        status
+                                            .port
+                                            .map(|p| format!("端口 {p}"))
+                                            .unwrap_or_default()
+                                    ));
+                                }
+                                ui.horizontal_wrapped(|ui| {
+                                    if ui
+                                        .add_enabled(
+                                            !status.state.is_available(),
+                                            egui::Button::new("启动"),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.run_action(status.id.clone(), "start");
+                                    }
+                                    if ui
+                                        .add_enabled(status.managed, egui::Button::new("停止"))
+                                        .clicked()
+                                    {
+                                        self.run_action(status.id.clone(), "stop");
+                                    }
+                                    if ui
+                                        .add_enabled(status.managed, egui::Button::new("重启"))
+                                        .clicked()
+                                    {
+                                        self.run_action(status.id.clone(), "restart");
+                                    }
+                                    if ui.button("日志 ↗").clicked() {
+                                        self.navigate(Page::Services, None);
+                                        self.request_logs(status.id.clone());
+                                        *show_main = true;
+                                    }
+                                });
+                            });
+                        ui.add_space(6.0);
+                    });
+                }
+            });
     }
 
     pub(super) fn receive_drop(&mut self, ctx: &egui::Context) {
@@ -214,25 +335,48 @@ impl DevToolsApp {
             return;
         }
         let id = egui::ViewportId::from_hash_of("zi-quick-panel");
+        let height = if self.quick_context && self.quick_tab == "服务" {
+            self.quick_size
+                .y
+                .min(320.0 + self.statuses.len().min(4) as f32 * 100.0)
+        } else {
+            self.quick_size.y
+        };
         let mut builder = egui::ViewportBuilder::default()
             .with_title("Zi DevTools · 快捷面板")
-            .with_inner_size(self.quick_size)
+            .with_inner_size(egui::vec2(self.quick_size.x, height))
             .with_decorations(false)
             .with_resizable(false)
             .with_taskbar(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop);
         if let Some(position) = self.quick_position {
-            builder = builder.with_position(position);
+            builder = builder.with_position(egui::pos2(
+                position.x,
+                position.y + self.quick_size.y - height,
+            ));
         }
         let mut chosen = None;
         let mut show_main = false;
+        let original_colors = self.colors;
+        let contextual = self.quick_context;
+        let system_theme = ctx
+            .input(|i| i.raw.system_theme)
+            .unwrap_or(egui::Theme::Light);
+        if self.quick_context {
+            self.colors = palette(if system_theme == egui::Theme::Dark {
+                Theme::Dark
+            } else {
+                Theme::Light
+            });
+        }
         ctx.show_viewport_immediate(id, builder, |panel, _| {
             let focused = panel.input(|i| i.viewport().focused.unwrap_or(false));
-            if focused && self.quick_opened.elapsed() > Duration::from_millis(300) {
+            if focused {
                 self.quick_had_focus = true;
             }
             if panel.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape))
                 || (self.quick_had_focus
+                    && self.quick_opened.elapsed() > Duration::from_millis(300)
                     && !focused
                     && !self.quick_focus
                     && panel.input(|i| i.raw.hovered_files.is_empty()))
@@ -247,11 +391,30 @@ impl DevToolsApp {
                         .stroke(egui::Stroke::new(1.0, self.colors.surface)),
                 )
                 .show(panel, |ui| {
+                    if self.quick_context {
+                        ui.style_mut().visuals = if system_theme == egui::Theme::Dark {
+                            egui::Visuals::dark()
+                        } else {
+                            egui::Visuals::light()
+                        };
+                        ui.style_mut().visuals.override_text_color = Some(self.colors.text);
+                        ui.style_mut().visuals.selection.bg_fill = self.colors.accent;
+                        ui.style_mut().visuals.selection.stroke =
+                            egui::Stroke::new(1.0, Color32::WHITE);
+                        ui.style_mut().spacing.button_padding = egui::vec2(10.0, 6.0);
+                        ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 8.0);
+                        ui.style_mut().visuals.widgets.inactive.weak_bg_fill = self.colors.card;
+                        ui.style_mut().visuals.widgets.hovered.weak_bg_fill = self.colors.surface;
+                    }
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Zi").size(28.0).color(self.colors.accent));
                         ui.vertical(|ui| {
-                            ui.strong("工具速启");
-                            ui.small("搜索 · 收藏 · 最近");
+                            ui.strong(if self.quick_context {
+                                "托盘快捷菜单"
+                            } else {
+                                "工具速启"
+                            });
+                            ui.small("搜索 · 收藏 · 最近 · 服务");
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.button("×").on_hover_text("收起 · Esc").clicked() {
@@ -262,6 +425,9 @@ impl DevToolsApp {
                             }
                         });
                     });
+                    if self.quick_context {
+                        self.tray_panel_actions(ui, &mut show_main);
+                    }
                     ui.add_space(14.0);
                     self.quick_recorder_controls(ui);
                     if self.prefix.active {
@@ -298,7 +464,7 @@ impl DevToolsApp {
                     }
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
-                        for tab in ["收藏", "最近", "全部"] {
+                        for tab in ["收藏", "最近", "常用", "全部", "服务"] {
                             if ui
                                 .selectable_value(&mut self.quick_tab, tab.into(), tab)
                                 .clicked()
@@ -307,9 +473,22 @@ impl DevToolsApp {
                             }
                         }
                     });
+                    if self.quick_tab == "服务" {
+                        self.tray_services(ui, &mut show_main);
+                        return;
+                    }
                     let mut entries = self.entries(&self.launcher_query);
                     if self.launcher_query.trim().is_empty() {
-                        if self.quick_tab == "收藏" {
+                        if self.quick_tab == "常用" {
+                            entries.retain(|e| {
+                                self.preferences.usage.get(&e.id).copied().unwrap_or(0) > 0
+                            });
+                            entries.sort_by_key(|e| {
+                                std::cmp::Reverse(
+                                    self.preferences.usage.get(&e.id).copied().unwrap_or(0),
+                                )
+                            });
+                        } else if self.quick_tab == "收藏" {
                             entries.retain(|e| self.preferences.favorites.contains(&e.id));
                             entries.sort_by_key(|e| {
                                 self.preferences.favorites.iter().position(|id| id == &e.id)
@@ -405,13 +584,14 @@ impl DevToolsApp {
                         if ui.button("拖入文件 / 导入…").clicked() {
                             chosen = Some("file-intake".into());
                         }
-                        if ui
-                            .small_button(if self.theme == Theme::Dark {
-                                "亮主题"
-                            } else {
-                                "暗主题"
-                            })
-                            .clicked()
+                        if !self.quick_context
+                            && ui
+                                .small_button(if self.theme == Theme::Dark {
+                                    "亮主题"
+                                } else {
+                                    "暗主题"
+                                })
+                                .clicked()
                         {
                             self.set_theme(
                                 panel,
@@ -438,6 +618,9 @@ impl DevToolsApp {
                 self.preview_panel_frames += 1;
             }
         });
+        if contextual {
+            self.colors = original_colors;
+        }
         if let Some(id) = chosen
             && let Some(entry) = self.entries("").into_iter().find(|e| e.id == id)
         {

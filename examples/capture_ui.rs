@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 444] = [
+const NAMES: [&str; 450] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -454,6 +454,12 @@ const NAMES: [&str; 444] = [
     "table-statistics-light",
     "table-statistics-small-dark",
     "table-statistics-small-light",
+    "services-dark",
+    "services-light",
+    "service-editor-dark",
+    "service-editor-light",
+    "service-logs-dark",
+    "service-logs-light",
 ];
 
 struct Capture {
@@ -915,6 +921,28 @@ impl eframe::App for Capture {
             }
             if self.frames == 76 {
                 input.events.push(egui::Event::Text("sin(x)*3".into()));
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("services-smoke") {
+            let key = match self.frames {
+                20 | 21 => Some("sidebar"),
+                40 | 41 => Some("add"),
+                60 | 61 | 100 | 101 => Some("save"),
+                80 | 81 => Some("edit"),
+                120 | 121 => Some("delete"),
+                140 | 141 => Some("confirm"),
+                160 | 161 => Some("logs"),
+                _ => None,
+            };
+            if let Some(key) = key {
+                let pos = self.app.preview_service_position(key);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 2 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
             }
         }
         if std::env::args().nth(3).as_deref() == Some("table-statistics-smoke") {
@@ -2115,6 +2143,70 @@ impl eframe::App for Capture {
             return;
         }
 
+        if smoke_mode.as_deref() == Some("tray-theme-capture") {
+            assert!(self.started.elapsed() < Duration::from_secs(30));
+            self.app.preview_tray_scene(ctx, &self.folder, self.scene);
+            self.app.update(ctx, frame);
+            let path = self.folder.join(if self.scene % 2 == 1 {
+                "tray-panel-light.png"
+            } else {
+                "tray-panel-dark.png"
+            });
+            if self.app.preview_panel_rendered() {
+                fs::write(
+                    self.folder.join(format!("tray-ready-{}", self.scene)),
+                    b"ready",
+                )
+                .unwrap();
+            }
+            if path.exists() {
+                println!(
+                    "PASS native tray capture: simulated system theme independent of opposite manual main theme; {}",
+                    path.display()
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("services-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(60),
+                "services UI smoke timeout"
+            );
+            if self.frames == 0 {
+                self.app.preview_service_smoke_prepare();
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            let phase = match self.frames {
+                30 => Some(0),
+                50 => Some(1),
+                70 => Some(2),
+                90 => Some(3),
+                110 => Some(4),
+                150 => Some(5),
+                180 => Some(6),
+                _ => None,
+            };
+            if let Some(phase) = phase {
+                if !self.app.preview_service_check(phase) {
+                    ctx.request_repaint_after(Duration::from_millis(30));
+                    return;
+                }
+            }
+            if self.frames == 180 {
+                println!(
+                    "PASS native services: actual fixed sidebar/add/save/edit/delete/confirm/log clicks; async YAML CRUD on disposable config; original service retained; log auto-refresh/follow enabled"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
         if smoke_mode.as_deref() == Some("table-statistics-smoke") {
             assert!(
                 self.started.elapsed() < Duration::from_secs(45),
@@ -3555,7 +3647,8 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (308..=309).contains(&self.scene)
+            let size = if (444..=449).contains(&self.scene)
+                || (308..=309).contains(&self.scene)
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)
                 || (322..=323).contains(&self.scene)

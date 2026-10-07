@@ -111,6 +111,7 @@ struct PidRecord {
 }
 
 pub struct ServiceManager {
+    lifecycle: Mutex<()>,
     config: RwLock<DashboardConfig>,
     children: Mutex<HashMap<String, Child>>,
     desired_running: Mutex<BTreeSet<String>>,
@@ -127,6 +128,7 @@ impl ServiceManager {
             .build()
             .context("创建本地健康检查客户端失败")?;
         Ok(Arc::new(Self {
+            lifecycle: Mutex::new(()),
             config: RwLock::new(config),
             children: Mutex::new(HashMap::new()),
             desired_running: Mutex::new(desired),
@@ -139,6 +141,10 @@ impl ServiceManager {
     }
 
     pub fn replace_config(&self, config: DashboardConfig) -> Result<()> {
+        let _gate = self
+            .lifecycle
+            .try_lock()
+            .ok_or_else(|| anyhow!("服务操作进行中，暂缓配置重载，请稍后刷新"))?;
         prepare_state_dirs(&config.state_dir)?;
         let desired = load_desired_running(&config);
         *self.config.write() = config;
@@ -243,6 +249,11 @@ impl ServiceManager {
     }
 
     pub fn start(&self, service_id: &str) -> Result<ActionResult> {
+        let _gate = self.lifecycle.lock();
+        self.start_inner(service_id)
+    }
+
+    fn start_inner(&self, service_id: &str) -> Result<ActionResult> {
         let spec = self.service_spec(service_id)?;
         let status = self.service_status(service_id)?;
         if status.state == ServiceState::Running {
@@ -321,6 +332,11 @@ impl ServiceManager {
     }
 
     pub fn stop(&self, service_id: &str) -> Result<ActionResult> {
+        let _gate = self.lifecycle.lock();
+        self.stop_inner(service_id)
+    }
+
+    fn stop_inner(&self, service_id: &str) -> Result<ActionResult> {
         let spec = self.service_spec(service_id)?;
         let mut system = System::new();
         system.refresh_processes(ProcessesToUpdate::All, true);
@@ -458,9 +474,10 @@ impl ServiceManager {
     }
 
     pub fn restart(&self, service_id: &str) -> Result<ActionResult> {
-        self.stop(service_id)?;
+        let _gate = self.lifecycle.lock();
+        self.stop_inner(service_id)?;
         std::thread::sleep(Duration::from_millis(250));
-        let mut result = self.start(service_id)?;
+        let mut result = self.start_inner(service_id)?;
         result.message = format!("服务已重启；{}", result.message);
         Ok(result)
     }
@@ -488,6 +505,52 @@ impl ServiceManager {
     pub fn logs(&self, service_id: &str, max_lines: usize) -> Result<String> {
         self.service_spec(service_id)?;
         tail_text(&self.log_path(service_id), max_lines.clamp(1, 5_000))
+    }
+
+    pub fn save_service(
+        &self,
+        original: Option<&ServiceSpec>,
+        mut spec: ServiceSpec,
+    ) -> Result<()> {
+        let _gate = self.lifecycle.lock();
+        crate::config::validate_service_edit(&spec)?;
+        let config = self.config_snapshot();
+        match original {
+            Some(old) => {
+                if old.id != spec.id || config.services.get(&old.id) != Some(old) {
+                    bail!("服务定义已变化，请重新打开编辑器");
+                }
+                if self.service_status(&old.id)?.managed {
+                    bail!("请先停止托管服务，再修改定义");
+                }
+            }
+            None if config.services.contains_key(&spec.id) => bail!("服务标识已存在"),
+            None => {}
+        }
+        spec.repo = expand_path(&spec.repo);
+        let mut services = config.services.clone();
+        services.insert(spec.id.clone(), spec);
+        let next = crate::config::save_services(&config, services)?;
+        *self.config.write() = next;
+        Ok(())
+    }
+
+    pub fn delete_service(&self, original: &ServiceSpec) -> Result<()> {
+        let _gate = self.lifecycle.lock();
+        let config = self.config_snapshot();
+        if config.services.get(&original.id) != Some(original) {
+            bail!("服务定义已变化，请刷新后重试");
+        }
+        if self.service_status(&original.id)?.managed {
+            bail!("请先停止托管服务，再删除定义");
+        }
+        // Persist intent before removing the definition: no future auto-restore.
+        self.set_desired_running(&original.id, false)?;
+        let mut services = config.services.clone();
+        services.remove(&original.id);
+        let next = crate::config::save_services(&config, services)?;
+        *self.config.write() = next;
+        Ok(())
     }
 
     pub fn clear_logs(&self, service_id: &str) -> Result<()> {
