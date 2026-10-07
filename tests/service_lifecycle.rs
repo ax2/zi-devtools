@@ -1,11 +1,123 @@
 use std::{
     fs,
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
     process::{Child, Command, Stdio},
-    sync::{Mutex, MutexGuard},
+    sync::{
+        Arc, Mutex, MutexGuard,
+        atomic::{AtomicUsize, Ordering},
+    },
     thread,
     time::Duration,
 };
+
+#[test]
+fn service_status_batches_are_concurrent_bounded_and_keep_order() {
+    let _guard = network_fixture_guard();
+    let root = std::env::temp_dir().join(format!("zi-service-batch-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let server_active = Arc::clone(&active);
+    let server_peak = Arc::clone(&peak);
+    let server = thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut handlers = Vec::new();
+        while handlers.len() < 17 && std::time::Instant::now() < deadline {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let active = Arc::clone(&server_active);
+                    let peak = Arc::clone(&server_peak);
+                    handlers.push(thread::spawn(move || {
+                        stream.set_nonblocking(false).unwrap();
+                        stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                        let mut request = [0; 4096];
+                        assert!(stream.read(&mut request).unwrap() > 0);
+                        let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+                        peak.fetch_max(count, Ordering::SeqCst);
+                        thread::sleep(Duration::from_millis(80));
+                        // Remove the active request before responding so a worker
+                        // reusing its slot cannot inflate the measured peak.
+                        active.fetch_sub(1, Ordering::SeqCst);
+                        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok").unwrap();
+                    }));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(2));
+                }
+                Err(error) => panic!("fixture accept failed: {error}"),
+            }
+        }
+        let count = handlers.len();
+        for handler in handlers {
+            handler.join().unwrap();
+        }
+        count
+    });
+    let config_path = root.join("services.yml");
+    let mut yaml = format!("state_dir: {}\nservices:\n", root.join("state").display());
+    for index in (0..17).rev() {
+        yaml.push_str(&format!("  svc-{index:03}:\n    repo: {}\n    command: echo fixture\n    health_url: http://127.0.0.1:{port}/{index}\n", root.display()));
+    }
+    fs::write(&config_path, yaml).unwrap();
+    let manager = ServiceManager::new(load_config(&config_path).unwrap()).unwrap();
+    let statuses = manager.list_services();
+    assert_eq!(server.join().unwrap(), 17);
+    assert_eq!(statuses.len(), 17);
+    assert!(statuses.iter().all(|status| status.health.ok == Some(true)));
+    assert_eq!(
+        statuses
+            .iter()
+            .map(|status| status.id.clone())
+            .collect::<Vec<_>>(),
+        (0..17)
+            .map(|index| format!("svc-{index:03}"))
+            .collect::<Vec<_>>()
+    );
+    assert!((2..=8).contains(&peak.load(Ordering::SeqCst)));
+    assert_eq!(active.load(Ordering::SeqCst), 0);
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn hundred_service_statuses_are_complete_and_stable() {
+    let root = std::env::temp_dir().join(format!("zi-service-hundred-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let config_path = root.join("services.yml");
+    let mut yaml = format!("state_dir: {}\nservices:\n", root.join("state").display());
+    for index in (0..100).rev() {
+        yaml.push_str(&format!(
+            "  svc-{index:03}:\n    repo: {}\n    command: echo fixture\n",
+            root.display()
+        ));
+    }
+    fs::write(&config_path, yaml).unwrap();
+    let manager = ServiceManager::new(load_config(&config_path).unwrap()).unwrap();
+    for _ in 0..2 {
+        let statuses = manager.list_services();
+        assert_eq!(statuses.len(), 100);
+        assert_eq!(
+            statuses
+                .iter()
+                .map(|status| status.id.clone())
+                .collect::<Vec<_>>(),
+            (0..100)
+                .map(|index| format!("svc-{index:03}"))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            statuses
+                .iter()
+                .all(|status| status.state == ServiceState::Stopped)
+        );
+    }
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
 
 use zi_devtools::{
     config::load_config,

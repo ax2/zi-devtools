@@ -5,7 +5,10 @@ use std::{
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -169,10 +172,27 @@ impl ServiceManager {
         self.reap_children();
         let mut system = System::new();
         system.refresh_processes(ProcessesToUpdate::All, true);
-        self.service_ids()
-            .iter()
-            .filter_map(|id| self.service_status_with_system(id, &system).ok())
-            .collect()
+        let ids = self.service_ids();
+        let next = AtomicUsize::new(0);
+        let results = Mutex::new(Vec::with_capacity(ids.len()));
+        // A bounded, dynamically assigned batch keeps slow health endpoints from
+        // serializing the dashboard without starting a thread per service.
+        std::thread::scope(|scope| {
+            for _ in 0..ids.len().min(8) {
+                scope.spawn(|| {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(id) = ids.get(index) else { break };
+                        if let Ok(status) = self.service_status_with_system(id, &system) {
+                            results.lock().push((index, status));
+                        }
+                    }
+                });
+            }
+        });
+        let mut results = results.into_inner();
+        results.sort_unstable_by_key(|(index, _)| *index);
+        results.into_iter().map(|(_, status)| status).collect()
     }
 
     pub fn service_status(&self, service_id: &str) -> Result<ServiceStatus> {
