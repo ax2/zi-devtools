@@ -15,7 +15,7 @@ struct Preview {
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
-        if matches!(self.frame, 20 | 60) {
+        if matches!(self.frame, 20 | 60 | 110) {
             input.events.push(egui::Event::Key {
                 key: egui::Key::Enter,
                 physical_key: None,
@@ -24,9 +24,19 @@ impl eframe::App for Preview {
                 modifiers: egui::Modifiers::CTRL,
             });
         }
+        if self.frame == 130 {
+            input
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(800.0, 520.0)));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -240.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.frame > 90 {
+        if self.frame > 160 {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
@@ -37,10 +47,20 @@ impl eframe::App for Preview {
         if self.frame == 50 {
             self.app.preview_text_plugin(ctx, self.light, 2);
         }
+        if self.frame == 100 {
+            self.app.preview_text_plugin(ctx, self.light, 4);
+        }
         self.app.update(ctx, frame);
-        if matches!(self.frame, 35 | 75) {
-            self.app
-                .preview_text_plugin(ctx, self.light, if self.frame == 35 { 1 } else { 3 });
+        if matches!(self.frame, 35 | 75 | 120 | 145) {
+            self.app.preview_text_plugin(
+                ctx,
+                self.light,
+                match self.frame {
+                    35 => 1,
+                    75 => 3,
+                    _ => 5,
+                },
+            );
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         for event in ctx.input(|i| i.events.clone()) {
@@ -61,10 +81,10 @@ impl eframe::App for Preview {
                 self.captured += 1;
             }
         }
-        if self.frame == 90 {
-            assert_eq!(self.captured, 2);
+        if self.frame == 160 {
+            assert_eq!(self.captured, 4);
             println!(
-                "PASS native plugin-compatible JSON Ctrl+Enter rejects duplicate keys then returns sorted JSON; light={}",
+                "PASS native plugin-compatible JSON Ctrl+Enter rejects duplicate keys then returns sorted JSON; 10002-byte result and synthetic wheel screenshots captured; light={}",
                 self.light
             );
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

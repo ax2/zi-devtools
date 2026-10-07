@@ -784,6 +784,14 @@ impl DevToolsApp {
                 assert!(self.tool_state.message.is_empty());
                 assert_eq!(self.tool_state.output, "{\n  \"a\": 1,\n  \"b\": 2\n}");
             }
+            4 => {
+                self.tool_state.input = format!("[{}]", vec!["0"; 2000].join(","));
+                self.tool_state.message.clear();
+            }
+            5 => {
+                assert!(self.tool_state.message.is_empty());
+                assert_eq!(self.tool_state.output.len(), 10002);
+            }
             _ => unreachable!(),
         }
     }
@@ -2864,6 +2872,7 @@ impl DevToolsApp {
                         .color(p.muted),
                 );
                 ui.add_space(12.0);
+                let paired_text = self.tool_state.has_plugin_mode() && ui.available_width() >= 520.0;
                 match self.tool_state.selected {
                     ToolKind::Uuid => {
                         ui.horizontal(|ui| {
@@ -2987,41 +2996,34 @@ impl DevToolsApp {
                             ui.label(RichText::new(help).small().color(p.muted));
                             ui.add_space(8.0);
                         }
-                        ui.horizontal(|ui| {
-                            ui.strong(if self.tool_state.selected == ToolKind::JsonDiff {
-                                "左侧 JSON"
-                            } else {
-                                "输入"
-                            });
-                            ui.label(
-                                RichText::new(format!(
-                                    "{} 字符 · {} 字节",
-                                    self.tool_state.input.chars().count(),
-                                    self.tool_state.input.len()
-                                ))
-                                .small()
-                                .color(p.muted),
-                            );
-                        });
-                        if self.tool_state.plugin_compatible && self.tool_state.has_plugin_mode() {
-                            let over = self.tool_state.input.len() > zi_text_core::TEXT_LIMIT;
-                            ui.label(RichText::new(format!("{} / {} UTF-8 字节{}", self.tool_state.input.len(), zi_text_core::TEXT_LIMIT, if over { " · 请缩短输入" } else { "" })).small().color(if over { p.red } else { p.muted }));
-                        }
                         self.tool_actions(ui);
                         ui.add_space(8.0);
-                        ui.add_sized(
-                            [
-                                ui.available_width(),
-                                if self.tool_state.selected == ToolKind::JsonDiff {
-                                    88.0
-                                } else {
-                                    editor_height
-                                },
-                            ],
-                            egui::TextEdit::multiline(&mut self.tool_state.input)
-                                .font(egui::TextStyle::Monospace)
-                                .hint_text("在这里粘贴需要处理的内容…"),
-                        );
+                        if paired_text {
+                            ui.columns(2, |columns| {
+                                columns[0].horizontal(|ui| {
+                                    ui.strong("输入");
+                                    let over = self.tool_state.plugin_compatible && self.tool_state.input.len() > zi_text_core::TEXT_LIMIT;
+                                    ui.label(RichText::new(if self.tool_state.plugin_compatible {
+                                        format!("{} / {} 字节{}", self.tool_state.input.len(), zi_text_core::TEXT_LIMIT, if over { " · 超限" } else { "" })
+                                    } else { format!("{} 字节", self.tool_state.input.len()) }).small().color(if over { p.red } else { p.muted }));
+                                });
+                                let width = columns[0].available_width();
+                                egui::ScrollArea::vertical().id_salt(("text-input", self.tool_state.selected.id())).max_height(editor_height).auto_shrink([false, false]).show(&mut columns[0], |ui| {
+                                    ui.add_sized([width, editor_height], egui::TextEdit::multiline(&mut self.tool_state.input).font(egui::TextStyle::Monospace).hint_text("粘贴需要处理的内容…"));
+                                });
+                                self.tool_output(&mut columns[1], ctx, editor_height);
+                            });
+                        } else {
+                            ui.horizontal(|ui| {
+                                ui.strong(if self.tool_state.selected == ToolKind::JsonDiff { "左侧 JSON" } else { "输入" });
+                                ui.label(RichText::new(format!("{} 字符 · {} 字节", self.tool_state.input.chars().count(), self.tool_state.input.len())).small().color(p.muted));
+                            });
+                            if self.tool_state.plugin_compatible && self.tool_state.has_plugin_mode() {
+                                let over = self.tool_state.input.len() > zi_text_core::TEXT_LIMIT;
+                                ui.label(RichText::new(format!("{} / {} UTF-8 字节{}", self.tool_state.input.len(), zi_text_core::TEXT_LIMIT, if over { " · 请缩短输入" } else { "" })).small().color(if over { p.red } else { p.muted }));
+                            }
+                            ui.add_sized([ui.available_width(), if self.tool_state.selected == ToolKind::JsonDiff { 88.0 } else { editor_height }], egui::TextEdit::multiline(&mut self.tool_state.input).font(egui::TextStyle::Monospace).hint_text("在这里粘贴需要处理的内容…"));
+                        }
                         ui.add_space(8.0);
                         if self.tool_state.selected == ToolKind::JsonDiff {
                             ui.strong("右侧 JSON");
@@ -3034,39 +3036,46 @@ impl DevToolsApp {
                         }
                     }
                 }
-                if !self.tool_state.message.is_empty() {
-                    egui::Frame::new()
-                        .fill(p.red.gamma_multiply(0.12))
-                        .corner_radius(8)
-                        .inner_margin(10.0)
-                        .show(ui, |ui| {
-                            ui.label(RichText::new(&self.tool_state.message).color(p.red));
-                        });
+                if !paired_text {
+                    self.tool_output(ui, ctx, editor_height);
                 }
-                ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    ui.label("上次处理结果");
-                    if ui
-                        .add_enabled(
-                            !self.tool_state.output.is_empty(),
-                            egui::Button::new("复制结果").small(),
-                        )
-                        .clicked()
-                    {
-                        ctx.copy_text(self.tool_state.output.clone());
-                        self.toast = Some(("结果已复制".into(), Instant::now()));
-                    }
-                    if ui
-                        .add_enabled(
-                            !self.tool_state.output.is_empty(),
-                            egui::Button::new("交换输入 / 输出").small(),
-                        )
-                        .clicked()
-                    {
-                        std::mem::swap(&mut self.tool_state.input, &mut self.tool_state.output);
-                    }
-                });
-                let mut output = self.tool_state.output.as_str();
+            });
+    }
+
+    fn tool_output(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, editor_height: f32) {
+        let p = self.colors;
+        ui.horizontal_wrapped(|ui| {
+            ui.label("结果");
+            if ui
+                .add_enabled(
+                    !self.tool_state.output.is_empty(),
+                    egui::Button::new("复制结果").small(),
+                )
+                .clicked()
+            {
+                ctx.copy_text(self.tool_state.output.clone());
+                self.toast = Some(("结果已复制".into(), Instant::now()));
+            }
+            if ui
+                .add_enabled(
+                    !self.tool_state.output.is_empty(),
+                    egui::Button::new("交换输入 / 输出").small(),
+                )
+                .clicked()
+            {
+                std::mem::swap(&mut self.tool_state.input, &mut self.tool_state.output);
+            }
+        });
+        if !self.tool_state.message.is_empty() {
+            ui.label(RichText::new(&self.tool_state.message).color(p.red));
+            return;
+        }
+        let mut output = self.tool_state.output.as_str();
+        egui::ScrollArea::vertical()
+            .id_salt(("text-result", self.tool_state.selected.id()))
+            .max_height(editor_height)
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
                 ui.add_sized(
                     [ui.available_width(), editor_height],
                     egui::TextEdit::multiline(&mut output)
