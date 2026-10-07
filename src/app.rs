@@ -689,6 +689,10 @@ impl DevToolsApp {
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
             432..=435 => self.preview_plot_fixture(true),
+            436..=439 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_statistics_fixture();
+            }
             430..=431 => self.preview_boundary_scene(),
             426..=429 => {
                 self.preview_mapping_scene(false);
@@ -1477,6 +1481,14 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_calculator_check(&self, phase: u8) {
         self.calculator.preview_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistics_check(&self, phase: u8) {
+        self.calculator.preview_statistics_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_statistics_position(&self) -> egui::Pos2 {
+        self.calculator.preview_statistics_position()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_keyboard_fixture(&mut self) {

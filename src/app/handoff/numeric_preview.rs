@@ -93,7 +93,7 @@ impl DevToolsApp {
                 .unwrap();
         } else {
             self.handoff =
-                Some(Transfer::numeric("计算器矩阵快照 · v0.6.0".into(), snapshot).unwrap());
+                Some(Transfer::numeric("计算器矩阵快照 · v0.7.0".into(), snapshot).unwrap());
         }
     }
     pub fn preview_numeric_smoke(&mut self, phase: u8) {

@@ -14,10 +14,13 @@ pub struct State {
     pub(super) message: String,
     pub(super) sheet_name: String,
     pub(super) files: super::worksheet_ui::Files,
+    pub(super) examples_expanded: bool,
     #[cfg(feature = "ui-preview")]
     pub(super) input_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
     pub preview_numeric_send: Option<egui::Rect>,
+    #[cfg(feature = "ui-preview")]
+    pub(super) preview_statistics_button: Option<(egui::Rect, egui::Rect)>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -33,10 +36,13 @@ impl Default for State {
             message: String::new(),
             sheet_name: "未命名工作表".into(),
             files: Default::default(),
+            examples_expanded: false,
             #[cfg(feature = "ui-preview")]
             input_rect: None,
             #[cfg(feature = "ui-preview")]
             preview_numeric_send: None,
+            #[cfg(feature = "ui-preview")]
+            preview_statistics_button: None,
         };
         state.files.baseline = Some(state.snapshot());
         state
@@ -220,6 +226,35 @@ impl State {
             ui.small(&self.message);
         }
         ui.add_space(10.0);
+        egui::CollapsingHeader::new("统计与组合 · 点选示例")
+            .id_salt("calculator-statistics")
+            .default_open(self.examples_expanded)
+            .show(ui, |ui| {
+                ui.small("1–64个值，用逗号分隔；可引用变量和分数。点选只填写算式，Enter才固定结果。");
+                for (label, examples) in [
+                    ("统计", &["sum(0.1,0.2,0.3)", "mean(1/3,2/3)", "median(5,1,2,4)"][..]),
+                    ("离散程度", &["varp(1,2,3)", "vars(1,2,3)", "stdp(1,2,3)", "stds(1,2,3)"][..]),
+                    ("组合与整数", &["fact(20)", "perm(5,3)", "comb(52,5)", "gcd(-48,18)", "lcm(12,18)"][..]),
+                ] {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(label);
+                        for example in examples {
+                            let button = ui.button(*example);
+                            #[cfg(feature = "ui-preview")]
+                            if *example == "comb(52,5)" {
+                                self.preview_statistics_button = Some((button.rect, ui.clip_rect()));
+                            }
+                            if button.clicked() {
+                                self.expression = (*example).into();
+                                self.message.clear();
+                                input.request_focus();
+                            }
+                        }
+                    });
+                }
+                ui.small("varp/stdp：总体，分母n；vars/stds：样本，分母n−1，至少2值。标准差为近似平方根。");
+                ui.small("阶乘/排列组合：0≤r≤n≤10000，结果须能用i128精确表示。超限明确报错，不自动改近似。");
+            });
         ui.collapsing("输入说明与示例",|ui| {
             ui.label("运算：+ - * / ^ % & | << >> ~；幂右结合，-2^2 = -4。输入需显式 *。");
             ui.label("函数：sin cos tan sqrt ln log10 exp abs floor ceil round min max xor；常量 pi/e。");

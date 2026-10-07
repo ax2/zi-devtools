@@ -8,6 +8,7 @@ mod plot;
 mod plot_preview;
 mod plot_render;
 mod plot_ui;
+mod statistics;
 mod ui;
 mod worksheet;
 mod worksheet_ui;

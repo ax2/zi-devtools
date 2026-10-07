@@ -271,8 +271,8 @@ impl Parser<'_> {
                     if !matches!(self.tokens[self.at].0, Token::Close) {
                         loop {
                             args.push(self.expression(0)?);
-                            if args.len() > 8 {
-                                return Err(self.error("函数最多 8 个参数"));
+                            if args.len() > 64 {
+                                return Err(self.error("函数最多 64 个参数"));
                             }
                             if !matches!(self.tokens[self.at].0, Token::Comma) {
                                 break;
@@ -328,21 +328,14 @@ impl Parser<'_> {
 }
 
 fn function(name: &str, args: &[Value], angle: Angle) -> Result<Value, String> {
+    if let Some(result) = super::statistics::evaluate(name, args) {
+        return result;
+    }
     if matches!(name, "min" | "max" | "xor") && args.len() == 2 {
         return if name == "xor" {
             Ok(Value::Exact(args[0].integer()? ^ args[1].integer()?, 1))
         } else {
-            let less = match (args[0], args[1]) {
-                (Value::Exact(a, b), Value::Exact(c, d)) => {
-                    if b == d {
-                        a < c
-                    } else {
-                        a.checked_mul(d).ok_or("精确比较超出范围")?
-                            < c.checked_mul(b).ok_or("精确比较超出范围")?
-                    }
-                }
-                _ => args[0].float() < args[1].float(),
-            };
+            let less = super::statistics::compare(args[0], args[1]).is_lt();
             Ok(if less == (name == "min") {
                 args[0]
             } else {

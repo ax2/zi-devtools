@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 436] = [
+const NAMES: [&str; 440] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -446,6 +446,10 @@ const NAMES: [&str; 436] = [
     "calculator-plot-light",
     "calculator-plot-small-dark",
     "calculator-plot-small-light",
+    "calculator-statistics-dark",
+    "calculator-statistics-light",
+    "calculator-statistics-small-dark",
+    "calculator-statistics-small-light",
 ];
 
 struct Capture {
@@ -933,10 +937,13 @@ impl eframe::App for Capture {
                 modifiers: egui::Modifiers::NONE,
             });
         }
-        if std::env::args().nth(3).as_deref() == Some("calculator-smoke") {
+        if matches!(
+            std::env::args().nth(3).as_deref(),
+            Some("calculator-smoke" | "statistics-smoke")
+        ) {
             let released = match self.frames {
                 31 | 71 => Some(egui::Key::A),
-                51 | 91 => Some(egui::Key::Enter),
+                51 | 91 | 131 => Some(egui::Key::Enter),
                 _ => None,
             };
             if let Some(key) = released {
@@ -975,15 +982,41 @@ impl eframe::App for Capture {
             }
             if matches!(self.frames, 40 | 80) {
                 input.events.push(egui::Event::Text(
-                    if self.frames == 40 { "0.1+0.2" } else { "1/0" }.into(),
+                    if std::env::args().nth(3).as_deref() == Some("statistics-smoke") {
+                        if self.frames == 40 {
+                            "variance = vars(1,2,3)"
+                        } else {
+                            "vars(1)"
+                        }
+                    } else if self.frames == 40 {
+                        "0.1+0.2"
+                    } else {
+                        "1/0"
+                    }
+                    .into(),
                 ));
             }
-            if matches!(self.frames, 50 | 90) {
+            if matches!(self.frames, 50 | 90)
+                || (self.frames == 130
+                    && std::env::args().nth(3).as_deref() == Some("statistics-smoke"))
+            {
                 input.events.push(egui::Event::Key {
                     key: egui::Key::Enter,
                     physical_key: None,
                     pressed: true,
                     repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if matches!(self.frames, 110 | 111)
+                && std::env::args().nth(3).as_deref() == Some("statistics-smoke")
+            {
+                let pos = self.app.preview_statistics_position();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames == 110,
                     modifiers: egui::Modifiers::NONE,
                 });
             }
@@ -2297,6 +2330,33 @@ impl eframe::App for Capture {
             ctx.request_repaint_after(Duration::from_millis(60));
             return;
         }
+        if smoke_mode.as_deref() == Some("statistics-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 436, self.fixture.clone());
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 1180.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 60 {
+                self.app.preview_statistics_check(0);
+            }
+            if self.frames == 100 {
+                self.app.preview_statistics_check(1);
+            }
+            if self.frames == 120 {
+                self.app.preview_statistics_check(2);
+            }
+            if self.frames == 140 {
+                self.app.preview_statistics_check(3);
+                println!(
+                    "PASS native statistics input: exact sample variance Enter assignment; single-value rejection preserves variable/ans/history; actual combination example click previews without commit then Enter records exact result"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
         if smoke_mode.as_deref() == Some("calculator-smoke") {
             if self.frames == 0 {
                 self.app.preview_scene(ctx, 310, self.fixture.clone());
@@ -3460,6 +3520,7 @@ impl eframe::App for Capture {
                 || (153..=154).contains(&self.scene)
                 || (400..=403).contains(&self.scene)
                 || (432..=433).contains(&self.scene)
+                || (436..=437).contains(&self.scene)
                 || (406..=407).contains(&self.scene)
                 || matches!(self.scene, 410 | 411 | 414 | 415 | 418 | 419 | 422 | 423)
                 || (280..=281).contains(&self.scene)
@@ -3483,6 +3544,8 @@ impl eframe::App for Capture {
                     | 431
                     | 434
                     | 435
+                    | 438
+                    | 439
             ) {
                 egui::vec2(980.0, 760.0)
             } else if (134..=135).contains(&self.scene) {

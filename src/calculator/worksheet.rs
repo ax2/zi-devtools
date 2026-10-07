@@ -157,7 +157,7 @@ impl Document {
         Ok(Self {
             format: "zi-devtools-calculator".into(),
             schema: 3,
-            tool_version: "0.6.0".into(),
+            tool_version: "0.7.0".into(),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })
