@@ -109,10 +109,15 @@ impl DevToolsApp {
         }
         ui.horizontal(|ui| {
             ui.label("筛选服务");
-            ui.add_sized(
+            let search = ui.add_sized(
                 [ui.available_width().min(420.0), 32.0],
                 egui::TextEdit::singleline(&mut self.search).hint_text("名称、标签或端口"),
             );
+            #[cfg(feature = "ui-preview")]
+            self.preview_services
+                .insert("scale-search", (search.rect, ui.clip_rect()));
+            #[cfg(not(feature = "ui-preview"))]
+            let _ = search;
         });
         ui.horizontal(|ui| {
             for filter in ServiceFilter::ALL {
@@ -126,10 +131,11 @@ impl DevToolsApp {
         });
 
         let query = self.search.to_lowercase();
-        let statuses: Vec<ServiceStatus> = self
+        let statuses: Vec<usize> = self
             .statuses
             .iter()
-            .filter(|status| {
+            .enumerate()
+            .filter(|(_, status)| {
                 self.service_filter.matches(status.state, status.managed)
                     && (query.is_empty()
                         || status.name.to_lowercase().contains(&query)
@@ -142,7 +148,7 @@ impl DevToolsApp {
                             .port
                             .is_some_and(|port| port.to_string().contains(&query)))
             })
-            .cloned()
+            .map(|(index, _)| index)
             .collect();
         ui.label(
             RichText::new(format!(
@@ -165,12 +171,161 @@ impl DevToolsApp {
                 .color(p.muted),
             );
         }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for status in statuses {
-                self.service_card(ui, status);
-                ui.add_space(10.0);
-            }
+        ui.horizontal_wrapped(|ui| {
+            ui.label("显示方式");
+            ui.selectable_value(&mut self.service_compact, None, "自动");
+            ui.selectable_value(&mut self.service_compact, Some(false), "卡片");
+            ui.selectable_value(&mut self.service_compact, Some(true), "列表");
         });
+        let compact = self.service_compact.unwrap_or(self.statuses.len() >= 30);
+        #[cfg(feature = "ui-preview")]
+        {
+            self.preview_service_rows = 0;
+        }
+        if compact {
+            ui.label(
+                RichText::new("点击服务查看完整详情；右侧可直接打开日志")
+                    .small()
+                    .color(p.muted),
+            );
+            egui::ScrollArea::vertical()
+                .id_salt("compact-services")
+                .auto_shrink([false, false])
+                .show_rows(ui, 56.0, statuses.len(), |ui, range| {
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.preview_service_rows += range.len();
+                    }
+                    for index in range {
+                        self.compact_service_row(ui, self.statuses[statuses[index]].clone());
+                    }
+                });
+            if let Some(id) = self.selected_service.clone() {
+                if let Some(status) = self.statuses.iter().find(|s| s.id == id).cloned() {
+                    let mut open = true;
+                    egui::Window::new(format!("服务详情 · {}", status.name))
+                        .id(egui::Id::new(("service-detail", &id)))
+                        .open(&mut open)
+                        .default_width(620.0)
+                        .show(ui.ctx(), |ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(560.0)
+                                .show(ui, |ui| {
+                                    self.service_card(ui, status);
+                                });
+                        });
+                    if !open {
+                        self.selected_service = None;
+                    }
+                } else {
+                    self.selected_service = None;
+                }
+            }
+        } else {
+            egui::ScrollArea::vertical()
+                .id_salt("service-cards")
+                .show(ui, |ui| {
+                    for index in statuses {
+                        self.service_card(ui, self.statuses[index].clone());
+                        ui.add_space(10.0);
+                    }
+                });
+        }
+    }
+
+    fn compact_service_row(&mut self, ui: &mut egui::Ui, status: ServiceStatus) {
+        ui.push_id(status.id.clone(), |ui| {
+            self.compact_service_row_content(ui, status)
+        });
+    }
+
+    fn compact_service_row_content(&mut self, ui: &mut egui::Ui, status: ServiceStatus) {
+        let p = self.colors;
+        let pending = self.service_pending.get(&status.id).copied();
+        let color = if status.failed_exit() {
+            p.red
+        } else if status.state.is_available() && status.health.ok == Some(false) {
+            p.amber
+        } else if status.managed {
+            p.green
+        } else if status.state.is_available() {
+            p.amber
+        } else {
+            p.muted
+        };
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), 56.0), egui::Sense::hover());
+        ui.painter().rect_filled(
+            rect,
+            6.0,
+            if self.selected_service.as_deref() == Some(&status.id) {
+                p.accent.linear_multiply(0.15)
+            } else {
+                p.card
+            },
+        );
+        let logs_rect = egui::Rect::from_min_max(
+            egui::pos2(rect.max.x - 74.0, rect.min.y + 8.0),
+            egui::pos2(rect.max.x - 8.0, rect.max.y - 8.0),
+        );
+        let main_rect = egui::Rect::from_min_max(
+            rect.min + egui::vec2(8.0, 4.0),
+            egui::pos2(logs_rect.min.x - 8.0, rect.max.y - 4.0),
+        );
+        let meta = if let Some(action) = pending {
+            format!("正在{}…", action_label(action))
+        } else {
+            format!(
+                "{} · {} · PID {} · 端口 {}",
+                status.display_state(),
+                status.id,
+                status.pid.map_or("—".into(), |id| id.to_string()),
+                status.port.map_or("—".into(), |port| port.to_string())
+            )
+        };
+        let response = ui.interact(
+            main_rect,
+            ui.id().with("select-service"),
+            egui::Sense::click(),
+        );
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &status.name)
+        });
+        for (text, offset, size, text_color) in [
+            (&status.name, 4.0, 15.0, p.text),
+            (&meta, 26.0, 12.0, color),
+        ] {
+            let mut job = egui::text::LayoutJob::simple(
+                text.clone(),
+                egui::FontId::proportional(size),
+                text_color,
+                main_rect.width(),
+            );
+            job.wrap.max_rows = 1;
+            let galley = ui.fonts(|fonts| fonts.layout_job(job));
+            ui.painter()
+                .galley(main_rect.min + egui::vec2(4.0, offset), galley, text_color);
+        }
+        #[cfg(feature = "ui-preview")]
+        if status.id == "fixture-499" {
+            self.preview_services
+                .insert("scale-last", (response.rect, ui.clip_rect()));
+        }
+        if response
+            .on_hover_text(format!("{}\n{}\n{}", status.name, meta, status.description))
+            .clicked()
+        {
+            self.selected_service = Some(status.id.clone());
+        }
+        let logs = ui.put(logs_rect, egui::Button::new("日志"));
+        #[cfg(feature = "ui-preview")]
+        if status.id == "demo" {
+            self.preview_services
+                .insert("logs", (logs.rect, ui.clip_rect()));
+        }
+        if logs.clicked() {
+            self.request_logs(status.id);
+        }
     }
 
     fn service_card(&mut self, ui: &mut egui::Ui, status: ServiceStatus) {

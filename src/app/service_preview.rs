@@ -6,6 +6,13 @@ impl DevToolsApp {
         self.notification.clear();
         self.selected_service = Some("demo".into());
         match scene {
+            450..=453 => {
+                self.preview_service_scale_prepare();
+                if scene >= 452 {
+                    self.search = "fixture-499".into();
+                    self.selected_service = Some("fixture-499".into());
+                }
+            }
             444 | 445 => {
                 let old = self.manager.service_spec("demo").unwrap();
                 let mut spec = old.clone();
@@ -36,6 +43,67 @@ impl DevToolsApp {
             _ => {}
         }
         let _ = (ctx, fixture);
+    }
+    pub fn preview_service_scale_prepare(&mut self) {
+        self.page = Page::Services;
+        self.startup_warning = None;
+        self.notification.clear();
+        self.selected_service = None;
+        self.search.clear();
+        self.service_compact = None;
+        self.refresh_cancel.store(true, Ordering::Release);
+        self.refresh_generation = self.refresh_generation.wrapping_add(1);
+        self.refresh_inflight = true;
+        let base = self.manager.list_services().remove(0);
+        self.statuses = (0..500)
+            .map(|index| {
+                let mut status = base.clone();
+                status.id = if index == 0 {
+                    "demo".into()
+                } else {
+                    format!("fixture-{index:03}")
+                };
+                status.name = format!("开发服务 {index:03} · 这是完整服务名称");
+                status.description = "合成规模样例，不代表 500 个真实运行进程".into();
+                status.tags = vec!["开发环境".into()];
+                status
+            })
+            .collect();
+        fs::write(
+            self.manager
+                .config_snapshot()
+                .state_dir
+                .join("logs/demo.log"),
+            "scale fixture log\n",
+        )
+        .unwrap();
+    }
+    pub fn preview_service_scale_check(&mut self, phase: u8) {
+        match phase {
+            0 => {
+                assert_eq!(self.statuses.len(), 500);
+                assert!(
+                    self.preview_service_rows > 0 && self.preview_service_rows < 30,
+                    "painted {}",
+                    self.preview_service_rows
+                );
+            }
+            1 => {
+                assert_eq!(self.search, "fixture-499");
+                assert_eq!(self.preview_service_rows, 1);
+            }
+            2 => {
+                assert_eq!(self.selected_service.as_deref(), Some("fixture-499"));
+                self.selected_service = None;
+                self.search.clear();
+            }
+            3 => {
+                assert_eq!(self.log_view.as_deref(), Some("demo"));
+                assert!(!self.log_inflight);
+                assert!(self.log_text.contains("scale fixture log"));
+            }
+            _ => unreachable!(),
+        }
     }
     pub fn preview_service_position(&self, key: &str) -> egui::Pos2 {
         let (rect, clip) = self

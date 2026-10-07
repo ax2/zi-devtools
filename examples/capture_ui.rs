@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 450] = [
+const NAMES: [&str; 454] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -460,6 +460,10 @@ const NAMES: [&str; 450] = [
     "service-editor-light",
     "service-logs-dark",
     "service-logs-light",
+    "service-list-dark",
+    "service-list-light",
+    "service-detail-dark",
+    "service-detail-light",
 ];
 
 struct Capture {
@@ -943,6 +947,27 @@ impl eframe::App for Capture {
                     pressed: self.frames % 2 == 0,
                     modifiers: egui::Modifiers::NONE,
                 });
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("services-scale-smoke") {
+            let key = match self.frames {
+                50 | 51 => Some("scale-search"),
+                80 | 81 => Some("scale-last"),
+                120 | 121 => Some("logs"),
+                _ => None,
+            };
+            if let Some(key) = key {
+                let pos = self.app.preview_service_position(key);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 2 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            if self.frames == 52 {
+                input.events.push(egui::Event::Text("fixture-499".into()));
             }
         }
         if std::env::args().nth(3).as_deref() == Some("table-statistics-smoke") {
@@ -2165,6 +2190,34 @@ impl eframe::App for Capture {
                     path.display()
                 );
                 std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("services-scale-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(60),
+                "services scale timeout"
+            );
+            if self.frames == 0 {
+                self.app.preview_service_scale_prepare();
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            self.app.update(ctx, frame);
+            match self.frames {
+                30 => self.app.preview_service_scale_check(0),
+                70 => self.app.preview_service_scale_check(1),
+                100 => self.app.preview_service_scale_check(2),
+                145 => {
+                    self.app.preview_service_scale_check(3);
+                    println!(
+                        "PASS native service scale: 500 synthetic rows paint only visible range; actual search field selects final stable ID; row opens full detail; first service log opens after filter clear"
+                    );
+                    std::process::exit(0);
+                }
+                _ => {}
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(40));
@@ -3653,7 +3706,7 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (444..=449).contains(&self.scene)
+            let size = if (444..=453).contains(&self.scene)
                 || (308..=309).contains(&self.scene)
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)

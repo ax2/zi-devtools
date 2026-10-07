@@ -167,6 +167,8 @@ pub struct DevToolsApp {
     #[cfg(feature = "ui-preview")]
     preview_services: std::collections::HashMap<&'static str, (egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
+    preview_service_rows: usize,
+    #[cfg(feature = "ui-preview")]
     preview_tray_capture: Option<PathBuf>,
     hotkey: crate::hotkey::Service,
     hotkey_edit: crate::hotkey::Setting,
@@ -191,6 +193,7 @@ pub struct DevToolsApp {
     selected_service: Option<String>,
     search: String,
     service_filter: ServiceFilter,
+    service_compact: Option<bool>,
     service_pending: std::collections::HashMap<String, &'static str>,
     event_tx: Sender<BackgroundEvent>,
     event_rx: Receiver<BackgroundEvent>,
@@ -710,7 +713,7 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
-            444..=449 => self.preview_service_scene(ctx, scene, &fixture),
+            444..=453 => self.preview_service_scene(ctx, scene, &fixture),
             432..=435 => self.preview_plot_fixture(true),
             436..=439 => {
                 self.page = Page::Calculator;
@@ -1889,6 +1892,8 @@ impl DevToolsApp {
             #[cfg(feature = "ui-preview")]
             preview_services: Default::default(),
             #[cfg(feature = "ui-preview")]
+            preview_service_rows: 0,
+            #[cfg(feature = "ui-preview")]
             preview_tray_capture: None,
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
@@ -1901,6 +1906,7 @@ impl DevToolsApp {
             selected_service: None,
             search: String::new(),
             service_filter: ServiceFilter::All,
+            service_compact: None,
             service_pending: Default::default(),
             event_tx,
             event_rx,
