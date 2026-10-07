@@ -758,6 +758,22 @@ impl DevToolsApp {
     pub fn preview_workflow_inspection(&mut self, phase: u8) {
         self.data_state.preview_workflow_inspection(phase);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_memory_position(&self, index: usize) -> egui::Pos2 {
+        self.data_state.preview_workflow_memory_position(index)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_memory_check(&self, remembered: bool) {
+        let folder = self.data_state.preview_workflow_memory_check(remembered);
+        let expected = remembered.then_some(folder.clone());
+        assert_eq!(self.preferences.workflow_library_folder, expected);
+        assert_eq!(
+            Preferences::load(&self.preferences_path).workflow_library_folder,
+            expected
+        );
+        assert!(folder.join("daily.json").is_file());
+        assert!(folder.join("orders.json").is_file());
+    }
 
     #[cfg(feature = "ui-preview")]
     pub fn preview_text_plugin(&mut self, ctx: &egui::Context, light: bool, phase: u8) {
@@ -4655,9 +4671,13 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| self.start_page(ui));
                 }
                 Page::Data => {
+                    self.data_state
+                        .workflow_folder_settings(&mut self.preferences, &self.preferences_path);
                     egui::ScrollArea::vertical()
                         .id_salt("data-page")
                         .show(ui, |ui| self.data_state.ui(ui, ctx));
+                    self.data_state
+                        .workflow_folder_settings(&mut self.preferences, &self.preferences_path);
                     if let Some(path) = self.data_state.take_sqlite_open_request() {
                         match self.sqlite_browser.open_path(path) {
                             Ok(()) => {

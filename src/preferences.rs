@@ -21,6 +21,7 @@ pub struct Preferences {
     pub favorites: Vec<String>,
     pub recent: Vec<String>,
     pub usage: std::collections::BTreeMap<String, u32>,
+    pub workflow_library_folder: Option<PathBuf>,
     pub recorder_auto_minimize: bool,
     pub recorder_auto_stop_minutes: u16,
     pub recorder_quality: crate::recorder::RecordingQuality,
@@ -37,6 +38,7 @@ impl Default for Preferences {
             favorites: Vec::new(),
             recent: Vec::new(),
             usage: Default::default(),
+            workflow_library_folder: None,
             recorder_auto_minimize: true,
             recorder_auto_stop_minutes: 0,
             recorder_quality: crate::recorder::RecordingQuality::default(),
@@ -49,6 +51,19 @@ pub fn path() -> PathBuf {
         .join(".zi-devtools/ui-preferences.json")
 }
 impl Preferences {
+    pub fn save_workflow_folder(&mut self, path: &Path, folder: Option<PathBuf>) -> Result<()> {
+        anyhow::ensure!(
+            folder
+                .as_ref()
+                .is_none_or(|folder| valid_workflow_folder(folder)),
+            "流程目录必须为有效的绝对路径，最多32768字节"
+        );
+        let mut next = self.clone();
+        next.workflow_library_folder = folder;
+        next.save(path)?;
+        *self = next;
+        Ok(())
+    }
     /// Save before activating, preserving the live state on failure.
     pub fn save_command_bindings(
         &mut self,
@@ -87,6 +102,13 @@ impl Preferences {
         value
     }
     fn normalize(&mut self) {
+        if self
+            .workflow_library_folder
+            .as_ref()
+            .is_some_and(|folder| !valid_workflow_folder(folder))
+        {
+            self.workflow_library_folder = None;
+        }
         let normalize = |ids: &mut Vec<String>, limit: usize| {
             let mut seen = std::collections::HashSet::new();
             ids.retain(|id| !id.is_empty() && id.len() <= 512 && seen.insert(id.clone()));
@@ -118,9 +140,54 @@ impl Preferences {
     }
 }
 
+fn valid_workflow_folder(path: &Path) -> bool {
+    path.is_absolute() && path.as_os_str().len() <= 32768 && !path.to_string_lossy().contains('\0')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn workflow_folder_save_roundtrip_failure_and_forget_preserve_files() {
+        let dir = std::env::temp_dir().join(format!("zi-flow-prefs-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&dir).unwrap();
+        let folder = dir.join("recipes");
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("keep.json"), b"unchanged").unwrap();
+        let path = dir.join("prefs.json");
+        let mut prefs = Preferences::load(&path);
+        prefs.visit("json");
+        prefs
+            .save_workflow_folder(&path, Some(folder.clone()))
+            .unwrap();
+        assert_eq!(
+            Preferences::load(&path).workflow_library_folder,
+            Some(folder.clone())
+        );
+        assert!(prefs.save_workflow_folder(&dir, None).is_err());
+        assert_eq!(prefs.workflow_library_folder, Some(folder.clone()));
+        assert!(
+            prefs
+                .save_workflow_folder(&path, Some(PathBuf::from("relative")))
+                .is_err()
+        );
+        // A stale second window changing an unrelated preference preserves the folder.
+        let mut stale = Preferences {
+            light: true,
+            ..Default::default()
+        };
+        stale.save(&path).unwrap();
+        assert_eq!(
+            Preferences::load(&path).workflow_library_folder,
+            Some(folder.clone())
+        );
+        prefs.save_workflow_folder(&path, None).unwrap();
+        let restored = Preferences::load(&path);
+        assert!(restored.workflow_library_folder.is_none());
+        assert!(restored.light);
+        assert_eq!(fs::read(folder.join("keep.json")).unwrap(), b"unchanged");
+        fs::remove_dir_all(dir).unwrap();
+    }
     #[test]
     fn binding_save_is_transactional_and_preserves_other_preferences() {
         let dir = std::env::temp_dir().join(format!("zi-bindings-{}", uuid::Uuid::new_v4()));
@@ -190,6 +257,7 @@ mod tests {
         let mut p: Preferences =
             serde_json::from_str(r#"{"light":true,"favorites":["json"]}"#).unwrap();
         assert!(p.command_bindings.is_empty());
+        assert!(p.workflow_library_folder.is_none());
         assert!(p.recent.is_empty());
         assert!(p.recorder_auto_minimize);
         assert_eq!(p.recorder_auto_stop_minutes, 0);

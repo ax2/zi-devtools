@@ -2,6 +2,26 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_memory_position(&self, index: usize) -> egui::Pos2 {
+        let rect = self.workflow.files.memory_buttons[index].expect("memory button missing");
+        assert!(rect.width() > 0.0 && rect.height() > 0.0);
+        rect.center()
+    }
+    pub fn preview_workflow_memory_check(&self, remembered: bool) -> PathBuf {
+        let files = &self.workflow.files;
+        let folder = files.folder.clone().unwrap();
+        assert_eq!(
+            files.remembered_folder,
+            remembered.then_some(folder.clone())
+        );
+        assert_eq!(files.listing.as_ref().unwrap().entries.len(), 2);
+        assert!(files.review.is_none());
+        assert!(!self.busy());
+        assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 2);
+        assert_eq!(self.workflow.definition.steps.len(), 2);
+        assert!(self.workflow.proposal.is_some());
+        folder
+    }
     pub fn preview_workflow_inspection(&mut self, phase: u8) {
         assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 4);
         assert_eq!(

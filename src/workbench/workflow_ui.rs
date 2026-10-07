@@ -67,6 +67,42 @@ impl State {
 }
 
 impl DataState {
+    pub fn workflow_folder_settings(
+        &mut self,
+        prefs: &mut crate::preferences::Preferences,
+        path: &std::path::Path,
+    ) {
+        let files = &mut self.workflow.files;
+        files.remembered_folder = prefs.workflow_library_folder.clone();
+        if !files.folder_hydrated {
+            files.folder_hydrated = true;
+            if files.folder.is_none() {
+                files.folder = files.remembered_folder.clone();
+                if files.folder.is_some() {
+                    files.memory_message =
+                        "已恢复记住的目录位置；点击刷新列表后才读取流程文件。".into();
+                }
+            }
+        }
+        if let Some(folder) = files.folder_request.take() {
+            let forgetting = folder.is_none();
+            match prefs.save_workflow_folder(path, folder) {
+                Ok(()) => {
+                    files.remembered_folder = prefs.workflow_library_folder.clone();
+                    files.memory_message = if forgetting {
+                        "已忘记目录位置；文件和当前实例内容保留。"
+                    } else {
+                        "已记住此目录位置；下次点击刷新列表后才读取文件，不自动运行。"
+                    }
+                    .into();
+                }
+                Err(error) => {
+                    files.memory_message =
+                        format!("目录记忆未保存：{error:#}；当前选择保留，可重试。");
+                }
+            }
+        }
+    }
     pub fn show_workflow(&mut self) {
         self.workflow.reveal = true;
     }
@@ -549,6 +585,10 @@ impl DataState {
 
 impl DataState {
     fn workflow_file_buttons(&mut self, ui: &mut egui::Ui) {
+        #[cfg(feature = "ui-preview")]
+        {
+            self.workflow.files.memory_buttons = [None, None];
+        }
         ui.horizontal_wrapped(|ui| {
             let allowed = !self.busy() && self.workflow.files.review.is_none();
             if ui
@@ -617,11 +657,58 @@ impl DataState {
                         egui::Button::new("刷新列表"),
                     )
                     .clicked()
-                    && let Err(error) = self.workflow.files.list(folder)
+                    && let Err(error) = self.workflow.files.list(folder.clone())
                 {
                     self.workflow.error = format!("{error:#}");
                 }
+                if self.workflow.files.remembered_folder.as_ref() == Some(&folder) {
+                    ui.weak("已记住此目录");
+                } else {
+                    let remember = ui
+                        .button("记住此目录")
+                        .on_hover_text("仅保存目录位置；不保存正文，不自动扫描或运行");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.workflow.files.memory_buttons[0] =
+                            Some(remember.rect.intersect(ui.clip_rect()));
+                    }
+                    if remember.clicked() {
+                        self.workflow.files.folder_request = Some(Some(folder.clone()));
+                    }
+                }
+                if let Some(remembered) = self
+                    .workflow
+                    .files
+                    .remembered_folder
+                    .as_ref()
+                    .filter(|saved| *saved != &folder)
+                {
+                    ui.weak(format!(
+                        "已记住：{}",
+                        remembered
+                            .file_name()
+                            .unwrap_or_else(|| remembered.as_os_str())
+                            .to_string_lossy()
+                    ))
+                    .on_hover_text(remembered.display().to_string());
+                }
+                if self.workflow.files.remembered_folder.is_some() {
+                    let forget = ui
+                        .button("忘记已记住目录")
+                        .on_hover_text("只清除记忆设置，不删除文件或当前实例内容");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.workflow.files.memory_buttons[1] =
+                            Some(forget.rect.intersect(ui.clip_rect()));
+                    }
+                    if forget.clicked() {
+                        self.workflow.files.folder_request = Some(None);
+                    }
+                }
             });
+        }
+        if !self.workflow.files.memory_message.is_empty() {
+            ui.label(&self.workflow.files.memory_message);
         }
         let mut selected = None;
         let allowed = !self.busy() && self.workflow.files.review.is_none();
@@ -672,7 +759,7 @@ impl DataState {
                         );
                     }
                 });
-            ui.weak("仅列出当前文件夹，不递归；载入时重新检查文件，不自动执行。文件夹选择仅在当前实例保留。");
+            ui.weak("仅列出当前文件夹，不递归；载入时重新检查文件，不自动执行。点击记住目录可跨次恢复位置。");
         }
         if let Some(path) = selected
             && let Err(error) = self.workflow.files.read(path)
@@ -835,6 +922,51 @@ const OPERATIONS: [ColumnOperation; 10] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remembered_folder_restores_location_only_and_does_not_replace_instance_content() {
+        let dir = std::env::temp_dir().join(format!("zi-folder-memory-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let config = dir.join("prefs.json");
+        let folder = dir.join("deleted-directory");
+        let alternate = dir.join("alternate");
+        let mut prefs = crate::preferences::Preferences::default();
+        prefs
+            .save_workflow_folder(&config, Some(folder.clone()))
+            .unwrap();
+        let mut first = fixture();
+        let original = first.dataset.clone();
+        let steps = first.workflow.definition.clone();
+        first.workflow_folder_settings(&mut prefs, &config);
+        assert_eq!(first.workflow.files.folder, Some(folder.clone()));
+        assert!(first.workflow.files.listing.is_none());
+        assert!(!first.workflow.files.job.phase.active());
+        assert!(first.workflow.files.review.is_none());
+        first.workflow.files.folder = Some(alternate.clone());
+        first.workflow_folder_settings(&mut prefs, &config);
+        assert_eq!(first.workflow.files.folder, Some(alternate.clone()));
+        first.workflow.files.folder_request = Some(Some(alternate.clone()));
+        first.workflow_folder_settings(&mut prefs, &dir);
+        assert_eq!(prefs.workflow_library_folder, Some(folder));
+        assert!(first.workflow.files.memory_message.contains("未保存"));
+        assert_eq!(first.workflow.files.folder, Some(alternate.clone()));
+        first.workflow.files.folder_request = Some(Some(alternate.clone()));
+        first.workflow_folder_settings(&mut prefs, &config);
+        let mut second = DataState::default();
+        second.workflow_folder_settings(&mut prefs, &config);
+        assert_eq!(second.workflow.files.folder, Some(alternate.clone()));
+        first.workflow.files.folder_request = Some(None);
+        first.workflow_folder_settings(&mut prefs, &config);
+        assert!(prefs.workflow_library_folder.is_none());
+        assert_eq!(first.workflow.files.folder, Some(alternate.clone()));
+        second.workflow_folder_settings(&mut prefs, &config);
+        assert_eq!(second.workflow.files.folder, Some(alternate));
+        assert_eq!(first.dataset, original);
+        assert_eq!(first.workflow.definition, steps);
+        assert!(second.workflow.files.listing.is_none());
+        assert!(second.workflow.files.review.is_none());
+        assert!(!second.busy());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
     fn fixture() -> DataState {
         let mut state = DataState {
             input: "编号,数量\n001,2\n002,3".into(),
