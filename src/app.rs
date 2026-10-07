@@ -824,6 +824,10 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            460..=461 => {
+                self.page = Page::Data;
+                self.data_state.preview_workflow_library(&fixture);
+            }
             444..=453 => self.preview_service_scene(ctx, scene, &fixture),
             454..=455 => self.preview_log_transfer_scene(),
             456..=457 => self.preview_service_scene(ctx, scene, &fixture),

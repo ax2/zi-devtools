@@ -107,6 +107,26 @@ impl DataState {
         self.workflow.files.review = Some(imported);
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_library(&mut self, fixture: &std::path::Path) {
+        self.preview_workflow();
+        let folder = fixture.parent().unwrap().join("workflow-library-fixture");
+        std::fs::create_dir_all(&folder).unwrap();
+        let mut definition = self.workflow.definition.clone();
+        for (file, name) in [
+            ("daily.json", "每日资料清洗"),
+            ("orders.json", "订单列类型转换"),
+        ] {
+            definition.name = name.into();
+            std::fs::write(
+                folder.join(file),
+                serde_json::to_vec_pretty(&definition).unwrap(),
+            )
+            .unwrap();
+        }
+        self.workflow.files.list(folder).unwrap();
+    }
+
     fn start_workflow(&mut self) -> Result<()> {
         ensure_not_busy(self)?;
         let input = self.dataset.as_ref().context("请先解析表格")?;
@@ -573,7 +593,92 @@ impl DataState {
                 ui.ctx()
                     .request_repaint_after(std::time::Duration::from_millis(30));
             }
+            if ui
+                .add_enabled(allowed, egui::Button::new("流程文件夹…"))
+                .clicked()
+                && let Some(folder) = rfd::FileDialog::new()
+                    .set_title("选择流程文件夹，只检查直接 JSON 文件")
+                    .pick_folder()
+                && let Err(error) = self.workflow.files.list(folder)
+            {
+                self.workflow.error = format!("{error:#}");
+            }
         });
+        if let Some(folder) = self.workflow.files.folder.clone() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(format!(
+                    "流程文件夹：{}",
+                    folder.file_name().unwrap_or_default().to_string_lossy()
+                ))
+                .on_hover_text(folder.display().to_string());
+                if ui
+                    .add_enabled(
+                        !self.busy() && self.workflow.files.review.is_none(),
+                        egui::Button::new("刷新列表"),
+                    )
+                    .clicked()
+                    && let Err(error) = self.workflow.files.list(folder)
+                {
+                    self.workflow.error = format!("{error:#}");
+                }
+            });
+        }
+        let mut selected = None;
+        let allowed = !self.busy() && self.workflow.files.review.is_none();
+        if let Some(listing) = &self.workflow.files.listing {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.workflow.files.query)
+                    .hint_text("搜索流程名称或文件名…"),
+            );
+            let visible = listing
+                .entries
+                .iter()
+                .filter(|entry| entry.matches(&self.workflow.files.query))
+                .count();
+            ui.label(format!(
+                "匹配 {visible} / {} 个流程 · 跳过 {} 个无效或无法读取的 JSON 文件",
+                listing.entries.len(),
+                listing.skipped
+            ));
+            if listing.partial {
+                ui.colored_label(
+                    egui::Color32::YELLOW,
+                    "仅显示部分列表：达到枚举、读取或条目上限，请缩小文件夹范围。",
+                );
+            }
+            egui::ScrollArea::vertical()
+                .id_salt("workflow-library")
+                .max_height(180.0)
+                .show(ui, |ui| {
+                    for entry in listing
+                        .entries
+                        .iter()
+                        .filter(|entry| entry.matches(&self.workflow.files.query))
+                    {
+                        ui.horizontal_wrapped(|ui| {
+                            if ui
+                                .add_enabled(allowed, egui::Button::new("载入并确认…"))
+                                .clicked()
+                            {
+                                selected = Some(entry.path.clone());
+                            }
+                            ui.label(format!("{} · {} 步", entry.name, entry.steps));
+                            ui.weak(entry.path.file_name().unwrap_or_default().to_string_lossy());
+                        });
+                    }
+                    if visible == 0 {
+                        ui.label(
+                            "没有匹配的流程；可调整搜索词、选择其他文件夹或保存新的流程文件。",
+                        );
+                    }
+                });
+            ui.weak("仅列出当前文件夹，不递归；载入时重新检查文件，不自动执行。文件夹选择仅在当前实例保留。");
+        }
+        if let Some(path) = selected
+            && let Err(error) = self.workflow.files.read(path)
+        {
+            self.workflow.error = format!("{error:#}");
+        }
         if !self.workflow.files.message.is_empty() {
             ui.label(&self.workflow.files.message);
         }

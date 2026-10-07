@@ -1,5 +1,6 @@
 //! Explicit files contain definitions, never source tables or grants.
 use super::{workflow::Definition, *};
+pub(super) mod library;
 const LIMIT: usize = 256 * 1024;
 fn save_new(definition: &Definition, path: &std::path::Path) -> Result<()> {
     definition.validate()?;
@@ -21,6 +22,7 @@ fn load(path: &std::path::Path) -> Result<Definition> {
 enum Reply {
     Saved(PathBuf),
     Loaded(Definition),
+    Listed(PathBuf, library::Listing),
 }
 #[derive(Default)]
 pub(super) struct State {
@@ -28,8 +30,29 @@ pub(super) struct State {
     pub(super) job: Job,
     pub(super) review: Option<Definition>,
     pub(super) message: String,
+    pub(super) folder: Option<PathBuf>,
+    pub(super) listing: Option<library::Listing>,
+    pub(super) query: String,
 }
 impl State {
+    pub(super) fn list(&mut self, folder: PathBuf) -> Result<()> {
+        anyhow::ensure!(!self.job.phase.active(), "请等待当前流程文件操作结束");
+        anyhow::ensure!(self.review.is_none(), "请先确认或取消已读取的流程");
+        let (tx, rx) = mpsc::channel();
+        self.receiver = Some(rx);
+        self.message.clear();
+        self.listing = None;
+        self.folder = Some(folder.clone());
+        self.job.begin();
+        std::thread::spawn(move || {
+            let _ = tx.send(
+                library::scan(&folder)
+                    .map(|listing| Reply::Listed(folder, listing))
+                    .map_err(|e| format!("{e:#}")),
+            );
+        });
+        Ok(())
+    }
     pub(super) fn save(&mut self, definition: Definition, path: PathBuf) -> Result<()> {
         anyhow::ensure!(!self.job.phase.active(), "请等待当前流程文件操作结束");
         anyhow::ensure!(self.review.is_none(), "请先确认或取消已读取的流程");
@@ -80,6 +103,11 @@ impl State {
                     .finish(Phase::Done, "流程文件已读取，等待确认；未运行");
                 self.review = Some(definition);
             }
+            Ok(Reply::Listed(folder, listing)) => {
+                self.job.finish(Phase::Done, "流程文件夹已检查；未运行");
+                self.folder = Some(folder);
+                self.listing = Some(listing);
+            }
             Err(error) => {
                 self.job.finish(Phase::Failed, "流程文件操作失败");
                 self.message = error;
@@ -101,6 +129,36 @@ mod tests {
                 value: String::new(),
             }],
         }
+    }
+    #[test]
+    fn background_listing_and_load_wait_for_review_without_running() {
+        let folder = std::env::temp_dir().join(format!("zi-flow-list-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let path = folder.join("recipe.json");
+        save_new(&definition(), &path).unwrap();
+        let mut state = State::default();
+        state.list(folder.clone()).unwrap();
+        assert!(state.listing.is_none());
+        assert!(state.review.is_none());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.job.phase.active() {
+            assert!(std::time::Instant::now() < deadline);
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(state.listing.as_ref().unwrap().entries.len(), 1);
+        state.read(path).unwrap();
+        while state.job.phase.active() {
+            assert!(std::time::Instant::now() < deadline);
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(state.review.as_ref().unwrap(), &definition());
+        assert!(state.list(folder.clone()).is_err());
+        assert!(state.read(folder.join("recipe.json")).is_err());
+        state.review = None;
+        assert_eq!(load(&folder.join("recipe.json")).unwrap(), definition());
+        std::fs::remove_dir_all(folder).unwrap();
     }
     #[test]
     fn round_trip_reuses_new_inputs_without_overwriting() {
