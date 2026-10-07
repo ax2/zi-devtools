@@ -266,6 +266,9 @@ pub struct DevToolsApp {
     #[cfg(feature = "ui-preview")]
     workflow_bookmark_button: Option<egui::Rect>,
     launcher_index: usize,
+    launcher_scope: launcher::Scope,
+    #[cfg(feature = "ui-preview")]
+    launcher_scope_buttons: [Option<egui::Rect>; 4],
     toast: Option<(String, Instant)>,
     data_state: crate::workbench::sessions::Workspace,
     planner: crate::planner::State,
@@ -796,6 +799,70 @@ impl DevToolsApp {
         self.workflow_bookmark_button
             .expect("visible workflow bookmark button")
             .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_search_scope_position(&self, index: usize) -> egui::Pos2 {
+        self.launcher_scope_buttons[index]
+            .expect("visible search scope")
+            .center()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_search_scope_check(&mut self, phase: u8) {
+        assert!(self.launcher_open);
+        assert_eq!(self.launcher_index, 0);
+        let query = self.launcher_query.to_lowercase();
+        let results = self.launcher_results(&query);
+        match phase {
+            1 => {
+                assert!(self.launcher_scope == launcher::Scope::Tools);
+                assert_eq!(query, "每日资料清洗");
+                assert!(results.tools.is_empty());
+                assert!(results.saved.is_empty());
+                assert_eq!(results.workflows.total, 0);
+            }
+            2 => {
+                assert!(self.launcher_scope == launcher::Scope::Workflows);
+                assert_eq!(query, "每日资料清洗");
+                assert!(results.tools.is_empty());
+                assert_eq!(results.saved.len(), 1);
+                assert_eq!(results.workflows.total, 1);
+            }
+            3 => {
+                assert!(self.launcher_scope == launcher::Scope::Favorites);
+                assert_eq!(query, "每日资料清洗");
+                assert!(results.tools.is_empty());
+                assert_eq!(results.saved.len(), 1);
+                assert_eq!(results.workflows.total, 0);
+            }
+            4 => {
+                assert!(self.launcher_scope == launcher::Scope::Favorites);
+                assert_eq!(query, "json");
+                assert!(results.tools.iter().any(|tool| tool.id == "json"));
+                assert!(
+                    results
+                        .tools
+                        .iter()
+                        .all(|tool| self.preferences.favorites.contains(&tool.id))
+                );
+                assert_eq!(results.saved.len(), 1); // Filename daily.json also matches.
+                assert_eq!(results.workflows.total, 0);
+            }
+            5 => {
+                assert!(self.launcher_scope == launcher::Scope::All);
+                assert_eq!(query, "json");
+                assert!(results.tools.iter().any(|tool| tool.id == "json"));
+                assert!(results.tools.len() > self.preferences.favorites.len());
+            }
+            6 => {
+                assert!(self.launcher_scope == launcher::Scope::Workflows);
+                assert!(query.is_empty());
+                assert!(results.tools.is_empty());
+                assert_eq!(results.workflows.total, 2);
+                assert_eq!(results.saved.len(), 1);
+            }
+            _ => panic!("unknown scope fixture phase"),
+        }
+        self.data_state.preview_workflow_search_check(2);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_bookmark_check(&mut self, phase: u8) {
@@ -2204,6 +2271,9 @@ impl DevToolsApp {
             preferences, preferences_path: preferences_path.clone(),
             tool_search: String::new(), library_query: String::new(), launcher_query: String::new(), launcher_open: false,
             launcher_focus: false, launcher_index: 0, toast: None,
+            launcher_scope: Default::default(),
+            #[cfg(feature = "ui-preview")]
+            launcher_scope_buttons: [None; 4],
             #[cfg(feature = "ui-preview")]
             workflow_bookmark_button: None,
             data_state: crate::workbench::sessions::Workspace::new(preferences_path.with_file_name("workspace.sqlite3")), file_state: FileState::default(), clear_tool_confirm:false,
@@ -2802,20 +2872,34 @@ impl DevToolsApp {
                     self.launcher_index = 0;
                     scroll_selection = true;
                 }
+                let old_scope = self.launcher_scope;
+                ui.horizontal(|ui| {
+                    for (index, (scope, label, key)) in launcher::Scope::ALL.into_iter().enumerate() {
+                        let _tab = ui.selectable_value(&mut self.launcher_scope, scope, label)
+                            .on_hover_text(format!("Ctrl+{}切换；保留搜索词", index + 1));
+                        #[cfg(feature = "ui-preview")]
+                        { self.launcher_scope_buttons[index] = Some(_tab.rect.intersect(ui.clip_rect())); }
+                        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, key)) {
+                            self.launcher_scope = scope;
+                        }
+                    }
+                });
+                if old_scope != self.launcher_scope {
+                    self.launcher_index = 0;
+                    self.launcher_focus = true;
+                    scroll_selection = true;
+                }
                 let query = self.launcher_query.to_lowercase();
-                let entries = self.entries(&query);
-                let workflows = self.data_state.workflow_matches(&query);
-                let saved: Vec<_> = self
-                    .preferences
-                    .workflow_favorites
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, entry)| entry.matches(&query))
-                    .map(|(index, _)| index)
-                    .collect();
+                let launcher::Results {tools: entries, workflows, saved} = self.launcher_results(&query);
                 let count = saved.len() + entries.len() + workflows.entries.len();
+                ui.label(RichText::new(format!("工具 {} · 收藏流程 {} · 已检查流程 {}", entries.len(), saved.len(), workflows.total))
+                    .size(12.0).color(self.colors.muted));
                 if count == 0 {
-                    ui.label("没有匹配的工具或已检查流程；可在数据工作台选择或刷新流程文件夹。");
+                    ui.label(match self.launcher_scope {
+                        launcher::Scope::Tools => "没有匹配的工具；可简化关键词或切换到全部。",
+                        launcher::Scope::Favorites => "没有匹配的收藏；可在工具库收藏工具，或在流程搜索结果旁点☆。",
+                        _ => "没有匹配的工具或流程；可在数据工作台选择或刷新流程文件夹，也可切换搜索范围。",
+                    });
                 } else {
                     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown))
                     {
@@ -2985,7 +3069,7 @@ impl DevToolsApp {
                 }
                 ui.separator();
                 ui.label(
-                    RichText::new("↑ ↓ 选择     Enter 打开     Esc 关闭")
+                    RichText::new("↑ ↓ 选择     Enter 打开     Esc 关闭     Ctrl 1–4 切换范围")
                         .small()
                         .weak(),
                 );

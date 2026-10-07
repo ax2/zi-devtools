@@ -1,4 +1,25 @@
 use super::*;
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum Scope {
+    #[default]
+    All,
+    Tools,
+    Workflows,
+    Favorites,
+}
+impl Scope {
+    pub const ALL: [(Self, &'static str, egui::Key); 4] = [
+        (Self::All, "全部", egui::Key::Num1),
+        (Self::Tools, "工具", egui::Key::Num2),
+        (Self::Workflows, "流程", egui::Key::Num3),
+        (Self::Favorites, "收藏", egui::Key::Num4),
+    ];
+}
+pub(super) struct Results {
+    pub tools: Vec<ToolEntry>,
+    pub workflows: crate::workbench::sessions::WorkflowMatches,
+    pub saved: Vec<usize>,
+}
 pub(super) enum Choice {
     Tool(String),
     Workflow(crate::workbench::sessions::WorkflowMatch),
@@ -6,6 +27,43 @@ pub(super) enum Choice {
 }
 
 impl DevToolsApp {
+    pub(super) fn launcher_results(&mut self, query: &str) -> Results {
+        let mut tools = if self.launcher_scope == Scope::Workflows {
+            Vec::new()
+        } else {
+            self.entries(query)
+        };
+        if self.launcher_scope == Scope::Favorites {
+            tools.retain(|entry| self.preferences.favorites.contains(&entry.id));
+        }
+        let workflows = if matches!(self.launcher_scope, Scope::All | Scope::Workflows) {
+            self.data_state.workflow_matches(
+                if query.trim().is_empty() && self.launcher_scope == Scope::Workflows {
+                    "流程"
+                } else {
+                    query
+                },
+            )
+        } else {
+            Default::default()
+        };
+        let saved = if self.launcher_scope == Scope::Tools {
+            Vec::new()
+        } else {
+            self.preferences
+                .workflow_favorites
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| entry.matches(query))
+                .map(|(index, _)| index)
+                .collect()
+        };
+        Results {
+            tools,
+            workflows,
+            saved,
+        }
+    }
     pub(super) fn open_search_choice(&mut self, choice: Choice) {
         match choice {
             Choice::SavedWorkflow(selected) => {
