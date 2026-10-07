@@ -174,7 +174,7 @@ P1：优先推进共用基础与完整任务闭环；P2：扩展场景；P3：�
 
 1. 唯一清单源是 `docs/tools.json`。新想法先加入 planned；开始开发改为 in-progress。
 2. 实现、边界用例与可用入口均验证后，才改为 implemented；同时更新范围、版本和日期。
-3. 执行 `python scripts/sync_tools.py`，将 JSON、生成文档、README 和代码一起提交。
+3. 执行 `python scripts/sync_tools.py`，同时生成插件迁移清单，将 JSON、生成文档、README 和代码一起提交。
 4. CI 用 `python scripts/sync_tools.py --check` 验证文档未过期，且已实现 ID 与 Rust 入口一致。
 5. 官网读取同一仓库的原始清单并保留本地快照；加载失败会明确显示快照日期，发版时同步快照。
 6. 状态转换后更新阶段日志、测试证据与发布说明；未通过测试的功能不能列为已实现。

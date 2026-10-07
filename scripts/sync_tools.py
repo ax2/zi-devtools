@@ -1,5 +1,5 @@
 """Generate tools.md; --check verifies source coverage and generated docs."""
-import argparse, json, re, sys, tomllib
+import argparse, json, re, subprocess, sys, tomllib
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -49,7 +49,7 @@ for t in items:
 lines += ['', '## 规划中', '', 'P1：优先推进共用基础与完整任务闭环；P2：扩展场景；P3：需专项依赖与权限设计。详见 [平台架构与阶段路线](platform-roadmap.md)。', '', '| 优先级 | 工具 | 工具版本 | 验收范围 | 状态 |', '| --- | --- | --- | --- | --- |']
 for t in items:
     if t['status']!='implemented': lines.append(f"| {t['priority']} | {t['name']} | {t['tool_version']} | {t['scope']} | {'进行中' if t['status']=='in-progress' else '规划中'} |")
-lines += ['', '## 持续同步规则', '', '1. 唯一清单源是 `docs/tools.json`。新想法先加入 planned；开始开发改为 in-progress。', '2. 实现、边界用例与可用入口均验证后，才改为 implemented；同时更新范围、版本和日期。', '3. 执行 `python scripts/sync_tools.py`，将 JSON、生成文档、README 和代码一起提交。', '4. CI 用 `python scripts/sync_tools.py --check` 验证文档未过期，且已实现 ID 与 Rust 入口一致。', '5. 官网读取同一仓库的原始清单并保留本地快照；加载失败会明确显示快照日期，发版时同步快照。', '6. 状态转换后更新阶段日志、测试证据与发布说明；未通过测试的功能不能列为已实现。', '']
+lines += ['', '## 持续同步规则', '', '1. 唯一清单源是 `docs/tools.json`。新想法先加入 planned；开始开发改为 in-progress。', '2. 实现、边界用例与可用入口均验证后，才改为 implemented；同时更新范围、版本和日期。', '3. 执行 `python scripts/sync_tools.py`，同时生成插件迁移清单，将 JSON、生成文档、README 和代码一起提交。', '4. CI 用 `python scripts/sync_tools.py --check` 验证文档未过期，且已实现 ID 与 Rust 入口一致。', '5. 官网读取同一仓库的原始清单并保留本地快照；加载失败会明确显示快照日期，发版时同步快照。', '6. 状态转换后更新阶段日志、测试证据与发布说明；未通过测试的功能不能列为已实现。', '']
 output = '\n'.join(lines)
 target = root/'docs/tools.md'
 if args.check:
@@ -84,3 +84,7 @@ if args.check:
     assert roadmap_text == roadmap_updated, 'Platform roadmap catalog summary is stale; regenerate it'
 else:
     roadmap.write_text(roadmap_updated, encoding='utf-8')
+
+# Keep the independently checked migration map in the same catalog update command.
+subprocess.run([sys.executable, str(root / "scripts/sync_studio_plugin_map.py"),
+                *(["--check"] if args.check else [])], check=True)
