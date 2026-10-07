@@ -578,6 +578,26 @@ impl DevToolsApp {
         rect.center()
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_conflict_review(&mut self, phase: u8, calendar: bool, deleted: bool) -> bool {
+        self.page = if calendar {
+            Page::Calendar
+        } else {
+            Page::Notes
+        };
+        self.planner
+            .preview_conflict_review(phase, calendar, deleted)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_conflict_review_position(&self, index: usize) -> egui::Pos2 {
+        let (rect, clip) =
+            self.planner.preview_conflict_review_rects[index].expect("comparison control rendered");
+        assert!(
+            clip.contains_rect(rect),
+            "comparison control must remain visible: {rect:?} {clip:?}"
+        );
+        rect.center()
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_snooze_smoke(&mut self, phase: u8) -> bool {
         self.page = Page::Home;
         self.planner.preview_snooze_smoke(phase)
@@ -4502,12 +4522,14 @@ impl eframe::App for DevToolsApp {
                     self.tasks_page(ui);
                 }
                 Page::Notes | Page::Calendar => {
+                    let conflict_review_open = self.planner.conflict_review_open();
                     let mut scroll = egui::ScrollArea::vertical().id_salt("planner-page");
                     if let Some(offset) = self.planner.take_page_navigation() {
                         scroll = scroll.vertical_scroll_offset(offset);
                     }
                     scroll.show(ui, |ui| self.planner.ui(ui));
-                    let save_shortcut = !self.launcher_open
+                    let save_shortcut = !conflict_review_open
+                        && !self.launcher_open
                         && (self.handoff.is_none() && !self.images.relay_active())
                         && !self.workspace_exit_confirm
                         && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::S));
@@ -4972,6 +4994,8 @@ fn apply_theme(ctx: &egui::Context, theme: Theme) {
     };
     visuals.panel_fill = p.bg;
     visuals.window_fill = p.card;
+    visuals.warn_fg_color = p.amber;
+    visuals.error_fg_color = p.red;
     visuals.override_text_color = None;
     visuals.weak_text_color = Some(p.muted);
     visuals.extreme_bg_color = p.input_bg;

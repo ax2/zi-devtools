@@ -84,7 +84,8 @@ impl State {
             self.purge_review.is_none()
                 && self.export_review.is_none()
                 && self.backup_review.is_none()
-                && self.ics_review.is_none(),
+                && self.ics_review.is_none()
+                && self.conflict_review.is_none(),
             "请先关闭文件或删除预览"
         );
         ensure!(

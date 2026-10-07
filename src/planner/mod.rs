@@ -6,6 +6,9 @@ mod agenda;
 mod backup;
 mod backup_ui;
 mod conflict_copy;
+mod conflict_review;
+#[cfg(feature = "ui-preview")]
+mod conflict_review_preview;
 mod convert;
 #[cfg(feature = "ui-preview")]
 mod cutoff_preview;
@@ -269,6 +272,7 @@ pub struct State {
     export_review: Option<files::Export>,
     backup_review: Option<backup::Review>,
     ics_review: Option<ics_ui::Review>,
+    conflict_review: Option<String>,
     loaded: bool,
     draft: Option<Item>,
     original: Option<Item>,
@@ -321,6 +325,8 @@ pub struct State {
     pub preview_duplicate_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
     pub preview_conflict_copy_rect: Option<(egui::Rect, egui::Rect)>,
+    #[cfg(feature = "ui-preview")]
+    pub preview_conflict_review_rects: [Option<(egui::Rect, egui::Rect)>; 2],
     #[cfg(feature = "ui-preview")]
     preview_duplicate_source: Option<Item>,
     #[cfg(feature = "ui-preview")]
@@ -460,6 +466,7 @@ impl State {
             export_review: None,
             backup_review: None,
             ics_review: None,
+            conflict_review: None,
             loaded: false,
             draft: None,
             original: None,
@@ -512,6 +519,8 @@ impl State {
             preview_duplicate_rect: None,
             #[cfg(feature = "ui-preview")]
             preview_conflict_copy_rect: None,
+            #[cfg(feature = "ui-preview")]
+            preview_conflict_review_rects: [None; 2],
             #[cfg(feature = "ui-preview")]
             preview_duplicate_source: None,
         };
@@ -606,6 +615,7 @@ impl State {
                 })
     }
     fn edit(&mut self, item: Item) {
+        self.conflict_review = None;
         self.shared.clear_conflict();
         self.focus_editor = true;
         self.date_text = item

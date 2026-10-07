@@ -271,6 +271,7 @@ impl State {
         self.export_ui(ui.ctx());
         self.backup_ui(ui.ctx());
         self.ics_ui(ui.ctx());
+        self.conflict_review_ui(ui.ctx());
     }
 
     fn calendar_list_ui(&mut self, ui: &mut egui::Ui) {

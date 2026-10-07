@@ -490,6 +490,7 @@ struct Capture {
     quick_smoke_phase: u8,
     sqlite_input_frame: Option<usize>,
     workflow_input_frame: Option<usize>,
+    comparison_opened_at: Option<Instant>,
 }
 impl Capture {
     fn pointer_click_waiting(&self) -> bool {
@@ -507,6 +508,51 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args()
+            .nth(3)
+            .is_some_and(|mode| mode.starts_with("planner-compare"))
+            && matches!(self.frames, 60 | 61 | 74..=76 | 80 | 81 | 90 | 91)
+            && self.sqlite_input_frame != Some(self.frames)
+        {
+            if matches!(self.frames, 74..=76) {
+                self.sqlite_input_frame = Some(self.frames);
+                if self.frames == 74 {
+                    let pos =
+                        self.app.preview_conflict_review_position(1) + egui::vec2(300.0, -180.0);
+                    input.events.push(egui::Event::PointerMoved(pos));
+                    input.events.push(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -1800.0),
+                        modifiers: egui::Modifiers::NONE,
+                    });
+                } else {
+                    input.modifiers = egui::Modifiers::CTRL;
+                    input.events.push(egui::Event::Key {
+                        key: egui::Key::S,
+                        physical_key: None,
+                        pressed: self.frames == 75,
+                        repeat: false,
+                        modifiers: egui::Modifiers::CTRL,
+                    });
+                }
+            } else {
+                let pos = if self.frames < 80 {
+                    self.app.preview_conflict_review_position(0)
+                } else if self.frames < 90 {
+                    self.app.preview_conflict_review_position(1)
+                } else {
+                    self.app.preview_conflict_copy_position()
+                };
+                self.sqlite_input_frame = Some(self.frames);
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: self.frames % 2 == 0,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+        }
         if std::env::args().nth(3).as_deref() == Some("planner-conflict-smoke")
             && (55..=61).contains(&self.frames)
         {
@@ -1759,6 +1805,95 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode
+            .as_deref()
+            .is_some_and(|mode| mode.starts_with("planner-compare"))
+        {
+            let calendar = smoke_mode.as_deref().unwrap().contains("calendar");
+            let deleted = smoke_mode.as_deref().unwrap().contains("deleted");
+            let compact = smoke_mode.as_deref().unwrap().contains("small");
+            assert!(self.started.elapsed() < Duration::from_secs(35));
+            if self.frames == 0 {
+                self.app
+                    .preview_scene(ctx, self.scene, self.fixture.clone());
+                self.app.preview_conflict_review(0, calendar, deleted);
+                if compact {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                        960.0, 640.0,
+                    )));
+                }
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 75 {
+                assert!(
+                    ctx.input(|input| input.key_pressed(egui::Key::S) && input.modifiers.ctrl),
+                    "Ctrl S must reach the comparison without being consumed by background save"
+                );
+            }
+            if matches!(self.frames, 60 | 61 | 74..=76 | 80 | 81 | 90 | 91)
+                && self.sqlite_input_frame != Some(self.frames)
+                || self.frames == 1 && !self.app.preview_conflict_review(1, calendar, deleted)
+                || self.frames == 50 && !self.app.preview_conflict_review(2, calendar, deleted)
+                || self.frames == 110 && !self.app.preview_conflict_review(5, calendar, deleted)
+            {
+                ctx.request_repaint_after(Duration::from_millis(50));
+                return;
+            }
+            if self.frames == 70 {
+                self.app.preview_conflict_review(3, calendar, deleted);
+                self.comparison_opened_at = Some(Instant::now());
+            }
+            if self.frames == 72
+                && self.comparison_opened_at.unwrap().elapsed() < Duration::from_millis(250)
+            {
+                ctx.request_repaint_after(Duration::from_millis(50));
+                return;
+            }
+            if self.frames == 72 {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+            }
+            let captured = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            });
+            if let Some(image) = captured {
+                let pixels: Vec<u8> = image.pixels.iter().flat_map(|p| p.to_array()).collect();
+                let theme = if self.scene % 2 == 0 { "dark" } else { "light" };
+                image::save_buffer(
+                    self.folder.join(format!(
+                        "compare-{}{}-{theme}.png",
+                        if deleted {
+                            "deleted"
+                        } else if calendar {
+                            "calendar"
+                        } else {
+                            "memo"
+                        },
+                        if compact { "-small" } else { "" }
+                    )),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .unwrap();
+            }
+            if self.frames == 85 {
+                self.app.preview_conflict_review(4, calendar, deleted);
+            }
+            if self.frames == 78 {
+                self.app.preview_conflict_review(7, calendar, deleted);
+            }
+            if self.frames >= 115 {
+                self.app.preview_conflict_review(6, calendar, deleted);
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(50));
+            return;
+        }
         if smoke_mode.as_deref() == Some("planner-conflict-smoke") {
             if self.frames == 0 {
                 self.app
@@ -4221,6 +4356,7 @@ fn main() -> Result<(), eframe::Error> {
                 quick_smoke_phase: 0,
                 sqlite_input_frame: None,
                 workflow_input_frame: None,
+                comparison_opened_at: None,
             }))
         }),
     )
