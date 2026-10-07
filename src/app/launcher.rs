@@ -89,7 +89,12 @@ impl DevToolsApp {
                                 ui.horizontal_wrapped(|ui| {
                                     ui.strong(&status.name);
                                     ui.colored_label(
-                                        if status.managed {
+                                        if status.failed_exit() {
+                                            self.colors.red
+                                        } else if status.managed && status.health.ok == Some(false)
+                                        {
+                                            self.colors.amber
+                                        } else if status.managed {
                                             self.colors.green
                                         } else {
                                             self.colors.muted

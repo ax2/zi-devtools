@@ -139,7 +139,7 @@ impl ServiceFilter {
 }
 
 enum BackgroundEvent {
-    Statuses(Vec<ServiceStatus>),
+    Statuses(u64, Vec<ServiceStatus>),
     Action(Result<ActionResult, String>),
     ServiceAction(String, Result<ActionResult, String>),
     Logs(String, Result<String, String>),
@@ -194,6 +194,8 @@ pub struct DevToolsApp {
     event_tx: Sender<BackgroundEvent>,
     event_rx: Receiver<BackgroundEvent>,
     refresh_inflight: bool,
+    refresh_generation: u64,
+    refresh_cancel: Arc<AtomicBool>,
     last_refresh: Instant,
     notification: String,
     notification_error: bool,
@@ -1901,6 +1903,8 @@ impl DevToolsApp {
             event_tx,
             event_rx,
             refresh_inflight: false,
+            refresh_generation: 0,
+            refresh_cancel: Arc::new(AtomicBool::new(false)),
             last_refresh: Instant::now() - Duration::from_secs(30),
             notification: tray_error.clone().unwrap_or_default(),
             notification_error: tray_error.is_some(),
@@ -1988,11 +1992,19 @@ impl DevToolsApp {
             return;
         }
         self.refresh_inflight = true;
+        self.refresh_cancel.store(true, Ordering::Release);
+        self.refresh_cancel = Arc::new(AtomicBool::new(false));
+        let cancelled = Arc::clone(&self.refresh_cancel);
+        self.refresh_generation = self.refresh_generation.wrapping_add(1);
+        let generation = self.refresh_generation;
         self.last_refresh = Instant::now();
         let manager = Arc::clone(&self.manager);
         let tx = self.event_tx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(BackgroundEvent::Statuses(manager.list_services()));
+            let _ = tx.send(BackgroundEvent::Statuses(
+                generation,
+                manager.list_services_cancellable(&cancelled),
+            ));
         });
     }
 
@@ -2095,7 +2107,10 @@ impl DevToolsApp {
                     self.service_pending.remove(&id);
                     let _ = self.event_tx.send(BackgroundEvent::Action(result));
                 }
-                BackgroundEvent::Statuses(statuses) => {
+                BackgroundEvent::Statuses(generation, statuses) => {
+                    if generation != self.refresh_generation {
+                        continue;
+                    }
                     self.refresh_inflight = false;
                     if let Some(tray) = &self.tray {
                         tray.update_status(&statuses);
@@ -2141,6 +2156,8 @@ impl DevToolsApp {
                     self.notification = message;
                     self.notification_error = false;
                     self.last_refresh = Instant::now() - Duration::from_secs(30);
+                    self.refresh_inflight = false;
+                    self.request_refresh();
                 }
                 BackgroundEvent::TrayNavigate(action) => match action {
                     TrayAction::RecorderTogglePause => self.recorder.toggle_pause(),
@@ -2261,6 +2278,8 @@ impl DevToolsApp {
                         }
                     }
                     self.last_refresh = Instant::now() - Duration::from_secs(30);
+                    self.refresh_inflight = false;
+                    self.request_refresh();
                 }
                 Err(error) => self.config_error = Some(error.to_string()),
             }
@@ -3442,6 +3461,8 @@ impl DevToolsApp {
                                     }
                                 }
                                 self.last_refresh = Instant::now() - Duration::from_secs(30);
+                                self.refresh_inflight = false;
+                                self.request_refresh();
                             }
                             Err(error) => self.config_error = Some(error.to_string()),
                         }
@@ -3536,6 +3557,7 @@ impl DevToolsApp {
                     }
                 }
                 self.last_refresh = Instant::now() - Duration::from_secs(30);
+                self.refresh_inflight = false;
                 self.request_refresh();
             }
         }
@@ -4031,6 +4053,7 @@ fn main_window_cloaked(window_handle: Option<isize>) -> bool {
 
 impl Drop for DevToolsApp {
     fn drop(&mut self) {
+        self.refresh_cancel.store(true, Ordering::Release);
         self.tray_bridge_stop.store(true, Ordering::Release);
     }
 }

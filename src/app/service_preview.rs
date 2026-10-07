@@ -6,6 +6,17 @@ impl DevToolsApp {
         self.notification.clear();
         self.selected_service = Some("demo".into());
         match scene {
+            444 | 445 => {
+                let old = self.manager.service_spec("demo").unwrap();
+                let mut spec = old.clone();
+                spec.command = "exit /b 37".into();
+                self.manager.save_service(Some(&old), spec).unwrap();
+                assert!(self.manager.start("demo").is_err());
+                self.statuses = self.manager.list_services();
+                assert_eq!(self.statuses[0].last_exit.as_ref().unwrap().code, Some(37));
+                self.refresh_inflight = false;
+                self.request_refresh();
+            }
             446 | 447 => {
                 self.service_editor.new_service();
                 let mut spec = self.manager.service_spec("demo").unwrap();
@@ -124,6 +135,26 @@ impl DevToolsApp {
             "fixture log\nWARN demo\n",
         )
         .unwrap();
+    }
+    pub fn preview_service_stale_queue(&self) {
+        let mut stale = self.statuses.clone();
+        assert!(!stale.is_empty());
+        for status in &mut stale {
+            status.name = "stale-snapshot".into();
+        }
+        self.event_tx
+            .send(BackgroundEvent::Statuses(
+                self.refresh_generation.wrapping_sub(1),
+                stale,
+            ))
+            .unwrap();
+    }
+    pub fn preview_service_stale_check(&self) {
+        assert!(
+            self.statuses
+                .iter()
+                .all(|status| status.name != "stale-snapshot")
+        );
     }
     pub fn preview_tray_scene(&mut self, ctx: &egui::Context, folder: &Path, index: usize) {
         let light = index % 2 == 1;

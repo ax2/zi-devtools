@@ -2181,6 +2181,12 @@ impl eframe::App for Capture {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
             self.app.update(ctx, frame);
+            if self.frames == 160 {
+                self.app.preview_service_stale_queue();
+            }
+            if self.frames == 170 {
+                self.app.preview_service_stale_check();
+            }
             let phase = match self.frames {
                 30 => Some(0),
                 50 => Some(1),
@@ -2199,7 +2205,7 @@ impl eframe::App for Capture {
             }
             if self.frames == 180 {
                 println!(
-                    "PASS native services: actual fixed sidebar/add/save/edit/delete/confirm/log clicks; async YAML CRUD on disposable config; original service retained; log auto-refresh/follow enabled"
+                    "PASS native services: actual fixed sidebar/add/save/edit/delete/confirm/log clicks; async YAML CRUD on disposable config; original service retained; log auto-refresh/follow enabled; stale status snapshots ignored"
                 );
                 std::process::exit(0);
             }

@@ -7,7 +7,7 @@ use std::{
     process::{Child, Command, Stdio},
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -54,6 +54,33 @@ pub struct HealthStatus {
 }
 
 #[derive(Clone, Debug)]
+pub struct ServiceExit {
+    pub at: String,
+    pub code: Option<i32>,
+    pub success: bool,
+    pub status: String,
+}
+
+impl ServiceExit {
+    fn from_status(status: std::process::ExitStatus) -> Self {
+        Self {
+            at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            code: status.code(),
+            success: status.success(),
+            status: status.to_string(),
+        }
+    }
+
+    pub fn summary(&self) -> String {
+        let code = self
+            .code
+            .map(|code| format!("退出码 {code}"))
+            .unwrap_or_else(|| self.status.clone());
+        format!("本次会话最近退出：{} · {code}", self.at)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ConfigFileSummary {
     pub configured_path: String,
     pub absolute_path: PathBuf,
@@ -81,12 +108,22 @@ pub struct ServiceStatus {
     pub log_size: u64,
     pub config_files: Vec<ConfigFileSummary>,
     pub env_count: usize,
+    pub last_exit: Option<ServiceExit>,
 }
 
 impl ServiceStatus {
+    pub fn failed_exit(&self) -> bool {
+        self.state == ServiceState::Stopped
+            && self.last_exit.as_ref().is_some_and(|exit| !exit.success)
+    }
+
     pub fn display_state(&self) -> &'static str {
         if self.managed && self.health_url.is_some() && self.health.ok == Some(false) {
-            "进程运行 · 待健康检查"
+            "进程运行 · 健康检查未通过"
+        } else if self.failed_exit() {
+            "异常退出"
+        } else if self.state == ServiceState::Stopped && self.last_exit.is_some() {
+            "已退出"
         } else {
             self.state.label()
         }
@@ -117,6 +154,7 @@ pub struct ServiceManager {
     lifecycle: Mutex<()>,
     config: RwLock<DashboardConfig>,
     children: Mutex<HashMap<String, Child>>,
+    last_exits: Mutex<HashMap<String, ServiceExit>>,
     desired_running: Mutex<BTreeSet<String>>,
     client: Client,
 }
@@ -134,6 +172,7 @@ impl ServiceManager {
             lifecycle: Mutex::new(()),
             config: RwLock::new(config),
             children: Mutex::new(HashMap::new()),
+            last_exits: Mutex::new(HashMap::new()),
             desired_running: Mutex::new(desired),
             client,
         }))
@@ -169,6 +208,15 @@ impl ServiceManager {
     }
 
     pub fn list_services(&self) -> Vec<ServiceStatus> {
+        self.list_services_cancellable(&AtomicBool::new(false))
+    }
+
+    /// Cancellation stops assigning new checks; running requests finish.
+    /// A cancelled batch may contain only part of the service list.
+    pub fn list_services_cancellable(&self, cancelled: &AtomicBool) -> Vec<ServiceStatus> {
+        if cancelled.load(Ordering::Acquire) {
+            return Vec::new();
+        }
         self.reap_children();
         let mut system = System::new();
         system.refresh_processes(ProcessesToUpdate::All, true);
@@ -181,6 +229,9 @@ impl ServiceManager {
             for _ in 0..ids.len().min(8) {
                 scope.spawn(|| {
                     loop {
+                        if cancelled.load(Ordering::Acquire) {
+                            break;
+                        }
                         let index = next.fetch_add(1, Ordering::Relaxed);
                         let Some(id) = ids.get(index) else { break };
                         if let Ok(status) = self.service_status_with_system(id, &system) {
@@ -265,6 +316,7 @@ impl ServiceManager {
             log_size,
             config_files,
             env_count: spec.env.len(),
+            last_exit: self.last_exits.lock().get(service_id).cloned(),
         })
     }
 
@@ -333,15 +385,32 @@ impl ServiceManager {
             .spawn()
             .with_context(|| format!("启动服务 {} 失败", spec.name))?;
         let pid = child.id();
-        self.children.lock().insert(service_id.to_owned(), child);
+        let mut children = self.children.lock();
+        children.insert(service_id.to_owned(), child);
+        self.last_exits.lock().remove(service_id);
         if let Err(error) = self.write_pid(service_id, pid) {
-            let _ = terminate_process_tree(pid);
-            self.children.lock().remove(service_id);
+            if let Ok(Some(status)) = children.get_mut(service_id).unwrap().try_wait() {
+                self.record_exit(service_id, status);
+                children.remove(service_id);
+                let _ = self.clear_pid(service_id);
+                bail!("服务启动后立即退出：{status}；请查看服务日志");
+            }
+            // Registration failed, so the numeric PID is not authenticated.
+            // Use the owned process handle rather than risking a reused PID.
+            if let Some(mut child) = children.remove(service_id) {
+                let _ = child.kill();
+                let _ = child.try_wait();
+            }
             let _ = self.clear_pid(service_id);
             return Err(error);
         }
+        drop(children);
         std::thread::sleep(Duration::from_millis(250));
-        if self.service_status(service_id)?.state != ServiceState::Running {
+        let status = self.service_status(service_id)?;
+        if status.state != ServiceState::Running {
+            if let Some(exit) = status.last_exit {
+                bail!("服务启动后立即退出：{}；请查看服务日志", exit.summary());
+            }
             bail!("服务启动后立即退出或脱离托管；请查看服务日志");
         }
         self.set_desired_running(service_id, true)?;
@@ -401,6 +470,10 @@ impl ServiceManager {
         }
         self.children.lock().remove(service_id);
         self.clear_pid(service_id)?;
+        if pid.is_some() {
+            // A completed user stop is not an unexpected process failure.
+            self.last_exits.lock().remove(service_id);
+        }
         self.set_desired_running(service_id, false)?;
         let port_still_open = spec.port.is_some_and(is_port_open);
         Ok(ActionResult {
@@ -570,6 +643,7 @@ impl ServiceManager {
         services.remove(&original.id);
         let next = crate::config::save_services(&config, services)?;
         *self.config.write() = next;
+        self.last_exits.lock().remove(&original.id);
         Ok(())
     }
 
@@ -600,7 +674,7 @@ impl ServiceManager {
         let started = Instant::now();
         match self.client.get(normalized).send() {
             Ok(response) => HealthStatus {
-                ok: Some(response.status().as_u16() < 500),
+                ok: Some(response.status().is_success()),
                 status_code: Some(response.status().as_u16()),
                 elapsed_ms: Some(started.elapsed().as_millis()),
                 message: None,
@@ -692,32 +766,31 @@ impl ServiceManager {
         Ok(())
     }
 
+    fn record_exit(&self, id: &str, status: std::process::ExitStatus) {
+        let exit = ServiceExit::from_status(status);
+        let _ = self.append_log(
+            id,
+            &format!(
+                "===== Zi DevTools process exited {} status={} =====\n",
+                exit.at, exit.status
+            ),
+        );
+        self.last_exits.lock().insert(id.to_owned(), exit);
+    }
+
     fn reap_children(&self) {
-        let exited: Vec<(String, std::process::ExitStatus)> = {
-            let mut children = self.children.lock();
-            children
-                .iter_mut()
-                .filter_map(|(id, child)| match child.try_wait() {
-                    Ok(Some(status)) => Some((id.clone(), status)),
-                    _ => None,
-                })
-                .collect()
-        };
-        if exited.is_empty() {
-            return;
-        }
         let mut children = self.children.lock();
+        let exited: Vec<(String, std::process::ExitStatus)> = children
+            .iter_mut()
+            .filter_map(|(id, child)| match child.try_wait() {
+                Ok(Some(status)) => Some((id.clone(), status)),
+                _ => None,
+            })
+            .collect();
         for (id, status) in exited {
             children.remove(&id);
             let _ = self.clear_pid(&id);
-            let _ = self.append_log(
-                &id,
-                &format!(
-                    "===== Zi DevTools process exited {} status={} =====\n",
-                    Local::now().format("%Y-%m-%d %H:%M:%S"),
-                    status
-                ),
-            );
+            self.record_exit(&id, status);
         }
     }
 }

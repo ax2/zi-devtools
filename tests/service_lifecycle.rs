@@ -5,7 +5,7 @@ use std::{
     process::{Child, Command, Stdio},
     sync::{
         Arc, Mutex, MutexGuard,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
     time::Duration,
@@ -97,6 +97,11 @@ fn hundred_service_statuses_are_complete_and_stable() {
     }
     fs::write(&config_path, yaml).unwrap();
     let manager = ServiceManager::new(load_config(&config_path).unwrap()).unwrap();
+    assert!(
+        manager
+            .list_services_cancellable(&AtomicBool::new(true))
+            .is_empty()
+    );
     for _ in 0..2 {
         let statuses = manager.list_services();
         assert_eq!(statuses.len(), 100);
@@ -119,6 +124,61 @@ fn hundred_service_statuses_are_complete_and_stable() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn cancellation_during_http_check_stops_assigning_more_services() {
+    let _guard = network_fixture_guard();
+    let root = std::env::temp_dir().join(format!("zi-service-cancel-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("services.yml");
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let server_cancel = Arc::clone(&cancelled);
+    let server = thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let mut handlers = Vec::new();
+        while std::time::Instant::now() < deadline {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let cancel = Arc::clone(&server_cancel);
+                    handlers.push(thread::spawn(move || {
+                        stream.set_nonblocking(false).unwrap();
+                        stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                        let mut bytes = [0; 4096];
+                        assert!(stream.read(&mut bytes).unwrap() > 0);
+                        cancel.store(true, Ordering::Release);
+                        thread::sleep(Duration::from_millis(80));
+                        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+                    }));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(2))
+                }
+                Err(error) => panic!("cancel fixture accept failed: {error}"),
+            }
+        }
+        let count = handlers.len();
+        for handler in handlers {
+            handler.join().unwrap();
+        }
+        count
+    });
+    let mut yaml = format!("state_dir: {}\nservices:\n", root.join("state").display());
+    for index in 0..100 {
+        yaml.push_str(&format!("  svc-{index:03}:\n    repo: {}\n    command: echo fixture\n    health_url: http://127.0.0.1:{port}/health\n",root.display()));
+    }
+    fs::write(&path, yaml).unwrap();
+    let manager = ServiceManager::new(load_config(&path).unwrap()).unwrap();
+    let statuses = manager.list_services_cancellable(&cancelled);
+    let accepted = server.join().unwrap();
+    assert!((1..=8).contains(&accepted));
+    assert_eq!(statuses.len(), accepted);
+    assert!(statuses.iter().all(|status| status.health.ok == Some(true)));
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
+
 use zi_devtools::{
     config::load_config,
     service::{ServiceManager, ServiceState},
@@ -129,6 +189,125 @@ use zi_devtools::{
 fn network_fixture_guard() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     LOCK.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
+#[test]
+fn immediate_exit_keeps_code_logs_and_clears_stale_failure_on_next_run() {
+    let root = std::env::temp_dir().join(format!("zi-service-exit-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let config_path = root.join("services.yml");
+    fs::write(
+        &config_path,
+        format!(
+            "state_dir: {}\nservices:\n  fixture:\n    repo: {}\n    command: exit /b 37\n",
+            root.join("state").display(),
+            root.display()
+        ),
+    )
+    .unwrap();
+    let manager = ServiceManager::new(load_config(&config_path).unwrap()).unwrap();
+    // Reaping from background status reads must not lose the foreground exit.
+    thread::scope(|scope| {
+        scope.spawn(|| {
+            for _ in 0..8 {
+                manager.list_services();
+            }
+        });
+        assert!(
+            manager
+                .start("fixture")
+                .unwrap_err()
+                .to_string()
+                .contains("37")
+        );
+    });
+    let failed = manager.service_status("fixture").unwrap();
+    assert_eq!(failed.last_exit.as_ref().unwrap().code, Some(37));
+    assert!(failed.failed_exit());
+    assert_eq!(failed.display_state(), "异常退出");
+    let log = manager.logs("fixture", 100).unwrap();
+    assert!(log.contains("process exited") && log.contains("37"));
+    let old = manager.service_spec("fixture").unwrap();
+    let mut next = old.clone();
+    next.command = "exit /b 0".into();
+    manager.save_service(Some(&old), next).unwrap();
+    assert!(manager.start("fixture").is_err());
+    let clean = manager.service_status("fixture").unwrap();
+    assert_eq!(clean.last_exit.as_ref().unwrap().code, Some(0));
+    assert!(!clean.failed_exit());
+    assert_eq!(clean.display_state(), "已退出");
+    let spec = manager.service_spec("fixture").unwrap();
+    manager.delete_service(&spec).unwrap();
+    manager.save_service(None, spec).unwrap();
+    assert!(
+        manager
+            .service_status("fixture")
+            .unwrap()
+            .last_exit
+            .is_none()
+    );
+    assert!(manager.logs("fixture", 100).unwrap().contains("37"));
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn health_checks_reject_client_and_server_http_errors() {
+    let _guard = network_fixture_guard();
+    let root =
+        std::env::temp_dir().join(format!("zi-service-http-errors-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("services.yml");
+    let mut yaml = format!("state_dir: {}\nservices:\n", root.join("state").display());
+    let mut servers = Vec::new();
+    for (id, code) in [("ok", 200), ("missing", 404), ("failed", 503)] {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        yaml.push_str(&format!("  {id}:\n    repo: {}\n    command: echo fixture\n    health_url: http://127.0.0.1:{port}/health\n",root.display()));
+        servers.push(thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream.set_nonblocking(false).unwrap();
+                        stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                        let mut bytes = [0; 4096];
+                        assert!(stream.read(&mut bytes).unwrap() > 0);
+                        stream.write_all(format!("HTTP/1.1 {code} Fixture\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).unwrap();
+                        break;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline => thread::sleep(Duration::from_millis(2)),
+                    Err(error) => panic!("health fixture failed: {error}"),
+                }
+            }
+        }));
+    }
+    fs::write(&path, yaml).unwrap();
+    let manager = ServiceManager::new(load_config(&path).unwrap()).unwrap();
+    let statuses = manager.list_services();
+    for server in servers {
+        server.join().unwrap();
+    }
+    for (id, code, ok) in [
+        ("ok", 200, true),
+        ("missing", 404, false),
+        ("failed", 503, false),
+    ] {
+        let status = statuses.iter().find(|status| status.id == id).unwrap();
+        assert_eq!(status.health.status_code, Some(code));
+        assert_eq!(status.health.ok, Some(ok));
+        assert_eq!(
+            status.state,
+            if ok {
+                ServiceState::External
+            } else {
+                ServiceState::Stopped
+            }
+        );
+    }
+    drop(manager);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -190,6 +369,13 @@ fn starts_health_checks_logs_and_stops_a_windows_service_tree() {
 
     manager.stop("fixture").unwrap();
     thread::sleep(Duration::from_millis(200));
+    assert!(
+        manager
+            .service_status("fixture")
+            .unwrap()
+            .last_exit
+            .is_none()
+    );
     assert_eq!(
         manager.service_status("fixture").unwrap().state,
         ServiceState::Stopped

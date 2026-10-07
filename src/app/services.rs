@@ -183,7 +183,9 @@ impl DevToolsApp {
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    let state_color = if status.managed && status.health.ok == Some(false) {
+                    let state_color = if status.failed_exit() {
+                        p.red
+                    } else if status.managed && status.health.ok == Some(false) {
                         p.amber
                     } else {
                         match status.state {
@@ -211,6 +213,27 @@ impl DevToolsApp {
                     });
                 });
                 ui.add_space(8.0);
+                if let Some(exit) = &status.last_exit {
+                    ui.label(
+                        RichText::new(exit.summary())
+                            .small()
+                            .color(if exit.success { p.muted } else { p.red }),
+                    );
+                }
+                if status.managed && status.health_url.is_some() && status.health.ok == Some(false)
+                {
+                    let detail = status
+                        .health
+                        .status_code
+                        .map(|code| format!("HTTP {code}"))
+                        .or_else(|| status.health.message.clone())
+                        .unwrap_or_else(|| "请检查健康端点".into());
+                    ui.label(
+                        RichText::new(format!("健康检查未通过：{detail}"))
+                            .small()
+                            .color(p.amber),
+                    );
+                }
                 if let Some(action) = pending {
                     ui.horizontal(|ui| {
                         ui.spinner();
