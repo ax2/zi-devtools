@@ -103,6 +103,52 @@ pub struct Definition {
     pub version: u32,
     pub name: String,
     pub steps: Vec<Step>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<Output>,
+}
+
+/// Versioned output settings only. Targets and permission are supplied per run.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "format", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Output {
+    Csv {
+        version: u32,
+        protect_formulas: bool,
+    },
+    Sqlite {
+        version: u32,
+        table: String,
+    },
+}
+impl Output {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Csv { version, .. } => ensure!(*version == 1, "不支持的CSV输出版本"),
+            Self::Sqlite { version, table } => {
+                ensure!(*version == 1, "不支持的SQLite输出版本");
+                ensure!(
+                    !table.trim().is_empty() && table.len() <= 128 && !table.contains('\0'),
+                    "输出表名须为1–128字节且不能包含NUL"
+                );
+            }
+        }
+        Ok(())
+    }
+    pub fn summary(&self) -> String {
+        match self {
+            Self::Csv {
+                protect_formulas, ..
+            } => format!(
+                "CSV · 文本公式保护{}",
+                if *protect_formulas {
+                    "开启"
+                } else {
+                    "关闭"
+                }
+            ),
+            Self::Sqlite { table, .. } => format!("SQLite · 表名 {table}"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -130,7 +176,11 @@ impl Definition {
     }
 
     pub fn validate(&self) -> Result<()> {
-        ensure!(matches!(self.version, 1 | 2), "不支持的流程定义版本");
+        ensure!(matches!(self.version, 1..=3), "不支持的流程定义版本");
+        if let Some(output) = &self.output {
+            ensure!(self.version == 3, "保存输出配置需要流程格式3");
+            output.validate()?;
+        }
         ensure!(
             !self.name.trim().is_empty() && self.name.chars().count() <= 120,
             "流程名称须为1–120字"
@@ -182,7 +232,7 @@ impl Definition {
                 }
             };
             ensure!(
-                self.version == 2
+                self.version >= 2
                     || matches!(step, Step::Column { .. } | Step::SelectColumns { .. }),
                 "第{}步的行操作需要格式版本2",
                 index + 1
@@ -275,8 +325,85 @@ mod tests {
     use crate::workbench::DataFormat;
     use serde_json::json;
 
+    #[test]
+    fn versioned_outputs_roundtrip_without_a_target_or_execution_grant() {
+        let mut def = definition(vec![Step::SelectColumns {
+            columns: vec!["id".into()],
+        }]);
+        let source = Dataset::parse("id,name\n001,original", DataFormat::Csv, b',').unwrap();
+        for output in [
+            Output::Csv {
+                version: 1,
+                protect_formulas: false,
+            },
+            Output::Sqlite {
+                version: 1,
+                table: "教程\"数据".into(),
+            },
+        ] {
+            def.version = 3;
+            def.output = Some(output);
+            let bytes = serde_json::to_vec(&def).unwrap();
+            let loaded = Definition::parse(&bytes).unwrap();
+            assert_eq!(loaded, def);
+            assert_eq!(
+                loaded
+                    .preview(&source, &AtomicBool::new(false))
+                    .unwrap()
+                    .result
+                    .rows[0][0],
+                "001"
+            );
+            let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            let keys: Vec<_> = json["output"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect();
+            assert!(
+                keys.iter()
+                    .all(|key| ["format", "version", "table", "protect_formulas"].contains(key))
+            );
+        }
+        for version in [1, 2] {
+            def.version = version;
+            def.output = None;
+            let bytes = serde_json::to_vec(&def).unwrap();
+            assert!(!String::from_utf8(bytes.clone()).unwrap().contains("output"));
+            assert_eq!(Definition::parse(&bytes).unwrap().output, None);
+        }
+    }
+    #[test]
+    fn output_contract_rejects_old_envelopes_unknown_actions_and_grants() {
+        let mut value = json!({"version":3,"name":"clean","steps":[{"action":"select_columns","columns":["id"]}],"output":{"format":"csv","version":1,"protect_formulas":true}});
+        for (field, data) in [
+            ("path", json!("C:/old.csv")),
+            ("authorized", json!(true)),
+            ("command", json!("run")),
+        ] {
+            let mut unsafe_value = value.clone();
+            unsafe_value["output"][field] = data;
+            assert!(Definition::parse(&serde_json::to_vec(&unsafe_value).unwrap()).is_err());
+        }
+        for version in [1, 2, 4] {
+            let mut wrong = value.clone();
+            wrong["version"] = json!(version);
+            assert!(Definition::parse(&serde_json::to_vec(&wrong).unwrap()).is_err());
+        }
+        value["output"]["version"] = json!(2);
+        assert!(Definition::parse(&serde_json::to_vec(&value).unwrap()).is_err());
+        value["output"] = json!({"format":"shell","version":1});
+        assert!(Definition::parse(&serde_json::to_vec(&value).unwrap()).is_err());
+        for table in ["".to_owned(), " ".into(), "x\0y".into(), "中".repeat(43)] {
+            value["output"] = json!({"format":"sqlite","version":1,"table":table});
+            assert!(Definition::parse(&serde_json::to_vec(&value).unwrap()).is_err());
+        }
+    }
+
     fn definition(steps: Vec<Step>) -> Definition {
         Definition {
+            output: None,
             version: 1,
             name: "重复清洗".into(),
             steps,

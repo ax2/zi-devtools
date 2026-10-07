@@ -31,6 +31,7 @@ mod tests {
         }
         fn definition(&self, file: &str, name: &str) {
             let definition = Definition {
+                output: None,
                 version: 2,
                 name: name.into(),
                 steps: vec![Step::SelectColumns {

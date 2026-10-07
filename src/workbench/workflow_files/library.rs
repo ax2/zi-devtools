@@ -115,6 +115,7 @@ mod tests {
         let folder = std::env::temp_dir().join(format!("zi-flow-library-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&folder).unwrap();
         let definition = Definition {
+            output: None,
             version: 2,
             name: "Daily clean".into(),
             steps: vec![super::super::super::workflow::Step::SelectColumns {
@@ -154,6 +155,7 @@ mod tests {
         let folder = std::env::temp_dir().join(format!("zi-flow-library-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&folder).unwrap();
         let definition = Definition {
+            output: None,
             version: 2,
             name: "Recipe".into(),
             steps: vec![super::super::super::workflow::Step::SelectColumns {

@@ -137,8 +137,31 @@ impl State {
 mod tests {
     use super::super::workflow::{ColumnOperation, Step};
     use super::*;
+    #[test]
+    fn saved_output_declaration_survives_real_file_roundtrip_without_execution() {
+        let root = std::env::temp_dir().join(format!("zi-output-recipe-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("recipe.json");
+        let mut def = definition();
+        def.version = 3;
+        def.output = Some(super::super::workflow::Output::Sqlite {
+            version: 1,
+            table: "教程资料".into(),
+        });
+        save_new(&def, &path).unwrap();
+        let imported = load(&path).unwrap();
+        assert_eq!(imported, def);
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            1,
+            "loading does not write a database"
+        );
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
     fn definition() -> Definition {
         Definition {
+            output: None,
             version: 1,
             name: "清洗".into(),
             steps: vec![Step::Column {
@@ -220,6 +243,7 @@ mod tests {
         use super::super::workflow::{Predicate, SortKey, Step};
         let path = std::env::temp_dir().join(format!("zi-row-flow-{}.json", uuid::Uuid::new_v4()));
         let definition = Definition {
+            output: None,
             version: 2,
             name: "行处理".into(),
             steps: vec![

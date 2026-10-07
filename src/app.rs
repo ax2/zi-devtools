@@ -781,6 +781,10 @@ impl DevToolsApp {
         self.data_state.preview_workflow_output_check(phase)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_output_reload(&mut self, path: &Path, phase: u8) {
+        self.data_state.preview_workflow_output_reload(path, phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_check(&mut self, phase: u8) -> bool {
         self.data_state.preview_workflow_check(phase)
     }

@@ -220,7 +220,7 @@ pub(super) struct State {
     status: String,
     receipt: Option<sqlite_export::Receipt>,
     #[cfg(feature = "ui-preview")]
-    pub(super) buttons: [Option<egui::Rect>; 4],
+    pub(super) buttons: [Option<egui::Rect>; 5],
 }
 impl Default for State {
     fn default() -> Self {
@@ -238,7 +238,7 @@ impl Default for State {
             status: String::new(),
             receipt: None,
             #[cfg(feature = "ui-preview")]
-            buttons: [None; 4],
+            buttons: [None; 5],
         }
     }
 }
@@ -248,6 +248,35 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn load_settings(&mut self, output: Option<&workflow::Output>) {
+        self.path.clear();
+        self.review = None;
+        self.format = Format::Csv;
+        self.safe = true;
+        self.table = "workflow_result".into();
+        match output {
+            Some(workflow::Output::Csv {
+                protect_formulas, ..
+            }) => self.safe = *protect_formulas,
+            Some(workflow::Output::Sqlite { table, .. }) => {
+                self.format = Format::Sqlite;
+                self.table = table.clone();
+            }
+            None => {}
+        }
+    }
+    fn settings(&self) -> workflow::Output {
+        match self.format {
+            Format::Csv => workflow::Output::Csv {
+                version: 1,
+                protect_formulas: self.safe,
+            },
+            Format::Sqlite => workflow::Output::Sqlite {
+                version: 1,
+                table: self.table.trim().into(),
+            },
+        }
+    }
     pub(super) fn wants_scroll(&self) -> bool {
         self.reveal
             || self
@@ -275,6 +304,16 @@ impl State {
             _ => panic!("unknown workflow output fixture phase"),
         }
         true
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_imported(&self, output: &workflow::Output) {
+        assert_eq!(&self.settings(), output);
+        assert!(self.path.is_empty() && self.receiver.is_none() && self.review.is_none());
+        assert_eq!(
+            self.job.phase,
+            Phase::Done,
+            "import must not start another output"
+        );
     }
     pub(super) fn busy(&self) -> bool {
         self.job.phase.active() || self.review.is_some()
@@ -350,10 +389,11 @@ impl State {
         &mut self,
         ui: &mut egui::Ui,
         source: Option<&Dataset>,
-        definition: &workflow::Definition,
+        definition: &mut workflow::Definition,
         result: Option<&Dataset>,
     ) {
-        if result.is_none()
+        if definition.steps.is_empty()
+            && result.is_none()
             && self.review.is_none()
             && self.status.is_empty()
             && !self.job.phase.active()
@@ -376,7 +416,18 @@ impl State {
                 if !self.status.is_empty() {
                     ui.label(&self.status);
                 }
-                ui.add_enabled_ui(result.is_some() && source.is_some() && !self.busy(), |ui| {
+                ui.add_enabled_ui(!self.busy(), |ui| {
+                    let settings_before = self.settings();
+                    let mut remember = definition.output.is_some();
+                    let save_settings =
+                        ui.checkbox(&mut remember, "将输出设置保存在流程中（不含目标或授权）");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.buttons[4] = Some(save_settings.rect.intersect(ui.clip_rect()));
+                    }
+                    if save_settings.changed() && !remember {
+                        definition.output = None;
+                    }
                     ui.horizontal_wrapped(|ui| {
                         ui.selectable_value(&mut self.format, Format::Csv, "CSV");
                         ui.selectable_value(&mut self.format, Format::Sqlite, "SQLite");
@@ -390,6 +441,16 @@ impl State {
                             ui.text_edit_singleline(&mut self.table);
                         });
                     }
+                    if remember {
+                        definition.version = 3;
+                        definition.output = Some(self.settings());
+                    }
+                    if save_settings.changed() || settings_before != self.settings() {
+                        self.scroll_until =
+                            Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
+                    }
+                });
+                ui.add_enabled_ui(result.is_some() && source.is_some() && !self.busy(), |ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.path)
                             .hint_text("新文件完整路径")
@@ -508,6 +569,34 @@ impl State {
 mod tests {
     use super::*;
     #[test]
+    fn imported_output_settings_reset_target_without_starting_a_writer() {
+        let mut state = State::default();
+        for output in [
+            workflow::Output::Sqlite {
+                version: 1,
+                table: "记录\"表".into(),
+            },
+            workflow::Output::Csv {
+                version: 1,
+                protect_formulas: false,
+            },
+        ] {
+            state.path = "C:/prior-target.csv".into();
+            state.load_settings(Some(&output));
+            assert_eq!(state.settings(), output);
+            assert!(state.path.is_empty() && state.review.is_none() && state.receiver.is_none());
+            assert!(!state.job.phase.active());
+        }
+        state.load_settings(None);
+        assert_eq!(
+            state.settings(),
+            workflow::Output::Csv {
+                version: 1,
+                protect_formulas: true
+            }
+        );
+    }
+    #[test]
     fn workflow_output_rejects_oversize_snapshot_before_creating_a_file() {
         let fixture = Fixture::new();
         let (source, definition, mut result) = frozen();
@@ -567,6 +656,7 @@ mod tests {
         let mut source=Dataset::parse(r#"[{"id":"001","name":" 中文🦀 ","formula":"=1+1","flag":true,"large":18446744073709551615,"empty":null,"number":-2}]"#,DataFormat::Json,b',').unwrap();
         source.rows = vec![source.rows[0].clone(); 300];
         let definition = workflow::Definition {
+            output: None,
             version: 2,
             name: "完整结果".into(),
             steps: vec![workflow::Step::Column {

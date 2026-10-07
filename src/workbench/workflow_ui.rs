@@ -25,6 +25,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             definition: Definition {
+                output: None,
                 version: 2,
                 name: "表格清洗".into(),
                 steps: vec![],
@@ -519,7 +520,7 @@ impl DataState {
                                 ] {
                                     if ui.button(title).clicked() {
                                         self.workflow.definition.steps.push(step);
-                                        self.workflow.definition.version = 2;
+                                        self.workflow.definition.version = self.workflow.definition.version.max(2);
                                         changed = true;
                                         ui.close();
                                     }
@@ -628,7 +629,7 @@ impl DataState {
             } else {
                 None
             },
-            &self.workflow.definition,
+            &mut self.workflow.definition,
             self.workflow.proposal.as_ref().map(|p| &p.result),
         );
         if start && let Err(error) = self.start_workflow() {
@@ -842,7 +843,13 @@ impl DataState {
                 imported.steps.len(),
                 self.workflow.definition.steps.len()
             ));
-            ui.label("仅替换步骤；当前表格与原始输入保留，不自动预览、运行、保存或授权。");
+            ui.label("替换步骤与输出设置；当前表格与原始输入保留，不自动预览、运行、保存或授权。");
+            if let Some(output) = &imported.output {
+                ui.label(format!(
+                    "保存的输出：{}；目标文件需重新选择并确认",
+                    output.summary()
+                ));
+            }
             egui::ScrollArea::vertical()
                 .max_height(300.0)
                 .show(ui, |ui| {
@@ -898,6 +905,9 @@ impl DataState {
         }
         if let Some(definition) = self.workflow.files.review.take() {
             self.workflow.invalidate();
+            self.workflow
+                .output
+                .load_settings(definition.output.as_ref());
             self.workflow.definition = definition;
             self.workflow.error.clear();
             self.workflow.files.message = "流程步骤已载入；尚未预览或应用".into();

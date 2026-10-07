@@ -18,6 +18,7 @@ struct Preview {
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
         let button = match self.frame {
+            24 | 25 => Some(4),
             30 | 31 | 80 | 81 => Some(0),
             60 | 61 => Some(1),
             110 | 111 => Some(2),
@@ -30,6 +31,16 @@ impl eframe::App for Preview {
                 pos,
                 button: egui::PointerButton::Primary,
                 pressed: self.frame % 2 == 0,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if matches!(self.frame, 190 | 191) {
+            let pos = self.app.preview_workflow_position(1);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frame == 190,
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -71,7 +82,7 @@ impl eframe::App for Preview {
                 assert_eq!(&rows[0][2], "2");
             }
         }
-        if matches!(self.frame, 20 | 45 | 145) {
+        if matches!(self.frame, 15 | 45 | 145 | 185) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         for event in ctx.input(|i| i.events.clone()) {
@@ -88,10 +99,22 @@ impl eframe::App for Preview {
                 self.captured += 1;
             }
         }
-        if self.frame == 160 {
-            assert_eq!(self.captured, 3);
+        if self.frame == 150 {
+            self.app
+                .preview_workflow_output_reload(&self.folder.join("recipe.json"), 0);
+        }
+        if self.frame == 170 {
+            self.app
+                .preview_workflow_output_reload(&self.folder.join("recipe.json"), 1);
+        }
+        if self.frame == 210 {
+            self.app
+                .preview_workflow_output_reload(&self.folder.join("recipe.json"), 2);
+        }
+        if self.frame == 220 {
+            assert_eq!(self.captured, 4);
             println!(
-                "PASS native workflow output sqlite={} light={}: actual review/back/confirm; no write before confirm; independently read complete output; original table and proposal retained",
+                "PASS native workflow output sqlite={} light={}: actual remember/review/back/confirm; no write before confirm; independently read complete output; original table and proposal retained; real recipe save/read, import confirmed by actual button, declared settings restored with empty target and no new writer",
                 self.sqlite, self.light
             );
             self.app.preview_tray_workflow_finish(ctx);

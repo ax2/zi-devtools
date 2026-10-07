@@ -2,16 +2,48 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_output_reload(&mut self, path: &std::path::Path, phase: u8) {
+        match phase {
+            0 => self
+                .workflow
+                .files
+                .save(self.workflow.definition.clone(), path.to_path_buf())
+                .unwrap(),
+            1 => {
+                assert!(!self.workflow.files.job.phase.active());
+                self.open_bookmarked_workflow(path.to_path_buf()).unwrap();
+            }
+            2 => {
+                assert!(self.workflow.files.review.is_none());
+                assert!(self.workflow.proposal.is_none());
+                self.workflow
+                    .output
+                    .preview_imported(self.workflow.definition.output.as_ref().unwrap());
+                assert_eq!(self.dataset.as_ref().unwrap().rows[0][1], " Zi Tools ");
+                assert_eq!(self.dataset.as_ref().unwrap().rows[0][2], "2");
+                let saved = Definition::parse(&std::fs::read(path).unwrap()).unwrap();
+                assert_eq!(saved, self.workflow.definition);
+            }
+            _ => panic!("unknown output reload phase"),
+        }
+    }
     pub fn preview_workflow_output_prepare(&mut self, path: &std::path::Path, sqlite: bool) {
         self.preview_workflow();
         self.workflow.output.preview_prepare(path, sqlite);
     }
     pub fn preview_workflow_output_position(&self, index: usize) -> egui::Pos2 {
         let rect = self.workflow.output.buttons[index].expect("output button missing");
-        assert!(rect.is_positive(), "output button is outside viewport");
+        assert!(
+            rect.is_positive(),
+            "output button {index} is outside viewport: {rect:?}"
+        );
         rect.center()
     }
     pub fn preview_workflow_output_check(&self, phase: u8) -> bool {
+        assert_eq!(self.workflow.definition.version, 3);
+        assert!(self.workflow.definition.output.is_some());
+        let bytes = serde_json::to_vec(&self.workflow.definition).unwrap();
+        assert_eq!(Definition::parse(&bytes).unwrap(), self.workflow.definition);
         let source = self.dataset.as_ref().unwrap();
         assert_eq!(source.rows[0][1], " Zi Tools ");
         assert_eq!(source.rows[0][2], "2");
@@ -107,6 +139,7 @@ impl DataState {
                 self.input = "编号,名称,数量\n001,Zi,2\n002,Zi,3\n003,Other,9\n004,Zip,1".into();
                 self.dataset = Some(Dataset::parse(&self.input, DataFormat::Csv, b',').unwrap());
                 self.workflow.definition = Definition {
+                    output: None,
                     version: 2,
                     name: "教程：筛选排序去重".into(),
                     steps: vec![

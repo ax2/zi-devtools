@@ -278,6 +278,7 @@ mod tests {
         };
         let original = data.clone();
         let result = Definition {
+            output: None,
             version: 2,
             name: "行处理".into(),
             steps,
@@ -384,6 +385,7 @@ mod tests {
     fn chain_rename_filter_multikey_sort_dedup_and_projection() {
         let data = Dataset::parse(r#"[{"id":"001","group":"A","n":2},{"id":"002","group":"a","n":3},{"id":"003","group":"A","n":1},{"id":"004","group":"B","n":4}]"#, super::super::super::DataFormat::Json, b',').unwrap();
         let definition = Definition {
+            output: None,
             version: 2,
             name: "组合".into(),
             steps: vec![
@@ -449,6 +451,7 @@ mod tests {
     #[test]
     fn invalid_parameters_and_empty_results() {
         let mut definition = Definition {
+            output: None,
             version: 2,
             name: "x".into(),
             steps: vec![Step::Filter {
