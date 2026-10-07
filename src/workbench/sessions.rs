@@ -89,6 +89,7 @@ impl DataState {
 
     fn validate_saved(&self) -> Result<()> {
         self.text_flow.validate()?;
+        self.workflow.validate_saved()?;
         anyhow::ensure!(
             self.input.len() <= INPUT_LIMIT
                 && self.output.len() <= 8 * 1024 * 1024

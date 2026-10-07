@@ -110,11 +110,14 @@ impl Workspace {
             let mut cancel = false;
             egui::Modal::new(egui::Id::new("save-data-instance")).show(ctx,|ui|{
                 ui.set_max_width(520.0);ui.heading(if self.save_copy{"另存工作实例副本"}else{"保存工作实例快照"});
-                ui.label(format!("保存“{}”的原始输入、当前表格、结果、筛选、文件路径、合并草稿和转换预览/撤销内容。",self.instances[self.active].name));
+                ui.label(format!("保存“{}”的原始输入、当前表格、导出文本、筛选、文件路径、合并草稿、转换预览/撤销内容，以及工具流程与表格流水线的步骤。",self.instances[self.active].name));
+                ui.label("流程运行结果、待确认审核、目标文件路径和写入授权不随流程恢复。恢复后请重新运行或预览，需要写文件时重新确认。");
                 ui.label("内容保存在本机，未加密；恢复不会运行命令、读取原文件或重新解析。保存后继续编辑，需要再次保存才能保留修改。");
                 ui.small(format!("位置：{}",self.store.path.display()));
                 ui.small("最多 256 项 / 128 MiB，单项最多 64 MiB；更新会替换此保存项的旧快照。需要保留旧版请选择另存副本。");
-                ui.horizontal(|ui|{cancel=ui.button("取消").clicked();save=ui.add_enabled(!self.operation_pending()&&!self.busy(),primary(ui,"确认保存到本机")).clicked();});
+                ui.horizontal(|ui|{cancel=ui.button("取消").clicked();let button=ui.add_enabled(!self.operation_pending()&&!self.busy(),primary(ui,"确认保存到本机"));
+                    #[cfg(feature="ui-preview")] ui.ctx().data_mut(|data|data.insert_temp(egui::Id::new("workspace-save-confirm"),button.rect));
+                    save=button.clicked();});
             });
             if cancel {
                 self.save_confirm = false;
@@ -291,5 +294,21 @@ impl Workspace {
                 });
             }
         }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_flow_save_prepare(&mut self) {
+        self.preview_workflow();
+        self.save_confirm = true;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_flow_disk_restore(&mut self) {
+        assert!(!self.operation_pending());
+        let saved = self.instances[self.active]
+            .saved
+            .clone()
+            .expect("actual database save completed");
+        let live = self.active_id().to_owned();
+        self.close(&live, true).unwrap();
+        self.load_saved(saved.0);
     }
 }

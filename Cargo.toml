@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.78"
+version = "0.82.0-dev.79"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -173,4 +173,8 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "action_picker_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "workspace_flow_ui"
 required-features = ["ui-preview"]

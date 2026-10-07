@@ -266,7 +266,7 @@ pub struct DataState {
     pub parse_job: Job,
     #[serde(skip)]
     sqlite_export: sqlite_export::State,
-    #[serde(skip)]
+    #[serde(default, with = "workflow_ui::saved")]
     workflow: workflow_ui::State,
     #[serde(skip)]
     numeric_selector: numeric::Selector,

@@ -759,6 +759,23 @@ impl DevToolsApp {
         self.data_state.preview_workflow_position(index)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_flow_save_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.preview_text_flow_prepare(ctx, light);
+        self.data_state.preview_flow_save_prepare();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_flow_disk_restore(&mut self) {
+        self.data_state.preview_flow_disk_restore();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_flow_restored_check(&mut self, ran: bool) {
+        assert!(!self.data_state.operation_pending());
+        self.data_state.preview_flow_snapshot_check(ran);
+        if !ran {
+            self.data_state.show_workflow();
+        }
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_action_picker_prepare(&mut self, ctx: &egui::Context, light: bool) {
         self.preview_text_flow_prepare(ctx, light);
         self.data_state.preview_action_picker_prepare();
@@ -5137,7 +5154,7 @@ impl eframe::App for DevToolsApp {
             egui::Modal::new(egui::Id::new("workspace-exit-confirm")).show(ctx, |ui| {
                 ui.set_max_width(620.0);
                 ui.heading("退出前保留工作");
-                ui.label("数据工作实例、流程步骤、备忘录和日程需要手动保存。流程请单独保存为文件，实例保存不包含步骤。已保存内容会保留，未保存修改会丢失。完全退出后日程不再弹出提醒。");
+                ui.label("数据工作实例可手动保存工具流程与表格流水线步骤，也可把配方另存为文件。流程运行结果、审核和写入授权不会恢复，恢复后需要重新运行或确认。备忘录和日程也需要手动保存；未保存修改会丢失，完全退出后日程不再弹出提醒。");
                 ui.label("快捷键草稿和待确认导入也需要保存；配置读写进行中时请等待完成。");
                 if self.clock.has_work() || self.clock.saving(){ui.label("时钟可主动开启本机保存并立即保存最新检查点。未保存的会话修改会清空；完全退出后不弹提醒。后台保存中需要等待。");}
                 if self.calculator.has_work(){ui.label("计算工作表有未保存内容、待读取确认或后台任务；请返回另存/恢复基线或放弃本次读取。后台读写中须等待，完全退出会丢失未保存工作。");}

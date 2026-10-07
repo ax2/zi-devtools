@@ -5,6 +5,29 @@ mod inspector;
 mod preview;
 mod row_editor;
 
+pub(super) mod saved {
+    use super::*;
+    pub(crate) fn serialize<S: serde::Serializer>(
+        state: &State,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        state.definition.serialize(serializer)
+    }
+    pub(crate) fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<State, D::Error> {
+        let definition = Definition::deserialize(deserializer)?;
+        definition
+            .validate_draft()
+            .map_err(serde::de::Error::custom)?;
+        let mut state = State::default();
+        state.output.load_settings(definition.output.as_ref());
+        state.definition = definition;
+        state.validate_saved().map_err(serde::de::Error::custom)?;
+        Ok(state)
+    }
+}
+
 pub(super) struct State {
     definition: Definition,
     proposal: Option<Preview>,
@@ -52,6 +75,14 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn validate_saved(&self) -> Result<()> {
+        self.definition.validate_draft()?;
+        anyhow::ensure!(
+            serde_json::to_vec(&self.definition)?.len() <= MAX_DEFINITION_BYTES,
+            "流程定义最多256 KiB"
+        );
+        Ok(())
+    }
     pub(super) fn modal_open(&self) -> bool {
         self.files.review.is_some()
             || self.files.tool_review.is_some()
@@ -79,6 +110,26 @@ impl State {
 }
 
 impl DataState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_flow_snapshot_check(&self, ran: bool) {
+        assert_eq!(self.workflow.definition.steps.len(), 2);
+        assert!(self.input.contains("001, Zi Tools ,2"));
+        assert!(!self.busy() && !self.dialog_pending());
+        if ran {
+            assert_eq!(self.workflow.job.phase, Phase::Done);
+            assert_eq!(
+                self.workflow.proposal.as_ref().unwrap().result.rows[0][2],
+                serde_json::json!(2)
+            );
+            assert_eq!(
+                self.dataset.as_ref().unwrap().rows[0][2],
+                serde_json::json!("2")
+            );
+        } else {
+            assert_eq!(self.workflow.job.phase, Phase::Idle);
+            assert!(self.workflow.proposal.is_none());
+        }
+    }
     pub fn show_workflow_output(&mut self) {
         self.show_workflow();
         self.workflow.output.reveal = true;
@@ -1022,6 +1073,71 @@ const OPERATIONS: [ColumnOperation; 10] = [
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn workspace_snapshot_restores_pipeline_definition_without_results_or_authority() {
+        let mut state = fixture();
+        state.workflow.definition.version = 3;
+        state.workflow.definition.output = Some(Output::Sqlite {
+            version: 1,
+            table: "result_rows".into(),
+        });
+        state.workflow.files.folder = Some(PathBuf::from("nonexistent-private-runtime-folder"));
+        state.start_workflow().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.busy() {
+            assert!(std::time::Instant::now() < deadline);
+            state.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(state.workflow.proposal.is_some());
+        let snapshot = state.snapshot().unwrap();
+        let encoded: serde_json::Value = serde_json::from_slice(&snapshot).unwrap();
+        assert_eq!(
+            encoded["workflow"],
+            serde_json::to_value(&state.workflow.definition).unwrap()
+        );
+        assert!(!String::from_utf8_lossy(&snapshot).contains("nonexistent-private-runtime-folder"));
+        let mut restored = DataState::restore(&snapshot).unwrap();
+        assert_eq!(restored.workflow.definition, state.workflow.definition);
+        assert_eq!(restored.dataset, state.dataset);
+        assert!(restored.workflow.proposal.is_none() && restored.workflow.source.is_none());
+        assert!(restored.workflow.files.folder.is_none() && !restored.workflow.modal_open());
+        assert!(!restored.busy());
+        assert_eq!(restored.workflow.job.phase, Phase::Idle);
+        restored.show_workflow();
+        restored.run_primary().unwrap();
+        while restored.busy() {
+            assert!(std::time::Instant::now() < deadline);
+            restored.poll();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(
+            restored.workflow.proposal.as_ref().unwrap().result.rows[0][1],
+            serde_json::json!(2)
+        );
+        assert_eq!(restored.dataset, state.dataset);
+    }
+    #[test]
+    fn old_snapshots_default_empty_pipeline_and_new_snapshots_reject_extra_authority() {
+        let state = fixture();
+        let mut encoded = serde_json::to_value(&state).unwrap();
+        encoded.as_object_mut().unwrap().remove("workflow");
+        let restored = DataState::restore(&serde_json::to_vec(&encoded).unwrap()).unwrap();
+        assert!(restored.workflow.definition.steps.is_empty());
+        assert_eq!(restored.dataset, state.dataset);
+        let empty = DataState::default();
+        assert!(DataState::restore(&empty.snapshot().unwrap()).is_ok());
+        assert!(empty.workflow.definition.validate().is_err());
+        let mut encoded = serde_json::to_value(&state).unwrap();
+        encoded["workflow"]["command"] = serde_json::json!("unexpected command");
+        assert!(DataState::restore(&serde_json::to_vec(&encoded).unwrap()).is_err());
+        encoded["workflow"]
+            .as_object_mut()
+            .unwrap()
+            .remove("command");
+        encoded["workflow"]["version"] = serde_json::json!(99);
+        assert!(DataState::restore(&serde_json::to_vec(&encoded).unwrap()).is_err());
+    }
     #[test]
     fn primary_pipeline_dispatch_previews_without_applying_source() {
         let mut state = fixture();

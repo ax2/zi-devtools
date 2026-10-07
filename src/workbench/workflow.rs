@@ -37,7 +37,7 @@ pub struct SortKey {
 
 const MAX_STEPS: usize = 32;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
-const MAX_DEFINITION_BYTES: usize = 256 * 1024;
+pub(super) const MAX_DEFINITION_BYTES: usize = 256 * 1024;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -176,6 +176,12 @@ impl Definition {
     }
 
     pub fn validate(&self) -> Result<()> {
+        self.validate_inner(true)
+    }
+    pub(super) fn validate_draft(&self) -> Result<()> {
+        self.validate_inner(false)
+    }
+    fn validate_inner(&self, require_steps: bool) -> Result<()> {
         ensure!(matches!(self.version, 1..=3), "不支持的流程定义版本");
         if let Some(output) = &self.output {
             ensure!(self.version == 3, "保存输出配置需要流程格式3");
@@ -186,7 +192,7 @@ impl Definition {
             "流程名称须为1–120字"
         );
         ensure!(
-            !self.steps.is_empty() && self.steps.len() <= MAX_STEPS,
+            (!require_steps || !self.steps.is_empty()) && self.steps.len() <= MAX_STEPS,
             "流程须包含1–32个步骤"
         );
         for (index, step) in self.steps.iter().enumerate() {
