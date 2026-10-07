@@ -103,7 +103,7 @@ mod tests {
         assert_eq!(records[0].body, draft.body);
         assert_eq!(records[0].schedule, draft.schedule);
         std::fs::remove_file(&path).unwrap();
-        std::fs::remove_dir(path.parent().unwrap()).unwrap();
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     #[test]

@@ -39,6 +39,7 @@ impl Cache {
 }
 impl State {
     pub(super) fn replace_items(&mut self, items: Vec<Item>) {
+        self.shared.invalidate();
         self.items = items;
         self.list_cache.invalidate();
         self.agenda_cache = Default::default();

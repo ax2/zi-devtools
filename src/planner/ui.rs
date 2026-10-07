@@ -68,6 +68,7 @@ impl State {
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_timer(&mut self) {
+        self.shared.synthetic = true;
         self.pending = None;
         self.saving = None;
         self.loaded = true;
@@ -118,6 +119,13 @@ impl State {
             RichText::new("记录留在本机 · 点击保存后持久保留 · 支持搜索、置顶与回收站恢复").weak(),
         );
         ui.add_space(12.0);
+        ui.small(self.shared.status());
+        if !self.shared.notice.is_empty() {
+            ui.colored_label(ui.visuals().error_fg_color, &self.shared.notice);
+        }
+        if self.shared_conflict() {
+            ui.colored_label(ui.visuals().warn_fg_color, "此记录已被另一窗口修改或删除；当前编辑已保留。请复制内容，放弃编辑并重新加载后重试。");
+        }
         ui.horizontal(|ui| {
             if ui.selectable_label(!self.calendar, "备忘录").clicked() {
                 self.calendar = false;
@@ -1011,6 +1019,7 @@ impl State {
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview(&mut self, calendar: bool, alarm: bool) {
+        self.shared.synthetic = true;
         // The capture app uses an isolated config directory; never writes user records.
         self.pending = None;
         self.saving = None;

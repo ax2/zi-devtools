@@ -25,6 +25,7 @@ mod interval_tests;
 mod listing;
 mod recurrence;
 mod reminder_actions;
+mod shared;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -255,6 +256,7 @@ enum Reply {
 }
 type LoadResult = std::result::Result<Reply, String>;
 pub struct State {
+    shared: shared::Shared,
     path: PathBuf,
     items: Vec<Item>,
     pending: Option<mpsc::Receiver<LoadResult>>,
@@ -397,7 +399,8 @@ impl State {
             && (self.saving.is_some() || self.deleting.is_some() || self.file_operation)
     }
     pub fn needs_clock(&self) -> bool {
-        self.pending.is_some()
+        cfg!(windows)
+            || self.pending.is_some()
             || self.items.iter().any(|i| {
                 !i.trash
                     && i.schedule.as_ref().is_some_and(|s| {
@@ -410,6 +413,7 @@ impl State {
     pub fn new(path: PathBuf) -> Self {
         let today = Local::now().date_naive();
         let mut state = Self {
+            shared: shared::Shared::default(),
             #[cfg(feature = "ui-preview")]
             preview_open_reminder_rect: None,
             #[cfg(feature = "ui-preview")]
@@ -583,13 +587,16 @@ impl State {
                 .is_some_and(|s| {
                     self.date_text != s.start.date().to_string()
                         || self.time_text != s.reminder_at(s.start).format("%H:%M").to_string()
-                        || s.repeat_until
-                            .is_some_and(|day| self.repeat_until_text != day.to_string())
-                        || s.display_end().is_some_and(|end| {
-                            self.end_date_text != end.date().to_string()
-                                || (!s.all_day
-                                    && self.end_time_text != end.format("%H:%M").to_string())
-                        })
+                        || self.repeat_until_text
+                            != s.repeat_until
+                                .map(|day| day.to_string())
+                                .unwrap_or_default()
+                        || s.display_end()
+                            .or_else(|| s.start.checked_add_signed(Duration::hours(1)))
+                            .is_some_and(|end| {
+                                self.end_date_text != end.date().to_string()
+                                    || self.end_time_text != end.format("%H:%M").to_string()
+                            })
                 })
     }
     fn edit(&mut self, item: Item) {
@@ -773,6 +780,7 @@ impl State {
                 Err(mpsc::TryRecvError::Empty) => None,
             };
             if let Some(reply) = reply {
+                self.shared.invalidate();
                 self.pending = None;
                 self.file_operation = false;
                 match reply {
@@ -878,6 +886,7 @@ impl State {
                 }
             }
         }
+        self.poll_shared();
         ctx.request_repaint_after(std::time::Duration::from_millis(
             if self.pending.is_some() { 100 } else { 1000 },
         ));
@@ -895,6 +904,9 @@ impl State {
         self.alarms.sort_by_key(|(_, at)| *at);
         let due: HashSet<_> = self.alarms.iter().cloned().collect();
         self.shown.retain(|key| due.contains(key));
+        if !self.owns_current_reminders() {
+            return false;
+        }
         let mut fresh = false;
         for key in &self.alarms {
             if self.shown.insert(key.clone()) {

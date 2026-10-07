@@ -220,7 +220,7 @@ fn monthly_rules_persist_backup_restore_and_keep_legacy_json_compatible() {
     for file in [path.clone(), restored_path, backup_path] {
         std::fs::remove_file(file).unwrap();
     }
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -427,7 +427,7 @@ fn save_restore_conflict_trash_and_schema_guard() {
     assert!(store::load(&path).is_err());
     assert!(store::save(&path, event()).is_err());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -487,7 +487,7 @@ fn repeat_lead_time_and_content_size_are_bounded() {
     drop(connection);
     assert!(store::load(&path).is_err());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -521,6 +521,14 @@ pub(super) fn wait_state(state: &mut State) {
         assert!(start.elapsed().as_secs() < 8);
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+    state.shared.expedite();
+    state.poll_shared();
+    while state.shared.refreshing() {
+        state.last_tick -= std::time::Duration::from_secs(2);
+        state.poll(&ctx);
+        assert!(start.elapsed().as_secs() < 8);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
 
 #[test]
@@ -544,7 +552,7 @@ fn editor_retains_draft_on_error_and_detects_unsaved_date() {
     assert!(state.has_unsaved());
     assert!(!state.may_leave());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -567,7 +575,7 @@ fn copied_memo_event_is_unsaved_until_saved_or_explicitly_discarded() {
     assert!(!state.has_unsaved());
     assert_eq!(store::load(&path).unwrap().len(), 1);
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -591,6 +599,7 @@ fn global_poll_delivers_once_suppresses_trash_and_recovers_after_restart() {
     state.last_tick -= std::time::Duration::from_secs(2);
     assert!(!state.poll(&egui::Context::default()));
     assert!(!state.alarm_open);
+    drop(state);
     let mut restart = State::new(path.clone());
     wait_state(&mut restart);
     assert!(restart.alarm_open);
@@ -599,9 +608,10 @@ fn global_poll_delivers_once_suppresses_trash_and_recovers_after_restart() {
     restart.launch(Some(item));
     wait_state(&mut restart);
     assert!(restart.alarms.is_empty());
-    assert!(!restart.needs_clock());
+    // Even an empty calendar must discover reminders created in another window.
+    assert!(restart.needs_clock());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -634,7 +644,7 @@ fn incoming_result_is_explicit_unsaved_bounded_and_never_overwrites_edits() {
     state.discard();
     assert!(state.transfer_text().is_none());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -723,7 +733,7 @@ fn purge_snapshot_is_atomic_and_excludes_live_and_later_records() {
     std::fs::remove_file(&path).unwrap();
     assert!(store::purge(&path, &fresh).is_err());
     assert!(!path.exists());
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -778,7 +788,7 @@ fn purge_requires_confirmation_protects_edits_and_clears_deleted_selection() {
     assert_eq!(store::load(&path).unwrap().len(), 1);
     assert!(state.request_purge(true).is_err());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -802,7 +812,7 @@ fn purge_failure_retains_selection_and_database_without_partial_deletion() {
     assert_eq!(state.items.len(), 1);
     assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -838,7 +848,7 @@ fn text_file_import_preserves_markdown_unicode_and_line_endings() {
     assert!(files::read_note(&unsupported).is_err());
     std::fs::remove_file(source).unwrap();
     std::fs::remove_file(unsupported).unwrap();
-    std::fs::remove_dir(root).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -864,7 +874,7 @@ fn text_file_export_is_exact_and_never_overwrites() {
     assert!(files::write_note(&root.join("missing/child.md"), body).is_err());
     std::fs::remove_file(target).unwrap();
     std::fs::remove_file(empty).unwrap();
-    std::fs::remove_dir(root).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -900,7 +910,7 @@ fn import_file_is_a_guarded_unsaved_draft_and_failure_keeps_current_note() {
     assert_eq!(std::fs::read_to_string(&source).unwrap(), "正文\r\n");
     std::fs::remove_file(source).unwrap();
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(root).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -947,7 +957,7 @@ fn export_snapshots_current_unsaved_body_without_saving_or_event_metadata() {
     state.draft.as_mut().unwrap().trash = true;
     assert!(state.review_export().is_err());
     std::fs::remove_file(target).unwrap();
-    std::fs::remove_dir(root).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -964,7 +974,7 @@ fn escaped_body_can_save_load_and_backup_at_the_body_limit() {
     assert_eq!(backup::read(&file).unwrap().records, records);
     std::fs::remove_file(file).unwrap();
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -1007,7 +1017,7 @@ fn backup_roundtrip_preserves_full_schedule_trash_and_rejects_malformed_data() {
         assert!(backup::read(&file).is_err(), "variant {variant}");
     }
     std::fs::remove_file(file).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -1103,7 +1113,7 @@ fn restore_transaction_rejects_stale_preview_and_stale_editor_versions() {
     std::fs::remove_file(&path).unwrap();
     assert!(store::restore(&path, &current, &imported).is_err());
     assert!(!path.exists());
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -1126,7 +1136,7 @@ fn invalid_restore_rolls_back_and_empty_backup_can_explicitly_replace_all() {
     assert_ne!(recreated[0].revision, before[0].revision);
     assert!(store::save(&path, before[0].clone()).is_err());
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -1192,7 +1202,7 @@ fn backup_restore_workflow_requires_review_confirmation_and_preserves_failure_st
     assert!(state.read_backup(file.clone()).is_err());
     std::fs::remove_file(file).unwrap();
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -1229,7 +1239,7 @@ fn backup_and_restore_enforce_record_byte_and_file_limits() {
     }
     assert!(backup::Document::new(large).is_err());
     std::fs::remove_file(file).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -1249,5 +1259,5 @@ fn restore_rolls_back_after_a_midtransaction_insert_failure() {
     assert!(store::restore(&path, &before, &[first, second]).is_err());
     assert_eq!(store::load(&path).unwrap(), before);
     std::fs::remove_file(&path).unwrap();
-    std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
