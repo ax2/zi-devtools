@@ -14,6 +14,7 @@ pub(crate) struct Workspace {
     sequence: u64,
     close_confirm: Option<String>,
     message: String,
+    closed_tasks: std::collections::VecDeque<crate::tasks::Row>,
     closed_receipts: std::collections::VecDeque<crate::preferences::SavedWorkflow>,
 }
 impl Default for Workspace {
@@ -29,6 +30,7 @@ impl Default for Workspace {
             close_confirm: None,
             message: String::new(),
             closed_receipts: Default::default(),
+            closed_tasks: Default::default(),
         }
     }
 }
@@ -76,6 +78,60 @@ impl Workspace {
                 .find_map(|i| i.state.take_loaded())
         })
     }
+    pub(crate) fn snapshots(&self) -> Vec<crate::tasks::Row> {
+        self.instances
+            .iter()
+            .filter_map(|i| {
+                i.state.task_snapshot().map(|mut r| {
+                    r.instance = Some(i.id.clone());
+                    r.instance_name = Some(i.title.clone());
+                    r
+                })
+            })
+            .collect()
+    }
+    pub(crate) fn take_task_receipts(&mut self) -> Vec<crate::tasks::Row> {
+        let mut rows: Vec<_> = self.closed_tasks.drain(..).collect();
+        for instance in &mut self.instances {
+            rows.extend(instance.state.completed_tasks.drain(..).map(|mut row| {
+                row.instance = Some(instance.id.clone());
+                row.instance_name = Some(instance.title.clone());
+                row
+            }));
+        }
+        rows
+    }
+    pub(crate) fn cancel_task(&mut self, id: &str, generation: u64) -> Result<()> {
+        let state = &mut self
+            .instances
+            .iter_mut()
+            .find(|i| i.id == id)
+            .context("图片实例已关闭")?
+            .state;
+        ensure!(
+            state
+                .task_snapshot()
+                .is_some_and(|r| r.generation == generation && r.phase.active()),
+            "任务已结束或已变化"
+        );
+        state.request_cancel();
+        Ok(())
+    }
+    pub(crate) fn open_task(&mut self, id: &str, generation: u64) -> Result<()> {
+        let index = self
+            .instances
+            .iter()
+            .position(|i| i.id == id)
+            .context("图片实例已关闭，历史状态保留")?;
+        ensure!(
+            self.instances[index]
+                .state
+                .task_snapshot()
+                .is_some_and(|r| r.generation == generation),
+            "历史任务已被新操作替换，请从图片页选择实例"
+        );
+        self.select(index)
+    }
     fn create(&mut self) -> Result<()> {
         ensure!(self.close_confirm.is_none(), "请先确认或取消关闭");
         ensure!(
@@ -112,6 +168,28 @@ impl Workspace {
             .position(|i| &i.id == id)
             .context("实例已关闭")?;
         ensure!(!self.instances[index].state.busy(), "请等待该实例任务收尾");
+        let final_row = self.instances[index].state.task_snapshot();
+        ensure!(
+            !final_row.as_ref().is_some_and(|r| r.phase.active()),
+            "请等待该实例任务收尾"
+        );
+        let id = self.instances[index].id.clone();
+        let name = self.instances[index].title.clone();
+        let mut rows: Vec<_> = self.instances[index]
+            .state
+            .completed_tasks
+            .drain(..)
+            .collect();
+        if let Some(row) = final_row
+            && !rows.iter().any(|r| r.generation == row.generation)
+        {
+            rows.push(row);
+        }
+        for mut row in rows {
+            row.instance = Some(id.clone());
+            row.instance_name = Some(name.clone());
+            self.closed_tasks.push_back(row);
+        }
         if let Some(receipt) = self.instances[index].state.take_loaded() {
             self.closed_receipts.push_back(receipt);
         }
@@ -303,7 +381,7 @@ mod tests {
         work.definition = def.clone();
         let original = first.clone();
         let definition = def.clone();
-        work.launch(&ctx, move |cancel| {
+        work.launch(&ctx, Kind::Run, move |cancel| {
             Ok(Reply::Run(execute(&definition, original, cancel)?))
         });
         assert!(work.request_close().is_err());
@@ -311,7 +389,7 @@ mod tests {
         work.source = Some(second.clone());
         work.definition = def.clone();
         let original = second.clone();
-        work.launch(&ctx, move |cancel| {
+        work.launch(&ctx, Kind::Run, move |cancel| {
             Ok(Reply::Run(execute(&def, original, cancel)?))
         });
         work.select(0).unwrap();
@@ -366,3 +444,8 @@ mod tests {
         assert!(work.create().is_err());
     }
 }
+
+#[cfg(feature = "ui-preview")]
+mod task_preview;
+#[cfg(test)]
+mod task_tests;

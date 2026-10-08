@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.93",
+  "sourceCatalogVersion": "0.82.0-dev.94",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -2866,7 +2866,7 @@
     {
       "sourceToolId": "task-center",
       "title": "后台任务中心",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -2875,9 +2875,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "数据解析、表格合并与文件校验的跨页面状态、进度、完成反馈；内存最近 50 条记录、取消和返回工具，其他工作台暂未接入；开发版的数据任务绑定独立实例，避免不同材料的记录混淆",
+          "scope": "数据、文件、服务及图片流程的跨页面任务状态、完成反馈；内存最近50条记录、取消和返回工具。图片任务绑定实例与运行代次，打开所属实例、拒绝过期请求、关闭后保留终态，清空记录不重现；其他工具保留原有打开行为。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.0",
+          "sourceVersion": "1.1.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -3307,7 +3307,7 @@
     {
       "sourceToolId": "image-workflow",
       "title": "图片操作流程",
-      "sourceVersion": "0.3.0",
+      "sourceVersion": "0.4.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -3316,9 +3316,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "开发中：裁剪/缩放/编码/报告与逐步预览、共享流程库搜索收藏最近和托盘读取确认；8份独立图片工作实例、后台归属、切换与确认关闭；公共插件端口及跨实例接力仍待完成",
+          "scope": "开发中：图片多步操作、独立工作实例、流程库搜索收藏最近；实例操作接入统一任务中心，按实例/任务版本取消和打开，关闭后终态保留；跨实例接力、全局内存预算和公共插件端口仍待完成",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.3.0",
+          "sourceVersion": "0.4.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }

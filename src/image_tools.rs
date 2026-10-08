@@ -227,6 +227,21 @@ impl State {
     pub fn show_batch(&mut self) {
         self.mode = Mode::Batch;
     }
+    pub(crate) fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
+        self.workflow.snapshots()
+    }
+    pub(crate) fn take_task_receipts(&mut self) -> Vec<crate::tasks::Row> {
+        self.workflow.take_task_receipts()
+    }
+    pub(crate) fn cancel_task(&mut self, id: &str, generation: u64) -> Result<()> {
+        self.workflow.cancel_task(id, generation)
+    }
+    pub(crate) fn open_task(&mut self, id: &str, generation: u64) -> Result<()> {
+        ensure!(!self.relay_active(), "请先确认或取消图片接力");
+        self.workflow.open_task(id, generation)?;
+        self.show_workflow();
+        Ok(())
+    }
     pub(crate) fn can_receive_workflow(&self) -> bool {
         self.workflow.can_receive() && !self.relay_active()
     }
@@ -261,6 +276,18 @@ impl State {
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_instances_check(&self, phase: u8) {
         self.workflow.preview_instance_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_tasks_fixture(&mut self, ctx: &egui::Context) {
+        self.workflow.preview_tasks_fixture(ctx);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_tasks_ready(&self) -> bool {
+        self.workflow.preview_tasks_ready()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_tasks_check(&self, phase: u8) {
+        self.workflow.preview_tasks_check(phase);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_ready(&self) -> bool {

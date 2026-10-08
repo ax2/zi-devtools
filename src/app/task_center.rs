@@ -33,6 +33,24 @@ impl DevToolsApp {
         self.open_entry(&entry);
         Ok(())
     }
+    fn open_task_row(
+        &mut self,
+        key: &str,
+        instance: Option<&str>,
+        generation: u64,
+    ) -> anyhow::Result<()> {
+        if key == "image-workflow" {
+            self.images.open_task(
+                instance.ok_or_else(|| anyhow::anyhow!("图片任务缺少实例"))?,
+                generation,
+            )?;
+            self.page = Page::Images;
+            self.visit("image-workflow");
+            Ok(())
+        } else {
+            self.open_task_result(key, instance)
+        }
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_tasks(&mut self) {
         self.tasks = Default::default();
@@ -56,6 +74,7 @@ impl DevToolsApp {
 
     fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
         let mut rows = self.data_state.snapshots();
+        rows.extend(self.images.task_snapshots());
         rows.extend(self.file_state.job.snapshot("files", "批量文件校验", true));
         rows.extend(
             self.service_batch
@@ -65,6 +84,9 @@ impl DevToolsApp {
         rows
     }
     pub(super) fn observe_tasks(&mut self) {
+        for row in self.images.take_task_receipts() {
+            self.tasks.observe(Some(row));
+        }
         for row in self.task_snapshots() {
             self.tasks.observe(Some(row));
         }
@@ -72,6 +94,7 @@ impl DevToolsApp {
     pub(super) fn poll_tasks(&mut self, ctx: &egui::Context) {
         self.observe_tasks();
         let before = self.task_snapshots();
+        self.images.poll_screenshot(ctx);
         self.data_state.poll();
         if self.images.can_receive_workflow()
             && let Some(definition) = self.data_state.take_image_workflow()
@@ -140,15 +163,23 @@ impl DevToolsApp {
     }
     pub(super) fn tasks_page(&mut self, ui: &mut egui::Ui) {
         ui.heading("后台任务中心");
-        ui.label("数据解析、表格合并与文件校验 · 切换页面后继续收取结果");
-        ui.small("保留本次运行最近 50 条记录；这里显示任务状态和实例名称，不保存正文或凭据。其他工具任务暂在各自页面查看。");
+        ui.label("数据、文件、服务与图片实例 · 切换页面后继续收取结果");
+        ui.small("保留本次运行最近 50 条记录；这里显示任务状态和实例名称，不保存正文或凭据。图片任务按实例和操作显示；其他工具任务暂在各自页面查看。");
         let active = self.tasks.rows.iter().filter(|r| r.phase.active()).count();
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!(
                 "{active} 项运行中 · {} 条记录",
                 self.tasks.rows.len()
             ));
-            if ui.button("清除已结束记录").clicked() {
+            let clear = ui.button("清除已结束记录");
+            #[cfg(feature = "ui-preview")]
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(
+                    egui::Id::new("task-history-clear"),
+                    clear.rect.intersect(ui.clip_rect()),
+                )
+            });
+            if clear.clicked() {
                 self.tasks.clear_finished();
             }
         });
@@ -185,15 +216,50 @@ impl DevToolsApp {
                                     };
                                     ui.colored_label(color, row.phase.label());
                                     ui.label(format!("{:.1} 秒", row.elapsed.as_secs_f32()));
-                                    if ui.button("打开工具").clicked() {
-                                        open = Some((row.key, row.instance.clone()));
+                                    let open_button = ui.button(if row.key == "image-workflow" {
+                                        "打开所属实例"
+                                    } else {
+                                        "打开工具"
+                                    });
+                                    #[cfg(feature = "ui-preview")]
+                                    if row.key == "image-workflow" {
+                                        ui.ctx().data_mut(|d| {
+                                            d.insert_temp(
+                                                egui::Id::new(format!(
+                                                    "image-task-open-{}-{}",
+                                                    row.instance.as_deref().unwrap_or_default(),
+                                                    row.generation
+                                                )),
+                                                open_button.rect.intersect(ui.clip_rect()),
+                                            )
+                                        });
                                     }
-                                    if row.cancellable
-                                        && row.phase == Phase::Running
-                                        && ui.button("取消任务").clicked()
-                                    {
-                                        cancel =
+                                    if open_button.clicked() {
+                                        open =
                                             Some((row.key, row.instance.clone(), row.generation));
+                                    }
+                                    if row.cancellable && row.phase == Phase::Running {
+                                        let cancel_button = ui.button("取消任务");
+                                        #[cfg(feature = "ui-preview")]
+                                        if row.key == "image-workflow" {
+                                            ui.ctx().data_mut(|d| {
+                                                d.insert_temp(
+                                                    egui::Id::new(format!(
+                                                        "image-task-cancel-{}-{}",
+                                                        row.instance.as_deref().unwrap_or_default(),
+                                                        row.generation
+                                                    )),
+                                                    cancel_button.rect.intersect(ui.clip_rect()),
+                                                )
+                                            });
+                                        }
+                                        if cancel_button.clicked() {
+                                            cancel = Some((
+                                                row.key,
+                                                row.instance.clone(),
+                                                row.generation,
+                                            ));
+                                        }
                                     }
                                 });
                                 if row.phase.active() {
@@ -223,6 +289,11 @@ impl DevToolsApp {
             });
         if let Some((key, instance, generation)) = cancel {
             match (key, instance) {
+                ("image-workflow", Some(id)) => {
+                    if let Err(e) = self.images.cancel_task(&id, generation) {
+                        self.toast = Some((e.to_string(), Instant::now()));
+                    }
+                }
                 ("csv-merge", Some(id)) => self.data_state.cancel(&id, generation),
                 ("sqlite-export", Some(id)) => self.data_state.cancel_sqlite(&id, generation),
                 ("pipeline", Some(id)) => self.data_state.cancel_workflow(&id, generation),
@@ -235,10 +306,13 @@ impl DevToolsApp {
                 _ => {}
             }
         }
-        if let Some((key, instance)) = open {
-            if let Err(error) = self.open_task_result(key, instance.as_deref()) {
+        if let Some((key, instance, generation)) = open {
+            if let Err(error) = self.open_task_row(key, instance.as_deref(), generation) {
                 self.toast = Some((error.to_string(), Instant::now()));
             }
         }
     }
 }
+
+#[cfg(feature = "ui-preview")]
+mod image_preview;

@@ -9,6 +9,26 @@ pub(super) use workspace::Workspace;
 #[cfg(test)]
 mod tests;
 
+#[derive(Clone, Copy, Default)]
+enum Kind {
+    Input,
+    ReadDefinition,
+    SaveDefinition,
+    #[default]
+    Run,
+    SaveImage,
+}
+impl Kind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Input => "图片输入读取",
+            Self::ReadDefinition => "图片流程读取",
+            Self::SaveDefinition => "图片流程保存",
+            Self::Run => "图片流程运行",
+            Self::SaveImage => "图片结果保存",
+        }
+    }
+}
 enum Reply {
     Input(Arc<DynamicImage>, String),
     Run(Run),
@@ -29,6 +49,9 @@ pub(crate) struct State {
     import: Option<Definition>,
     message: String,
     loaded: Option<crate::preferences::SavedWorkflow>,
+    completed_tasks: std::collections::VecDeque<crate::tasks::Row>,
+    job: crate::tasks::Job,
+    kind: Kind,
 }
 impl Default for State {
     fn default() -> Self {
@@ -45,6 +68,9 @@ impl Default for State {
             import: None,
             message: String::new(),
             loaded: None,
+            completed_tasks: Default::default(),
+            job: Default::default(),
+            kind: Kind::default(),
         }
     }
 }
@@ -146,11 +172,14 @@ impl State {
     fn launch(
         &mut self,
         ctx: &egui::Context,
+        kind: Kind,
         job: impl FnOnce(&AtomicBool) -> Result<Reply> + Send + 'static,
     ) {
         if self.busy() {
             return;
         }
+        self.job.begin();
+        self.kind = kind;
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.cancel = Arc::new(AtomicBool::new(false));
@@ -178,8 +207,34 @@ impl State {
             && matches!(&result, Ok(Reply::Input(..) | Reply::Definition(..)))
         {
             self.message = "已取消载入；原工作保留".into();
+            self.finish_task(crate::tasks::Phase::Cancelled, "载入已取消，原工作保留");
             return;
         }
+        use crate::tasks::Phase;
+        let (phase, summary) = match &result {
+            Ok(Reply::Run(run)) if run.cancelled => (
+                Phase::Cancelled,
+                format!("已取消，保留{}步结果", run.outputs.len()),
+            ),
+            Ok(Reply::Run(run)) if run.failure.is_some() => (
+                Phase::Failed,
+                format!("流程失败，保留{}步结果；打开实例查看", run.outputs.len()),
+            ),
+            Ok(Reply::Run(run)) => (
+                Phase::Done,
+                format!("完成{}步；未自动保存", run.outputs.len()),
+            ),
+            Ok(Reply::Input(..)) => (Phase::Done, "输入已读取，未运行".into()),
+            Ok(Reply::Definition(..)) => (Phase::Done, "定义已读取，待应用；未运行".into()),
+            Ok(Reply::SavedDefinition(..) | Reply::Saved(..)) => {
+                (Phase::Done, "文件已主动保存".into())
+            }
+            Err(_) if self.cancel.load(Ordering::Relaxed) => {
+                (Phase::Cancelled, "操作已取消，原工作保留".into())
+            }
+            Err(_) => (Phase::Failed, "操作失败，打开实例查看".into()),
+        };
+        self.finish_task(phase, summary);
         match result {
             Ok(Reply::Input(image, name)) => {
                 self.source = Some(image);
@@ -212,6 +267,22 @@ impl State {
             Err(e) => self.message = e,
         }
     }
+    fn finish_task(&mut self, phase: crate::tasks::Phase, summary: impl Into<String>) {
+        if !self.job.phase.active() {
+            return;
+        }
+        self.job.finish(phase, summary);
+        if let Some(row) = self.task_snapshot() {
+            self.completed_tasks.push_back(row);
+        }
+    }
+    fn request_cancel(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        self.job.cancelling();
+    }
+    fn task_snapshot(&self) -> Option<crate::tasks::Row> {
+        self.job.snapshot("image-workflow", self.kind.label(), true)
+    }
     pub(super) fn relay_source(&self) -> Option<(relay::Source, Vec<relay::Origin>, &'static str)> {
         if self.busy() || self.import.is_some() {
             return None;
@@ -238,7 +309,7 @@ impl State {
                         .add_filter("图片", &["png", "jpg", "jpeg", "webp"])
                         .pick_file()
                 {
-                    self.launch(ui.ctx(), move |cancel| {
+                    self.launch(ui.ctx(), Kind::Input, move |cancel| {
                         ensure!(!cancel.load(Ordering::Relaxed), "已取消");
                         let material = crate::material_files::FileMaterial::selected(
                             &path,
@@ -265,7 +336,7 @@ impl State {
                         .add_filter("图片流程JSON", &["json"])
                         .pick_file()
                 {
-                    self.launch(ui.ctx(), move |cancel| {
+                    self.launch(ui.ctx(), Kind::ReadDefinition, move |cancel| {
                         ensure!(!cancel.load(Ordering::Relaxed), "已取消");
                         let m = crate::material_files::FileMaterial::selected(&path, RECIPE_LIMIT)?;
                         let bytes = m.read_bytes(RECIPE_LIMIT)?;
@@ -283,7 +354,7 @@ impl State {
                         .save_file()
                 {
                     let def = self.definition.clone();
-                    self.launch(ui.ctx(), move |c| {
+                    self.launch(ui.ctx(), Kind::SaveDefinition, move |c| {
                         let b = def.bytes()?;
                         crate::local_files::save_new_moved(&path, &b, c)?;
                         Ok(Reply::SavedDefinition(
@@ -470,12 +541,12 @@ impl State {
             if run.clicked() {
                 let def = self.definition.clone();
                 let image = self.source.clone().unwrap();
-                self.launch(ui.ctx(), move |cancel| {
+                self.launch(ui.ctx(), Kind::Run, move |cancel| {
                     Ok(Reply::Run(execute(&def, image, cancel)?))
                 });
             }
             if self.busy() && ui.button("取消当前操作").clicked() {
-                self.cancel.store(true, Ordering::Relaxed);
+                self.request_cancel();
             }
         });
         ui.label(&self.message);
@@ -540,7 +611,7 @@ impl State {
                         .set_file_name(format!("image-flow-result.{extension}"))
                         .save_file()
                     {
-                        self.launch(ui.ctx(), move |c| {
+                        self.launch(ui.ctx(), Kind::SaveImage, move |c| {
                             crate::local_files::save_new_moved(&path, &bytes, c)?;
                             Ok(Reply::Saved(
                                 path.file_name()
