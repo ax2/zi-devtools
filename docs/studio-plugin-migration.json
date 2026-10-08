@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.83",
+  "sourceCatalogVersion": "0.82.0-dev.84",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -20,6 +20,16 @@
         "devtools.text.json.format",
         "devtools.text.json.minify"
       ],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "格式化、压缩与校验 JSON；同仓共享纯Rust核心，可选插件兼容模式（8192 UTF-8字节、JSON深度/重复键/安全整数与严格Base64）；五项WASI能力为未签名候选，Studio真实接入待验收",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.3",
+          "pluginStatus": "candidate",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -33,6 +43,16 @@
         "devtools.text.base64.encode",
         "devtools.text.base64.decode"
       ],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "UTF-8 文本与 Base64 编解码；同仓共享纯Rust核心，可选插件兼容模式（8192 UTF-8字节、JSON深度/重复键/安全整数与严格Base64）；五项WASI能力为未签名候选，Studio真实接入待验收",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.3",
+          "pluginStatus": "candidate",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -43,6 +63,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "URL 参数百分号编码与还原",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -55,6 +85,16 @@
       "pilotCapabilities": [
         "devtools.text.sha256"
       ],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "计算文本的 SHA-256 摘要；同仓共享纯Rust核心，可选插件兼容模式（8192 UTF-8字节、JSON深度/重复键/安全整数与严格Base64）；五项WASI能力为未签名候选，Studio真实接入待验收",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.3",
+          "pluginStatus": "candidate",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -65,6 +105,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "Unix 时间戳与本地时间转换",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -75,6 +125,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "生成随机 UUID v4",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -85,6 +145,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "查看 Header 与 Payload；不验证签名",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -95,6 +165,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "查找匹配与捕获组",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -105,6 +185,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "二、八、十、十六进制互转",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -115,6 +205,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "0–127 十进制、十六进制、可显示字符与控制符名称查询；可复制可显示字符",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -125,6 +225,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "按分类或名称搜索常用符号、Emoji 和颜文字，一键复制；精选库不等于完整 Unicode",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -135,6 +245,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "内置 5×7 英文与数字横幅、本机 PNG/JPEG/WebP 按亮度转换字符画，宽度控制、复制和不覆盖另存 TXT",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -145,6 +265,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "从文本生成二维码并保存 PNG",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -155,6 +285,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "HEX、RGB、HSL 颜色表示",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -165,6 +305,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "字符、字节、行数与词段统计",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -175,6 +325,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "HTML 特殊字符转义与还原",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -185,6 +345,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "JSON 字符串转义与还原",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -195,6 +365,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -205,6 +385,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "YAML 与 JSON 双向转换",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -215,6 +405,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "UTF-8 文本与十六进制字节互转",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -225,6 +425,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -235,6 +445,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "解析协议、主机、路径和重复查询参数",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -245,6 +465,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "IPv4 掩码、网络地址与可用范围",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -255,6 +485,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出；导出结果发送到其他文本工具，接收结果后本地解析预览；整列去空白/大小写、空值处理与重命名，预览应用及单步撤销；开发版支持命名多实例与主动保存/恢复快照 接收计算器数值类型JSON表格，默认新实例保留已有工作；类型对象经JSON导出可确认送回矩阵A，文本或近似数字模式明确显示类型/精度变化。 从已解析筛选排序视图选择行范围、具名列和列顺序，预览最多8×8数值后接力；CSV字面量精确或显式近似转换，JSON浮点明确近似，拒绝非数字/函数/赋值/空值，保留源工作。；首屏独立数值选取窗口、固定取消/预览操作，取消不发送；接收SQLite当前页类型化表格为新实例，保留已有工作；验证形状/2MiB输入预算后创建，直接可用并刷新可见行，空页保留列；不自动运行流程。 类型化表格接力草稿使用列结构JSON保留空表、列序和值类型，原实例保留。 新增可保存文本流程草稿，独立实例接收不自动运行，后台任务/取消/实例归属和快照恢复；不覆盖既有表格。 共用数据页面按实例当前入口显示导航名称，旧快照默认数据工作台。 JSON输入同时支持严格headers/rows列结构；所有类型化表格接力草稿使用列结构JSON，空表/列序/值类型在保存恢复后重解析保留，宽列名不再因对象数组重复列名而超限。拒绝重复模式字段、非法形状与空列名；流程表格审核后接收新实例。；固定工作实例管理栏，工具内容独立滚动，每实例每工作台保留滚动位置",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.10.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -265,6 +505,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "SHA-256 / SHA-512、进度、取消、摘要对比；普通文件身份/大小/修改时间核对，后台分块计算；选择报告输出进入统一结果接力，原文件输出经确认送入编码检查且不自动读取/转换/写入；增加多文件选择入口；原文件接收确认支持Esc和点击遮罩返回，不改变目标已有草稿/转换预览或来源报告",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -275,6 +525,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "请求标签、站点配置、响应查看和脱敏历史；完整响应可预览并发送到文本工具",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -285,6 +545,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "逐行比较两段文本；接收其他工具结果到左侧或右侧输入",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -295,6 +565,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "DNS 查询与单端口 TCP 连通测试",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -305,6 +585,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "固定侧栏入口；表单新增/编辑/删除与高级 YAML 选项；运行中编辑保护、配置冲突检查及原子保存；启停重启/健康状态/PID；日志自动刷新/筛选/跟随末尾与清空确认；删除保留目录及日志；每轮最多 8 个并发检查，保持列表顺序；会话内退出时间/退出码及异常退出提示；健康检查仅接受 HTTP 2xx；刷新轮次保护与旧轮次取消；运行中定义/状态目录重载保护；配置与日志实际有界读取；日志缓存筛选/可见行绘制、匹配计数、复制筛选结果与超长行预览提示；自动/卡片/紧凑列表，列表只绘制可见行，稳定标识选择独立完整详情；服务日志全部预览/筛选结果可捕获快照发送到工具；读取中/失败禁止发送，超过2MiB拒绝；确认后接收，不自动运行。 取消接力返回原日志窗口并保留筛选。 需要关注视图筛选异常退出或健康失败；各状态显示全量计数，可与搜索组合；统一状态与筛选判定，不自动操作进程。；桌面与托盘统一批量后台任务、逐项进度和结果、取消剩余项、任务中心与退出保护；逐项绑定服务定义/配置位置，变更时拒绝执行",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.8.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -315,6 +605,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "JSONPath 子集：字段、数组索引、通配符与 JSON 结果导出；不含过滤器、递归和切片",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -325,6 +625,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "结构化 JSON 差异与 JSON Pointer 路径；数组按索引或无序多重集比较；不含忽略路径",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -335,6 +645,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "JSON 对象数组、CSV/TSV 的空值、重复行、类型分布与混合类型报告",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -345,6 +665,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "选择保留列、重命名、文本清理、空值处理、显式文本/整数/数字/布尔转换；整列预览、失败行提示、原始输入保留及单步撤销",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -355,6 +685,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "CSV/TSV/JSON 两表内连接与左连接、同名列按行追加、等行数拼列；重复键/未匹配统计、列名冲突处理、后台可取消预览、结果上限与单步撤销",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -365,6 +705,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "同目录 1–64 个普通文件生成 SHA256SUMS，后台流式计算、预览并无覆盖另存；导入 ≤32 KiB 清单逐项定位匹配、缺失、摘要不匹配和读取错误，拒绝路径穿越、重复文件名和符号链接",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -375,6 +725,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "明确选择目录后后台只读统计逻辑大小、直属子目录与大文件；跳过链接及重解析点，限制时间/条目/深度，支持取消并标出部分结果；不删除文件",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -385,6 +745,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "明确选择目录后先按大小筛选，再对候选文件后台流式计算 SHA-256；限定条目/深度/时间/候选数/读取字节，支持取消并标出部分结果；只读、不自动删除",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -395,6 +765,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "选择两个本机目录，按相对路径和类型对照；文件先比大小，同大小再流式计算 SHA-256；有界后台扫描、取消、部分结果说明、筛选和无覆盖 CSV 导出，不同步或删除",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -405,6 +785,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "数字五字段 Cron、列表/范围/步长；固定 UTC 偏移下未来 5 年内最多 10 次运行预览",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -415,6 +805,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "操作系统安全随机字符串；独立种子模式生成可复现测试字符串（非安全）",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -425,6 +825,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "方言选择与格式化，不连接数据库",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -435,6 +845,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本地 schema、错误字段路径、引用限制",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -445,6 +865,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "大文件流式读取、级别筛选、时间定位和多行事件",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -455,6 +885,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "只读选择本机普通数据库文件，列出前 200 个表/视图和列结构，最多 64 列、每页 50 行预览前 10000 行；后台超时/取消、值预算和无覆盖导出当前页 CSV。任意 SQL 与写模式待后续实现；当前页冻结快照先审核范围/类型再送到独立数据实例，最多50行，不代表全表；NULL/整数/有限浮点/UTF8文本保留，截断/BLOB/非UTF8/非有限值拒绝；空页保留列，2MiB目标预算；字节有界文本读取保留内嵌NUL后缀，修正128列提示。",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -465,6 +905,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "请求集合、环境变量、导入导出脱敏",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -475,6 +925,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "解析请求命令，不执行 shell，认证字段脱敏",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -485,6 +945,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "证书链、有效期与主机名验证，只读连接",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -495,6 +965,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机 ≤8 MiB 文本有界读取；明确 BOM、合法 UTF-8 与启发式推测的差异，可手选 UTF-8/UTF-16 LE/BE/GB18030/Big5/Shift_JIS/Windows-1252，严格解码、回读核验、目标字节和 SHA-256 预览后另存新文件，拒绝替换字符与覆盖已有文件；接收文件校验的原文件引用；确认替换现有草稿后不自动读取，主动读取再次核对原文件身份，删除/替换/变更拒绝读取",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -505,6 +985,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "规则预览、冲突检查、操作记录与撤销",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -515,6 +1005,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机读取 PNG/JPEG/WebP，查看尺寸、缩小宽度并按比例输出，转换格式及 JPEG 质量；显示最终编码预览和精确预览文件大小，明确另存新文件且拒绝覆盖原图；单文件 32 MiB、1600 万像素上限 内存图片接力：实际编码结果/透明选区优先、后台有界准备、来源工具版本链与预览确认，目标后台任务/已有工作保护，不创建临时图片、不自动保存。 支持选中剪贴板PNG图片接力，无临时文件。",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.3.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -525,6 +1025,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "多选 1–100 张 PNG/JPEG/WebP，统一最大宽度、输出格式和 JPEG 质量；后台预检输出目录及同名/已有目标冲突，确认清单后逐张编码并显示实际输出大小、进度与结果，可取消余下任务；create_new 拒绝覆盖",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -535,6 +1045,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机 PNG/JPEG/WebP 可视化裁剪、黑色遮挡、箭头与文字标注；按原图分辨率编码并预览实际输出及大小，确认后另存新文件，拒绝覆盖；中文文字依赖本机字体，单图 32 MiB/1600 万像素、输出 128 MiB 上限 内存图片接力：实际编码结果/透明选区优先、后台有界准备、来源工具版本链与预览确认，目标后台任务/已有工作保护，不创建临时图片、不自动保存。 支持选中剪贴板PNG图片接力，无临时文件。",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -545,6 +1065,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机有界扫描 PNG/JPEG/WebP 常见 EXIF/GPS、ICC、XMP、文本与 IPTC 块，不显示敏感原值；应用 EXIF 方向后重新编码、预览并复检清理副本，明确另存且不覆盖；动画图片拒绝处理，不能保证识别所有私有元数据",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -555,6 +1085,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "选择 ≤2 MiB 的本机 UTF-8 Markdown 或粘贴草稿，应用内按标题、段落、列表、代码、引用和表格结构阅读；原始 HTML 转义、图片不加载、只保留 http/https 与页内链接；生成带 CSP 的自包含 HTML 预览并另存新文件，拒绝覆盖",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -565,6 +1105,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -575,6 +1125,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "Unicode、HTML 实体与 shell 引号的明确方言",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -585,6 +1145,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "多时区比较、夏令时边界与批量时间转换",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -595,6 +1165,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "批量替换预览、捕获组引用与匹配限额",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -605,6 +1185,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "显式算法白名单和本地公钥，不接受任意算法",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -615,6 +1205,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "明确算法参数、测试向量、密钥仅内存",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -625,6 +1225,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "开发中：无已解析表格时可建立/编辑/读取流程、填写列名及保留列，解析后才可预览/应用，定义跨解析保留；1–32步列转换/选列/筛选/稳定多列排序/按列去重、按列名绑定、后台完整预览、步骤报告及错误定位、取消、实例任务归属、来源复核后显式应用与最近一次表格撤销；未匹配保留列可编辑或移除，非法投影不改变预测列结构；独立JSON流程文件另存不覆盖、后台读取后预览确认替换步骤，可用于新的输入表，不自动执行；文件限256KiB、严格版本/字段校验，保存失败保留步骤，不含原表或授权。实例快照仍不包含步骤。完整中间结果查看、文件写步骤、图片/插件/MCP/Agent统一执行仍待实现；格式2新增行处理并兼容读取格式1旧流程：文本包含可选大小写、类型敏感JSON相等及null过滤，最多4列精确数字稳定排序、JSON表示去重保留首条；完整输入处理而非只处理屏幕可见行；流程保存先写同目录暂存并同步，再以Windows不覆盖移动发布，提交竞争拒绝且保留已有目标，普通失败尝试清理暂存；崩溃/清理受阻可能遗留tmp，其他平台仍使用无覆盖硬链接；应用前只读检查冻结输入/结果、独立筛选与每页50行查看、JSON类型与有界单元格详情、明确复制完整JSON值；查看不改变待应用结果，关闭后才运行/应用，失效清除；用户主动选择流程文件夹后后台检查直接JSON文件，可按名称/文件名搜索和重新载入确认；最多枚举1000项/累计读取8MiB/保留256流程，部分列表明示；当前实例独立选目录；可显式记住/忘记目录位置，启动及新实例只恢复位置，点击刷新才检查文件；CtrlK搜索已检查流程名称/文件名，显示所属实例及步数；结构化实例/文件键路由，重新读文件再确认，取消保持旧步骤与预览；缓存按列表修订/查询/实例变化失效，最多显示100条流程匹配；流程可显式收藏位置/名称/步骤摘要到偏好（最多100条），CtrlK空搜索优先显示收藏，跨进程启动未扫描目录也可搜索/后台重新读取到当前实例确认；移除保留原文件，保存失败活跃状态回滚，多窗口按路径合并增删/刷新，不保存正文/表格/授权；完整跨次索引及通用跨工具执行待开发；CtrlK统一入口支持全部/工具/流程/收藏四范围及Ctrl1–4，保留搜索词并重置选择，流程范围空搜索显示已检查列表，收藏范围仅工具/流程收藏，结果计数与空状态；本次应用内保留最后范围，重启恢复全部，不自动扫描或执行。；后台实际读取/校验成功后绑定实例生成最近载入元数据（最多20），多窗口合并/去重/移除、保存失败保留待提交并30秒重试，CtrlK全部/流程显示并可再次重新读取确认，已收藏同路径不重复显示；删除记录保留文件/数据，不代表已应用或执行。；实际Rust托盘面板收藏/最近/全部支持流程摘要，独立流程页与全部流程搜索，收藏/最近各最多6条，完整计数、同路径去重、键盘选中，打开前复核偏好入口，恢复主窗口后普通读取并确认；原表/旧预览保留。；完整冻结预览可显式确认另存新CSV/SQLite，无需应用原表；格式/目标/全行列/类型转换预览，CSV文本公式保护可选，32MiB快照/CSV输出上限，后台实例任务与取消；同目录暂存后硬链接无覆盖发布（磁盘不支持时失败），保留原表与预览；不保存为可复用写步骤、不持久化授权。；格式3可保存版本1的CSV/SQLite输出设置（公式保护/表名），兼容格式1/2；导入先展示设置摘要并确认，清空旧目标，不自动写入；输出配置可在预览前编辑，不含目标路径/授权/命令，未知版本或字段拒绝；当前仅一个最终结果输出声明，多产物/通用动作仍待实现。；保存的SQLite结果可显式打开实际文件进入数据库工作台，回执类型/路径与后续编辑的输出选项分离；CSV回执不提供SQLite入口，使用正确工具ID记录最近。 表格流程库同时识别版本化工具配方，收藏/搜索/最近/托盘复用同一元数据格式；实际读取严格识别格式，失败保持当前工具，成功才记录对应工具最近。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.17.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -635,6 +1245,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "限定目录、类型过滤、取消、隐私目录排除",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -645,6 +1265,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "文本型 PDF 分页提取与检索；OCR 单独评估",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -655,6 +1285,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本地规范校验、生成请求草稿与敏感字段标记",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -665,6 +1305,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "声明式 JSON 插件安装预览、启停、卸载与内容指纹；内置配方和非流式 HTTP 适配器，3 个示例包共 6 个可选工具",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -675,6 +1325,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "只读检查 PATH 软件入口和 4 个本地 TCP 端口；不读取软件私有配置或启动服务",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -685,6 +1345,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "已支持命名连接档案、工具级系统凭据、OpenAI/Ollama 模型发现与列表连接检查；通用提供商配置及生成能力验证待补",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -695,6 +1365,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "已支持受限 OpenAI/Ollama 文本模板的内存多轮、SSE/NDJSON 流式、客户端取消、成功会话 Markdown/JSON 导出、JSON 预览确认恢复、有界 UTF-8 文本附件及显式保存的本地命名会话库；真实模型兼容性、PDF/Word/图片与更完整会话管理待补",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -705,6 +1385,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "同一问题多模型运行、延迟/成本/输出并排比较，可导出评测记录",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -715,6 +1405,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "受支持文本插件已有本地命名模板、最多 20 个修订、标签搜索、变量填写与展开预览、相邻修订差异；正文可跨工具填入，同工具可明确应用模型/流式/多轮参数。真实模型端到端与完整交互验收待补",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -725,6 +1425,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "按模型 tokenizer 统计与估算区分，显示截断位置和预算",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -735,6 +1445,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "JSON Schema 校验、失败字段解释与可选修复，不静默改写",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -745,6 +1465,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "明确调用本机 Ollama /api/embed 对两段文本生成向量；展示维度、范数、余弦相似度和欧氏距离，可预览或复制完整向量；请求有输入/响应预算、取消与回环地址限制，不保存文本或向量",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -755,6 +1485,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "首 Token、吞吐、峰值内存和固定数据集重复测试",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -765,6 +1505,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "模型下载进度/取消、删除确认、磁盘占用；不自动下载大文件",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -775,6 +1525,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机 stdio 可显式保持同一进程、连续操作、手动断开和闲置超时；Stage 77新增 2025 Streamable HTTP 会话；失效会话重新初始化且不重放原操作通过夹具；官方 SDK 1.31.0 的 JSON/SSE 互操作通过；2026 协议、认证、心跳及第三方兼容性待完善",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -785,6 +1545,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机 stdio 短会话及持续连接已发布；Stage 77新增 2025 Streamable HTTP 的 JSON/SSE、手动工具调用、资源/提示词读取、取消及有界响应。失效会话重新初始化且不重放原操作通过夹具；官方 SDK 1.31.0 的 JSON/SSE 互操作通过；Stage 78 临时 Bearer、主动 Windows 端点凭据保存及 401 地址发现/OAuth 元数据预览开发中，分项测试通过但未发布；PKCE/state 与本机随机端口回调基础已通过合成测试，令牌交换基础已通过合成请求测试；公共客户端浏览器登录 UI/连接认证已接入并完成合成状态测试与界面预览，主动刷新与轮换已接入并完成合成测试，持续连接凭据更新通道及会话恢复/旧值屏蔽已通过合成测试，主动开启的自动续期/后台调度/连接确认已接入并通过合成状态测试；开放公共客户端注册/同次回调登录已接入并通过合成测试，公共客户端主动撤销/断开已接入并通过合成分项测试；受保护注册/软件声明和完整互操作验收仍待完成；2026 协议、完整 OAuth、参数表单、协议日志和第三方兼容性待补",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -795,6 +1565,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机 stdio 调试台短会话与持续连接按 EXE/参数及工具完整定义保存禁止或受限只读直接调用规则，默认逐次确认；本机 Agent 自动调用只接受已直接许可且完整声明低影响只读的工具，每次调用前复核身份、定义和权限。高影响工具仍需调试台逐次手动确认；跨客户端审计待实现",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -805,6 +1585,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "显示当前屏幕画面的鼠标框选或整屏，H.264 MP4 与光标，4/8/16 Mbps 质量档位及按时长大小估算、保存后实际大小，倒计时、自动停止、自动最小化与恢复、托盘/快捷面板及全局录屏热键，可选静音、系统声、麦克风或双声源；中断时尽可能保存已录片段；主屏实测",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -815,6 +1605,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "已接入按设备名选择、物理边界框选及录制前和录制中的拓扑复核；仅主屏完成实测，非主屏、物理热拔插、跨屏合成和混合 DPI 待验收",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -825,6 +1625,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "录屏时同时采集系统播放和麦克风，48 kHz 双声道等幅混音，暂停排除与音视频轨道时长校验",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -835,6 +1645,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "录制前分别设置系统声与麦克风 0–200% 增益，支持单路静音及双声源混音削波保护",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -845,6 +1665,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "录制时分别显示系统声与麦克风短时峰值，暂停和静音自动归零；单次受控音调验证系统声输入",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -855,6 +1685,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "主屏 60 秒麦克风单路与双声源、120 秒双声源含 3 秒暂停的 MP4 音画轨同步已实测；受控音频及画面中断后短片段封装已验证；更长时间、不同声卡时钟和真实热拔插仍待验收",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -865,6 +1705,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "按同目录实际 MCP 服务 EXE 路径生成 Codex CLI 命令、Codex TOML 和通用 mcpServers JSON；TOML 限定两个知识工具并采用 writes 审批模式，本机 Codex CLI 真实会话已调用列表和合成检索。只预览和复制，不读取或修改客户端配置、不包含凭据；其他客户端适配与现有配置差异仍待实现",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -875,6 +1725,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "独立 Windows 控制台 EXE 提供只读 MCP stdio 服务，向可信客户端列出已扫描知识源、检索已同步索引；两个工具在协议中声明只读，逐条复核当前文件 SHA-256，仅返回有界片段、相对路径和引用。不监听网络、不写入或自动扫描；通用工具暴露与调用审计仍待规划",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -885,6 +1745,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机 Ollama 生成可审阅计划，用户明确批准后在短会话内调用已获直接许可的低影响只读 MCP 工具；本次工具白名单、最多四次调用、模型 token/请求字节上限与取消。知识检索结果去除重复包装、按 3 KiB 模型消息选入片段，仅显示选入的编号来源并校验完成回答中的 [K编号]；失败或取消时末步消息可能尚未发送，缺少引用明确提示，编号有效不证明事实。计划、步骤和答案默认仅驻留内存；运行记录默认不含内容或来源路径，主动勾选才附带目标、计划、答案、错误和来源。写操作、费用计费、断点恢复及其他模型协议待规划",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -895,6 +1765,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "检测版本与能力，使用独立工作目录、流式事件、取消和审批桥接；不复用私有会话库",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -905,6 +1785,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "可选 CLI 适配、结构化事件和退出码；未安装时清晰提示",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -915,6 +1805,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "读取本机导出的 Agent schema v1/v2/v3 JSON，按步骤只读回看状态、白名单、耗时、响应大小、模型用量及主动导出的知识检索来源声明；v3 编号来源与答案引用列表一致性可校验，v2 旧来源无法证明进入模型上下文。可明确选择目录，在后台有界读取顶层最多 64 份、累计 16 MiB 的 JSON 并按元数据跨记录搜索；可选两份记录比较元数据并主动复制不含正文的摘要。单份最多 1 MiB，任务正文和来源路径展示默认隐藏；不执行模型或 MCP 工具，事实级验证及可执行恢复仍待规划",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -925,6 +1825,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "串联本地工具/模型/MCP，类型校验、分支、重试与断点恢复",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -935,6 +1845,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "计划任务/目录变化触发、重入保护与权限复核，明确后台运行状态",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -945,6 +1865,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户明确添加最多 32 个本机文件/目录，配置默认及自定义排除规则；手动有界扫描 Markdown/TXT/HTML/PDF/DOCX，记录相对路径、大小、修改时间和 SHA-256 版本，比较新增/变化/移除并本机持久化；不保存正文、不自动扫整盘",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -955,6 +1885,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "从已扫描本地知识源选择单份 Markdown/TXT/HTML/PDF/DOCX，校验文件 SHA-256 后在后台解析；按页/段落定位、800 字符分块与 100 字符重叠、分块 SHA-256 和分页预览。单文件 16 MiB、正文 4 MiB、PDF 200 页、最多 2000 分块；正文不持久化，扫描 PDF 不支持 OCR",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -965,6 +1905,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户手动同步已扫描来源到本机 SQLite FTS5 全文索引；按文件 SHA-256 增量更新、快照移除同步删除、事务性重建/取消回滚、来源计数、资源预算和确认后清空索引；正文只保存在本机数据库，向量可经独立工作台另建索引",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -975,6 +1925,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户明确选择本机 Ollama 嵌入模型，对已手动同步的全文索引分块按文件/分块哈希增量生成向量；模型摘要变化时重建，事务性取消/错误回滚，128 MiB 向量预算，最多 50 条语义检索结果并核验当前全文索引；可确认后删除独立向量库。当前仅支持回环 Ollama，不含关键词混合排序",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -985,6 +1945,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "只读查询已同步本机 SQLite 索引；英文词项 FTS5 相关度排序、中文片段字面包含匹配，来源筛选和最多 50 条结果；展示路径、位置、片段与哈希，可复制引用或片段加引用，打开原文件前核对当前快照和内容哈希。不含向量语义检索",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -995,6 +1965,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "对手动同步的本机全文索引与同模型版本向量索引各取最多 50 条候选；来源筛选在两通道内生效，按文件/片段哈希合并并复核当前索引；25/50/75% 关键词权重的 RRF 融合、最多 10/25/50 条结果、通道排名与贡献解释、引用复制和打开前原文件核验；模型异常或取消不静默退化为单通道",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1005,6 +1985,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户明确选关键词或关键词+向量检索准备最多 8 条可核验来源证据；混合模式复用同版本索引的加权 RRF，显示两路排名与贡献，支持取消且模型/索引失败不降级；预览后才明确调用回环 Ollama/OpenAI 兼容流式问答模型，答案仅接受有效本次证据编号，原文件变化不发送，支持答案与引用复制；不保证模型陈述全真",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1015,6 +2005,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "粘贴最多 10 题固定 JSON 样例集，指定问题、检索词、预期知识源文件及可选答案字面片段；可选关键词或同版本向量的混合证据做单路检索/本机模型评测，也可同题并列比较两路 Top K 命中、名次和 MRR，错误题不计成对结果；支持取消、逐题失败显示和不覆盖的有限 JSON 报告。统计仅供本机回归，不证明语义准确性",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1025,6 +2025,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "通过官方 API 查询选定工作区，不直读其私有数据库，连接错误可诊断",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1035,6 +2045,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户选择 vault 后只读检索、双链解析、显式写回预览与冲突处理",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1045,6 +2065,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "可选本地 OCR 引擎、语言包管理、页面坐标与可搜索文本导出",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1055,6 +2085,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "粘贴文字或 HTML 源码、导入本机 UTF-8 HTML，或明确抓取公开 HTTPS 页面；预览标题、来源、时间和正文，选择目录型知识源或建立 Zi 收集箱后以 Markdown 新文件保存，内容去重、不覆盖。网页请求不带浏览器 Cookie 或认证、不跟随重定向，仅允许公开地址且有时长/体积上限；保存后仍需手动扫描和索引，不含浏览器扩展",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1065,6 +2105,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "版本约束、更新差异、权限增量确认、失败回滚与可信来源校验",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1075,6 +2125,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "版本化 JSON-RPC 协议、进程树退出、超时取消、输出限额；隔离能力按系统验证",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1085,6 +2145,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "签名/摘要、来源、兼容性、更新说明；远程发现与执行授权分离",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1095,6 +2165,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "已接入 Windows 凭据管理器、地址/模型设置及跨工具命名档案，支持模型列表连接检查；待补通用设置 schema",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1105,6 +2185,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "依赖检测、崩溃记录、慢调用、禁用原因和可脱敏诊断包",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1115,6 +2205,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "Windows 可配置系统热键、冲突提示与旧绑定保留；独立托盘快捷面板、搜索/收藏/最近、键盘导航、主题切换和录屏控制。开发版新增固定主导航、开始页与连续工具库；统一目录中的用途别名及有限英文拼写纠正，搜索展示说明与匹配原因，打开仅导航不执行；输入识别、通用拼音和工作实例检索待续；托盘右键为跟随系统主题的可搜索轻量面板，含收藏/最近/常用/服务状态与启停日志入口，主窗口手动主题独立；工具库可生成各工具桌面/任务栏快捷方式，--tool稳定ID直达内置子工具与启用插件，独立任务栏身份，工具启动不自动恢复服务；任务栏由Windows确认固定，未验证全部系统实际固定交互；多工具窗口协作保存收藏/最近/频次，Windows排队文件锁内合并本窗口增量，发现字段定时刷新，损坏最新偏好拒绝覆盖；不等于其他用户数据的跨进程保护",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.4.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1125,6 +2225,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "按任务保存常用工具组合、固定顺序、导入导出与配置迁移",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1135,6 +2245,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户触发后识别 JSON/URL/文件，预览转换动作；不后台采集剪贴板",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1145,6 +2265,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "容器与镜像只读概览、日志；启动停止清理需显式操作",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1155,6 +2285,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "状态/差异/分支查看，写入前预览，不自动提交私有文件",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1165,6 +2305,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "schema、分页预览、过滤与 CSV/JSON 导出，控制内存上限",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1175,6 +2325,16 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
@@ -1185,27 +2345,59 @@
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "java-thread-dump",
       "title": "Java 线程转储分析",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "operationId": "java.threads",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "jstack/jcmd导入文本分析；进程采集另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "java-dependencies",
       "title": "Maven / Gradle 依赖冲突",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "java.dependencies",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "Maven/Gradle依赖导入文本分析；构建执行另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "java-environment",
@@ -1215,37 +2407,80 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "显式选择可信 java，固定命令对比 JDK 属性与 JAVA_HOME；Maven/Gradle 仅发现入口，不修改环境",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
       "sourceToolId": "java-gc-log",
       "title": "Java GC 日志分析",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "operationId": "java.gc",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "GC日志导入文本分析；文件获取/进程采集另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "java-jfr",
       "title": "JFR 录制报告浏览",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "java.jfr_json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "JFR导入JSON分析；二进制读取/导出另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "spring-config",
       "title": "Spring 配置对比",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "spring.config",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "spring-actuator",
@@ -1255,6 +2490,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "显式选择基础地址和 health/info/metrics GET；支持 503 health JSON，不跟随重定向、不读取 env/configprops",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1265,67 +2510,143 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "显式运行可信 Python -I，检查解释器/venv/Django 分发和脚本目录，可比较两个环境；不加载项目 settings",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
       "sourceToolId": "django-migrations",
       "title": "Django 迁移计划检查",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "django.migrations",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "django-sql",
       "title": "Django SQL / N+1 分析",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "django.sql",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "SQL导入文本归一化与重复分析；执行另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "django-urls",
       "title": "Django URL / reverse 检查",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "django.urls",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "URL导入列表检索；项目加载另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "django-drf",
       "title": "DRF OpenAPI 契约对比",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "django.openapi",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "两份OpenAPI JSON差异；联网另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "django-checks",
       "title": "Django 部署检查报告",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "django.checks",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "检查输出导入分析；manage.py执行另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "celery-diagnostics",
       "title": "Celery 任务故障分析",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
-      "migration": "await_host",
+      "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "operationScopes": [
+        {
+          "operationId": "celery.report",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "Celery任务日志导入分析；Broker/Worker操作另需Host",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "not_delivered",
+          "core": "zi-diagnostics-core/0.1.0",
+          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+        }
+      ],
+      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
     },
     {
       "sourceToolId": "file-intake",
@@ -1335,6 +2656,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "主窗口/快捷面板拖放或填写路径，选择 CSV/TSV/JSON、Java/Python/线程/GC/SQL/Celery 或文件校验；UTF-8 文本限 2 MiB、最多 64 文件，不自动执行或上传",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1345,6 +2676,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "数据解析、表格合并与文件校验的跨页面状态、进度、完成反馈；内存最近 50 条记录、取消和返回工具，其他工作台暂未接入；开发版的数据任务绑定独立实例，避免不同材料的记录混淆",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1355,6 +2696,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "Stage 78 开发版：数据/清洗/合并的命名多实例、切换后后台收取、主动SQLite快照保存/恢复/另存/删除、版本冲突检查；项目空间、自动保存、跨工具实例与长期运行恢复仍待接入；实例切换、名称与保存入口固定在内容滚动区上方",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.4.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1365,6 +2716,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "文本/JSON/表格/图片/文件集合的版本化结果、来源引用及兼容下一步；大文件按引用或流处理；新建、追加与替换明确区分",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1375,6 +2736,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "跨工具 RunId、进度/取消/提交/部分完成与结果定位；页面关闭不影响任务管理，恢复与重试按操作能力验证；开发版先完成数据实例归属，尚未统一所有执行器",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1385,6 +2756,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "用户可按本次/项目/配方授权文件及数据库操作；预览目标/差异/冲突，提交前复核版本，适用时备份/事务/回收站，外部程序隔离按实测说明",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1395,6 +2776,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本地保存、已保存备忘创建副本草稿、固定保存/放弃区与 Ctrl S、全文搜索、置顶筛选/标题或更新时间排序/可见行渲染/查询结果缓存、置顶、回收站恢复及确认后永久删除、转为日程；接收工具结果为新草稿，正文发送至其他文本工具；Markdown/UTF-8 文本导入草稿与正文预览导出；全部备忘/日程 JSON 备份及预览合并/替换恢复；固定底部双向复制备忘/日程草稿，仅标题正文，原记录保留，新日程提醒关闭；v1.1.0：约2秒发现其他窗口保存的记录，保留未保存草稿及原版本；同一份日程由一个窗口自动提醒，关闭后接管，读失败保留内容；v1.2.0：冲突修改显式另存新记录、原记录不改，新日程提醒关闭，保存事务凭据区分写入失败与刷新失败；v1.3.0：只读冲突字段对比，当前原始输入与最近同步版本、删除/同步异常提示，查看期间不保存",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.3.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1405,6 +2796,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "1901–2099 公历、农历、节气；置顶筛选及日期/标题/更新时间排序/查询结果缓存、7/30 天日程列表、重复逐次展开与范围筛选；日程保存、创建副本草稿默认关闭提醒/移除原UID、每天/每周/每月/每年重复及缺日处理、提前提醒、5/10/30/60/120/1440 分钟延后与重启补提醒、提醒直达日程与正文接力；退出程序不提醒；v0.79.0：结束时间、跨天/全天事件、全天提醒钟点与跨范围日程；可选重复截止日期与最后一次跨天保留、固定保存/放弃区与 Ctrl S；基础 ICS 预览导入、UID 去重/确认更新与当前/全部日程导出，支持 UNTIL 截止，时区和复杂重复仍有限制；固定底部双向复制备忘/日程草稿，仅标题正文，原记录保留，新日程提醒关闭；周视图：周一至周日、全天优先/跨天覆盖、范围搜索/已完成筛选、前后周/日期跳转、原系列编辑，窄窗口横向滚动；v0.80.0-dev.2：固定底部返回日程视图/查看当前编辑，保留未保存正文、日期与筛选，不自动写入；v0.80.0-dev.3：工具结果直接创建新日程草稿，显示日期09:00、提醒关闭、不重复，保存后才写盘，拒绝覆盖未保存或活动文件预览；v1.1.0：约2秒发现其他窗口保存的记录，保留未保存草稿及原版本；同一份日程由一个窗口自动提醒，关闭后接管，读失败保留内容；v1.2.0：冲突修改显式另存新记录、原记录不改，新日程提醒关闭，保存事务凭据区分写入失败与刷新失败；v1.3.0：只读冲突字段对比，当前原始输入与最近同步版本、删除/同步异常提示，查看期间不保存 接收指定日期的单次全天草稿，提醒关闭且不自动保存；保留旧选中日期失败守卫和脏编辑保护，支持1901–2099年。",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.4.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1415,6 +2816,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "农历生日重复、ICS 时区、COUNT 次数和例外扩展、系统通知与退出后的系统任务提醒；周视图、全天与结束时间、基础 ICS 文件交换、重复截止与 UNTIL 已归入现有日程入口",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1425,6 +2836,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "标签、多文件批量导入导出，以及主动将备忘送往知识库；单文件正文交换、完整备忘/日程 JSON 备份恢复、核心结果互传和回收站永久清理已归入备忘录入口",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1435,6 +2856,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "v0.81.0：数据工作台可将筛选/排序结果或全部原始行另存新SQLite单表文件，完整快照、范围/目标/类型预览和明确确认；后台事务及独立校验、拒绝已有或竞争目标、提交前取消、实例任务归属、主动打开只读浏览器；最多10000行/128列/32MiB，需支持硬链接的文件系统，不追加或改写已有数据库",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.1.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     },
     {
@@ -1445,6 +2876,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "编码与预览共用BGRA：固定/跟随放大、全景＋鼠标放大窗（四角可选）、平滑过渡、鼠标高亮/左右键波纹、鼠标聚光灯（半径/压暗可调、离开选区关闭）。录制中调整、静态源重新合成、暂停清除瞬态；1600万像素上限。真实桌面/物理输入/混合DPI/高分辨率性能及画笔/按键/提词器继续验收。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.2.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1455,6 +2896,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "签名发布检查与完整EXE/MSI认证升级；便携版优先匹配双EXE基线的独立签名增量包、重建后目标摘要认证、明确确认退出应用及恢复。基线不匹配使用完整包并说明原因，损坏签名/补丁停止；MSI仍原生完整安装。首次正式签名升级、健康握手、MSI增量与断点续传继续验收。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.8.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1465,6 +2916,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "本机分块差分/压缩完整内容包生成、自验重建及另存；程序更新另接独立签名增量清单，绑定源双EXE、补丁与完整目标，便携匹配基线时下载重建、确认后应用和恢复。发布流水线收集前一正式版基线并只发布有传输收益的两件包。首次正式线上增量及健康自动回滚、MSI增量仍待验收。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.2.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1475,6 +2936,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "开发版已接入有界精确 i128 有理数表达式、优先级与右结合幂、科学函数及弧度/角度、进制与有符号 128 位位运算、长度/质量/时间/存储/温度转换、变量/ans 与 100 条内存历史、结果复制和表达式复用；复数、非线性方程、高级绘图、时区与日期时间换算、其他结果接力继续开发。 新增独立矩阵工作区：每轴1–8、表达式/变量单元格及TSV批量输入预览确认、矩形加减乘/转置、行列式/逆矩阵及多右端AX=B；精确有理数不自动降精度，浮点明确近似且无病态误差保证；过期结果禁止复制，TSV输出。复数/绘图/非线性、原文件更新和其他类型接力继续开发。 新增有界JSON工作表快照另存与预览确认恢复，含算式/角度/变量/历史/矩阵和TSV草稿；精确分数字符串、近似完整f64，后台快照保存不误标后续编辑，恢复不回放赋值或保留旧矩阵结果，退出/更新保护。1MiB，明文、无覆盖原子另存，需支持硬链接文件系统。 新增数值类型/完整文本/近似数字结果接力，规范类型JSON表格可确认回传矩阵A；精确分数与完整f64保留，过期结果/目标未保存保护。工作表schema2保存类型字面量，兼容读取schema1。 接收数值可选择矩阵A/B，有未保存内容时显式允许替换所选矩阵并保留其他工作；后台I/O/待读取不可绕过。长单元格完整悬浮查看，小窗口接力正文滚动而操作固定。 接收矩阵选择和替换许可固定底部，长内容及有界错误单独滚动。 新增函数绘图：最多4条、每条17–2049点后台近似采样，变量/角度快照、定义域/中点断点探测；图内平移缩放与采样读数、过期禁止输出，CSV/SVG主动无覆盖另存与采样表新实例接力。schema3保存绘图参数兼容读1/2，恢复不执行。 新增有界统计/排列组合/公约数公倍数与分类示例，精确分数比较避免交叉乘法溢出。 已接收数值区域A可主动求总和/均值/中位数/总体与样本方差或标准差，结果保留类型1×1继续接力；运算按矩阵/统计分组，B不参与统计；schema4兼容旧1/2/3，恢复不执行。 新增日期与工作日工作台：公历0001–9999年、带符号经过天数、日/月/年偏移、月末显式报错或截断、周一至周五端点计数与正负偏移；不含节假日/调休；输入修改后旧结果不可复制或接力，天数保留精确整数接力。schema5保存日期原始草稿并兼容1–4，恢复不计算。 日期偏移结果携带类型日期与完整条件，确认后生成提醒关闭的全天日程草稿或其他文本目标；字段绘制后捕获，旧结果不能发送。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.10.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1485,6 +2956,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "文件/文件夹/空白处统一 Zi DevTools 菜单，按文件类型与多选限制显示适用操作；工具先预览再执行。当前用户安装、更新、修复及卸载；支持 EXE 主动注册和 MSI 安装选项，核验路径转义、单实例转发及 Windows 11 新旧菜单兼容",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1495,6 +2976,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "开发版接入IANA世界时钟/模拟表盘及相对会议对照、秒表分段、32个独立单调计时器、64个一次/每日时区闹钟、补提醒/知晓/5分钟稍后、番茄专注与四轮长休息。共用日程的后台唤醒，隐藏托盘继续处理、主动启用本机保存：后台原子快照、操作后保存/运行每30秒检查点，重启先预览再确认、倒计时暂停或包含离线时间继续、秒表暂停恢复、闹钟/专注/分段/提醒恢复与已确认去重，拒绝损坏/未来版本/过期写入；未保存会话退出提示。三种内置短音/音量/试听/静音/跨午夜免打扰、同时到期合并声音且提醒保留、后台可取消WASAPI播放、声音设置随保存恢复及旧格式备份迁移；8个独立原生小窗/置顶/全屏/Esc/返回工作台、稳定ID/同步操作/重置确认、关闭不停止计时/恢复先关闭旧窗；提醒数据与日程共享调度、完整睡眠/系统时间实测和退出后系统任务仍待实现或验收",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.4.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1505,6 +2996,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "开发版可主动隐藏工作台后捕获主屏幕，以原生全屏选择层绘制矩形/自由轮廓，Enter截全屏；捕获源像素放大镜、坐标/RGB、R/F切模式、Space开关放大镜、Backspace重选、Esc取消保留旧工作。偶奇规则、2×2采样透明边缘、棋盘格预览、后台无覆盖PNG另存及退出保护；稳定选择层ID、恢复主窗。2048点/1600万像素上限。其他屏幕/窗口、编辑点/羽化/标注/打码/复制/固定截图/撤销及真实多屏/混合DPI/物理全局键继续开发，长截图/OCR后续验收。 内存图片接力：实际编码结果/透明选区优先、后台有界准备、来源工具版本链与预览确认，目标后台任务/已有工作保护，不创建临时图片、不自动保存。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.3.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1515,6 +3016,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "开发版已接入稳定命令 ID、可配置全局前缀和默认序列；全部可用工具及已启用插件可搜索并编辑 1–4 个字母的附加序列，K 保留搜索。修改进入草稿，重复/前缀冲突禁止保存，保存成功后生效；可取消绑定、恢复单项或全部默认、放弃修改。停用插件保留并预留绑定，运行时冲突停用相关序列。8 秒超时、失焦/Esc/输入法组合取消，旧录屏直接热键保留。新增快捷配置 JSON 后台另存与读取，导入先查看变更和冲突，合并/替换确认后只进入草稿；格式有界，已有文件不覆盖，退出保护覆盖草稿/待确认与活动读写。更多动作及物理跨应用验收待续；新增T默认打开时钟工作台；新增S C快速截图，S F打开截图工作台。 新增R T教程录屏入口、R Z开关鼠标聚焦放大、R X关闭效果；真实跨应用热键验收仍待续。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.7.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1525,6 +3036,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "开发版主动文本及另行开启图片采集，PNG优先、常见24/32位DIB与明确32位V5掩码；保留alpha，400万像素/PNG16MiB，混合历史及事件队列各32MiB按编码加RGBA计，500条。共享采集前来源排除、暂停/代次检查、去重/置顶/期限；单预览纹理、PNG与DIBV5复制/回流抑制、透明PNG无覆盖另存和图片工具接力。主动Windows用户保护schema3保存/文本1、2兼容，恢复不自动采集。富文本/文件引用/OCR/Agent授权、其他位图/ICC、长期性能和多进程继续开发。",
+          "sourceStatus": "in-progress",
+          "sourceVersion": "0.5.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1535,6 +3056,16 @@
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "把多次复制整理成表格/JSON/备忘/日程草稿，图片 OCR 与翻译需选择本机或远程模型；每步预览、类型转换/来源追踪/撤销、贴入目标前确认；大文件只保留引用并复核存在性，不后台自动上传",
+          "sourceStatus": "planned",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        }
+      ],
       "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
     },
     {
@@ -1545,6 +3076,16 @@
       "migration": "await_host",
       "pluginStatus": "not_delivered",
       "pilotCapabilities": [],
+      "operationScopes": [
+        {
+          "scopeKind": "declared_standalone_scope",
+          "scope": "13项原生文本操作与9项表格操作，共22项；版本化动作目录驱动搜索、排序和后台串行执行；格式1兼容，格式2按显式文本/表格类型检查。最多16步、输入/每步1MiB、累计材料8MiB；逐步结果/失败定位和取消，复用既有表格列转换。CSV/TSV解析保留文本，JSON对象数组保留类型，列结构JSON保留列序/空表/类型；CSV原值导出明示类型变化。表格审核后直接接力独立数据实例，原输入/结果保留；文本沿已有接力。输入/步骤随实例保存，恢复不运行；配方不含输入/结果/目标/授权。文件/图片/插件/Agent/MCP统一动作平台仍未完成。 主动读取UTF-8文件(1MiB)后审核替换输入，不自动执行；配方新文件保存/读取(64KiB)，仅含版本/步骤；选择任一步完整结果经格式/字节/路径审核另存原文本或列结构JSON，复用原子不覆盖写入。文件任务使用实例后台任务/取消/退出保护，读取取消保留草稿与旧结果，发布后取消不删除成品。 配方接入统一有界目录、CtrlK检索/收藏/最近与托盘，重新读取文件按实际契约分派工具审核，保留原输入和旧步骤/结果直到确认；直接配方读取记最近，后台实例绑定，不自动执行。",
+          "sourceStatus": "implemented",
+          "sourceVersion": "1.6.1",
+          "pluginStatus": "not_delivered",
+          "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        }
+      ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     }
   ]

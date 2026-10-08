@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.82.0-dev.83"
+version = "0.82.0-dev.84"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -5610,8 +5610,19 @@ dependencies = [
  "windows-sys 0.59.0",
  "winresource",
  "zeroize",
+ "zi-diagnostics-core",
  "zi-text-core",
  "zip",
+]
+
+[[package]]
+name = "zi-diagnostics-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "regex",
+ "serde_json",
+ "serde_yaml_ng",
 ]
 
 [[package]]

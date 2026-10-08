@@ -27,8 +27,8 @@ jobs:
           cache-on-failure: true
       - run: python scripts/sync_tools.py --check
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - run: cargo test --locked
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --workspace --locked
       - name: Validate release version
         shell: pwsh
         env:

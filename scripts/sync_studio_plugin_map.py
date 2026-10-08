@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import json
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -9,6 +10,24 @@ parser.add_argument("--check", action="store_true")
 args = parser.parse_args()
 catalog = json.loads((ROOT / "docs/tools.json").read_text(encoding="utf-8"))
 compute = set("json base64 url sha256 jwt regex number ascii-codes symbol-library ascii-art qr color text-stats html-escape text-escape case-convert yaml hex lines url-inspect cidr diff json-path json-diff data-schema data-transform csv-merge unicode java-trace django-trace java-thread-dump java-gc-log".split())
+report_scopes = {
+    "java-thread-dump": "jstack/jcmd导入文本分析；进程采集另需Host",
+    "java-dependencies": "Maven/Gradle依赖导入文本分析；构建执行另需Host",
+    "java-gc-log": "GC日志导入文本分析；文件获取/进程采集另需Host",
+    "java-jfr": "JFR导入JSON分析；二进制读取/导出另需Host",
+    "spring-config": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
+    "django-migrations": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
+    "django-sql": "SQL导入文本归一化与重复分析；执行另需Host",
+    "django-urls": "URL导入列表检索；项目加载另需Host",
+    "django-drf": "两份OpenAPI JSON差异；联网另需Host",
+    "django-checks": "检查输出导入分析；manage.py执行另需Host",
+    "celery-diagnostics": "Celery任务日志导入分析；Broker/Worker操作另需Host",
+}
+core_source = (ROOT / "crates/zi-diagnostics-core/src/lib.rs").read_text(encoding="utf-8")
+report_actions = {source: action for action, source in re.findall(
+    r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"', core_source)}
+assert set(report_actions) == set(report_scopes), "Report migration must match the actual core registry"
+compute.update(report_scopes)
 pilot = {
     "json": ["devtools.text.json.format", "devtools.text.json.minify"],
     "base64": ["devtools.text.base64.encode", "devtools.text.base64.decode"],
@@ -29,7 +48,14 @@ for tool in catalog["tools"]:
         reason = "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     rows.append(dict(sourceToolId=tool["id"], title=tool["name"], sourceVersion=tool["tool_version"],
                      sourceStatus=tool["status"], migration=category, pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
-                     pilotCapabilities=pilot.get(tool["id"], []), reason=reason))
+                     pilotCapabilities=pilot.get(tool["id"], []),
+                     operationScopes=([dict(operationId=report_actions[tool["id"]], scopeKind="completed_imported_report_subset", scope=report_scopes[tool["id"]],
+                         sourceVersion=tool["tool_version"], pluginStatus="not_delivered",
+                         core="zi-diagnostics-core/0.1.0", blockingReason="共享原生核心已抽离；WASI/包/View及Host验收未完成")]
+                         if tool["id"] in report_scopes else [dict(scopeKind="declared_standalone_scope",
+                             scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
+                             pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
+                             blockingReason=reason)]), reason=reason))
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

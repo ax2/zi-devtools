@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.83"
+version = "0.82.0-dev.84"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 zi-text-core = { path = "crates/zi-text-core" }
+zi-diagnostics-core = { path = "crates/zi-diagnostics-core" }
 ab_glyph = "0.2.32"
 anyhow = "1.0"
 base64 = "0.22"
@@ -61,7 +62,7 @@ rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
 ui-preview = []
 
 [workspace]
-members = ["crates/zi-text-core", "crates/zi-text-wasi"]
+members = ["crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core"]
 default-members = ["."]
 resolver = "3"
 
