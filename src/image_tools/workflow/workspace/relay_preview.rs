@@ -63,3 +63,39 @@ impl Workspace {
         }
     }
 }
+
+impl Workspace {
+    pub(crate) fn preview_budget_fixture(&mut self) {
+        *self = Self::default();
+        let source = Arc::new(DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(
+            4096,
+            2304,
+            image::Rgba([50000u16, 10000, 20000, 60000]),
+        )));
+        self.memory
+            .share(&source, super::super::super::memory::pixels(&source))
+            .unwrap();
+        self.source = Some(source);
+        self.name = "72MiB真实16位图片".into();
+    }
+    pub(crate) fn preview_budget_check(&self, phase: u8) {
+        let expected = if phase <= 2 { 128 } else { 256 };
+        assert_eq!(self.memory_limit_mb, expected);
+        assert_eq!(
+            self.memory.snapshot().unwrap(),
+            (72 * 1048576, 0, expected as usize * 1048576)
+        );
+        assert_eq!(self.source.as_ref().unwrap().dimensions(), (4096, 2304));
+        assert_eq!(
+            &self.source.as_ref().unwrap().as_bytes()[..8],
+            &[80, 195, 16, 39, 32, 78, 96, 234]
+        );
+        assert!(self.run.is_none());
+        if phase != 2 {
+            assert!(self.memory_message.is_empty());
+        }
+        if phase == 2 {
+            assert!(self.memory_message.contains("低于当前占用"));
+        }
+    }
+}

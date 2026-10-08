@@ -12,6 +12,7 @@ pub(crate) struct Workspace {
     instances: Vec<Instance>,
     memory: super::super::memory::Pool,
     memory_limit_mb: u32,
+    memory_message: String,
     active: usize,
     sequence: u64,
     close_confirm: Option<String>,
@@ -40,6 +41,7 @@ impl Default for Workspace {
         Self {
             memory: memory.clone(),
             memory_limit_mb: 1024,
+            memory_message: String::new(),
             instances: vec![Instance {
                 id: uuid::Uuid::new_v4().to_string(),
                 title: "图片流程 1".into(),
@@ -346,19 +348,37 @@ impl Workspace {
                     Ok((retained, reserved, limit)) => { ui.small(format!("图片内存 {:.1} MiB · 处理中 {:.1} MiB / {:.0} MiB", retained as f64 / 1048576.0, reserved as f64 / 1048576.0, limit as f64 / 1048576.0)); },
                     Err(message) => { ui.label(message); }
                 }
-                ui.menu_button("内存设置", |ui| {
+                let memory_button = ui.button("内存设置");
+                let memory_popup = egui::Popup::menu(&memory_button)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| {
                     ui.set_max_width(340.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.label("本次流程预算 MiB");
                     let old = self.memory_limit_mb;
-                    if ui.add(egui::DragValue::new(&mut self.memory_limit_mb).range(64..=8192)).changed()
-                        && let Err(message) = self.memory.set_limit(self.memory_limit_mb as usize * 1048576) {
-                        self.memory_limit_mb = old;
-                        self.message = message.into();
+                    let budget = ui.add(egui::DragValue::new(&mut self.memory_limit_mb).range(64..=8192));
+                    #[cfg(feature = "ui-preview")]
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("image-memory-limit"), budget.rect));
+                    if budget.changed() {
+                        match self.memory.set_limit(self.memory_limit_mb as usize * 1048576) {
+                            Ok(()) => self.memory_message.clear(),
+                            Err(message) => {
+                                self.memory_limit_mb = old;
+                                self.memory_message = message.into();
+                            }
+                        }
                     }
                 });
+                if !self.memory_message.is_empty() { ui.label(&self.memory_message); }
                 ui.small("包含流程图片、编码缓冲、文件载入缓冲与解码像素预留。其他图片工具、编解码器内部临时内存、预览和GPU未统一；不是程序总内存。不自动清除工作，仅当前会话有效。");
                 });
+                #[cfg(feature = "ui-preview")]
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(egui::Id::new("image-memory-menu"), memory_button.rect);
+                    d.insert_temp(egui::Id::new("image-memory-menu-open"), memory_popup.is_some());
+                });
+                #[cfg(not(feature = "ui-preview"))]
+                let _ = memory_popup;
             });
             ui.horizontal_wrapped(|ui| {
                 ui.strong("图片工作实例");

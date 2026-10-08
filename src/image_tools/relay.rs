@@ -808,6 +808,18 @@ impl State {
         }
     }
 }
+#[cfg(feature = "ui-preview")]
+impl State {
+    pub fn preview_budget_fixture(&mut self) {
+        *self = Self::default();
+        self.workflow.preview_budget_fixture();
+        self.mode = Mode::Workflow;
+    }
+    pub fn preview_budget_check(&self, phase: u8) {
+        self.workflow.preview_budget_check(phase);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

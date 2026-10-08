@@ -69,3 +69,21 @@ impl DevToolsApp {
         assert_eq!(self.page, Page::Images);
     }
 }
+
+impl DevToolsApp {
+    pub fn preview_budget_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.images.preview_budget_fixture();
+        self.page = Page::Images;
+    }
+    pub fn preview_budget_check(&self, ctx: &egui::Context, phase: u8) {
+        self.images.preview_budget_check(phase);
+        if phase == 4 {
+            assert!(
+                !ctx.data(|d| d.get_temp::<bool>(egui::Id::new("image-memory-menu-open")))
+                    .unwrap()
+            );
+        }
+    }
+}

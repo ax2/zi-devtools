@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.99",
+  "sourceCatalogVersion": "0.82.0-dev.100",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -3307,7 +3307,7 @@
     {
       "sourceToolId": "image-workflow",
       "title": "图片操作流程",
-      "sourceVersion": "0.6.1",
+      "sourceVersion": "0.6.2",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -3316,9 +3316,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "开发中：逐步图片操作、独立工作实例、流程库搜索收藏最近、实例任务中心和跨实例接力。流程实例共享会话载荷预算，默认1024MiB、界面可调64..8192MiB；共享像素与编码按实际分配容量去重计数，后台任务先预留，保留旧结果和未收取结果，超额拒绝新分配。仍保留每次运行256MiB累计限制。开发版载入选定文件在读取缓冲和像素解码之前预留，按文件身份复核和取消释放；内存设置通过摘要同一行菜单展开。其他图片工具、缩略图/GPU和编解码器内部临时分配尚未统一；不是进程总内存上限。公共插件端口及物理交互验收继续开发。",
+          "scope": "开发中：逐步图片操作、独立工作实例、流程库搜索收藏最近、实例任务中心和跨实例接力。流程实例共享会话载荷预算，默认1024MiB、界面可调64..8192MiB；共享像素与编码按实际分配容量去重计数，后台任务先预留，保留旧结果和未收取结果，超额拒绝新分配。仍保留每次运行256MiB累计限制。开发版载入选定文件在读取缓冲和像素解码之前预留，按文件身份复核和取消释放；内存设置通过摘要同一行菜单展开。其他图片工具、缩略图/GPU和编解码器内部临时分配尚未统一；不是进程总内存上限。公共插件端口及物理交互验收继续开发。 内存设置菜单支持内部点击与数值编辑，点击外部或Esc关闭；预算错误单独提示，有效修改后清除。明暗实际72MiB图片、128MiB成功/64MiB拒绝保留原额度/256MiB成功验证通过。",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.6.1",
+          "sourceVersion": "0.6.2",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }
