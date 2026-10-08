@@ -706,7 +706,23 @@ mod tests {
         p.save_now(&ctx, &h);
         h.insert("later-fixture".into(), "fixture".into()).unwrap();
         p.changed();
-        settle(&mut p, &mut h);
+        // Observe the first receipt before the intentional one-second autosave
+        // debounce. A loaded CI worker may complete the real DPAPI/SQLite job
+        // after that interval, so polling until idle can also save the later edit.
+        let receipt = p
+            .job
+            .as_ref()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(30))
+            .expect("first snapshot must finish")
+            .expect("first snapshot must save");
+        assert!(matches!(&receipt, Receipt::Save(1)));
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        tx.send(Ok(receipt)).unwrap();
+        p.job = Some(rx);
+        p.last_change = Instant::now();
+        p.poll(&ctx, &mut h);
+        assert!(!p.busy());
         assert!(p.enabled && p.pending());
         assert_eq!(h.entries.len(), 2);
         assert_eq!(load(&path).unwrap().unwrap().entries.len(), 1);
