@@ -134,6 +134,8 @@ impl Picker {
         can_add: bool,
     ) -> Option<&'static Action> {
         let mut changed = false;
+        let reveal = self.focus;
+        let picker_top = ui.cursor().min;
         let search_id = ui.make_persistent_id("flow-picker-search-input");
         let focused = ui.is_enabled() && ui.memory(|memory| memory.has_focus(search_id));
         let down = focused
@@ -240,8 +242,10 @@ impl Picker {
             });
         }
         let start = self.selected / PAGE * PAGE;
-        egui::ScrollArea::vertical()
+        let viewport = egui::ScrollArea::vertical()
             .id_salt("text-flow-actions")
+            // Reserve useful browsing space inside the outer workbench scroll area.
+            .min_scrolled_height(180.0)
             .max_height(180.0)
             .show(ui, |ui| {
                 for (index, action) in matches.iter().enumerate().skip(start).take(PAGE) {
@@ -282,6 +286,19 @@ impl Picker {
                     }
                 }
             });
+        if reveal {
+            // Reveal search and results together in the outer workbench viewport.
+            ui.scroll_to_rect(
+                egui::Rect::from_min_max(picker_top, viewport.inner_rect.max),
+                Some(egui::Align::Max),
+            );
+        }
+        #[cfg(any(test, feature = "ui-preview"))]
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("flow-picker-viewport"), viewport.inner_rect)
+        });
+        #[cfg(not(any(test, feature = "ui-preview")))]
+        let _ = viewport;
         if keyboard_add
             && can_add
             && let Some(action) = matches.get(self.selected)
@@ -321,6 +338,48 @@ mod tests {
             });
         });
         chosen
+    }
+    #[test]
+    fn nested_picker_keeps_browsing_height_and_outer_scroll_reaches_controls() {
+        let ctx = egui::Context::default();
+        let mut picker = Picker::default();
+        let mut outer = None;
+        let mut bottom = 0.0;
+        let mut footer = egui::Rect::NOTHING;
+        for frame in 0..4 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(640.0, 480.0),
+                )),
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.allocate_space(egui::vec2(0.0, 150.0)); // Pinned instance header.
+                    let result = egui::ScrollArea::vertical()
+                        .id_salt("picker-layout-test")
+                        .auto_shrink([false, false])
+                        .vertical_scroll_offset(if frame >= 2 { bottom } else { 0.0 })
+                        .show(ui, |ui| {
+                            ui.allocate_space(egui::vec2(0.0, 160.0)); // Input editor.
+                            picker.ui(ui, Some(Kind::Text), true);
+                            footer = ui.button("Run workflow").rect;
+                        });
+                    bottom = (result.content_size.y - result.inner_rect.height()).max(0.0);
+                    outer = Some(result.inner_rect);
+                });
+            });
+            let viewport = ctx
+                .data(|data| data.get_temp::<egui::Rect>(egui::Id::new("flow-picker-viewport")))
+                .unwrap();
+            assert!(viewport.height() >= 179.0, "{viewport:?}");
+        }
+        assert!(
+            outer.unwrap().contains_rect(footer),
+            "outer scroll must reach run controls: outer={:?}, footer={footer:?}",
+            outer.unwrap()
+        );
     }
     #[test]
     fn focused_navigation_adds_only_matching_type_and_does_not_consume_control_enter() {

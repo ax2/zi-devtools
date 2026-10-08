@@ -66,6 +66,25 @@ impl eframe::App for Preview {
             self.app.preview_action_picker_prepare(ctx, self.light);
         }
         self.app.update(ctx, frame);
+        if self.tick == 15 {
+            let viewport = ctx
+                .data(|data| data.get_temp::<egui::Rect>(egui::Id::new("flow-picker-viewport")))
+                .expect("action list rendered");
+            assert!(
+                viewport.height() >= 179.0,
+                "action list collapsed: {viewport:?}"
+            );
+            let (_, clip) = ctx
+                .data(|data| {
+                    data.get_temp::<(egui::Rect, egui::Rect)>(egui::Id::new("flow-picker-search"))
+                })
+                .expect("search rendered");
+            assert!(
+                clip.contains_rect(viewport),
+                "list must be visible: {viewport:?} / {clip:?}"
+            );
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+        }
         let phase = match self.tick {
             40 => Some(0),
             55 => Some(1),
@@ -97,7 +116,7 @@ impl eframe::App for Preview {
             }
         }
         if self.tick == 180 {
-            assert_eq!(self.shots, 5);
+            assert_eq!(self.shots, 6);
             println!(
                 "PASS native fullwidth/multi-term alias search, focused arrows/Enter compose CSV -> trim -> schema; CtrlEnter explicit run, typed result and original drafts retained; light={}",
                 self.light

@@ -387,6 +387,9 @@ impl State {
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll();
+        if self.reveal && (self.picker_open || self.definition.steps.is_empty()) {
+            self.picker.focus();
+        }
         let response = egui::CollapsingHeader::new("操作流程 · 文本 / 表格工具链")
             .id_salt("text-tool-flow").open(self.reveal.then_some(true)).default_open(self.has_content()).show(ui, |ui| {
             ui.label("每一步接收上一步材料，输入/输出类型必须匹配。原输入保留，可保存当前工作实例；最多16步。");
@@ -494,9 +497,11 @@ impl State {
                 }
             });
         });
-        if self
-            .scroll_until
-            .is_some_and(|until| std::time::Instant::now() < until)
+        if !self.picker_open
+            && !self.definition.steps.is_empty()
+            && self
+                .scroll_until
+                .is_some_and(|until| std::time::Instant::now() < until)
         {
             response
                 .header_response
