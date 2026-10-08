@@ -341,13 +341,25 @@ impl Workspace {
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui, unlocked: bool) {
         self.poll(ui.ctx());
         ui.group(|ui| {
-            if let Ok((retained,reserved,limit))=self.memory.snapshot() {
-                ui.label(format!("流程载荷 {:.1} MiB · 后台预留 {:.1} MiB / {:.0} MiB",retained as f64/1048576.0,reserved as f64/1048576.0,limit as f64/1048576.0));
-            }
-            ui.horizontal_wrapped(|ui| {ui.label("本次流程预算 MiB");let old=self.memory_limit_mb;if ui.add(egui::DragValue::new(&mut self.memory_limit_mb).range(64..=8192)).changed() {
-                if let Err(message)=self.memory.set_limit(self.memory_limit_mb as usize*1048576) {self.memory_limit_mb=old;self.message=message.into();}
-            }});
-            ui.small("目前覆盖流程共享像素、编码与执行预留；载入解码临时内存、其他图片工具、预览和GPU仍待统一。不自动清除其他工作。");
+            ui.horizontal_wrapped(|ui| {
+                match self.memory.snapshot() {
+                    Ok((retained, reserved, limit)) => { ui.small(format!("图片内存 {:.1} MiB · 处理中 {:.1} MiB / {:.0} MiB", retained as f64 / 1048576.0, reserved as f64 / 1048576.0, limit as f64 / 1048576.0)); },
+                    Err(message) => { ui.label(message); }
+                }
+                ui.menu_button("内存设置", |ui| {
+                    ui.set_max_width(340.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("本次流程预算 MiB");
+                    let old = self.memory_limit_mb;
+                    if ui.add(egui::DragValue::new(&mut self.memory_limit_mb).range(64..=8192)).changed()
+                        && let Err(message) = self.memory.set_limit(self.memory_limit_mb as usize * 1048576) {
+                        self.memory_limit_mb = old;
+                        self.message = message.into();
+                    }
+                });
+                ui.small("包含流程图片、编码缓冲、文件载入缓冲与解码像素预留。其他图片工具、编解码器内部临时内存、预览和GPU未统一；不是程序总内存。不自动清除工作，仅当前会话有效。");
+                });
+            });
             ui.horizontal_wrapped(|ui| {
                 ui.strong("图片工作实例");
                 let enabled = unlocked && self.close_confirm.is_none();

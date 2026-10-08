@@ -2,6 +2,7 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 mod core;
+mod input;
 mod workspace;
 pub(crate) use core::Definition;
 #[cfg(any(test, feature = "ui-preview"))]
@@ -333,18 +334,9 @@ impl State {
                             &path,
                             MAX_INPUT_BYTES as usize,
                         )?;
-                        let bytes = material.read_bytes(MAX_INPUT_BYTES as usize)?;
-                        let prepared = relay::prepare(
-                            relay::Source::Encoded(Arc::new(bytes)),
-                            vec![],
-                            "image-workflow",
-                        )?;
-                        ensure!(!cancel.load(Ordering::Relaxed), "已取消");
-                        memory
-                            .share(&prepared.image, super::memory::pixels(&prepared.image))
-                            .map_err(anyhow::Error::msg)?;
+                        let image = input::load(&material, cancel, &memory)?;
                         Ok(Reply::Input(
-                            prepared.image,
+                            image,
                             path.file_name()
                                 .unwrap_or_default()
                                 .to_string_lossy()
