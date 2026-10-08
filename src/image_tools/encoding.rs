@@ -114,6 +114,7 @@ impl Seek for Output {
         Ok(self.position as u64)
     }
 }
+#[cfg(test)]
 pub(super) fn encode(
     image: &DynamicImage,
     format: ImageFormat,

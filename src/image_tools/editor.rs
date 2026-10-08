@@ -1,5 +1,5 @@
 //! Local full-resolution crop, redaction, arrows and text with encoded preview.
-use super::{Format, MAX_OUTPUT_BYTES, metadata, preview_image};
+use super::{Format, MAX_OUTPUT_BYTES, memory, metadata, preview_image, workflow};
 use ab_glyph::{Font, FontVec, PxScale, ScaleFont, point};
 use anyhow::{Result, bail, ensure};
 use eframe::egui::{self, Color32, Sense, Stroke};
@@ -75,10 +75,11 @@ enum Edit {
 enum Job {
     Loaded {
         image: Arc<DynamicImage>,
+        path: PathBuf,
         preview: egui::ColorImage,
     },
     Rendered {
-        encoded: Vec<u8>,
+        encoded: Arc<Vec<u8>>,
         preview: egui::ColorImage,
         width: u32,
         height: u32,
@@ -87,6 +88,7 @@ enum Job {
 
 pub(super) struct State {
     input: String,
+    loaded_path: Option<PathBuf>,
     origins: Vec<super::relay::Origin>,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -111,6 +113,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             input: String::new(),
+            loaded_path: None,
             origins: Vec::new(),
             output: String::new(),
             source: None,
@@ -177,6 +180,7 @@ impl State {
         self.source = Some(value.image.clone());
         self.origins = value.origins.clone();
         self.input.clear();
+        self.loaded_path = None;
         self.output.clear();
         self.edits.clear();
         self.format = Format::Png;
@@ -201,7 +205,7 @@ impl State {
     }
 
     #[cfg(feature = "ui-preview")]
-    pub(super) fn preview_fixture(&mut self, ctx: &egui::Context) {
+    pub(super) fn preview_fixture(&mut self, ctx: &egui::Context, memory: &memory::Pool) {
         let image = DynamicImage::ImageRgba8(image::ImageBuffer::from_fn(960, 540, |x, y| {
             image::Rgba([((x / 5) + 35) as u8, ((y / 3) + 35) as u8, 150, 255])
         }));
@@ -212,7 +216,9 @@ impl State {
             preview_image(&image),
             egui::TextureOptions::LINEAR,
         ));
-        self.source = Some(Arc::new(image));
+        let image = Arc::new(image);
+        memory.share(&image, memory::pixels(&image)).unwrap();
+        self.source = Some(image);
         self.edits = vec![
             Edit::Crop(Rect {
                 a: Point::new(0.06, 0.08),
@@ -259,10 +265,16 @@ impl State {
         };
         self.pending = None;
         match result {
-            Ok(Job::Loaded { image, preview }) => {
+            Ok(Job::Loaded {
+                image,
+                preview,
+                path,
+            }) => {
                 self.source_texture =
                     Some(ctx.load_texture("editor-source", preview, egui::TextureOptions::LINEAR));
-                self.output = suggested_output(Path::new(&self.input), self.format)
+                self.input = path.to_string_lossy().into_owned();
+                self.loaded_path = Some(path.clone());
+                self.output = suggested_output(&path, self.format)
                     .to_string_lossy()
                     .into_owned();
                 self.source = Some(image);
@@ -282,7 +294,7 @@ impl State {
                     "输出预览已生成：{width} × {height} · {:.2} MB；确认画面后另存。",
                     encoded.len() as f64 / 1_000_000.0
                 );
-                self.encoded = Some(Arc::new(encoded));
+                self.encoded = Some(encoded);
                 self.output_texture =
                     Some(ctx.load_texture("editor-output", preview, egui::TextureOptions::LINEAR));
                 self.error = false;
@@ -294,30 +306,28 @@ impl State {
         }
     }
 
-    fn load(&mut self) {
+    fn load(&mut self, memory: memory::Pool) {
         if self.pending.is_some() {
             return;
         }
         let path = PathBuf::from(self.input.trim());
-        self.source = None;
-        self.source_texture = None;
-        self.edits.clear();
-        self.invalidate();
+
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.message = "正在读取原图…".into();
         std::thread::spawn(move || {
-            let result = metadata::oriented_static_image(&path)
-                .map(|image| {
-                    let preview = preview_image(&image);
-                    Job::Loaded { image, preview }
+            let result = metadata::oriented_static_image(&path, &memory)
+                .map(|(image, path, preview)| Job::Loaded {
+                    image,
+                    preview,
+                    path,
                 })
                 .map_err(|e| format!("读取失败：{e:#}"));
             let _ = tx.send(result);
         });
     }
 
-    fn render(&mut self) {
+    fn render(&mut self, memory: memory::Pool) {
         if self.pending.is_some() {
             return;
         }
@@ -328,13 +338,13 @@ impl State {
         let format = self.format;
         let quality = self.jpeg_quality;
         let font_path = self.font_path.clone();
-        self.invalidate();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.message = "正在按原图分辨率生成输出预览…".into();
         std::thread::spawn(move || {
-            let result = render_output(&source, &edits, format, quality, &font_path)
-                .map_err(|e| format!("导出预览失败：{e:#}"));
+            let result =
+                render_output_budgeted(source, &edits, format, quality, &font_path, &memory)
+                    .map_err(|e| format!("导出预览失败：{e:#}"));
             let _ = tx.send(result);
         });
     }
@@ -342,7 +352,10 @@ impl State {
     fn save(&mut self) {
         let Some(bytes) = &self.encoded else { return };
         let target = Path::new(self.output.trim());
-        let source = Path::new(self.input.trim());
+        let source = self
+            .loaded_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(self.input.trim()));
         let result = (|| -> Result<()> {
             ensure!(
                 !target.as_os_str().is_empty() && target != source,
@@ -428,7 +441,7 @@ impl State {
         self.message = "文字已放置；导出时会检查本机字体是否包含所有字符。".into();
     }
 
-    pub(super) fn ui(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn ui(&mut self, ui: &mut egui::Ui, memory: &memory::Pool) {
         self.poll(ui.ctx());
         ui.heading("图片裁剪与标注");
         ui.label("在缩放画布上编辑；输出按原图像素渲染。先看真实编码预览，再另存新文件。");
@@ -443,10 +456,7 @@ impl State {
                 )
                 .changed()
             {
-                self.source = None;
-                self.source_texture = None;
-                self.edits.clear();
-                self.invalidate();
+                self.error = false;
             }
             if ui
                 .add_enabled(!busy, egui::Button::new("选择图片…"))
@@ -456,12 +466,19 @@ impl State {
                     .pick_file()
             {
                 self.input = path.to_string_lossy().into_owned();
-                self.load();
+                self.load(memory.clone());
             }
             if ui.add_enabled(!busy, egui::Button::new("读取")).clicked() {
-                self.load();
+                self.load(memory.clone());
             }
         });
+        if self
+            .loaded_path
+            .as_ref()
+            .is_some_and(|path| path != Path::new(self.input.trim()))
+        {
+            ui.small("路径尚未重新读取；当前编辑仍来自已载入图片。");
+        }
         if self.source.is_none() {
             ui.label(&self.message);
             return;
@@ -536,7 +553,16 @@ impl State {
             return;
         };
         let dimensions = texture.size_vec2();
-        let draw_size = dimensions * (720.0 / dimensions.x).min(440.0 / dimensions.y).min(1.0);
+        let ratio = if self.output_texture.is_some() {
+            0.2
+        } else {
+            0.35
+        };
+        let height = (ui.ctx().screen_rect().height() * ratio).clamp(64.0, 440.0);
+        let draw_size = dimensions
+            * (ui.available_width().min(720.0) / dimensions.x)
+                .min(height / dimensions.y)
+                .min(1.0);
         let sense = if busy {
             Sense::hover()
         } else {
@@ -584,9 +610,14 @@ impl State {
                             .changed()
                         {
                             if !self.input.trim().is_empty() {
-                                self.output = suggested_output(Path::new(&self.input), format)
-                                    .to_string_lossy()
-                                    .into_owned();
+                                self.output = suggested_output(
+                                    self.loaded_path
+                                        .as_deref()
+                                        .unwrap_or_else(|| Path::new(&self.input)),
+                                    format,
+                                )
+                                .to_string_lossy()
+                                .into_owned();
                             } else {
                                 self.output.clear();
                             }
@@ -605,7 +636,7 @@ impl State {
                 .add_enabled(!busy, egui::Button::new("生成输出预览"))
                 .clicked()
             {
-                self.render();
+                self.render(memory.clone());
             }
         });
         if self
@@ -638,9 +669,12 @@ impl State {
         if let Some(texture) = &self.output_texture {
             ui.small("最终编码输出预览");
             let size = texture.size_vec2();
+            let height = (ui.ctx().screen_rect().height() * 0.15).clamp(48.0, 140.0);
             ui.image((
                 texture.id(),
-                size * (450.0 / size.x).min(250.0 / size.y).min(1.0),
+                size * (ui.available_width().min(450.0) / size.x)
+                    .min(height / size.y)
+                    .min(1.0),
             ));
         }
         ui.horizontal(|ui| {
@@ -750,6 +784,7 @@ fn paint_edits(painter: &egui::Painter, rect: egui::Rect, source_width: u32, edi
     }
 }
 
+#[cfg(test)]
 fn render_output(
     source: &DynamicImage,
     edits: &[Edit],
@@ -757,6 +792,26 @@ fn render_output(
     quality: u8,
     font_path: &str,
 ) -> Result<Job> {
+    render_output_budgeted(
+        Arc::new(source.clone()),
+        edits,
+        format,
+        quality,
+        font_path,
+        &memory::Pool::default(),
+    )
+}
+fn render_output_budgeted(
+    source: Arc<DynamicImage>,
+    edits: &[Edit],
+    format: Format,
+    quality: u8,
+    font_path: &str,
+    memory: &memory::Pool,
+) -> Result<Job> {
+    memory
+        .share(&source, memory::pixels(&source))
+        .map_err(anyhow::Error::msg)?;
     let (full_width, full_height) = source.dimensions();
     let crop = edits.iter().rev().find_map(|e| {
         if let Edit::Crop(r) = e {
@@ -769,8 +824,12 @@ fn render_output(
         .map(|r| r.pixel_bounds(full_width, full_height))
         .unwrap_or((0, 0, full_width, full_height));
     ensure!(cx1 > cx0 && cy1 > cy0, "裁剪区域不能为空");
-    let mut pixels =
-        image::imageops::crop_imm(&source.to_rgba8(), cx0, cy0, cx1 - cx0, cy1 - cy0).to_image();
+    let output_pixels = memory
+        .reserve((cx1 - cx0) as usize * (cy1 - cy0) as usize * 4)
+        .map_err(anyhow::Error::msg)?;
+    let mut pixels = RgbaImage::from_fn(cx1 - cx0, cy1 - cy0, |x, y| {
+        source.get_pixel(x + cx0, y + cy0)
+    });
     let font = if edits.iter().any(|e| matches!(e, Edit::Text { .. })) {
         Some(load_font(font_path)?)
     } else {
@@ -823,18 +882,36 @@ fn render_output(
             }
         }
     }
-    let rendered = DynamicImage::ImageRgba8(pixels);
+    let rendered = Arc::new(DynamicImage::ImageRgba8(pixels));
+    output_pixels
+        .promote(&rendered, memory::pixels(&rendered))
+        .map_err(anyhow::Error::msg)?;
     let encoded = if format == Format::Jpeg {
-        super::encoding::encode(
-            &flatten_on_white(&rendered),
+        let guard = memory
+            .reserve(rendered.width() as usize * rendered.height() as usize * 3)
+            .map_err(anyhow::Error::msg)?;
+        let flattened = Arc::new(flatten_on_white(&rendered));
+        guard
+            .promote(&flattened, memory::pixels(&flattened))
+            .map_err(anyhow::Error::msg)?;
+        super::encoding::encode_tracked(
+            &flattened,
             format.image_format(),
             quality,
             MAX_OUTPUT_BYTES,
+            memory,
         )?
     } else {
-        super::encoding::encode(&rendered, format.image_format(), quality, MAX_OUTPUT_BYTES)?
+        super::encoding::encode_tracked(
+            &rendered,
+            format.image_format(),
+            quality,
+            MAX_OUTPUT_BYTES,
+            memory,
+        )?
     };
-    let decoded = image::load_from_memory_with_format(&encoded, format.image_format())?;
+    let decoded =
+        workflow::input::decode(&encoded, &std::sync::atomic::AtomicBool::new(false), memory)?;
     Ok(Job::Rendered {
         encoded,
         preview: preview_image(&decoded),
@@ -845,7 +922,7 @@ fn render_output(
 
 fn flatten_on_white(image: &DynamicImage) -> DynamicImage {
     let mut rgb = image::RgbImage::new(image.width(), image.height());
-    for (x, y, p) in image.to_rgba8().enumerate_pixels() {
+    for (x, y, p) in image.pixels() {
         let a = u16::from(p[3]);
         let channel = |v: u8| ((u16::from(v) * a + 255 * (255 - a) + 127) / 255) as u8;
         rgb.put_pixel(
@@ -996,6 +1073,88 @@ fn paint_text(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cropped_sixteen_bit_pixels_and_failed_workers_preserve_edits_and_outputs() {
+        use super::*;
+        let root = std::env::temp_dir().join(format!("zi-editor-budget-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("source.png");
+        let source = DynamicImage::ImageRgba16(image::ImageBuffer::from_fn(20, 20, |x, y| {
+            image::Rgba([x as u16 * 3000, y as u16 * 3000, 20000, 40000])
+        }));
+        source
+            .save_with_format(&path, image::ImageFormat::Png)
+            .unwrap();
+        let original = fs::read(&path).unwrap();
+        let expected = image::imageops::crop_imm(&source.to_rgba8(), 0, 0, 10, 10).to_image();
+        for format in Format::ALL {
+            let pool = memory::Pool::new(5000);
+            let ctx = egui::Context::default();
+            let settle = |state: &mut State| {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while state.busy() {
+                    state.poll(&ctx);
+                    assert!(std::time::Instant::now() < deadline);
+                    std::thread::yield_now();
+                }
+            };
+            let mut state = State {
+                input: path.to_string_lossy().into_owned(),
+                format,
+                ..Default::default()
+            };
+            state.load(pool.clone());
+            settle(&mut state);
+            assert!(!state.error, "{}", state.message);
+            let loaded = state.source.as_ref().unwrap().clone();
+            assert_eq!(memory::pixels(&loaded), 3200);
+            state.edits.push(Edit::Crop(Rect {
+                a: Point::new(0., 0.),
+                b: Point::new(0.5, 0.5),
+            }));
+            state.render(pool.clone());
+            settle(&mut state);
+            assert!(!state.error, "{}", state.message);
+            let encoded = state.encoded.as_ref().unwrap().clone();
+            let actual = image::load_from_memory(&encoded).unwrap();
+            assert_eq!(actual.dimensions(), (10, 10));
+            if format != Format::Jpeg {
+                assert_eq!(actual.to_rgba8(), expected);
+            }
+            // Full-source RGBA copy + cropped buffer would already need 5200 bytes.
+            let held = pool.snapshot().unwrap().0;
+            assert!(held > 3200 && held < 5000);
+            pool.set_limit(held).unwrap();
+            state.input = root.join("missing.png").to_string_lossy().into_owned();
+            state.load(pool.clone());
+            settle(&mut state);
+            assert!(state.error);
+            assert!(Arc::ptr_eq(state.source.as_ref().unwrap(), &loaded));
+            assert!(Arc::ptr_eq(state.encoded.as_ref().unwrap(), &encoded));
+            assert_eq!(state.edits.len(), 1);
+            assert_eq!(
+                state.loaded_path.as_deref(),
+                Some(fs::canonicalize(&path).unwrap().as_path())
+            );
+            state.render(pool.clone());
+            settle(&mut state);
+            assert!(state.error);
+            assert!(Arc::ptr_eq(state.encoded.as_ref().unwrap(), &encoded));
+            state.output = root
+                .join(format!("saved.{}", format.extension()))
+                .to_string_lossy()
+                .into_owned();
+            state.save();
+            assert!(!state.error, "{}", state.message);
+            assert_eq!(fs::read(&path).unwrap(), original);
+            assert_eq!(fs::read(&state.output).unwrap(), encoded.as_slice());
+            drop(state);
+            drop(loaded);
+            drop(encoded);
+            assert_eq!(pool.snapshot().unwrap(), (0, 0, held));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
     use super::*;
     use image::ImageFormat;
     use std::io::Cursor;
@@ -1118,7 +1277,7 @@ mod tests {
         let mut state = State {
             input: input.to_string_lossy().into_owned(),
             output: output.to_string_lossy().into_owned(),
-            encoded: Some(Arc::new(encoded)),
+            encoded: Some(encoded),
             ..Default::default()
         };
         state.save();

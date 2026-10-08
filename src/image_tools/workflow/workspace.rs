@@ -371,7 +371,7 @@ impl Workspace {
                     }
                 });
                 if !self.memory_message.is_empty() { ui.label(&self.memory_message); }
-                ui.small("包含单图、批处理与流程图片、编码缓冲、文件载入缓冲与解码像素预留。其他图片工具、编解码器内部临时内存、预览和GPU未统一；不是程序总内存。不自动清除工作，仅当前会话有效。");
+                ui.small("包含单图、批处理、编辑、元数据与流程图片、编码缓冲、文件载入缓冲与解码像素预留。其他图片工具、编解码器内部临时内存、预览和GPU未统一；不是程序总内存。不自动清除工作，仅当前会话有效。");
                 });
                 #[cfg(feature = "ui-preview")]
                 ui.ctx().data_mut(|d| {

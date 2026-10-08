@@ -175,7 +175,8 @@ impl super::State {
 
     #[cfg(feature = "ui-preview")]
     pub fn preview_metadata_report_fixture(&mut self, ctx: &egui::Context) {
-        self.metadata.preview_fixture(ctx);
+        self.metadata
+            .preview_fixture(ctx, &self.workflow.memory_pool());
         self.mode = Mode::Metadata;
     }
 

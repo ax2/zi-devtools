@@ -1,11 +1,14 @@
 //! Bounded image-container metadata inspection and explicit clean-copy export.
-use super::{MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, MAX_PIXELS, image_limits, preview_image};
+use super::{
+    MAX_INPUT_BYTES, MAX_OUTPUT_BYTES, MAX_PIXELS, image_limits, memory, preview_image, workflow,
+};
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader};
+#[cfg(test)]
+use std::fs;
 use std::{
-    fs,
-    io::{Cursor, Read},
+    io::Cursor,
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
@@ -267,10 +270,11 @@ enum Job {
         summary: Summary,
         image: Arc<DynamicImage>,
         original_bytes: u64,
+        path: PathBuf,
         preview: egui::ColorImage,
     },
     Cleaned {
-        encoded: Vec<u8>,
+        encoded: Arc<Vec<u8>>,
         summary: Summary,
         preview: egui::ColorImage,
     },
@@ -279,6 +283,7 @@ enum Job {
 #[derive(Default)]
 pub(super) struct State {
     input: String,
+    loaded_path: Option<PathBuf>,
     output: String,
     original: Option<Arc<DynamicImage>>,
     source_summary: Option<Summary>,
@@ -296,7 +301,7 @@ pub(super) struct State {
 
 impl State {
     #[cfg(feature = "ui-preview")]
-    pub(super) fn preview_fixture(&mut self, ctx: &egui::Context) {
+    pub(super) fn preview_fixture(&mut self, ctx: &egui::Context, memory: &memory::Pool) {
         let image = DynamicImage::ImageRgb8(image::ImageBuffer::from_fn(960, 540, |x, y| {
             image::Rgb([(x / 4) as u8, (y / 3) as u8, 160])
         }));
@@ -310,21 +315,24 @@ impl State {
             xmp: 1,
             ..Default::default()
         };
+        let image = Arc::new(image);
+        memory.share(&image, memory::pixels(&image)).unwrap();
         let Job::Cleaned {
             encoded,
             summary: cleaned_summary,
             preview,
-        } = clean_preview(&image, &summary, 85).expect("metadata preview fixture")
+        } = clean_preview_budgeted(image.clone(), &summary, 85, memory)
+            .expect("metadata preview fixture")
         else {
             unreachable!()
         };
         self.source_summary = Some(summary);
         self.source_bytes = 2_400_000;
         self.jpeg_quality = 85;
-        self.original = Some(Arc::new(image.clone()));
+        self.original = Some(image);
         self.cleaned_summary = Some(cleaned_summary);
         self.report_current = false;
-        self.encoded = Some(Arc::new(encoded));
+        self.encoded = Some(encoded);
         self.texture =
             Some(ctx.load_texture("metadata-preview", preview, egui::TextureOptions::LINEAR));
         self.message = "界面预览：输出复检无已识别元数据块；确认画面后另存副本。".into();
@@ -379,9 +387,12 @@ impl State {
                 summary,
                 image,
                 original_bytes,
+                path,
                 preview,
             }) => {
-                self.output = suggested_output(Path::new(&self.input), &summary)
+                self.input = path.to_string_lossy().into_owned();
+                self.loaded_path = Some(path.clone());
+                self.output = suggested_output(&path, &summary)
                     .to_string_lossy()
                     .into_owned();
                 self.source_summary = Some(summary);
@@ -405,7 +416,7 @@ impl State {
                     "清理预览已生成：{:.2} MB；输出复检无已识别元数据块。",
                     encoded.len() as f64 / 1_000_000.0
                 );
-                self.encoded = Some(Arc::new(encoded));
+                self.encoded = Some(encoded);
                 self.texture = Some(ctx.load_texture(
                     "metadata-preview",
                     preview,
@@ -421,24 +432,23 @@ impl State {
         }
     }
 
-    fn inspect(&mut self) {
+    fn inspect(&mut self, memory: memory::Pool) {
         if self.pending.is_some() {
             return;
         }
-        self.original = None;
-        self.source_summary = None;
-        self.invalidate_preview();
-        self.texture = None;
+        self.report_current = false;
         let path = PathBuf::from(self.input.trim());
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.message = "正在检查图片容器和元数据…".into();
         std::thread::spawn(move || {
-            let _ = tx.send(inspect_file(&path).map_err(|e| format!("检查失败：{e:#}")));
+            let _ = tx.send(
+                inspect_file_budgeted(&path, &memory).map_err(|e| format!("检查失败：{e:#}")),
+            );
         });
     }
 
-    fn clean(&mut self) {
+    fn clean(&mut self, memory: memory::Pool) {
         if self.pending.is_some() {
             return;
         }
@@ -449,11 +459,12 @@ impl State {
         let quality = self.jpeg_quality;
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        self.invalidate_preview();
+        self.report_current = false;
         self.message = "正在重新编码并复检输出…".into();
         std::thread::spawn(move || {
             let _ = tx.send(
-                clean_preview(&image, &summary, quality).map_err(|e| format!("清理失败：{e:#}")),
+                clean_preview_budgeted(image, &summary, quality, &memory)
+                    .map_err(|e| format!("清理失败：{e:#}")),
             );
         });
     }
@@ -463,7 +474,10 @@ impl State {
             return;
         };
         let target = Path::new(self.output.trim());
-        let source = Path::new(self.input.trim());
+        let source = self
+            .loaded_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(self.input.trim()));
         let result = (|| -> Result<()> {
             ensure!(
                 !target.as_os_str().is_empty() && target != source,
@@ -598,7 +612,7 @@ impl State {
         }
     }
 
-    pub(super) fn ui(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn ui(&mut self, ui: &mut egui::Ui, memory: &memory::Pool) {
         self.poll(ui.ctx());
         ui.heading("图片元数据检查与清理");
         ui.label("在本机识别常见元数据块；确认预览后另存清理副本，原图保持不变。");
@@ -613,10 +627,7 @@ impl State {
                 )
                 .changed()
             {
-                self.original = None;
-                self.source_summary = None;
-                self.invalidate_preview();
-                self.texture = None;
+                self.report_current = false;
             }
             if ui
                 .add_enabled(!busy, egui::Button::new("选择图片…"))
@@ -626,12 +637,19 @@ impl State {
                     .pick_file()
             {
                 self.input = path.to_string_lossy().into_owned();
-                self.inspect();
+                self.inspect(memory.clone());
             }
             if ui.add_enabled(!busy, egui::Button::new("检查")).clicked() {
-                self.inspect();
+                self.inspect(memory.clone());
             }
         });
+        if self
+            .loaded_path
+            .as_ref()
+            .is_some_and(|path| path != Path::new(self.input.trim()))
+        {
+            ui.small("路径尚未重新读取；当前摘要和清理预览仍来自已载入图片。");
+        }
         if let Some(summary) = &self.source_summary {
             if let Some(image) = &self.original {
                 ui.small(format!(
@@ -686,7 +704,7 @@ impl State {
                 .add_enabled(!busy, egui::Button::new("生成清理预览并复检"))
                 .clicked()
             {
-                self.clean();
+                self.clean(memory.clone());
             }
             if let Some(texture) = &self.texture {
                 ui.small(if self.encoded.is_some() {
@@ -695,9 +713,12 @@ impl State {
                     "原图预览（按 EXIF 方向显示）"
                 });
                 let size = texture.size_vec2();
+                let height = (ui.ctx().screen_rect().height() * 0.22).clamp(64.0, 280.0);
                 ui.image((
                     texture.id(),
-                    size * (520.0 / size.x).min(280.0 / size.y).min(1.0),
+                    size * (ui.available_width().min(520.0) / size.x)
+                        .min(height / size.y)
+                        .min(1.0),
                 ));
             }
             ui.label("另存路径");
@@ -733,23 +754,18 @@ fn suggested_output(source: &Path, summary: &Summary) -> PathBuf {
     source.with_file_name(format!("{stem}-cleaned.{}", summary.extension()))
 }
 
+#[cfg(test)]
 fn inspect_file(path: &Path) -> Result<Job> {
-    let size = fs::metadata(path)?.len();
-    ensure!(
-        size > 0 && size <= MAX_INPUT_BYTES,
-        "图片需为非空且不超过 32 MiB"
-    );
-    let mut bytes = Vec::with_capacity(size as usize);
-    fs::File::open(path)?
-        .take(MAX_INPUT_BYTES + 1)
-        .read_to_end(&mut bytes)?;
-    ensure!(
-        bytes.len() as u64 <= MAX_INPUT_BYTES,
-        "图片读取期间超过 32 MiB"
-    );
-    let summary = scan_metadata(&bytes)?;
+    inspect_file_budgeted(path, &memory::Pool::default())
+}
+fn inspect_file_budgeted(path: &Path, memory: &memory::Pool) -> Result<Job> {
+    let path = std::path::absolute(path)?;
+    let material = crate::material_files::FileMaterial::selected(&path, MAX_INPUT_BYTES as usize)?;
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let selected = workflow::input::read_selected(&material, &cancel, memory)?;
+    let summary = scan_metadata(selected.bytes())?;
     ensure!(!summary.animation, "动画图片暂不支持清理，以免丢失帧");
-    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
+    let mut reader = ImageReader::new(Cursor::new(selected.bytes())).with_guessed_format()?;
     ensure!(
         reader.format() == Some(summary.format),
         "图片容器与解码格式不一致"
@@ -758,36 +774,88 @@ fn inspect_file(path: &Path) -> Result<Job> {
     let mut decoder = reader.into_decoder()?;
     let (width, height) = decoder.dimensions();
     ensure!(
-        u64::from(width) * u64::from(height) <= MAX_PIXELS,
-        "图片像素数超过 1600 万"
+        width > 0
+            && height > 0
+            && width <= 12000
+            && height <= 12000
+            && u64::from(width) * u64::from(height) <= MAX_PIXELS,
+        "输入图片尺寸超限"
     );
+    let raw_bytes = usize::try_from(decoder.total_bytes())?;
+    ensure!(raw_bytes <= 192 * 1024 * 1024, "输入图片解码超限");
+    let pixels = memory.reserve(raw_bytes).map_err(anyhow::Error::msg)?;
     let orientation = decoder.orientation().context("无法读取图片方向")?;
+    use image::metadata::Orientation;
+    let rotation = if matches!(
+        orientation,
+        Orientation::Rotate90
+            | Orientation::Rotate270
+            | Orientation::Rotate90FlipH
+            | Orientation::Rotate270FlipH
+    ) {
+        Some(memory.reserve(raw_bytes).map_err(anyhow::Error::msg)?)
+    } else {
+        None
+    };
     let mut image = DynamicImage::from_decoder(decoder)?;
     image.apply_orientation(orientation);
+    let image = Arc::new(image);
+    pixels
+        .promote(&image, memory::pixels(&image))
+        .map_err(anyhow::Error::msg)?;
+    drop(rotation);
+    selected.verify()?;
     let preview = preview_image(&image);
     Ok(Job::Inspected {
         summary,
-        image: Arc::new(image),
-        original_bytes: size,
+        image,
+        original_bytes: material.bytes(),
+        path: material.path().to_path_buf(),
         preview,
     })
 }
-
-pub(super) fn oriented_static_image(path: &Path) -> Result<Arc<DynamicImage>> {
-    let Job::Inspected { image, .. } = inspect_file(path)? else {
+pub(super) fn oriented_static_image(
+    path: &Path,
+    memory: &memory::Pool,
+) -> Result<(Arc<DynamicImage>, PathBuf, egui::ColorImage)> {
+    let Job::Inspected {
+        image,
+        path,
+        preview,
+        ..
+    } = inspect_file_budgeted(path, memory)?
+    else {
         bail!("图片读取结果无效")
     };
-    Ok(image)
+    Ok((image, path, preview))
 }
-
+#[cfg(test)]
 fn clean_preview(image: &DynamicImage, source: &Summary, quality: u8) -> Result<Job> {
-    let encoded = super::encoding::encode(image, source.format, quality, MAX_OUTPUT_BYTES)?;
+    clean_preview_budgeted(
+        Arc::new(image.clone()),
+        source,
+        quality,
+        &memory::Pool::default(),
+    )
+}
+fn clean_preview_budgeted(
+    image: Arc<DynamicImage>,
+    source: &Summary,
+    quality: u8,
+    memory: &memory::Pool,
+) -> Result<Job> {
+    memory
+        .share(&image, memory::pixels(&image))
+        .map_err(anyhow::Error::msg)?;
+    let encoded =
+        super::encoding::encode_tracked(&image, source.format, quality, MAX_OUTPUT_BYTES, memory)?;
     let output_summary = scan_metadata(&encoded)?;
     ensure!(
         !output_summary.has_source_metadata() && !output_summary.animation,
         "重新编码的文件仍含可识别元数据，已拒绝保存"
     );
-    let decoded = image::load_from_memory_with_format(&encoded, source.format)?;
+    let decoded =
+        workflow::input::decode(&encoded, &std::sync::atomic::AtomicBool::new(false), memory)?;
     let preview = preview_image(&decoded);
     Ok(Job::Cleaned {
         encoded,
@@ -798,6 +866,93 @@ fn clean_preview(image: &DynamicImage, source: &Summary, quality: u8) -> Result<
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn oriented_input_preallocation_and_failed_workers_preserve_loaded_snapshot() {
+        use super::*;
+        use image::GenericImageView;
+        let root =
+            std::env::temp_dir().join(format!("zi-metadata-budget-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("rotated.jpg");
+        let bytes = jpeg_with_orientation();
+        fs::write(&path, &bytes).unwrap();
+        let exact = bytes.len() + 32 * 16 * 3 * 2;
+        let too_small = memory::Pool::new(exact - 1);
+        assert!(inspect_file_budgeted(&path, &too_small).is_err());
+        assert_eq!(too_small.snapshot().unwrap(), (0, 0, exact - 1));
+        let pool = memory::Pool::new(exact);
+        let job = inspect_file_budgeted(&path, &pool).unwrap();
+        assert_eq!(pool.snapshot().unwrap(), (1536, 0, exact));
+        let mut state = State::default();
+        deliver(&mut state, job);
+        assert_eq!(state.original.as_ref().unwrap().dimensions(), (16, 32));
+        assert_eq!(
+            state.loaded_path.as_deref(),
+            Some(fs::canonicalize(&path).unwrap().as_path())
+        );
+        pool.set_limit(20000).unwrap();
+        let source = state.original.as_ref().unwrap().clone();
+        let (tx, rx) = mpsc::channel();
+        tx.send(
+            clean_preview_budgeted(
+                source.clone(),
+                state.source_summary.as_ref().unwrap(),
+                85,
+                &pool,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let held = pool.snapshot().unwrap().0;
+        assert!(held > 1536);
+        pool.set_limit(held).unwrap();
+        assert!(
+            clean_preview_budgeted(
+                source.clone(),
+                state.source_summary.as_ref().unwrap(),
+                85,
+                &pool
+            )
+            .is_err()
+        );
+        deliver(&mut state, rx.recv().unwrap());
+        let old_encoded = state.encoded.as_ref().unwrap().clone();
+        let old_summary = state.source_summary.clone();
+        state.input = root.join("missing.png").to_string_lossy().into_owned();
+        state.inspect(pool.clone());
+        let ctx = egui::Context::default();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.busy() {
+            state.poll(&ctx);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert!(state.error);
+        assert!(Arc::ptr_eq(state.original.as_ref().unwrap(), &source));
+        assert!(Arc::ptr_eq(state.encoded.as_ref().unwrap(), &old_encoded));
+        assert_eq!(state.source_summary, old_summary);
+        state.clean(pool.clone());
+        while state.busy() {
+            state.poll(&ctx);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert!(state.error);
+        assert!(Arc::ptr_eq(state.encoded.as_ref().unwrap(), &old_encoded));
+        state.output = root.join("saved.jpg").to_string_lossy().into_owned();
+        state.save();
+        assert!(!state.error);
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        assert_eq!(
+            fs::read(root.join("saved.jpg")).unwrap(),
+            old_encoded.as_slice()
+        );
+        drop(state);
+        drop(source);
+        drop(old_encoded);
+        assert_eq!(pool.snapshot().unwrap(), (0, 0, held));
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn metadata_failure_is_received_when_another_tool_is_open() {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1069,7 +1224,7 @@ mod tests {
             input: original.to_string_lossy().into_owned(),
             output: target.to_string_lossy().into_owned(),
             source_summary: Some(summary),
-            encoded: Some(Arc::new(encoded)),
+            encoded: Some(encoded),
             ..Default::default()
         };
         state.save();
@@ -1110,7 +1265,7 @@ mod tests {
             } else {
                 "source.webp"
             });
-            fs::write(&input, &encoded).unwrap();
+            fs::write(&input, encoded.as_slice()).unwrap();
             let Job::Inspected { image: loaded, .. } = inspect_file(&input).unwrap() else {
                 panic!("expected inspected image")
             };

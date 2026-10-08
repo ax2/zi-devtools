@@ -18,8 +18,9 @@ struct Preview {
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
-        // Wait on the actual background result, not an assumed decode duration.
-        if !matches!(self.tick, 54 | 109 | 169) || self.app.preview_metadata_relay_ready() {
+        // Wait for the real result early enough that its measured modal layout
+        // settles before pointer presses; never set consent programmatically.
+        if !matches!(self.tick, 54 | 100 | 160) || self.app.preview_metadata_relay_ready() {
             self.tick = self.tick.wrapping_add(1);
         }
         input

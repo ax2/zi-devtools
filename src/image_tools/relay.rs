@@ -317,7 +317,8 @@ impl State {
     #[cfg(feature = "ui-preview")]
     pub fn preview_relay_fixture(&mut self, ctx: &egui::Context) {
         self.preview_fixture(ctx);
-        self.editor.preview_fixture(ctx);
+        self.editor
+            .preview_fixture(ctx, &self.workflow.memory_pool());
         self.screenshot.preview_fixture(ctx);
         self.mode = Mode::Screenshot;
         let (source, origins, id) = self.relay_source().unwrap();
@@ -365,8 +366,10 @@ impl State {
     #[cfg(feature = "ui-preview")]
     pub fn preview_metadata_relay_fixture(&mut self, ctx: &egui::Context) -> Arc<Vec<u8>> {
         self.preview_fixture(ctx);
-        self.editor.preview_fixture(ctx);
-        self.metadata.preview_fixture(ctx);
+        self.editor
+            .preview_fixture(ctx, &self.workflow.memory_pool());
+        self.metadata
+            .preview_fixture(ctx, &self.workflow.memory_pool());
         self.mode = Mode::Metadata;
         self.metadata.preview_cleaned_snapshot()
     }
@@ -413,7 +416,8 @@ impl State {
         root: &std::path::Path,
     ) -> Arc<Vec<u8>> {
         self.preview_fixture(ctx);
-        self.editor.preview_fixture(ctx);
+        self.editor
+            .preview_fixture(ctx, &self.workflow.memory_pool());
         self.mode = Mode::Batch;
         self.batch.preview_relay_fixture(root)
     }
@@ -615,6 +619,10 @@ impl State {
                 self.error = false;
             }
             Target::Edit => {
+                self.workflow
+                    .memory_pool()
+                    .share(&prepared.image, super::memory::pixels(&prepared.image))
+                    .map_err(anyhow::Error::msg)?;
                 self.editor.receive_relay(ctx, prepared);
                 self.relay_route = Some("image-crop-annotate");
                 self.mode = Mode::Editor;
@@ -764,7 +772,7 @@ impl State {
                 ui.label("目标暂不可接收，请完成任务或重新选择");
             }
             if has_work {
-                let response=ui.checkbox(&mut transfer.replace,if transfer.target == Target::Workflow {"允许替换此实例的输入图片和结果（保留步骤）"} else {"允许替换目标当前原图、操作和未保存预览"});
+                let response=ui.push_id("image-relay-replacement-consent", |ui| ui.checkbox(&mut transfer.replace,if transfer.target == Target::Workflow {"允许替换此实例的输入图片和结果（保留步骤）"} else {"允许替换目标当前原图、操作和未保存预览"})).inner;
                 #[cfg(feature="ui-preview")]
                 ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new("image-relay-replace"),response.rect));
                 #[cfg(not(feature="ui-preview"))]
@@ -1004,5 +1012,45 @@ mod tests {
         assert!(Arc::ptr_eq(state.source.as_ref().unwrap(), &source));
         assert_eq!(state.origins[0].id, "screenshot-workbench");
         assert!(state.encoded.is_none() && state.output.is_empty());
+    }
+
+    #[cfg(feature = "ui-preview")]
+    #[test]
+    fn editor_target_budget_refusal_preserves_original_then_explicit_share_succeeds() {
+        let ctx = egui::Context::default();
+        let mut state = State::default();
+        let pool = state.workflow.memory_pool();
+        let original = Arc::new(DynamicImage::new_rgba8(2, 3));
+        pool.share(&original, 24).unwrap();
+        let old = prepare(Source::Image(original.clone()), Vec::new(), "image-tools").unwrap();
+        state.editor.receive_relay(&ctx, &old);
+        drop(old);
+        pool.set_limit(24).unwrap();
+        let source = Arc::new(DynamicImage::new_rgba8(1, 1));
+        let prepared = prepare(Source::Image(source.clone()), Vec::new(), "image-tools").unwrap();
+        state.relay = Some(Transfer {
+            source_id: "image-tools",
+            target: Target::Edit,
+            workflow_destination: workflow::Destination::default(),
+            source_instance: None,
+            replace: true,
+            cancelled: false,
+            error: String::new(),
+            prepared: Some(prepared),
+            texture: None,
+            receiver: None,
+            cancel_work: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        });
+        assert!(state.apply_relay(&ctx).is_err());
+        state.editor.verify_relay_source(&original, 1);
+        assert_eq!(pool.snapshot().unwrap(), (24, 0, 24));
+        pool.set_limit(28).unwrap();
+        state.apply_relay(&ctx).unwrap();
+        state.editor.verify_relay_source(&source, 1);
+        assert_eq!(pool.snapshot().unwrap(), (28, 0, 28));
+        drop(state);
+        drop(original);
+        drop(source);
+        assert_eq!(pool.snapshot().unwrap(), (0, 0, 28));
     }
 }

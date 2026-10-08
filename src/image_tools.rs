@@ -317,12 +317,14 @@ impl State {
     #[cfg(feature = "ui-preview")]
     pub fn preview_metadata_fixture(&mut self, ctx: &egui::Context) {
         self.mode = Mode::Metadata;
-        self.metadata.preview_fixture(ctx);
+        self.metadata
+            .preview_fixture(ctx, &self.workflow.memory_pool());
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_editor_fixture(&mut self, ctx: &egui::Context) {
         self.mode = Mode::Editor;
-        self.editor.preview_fixture(ctx);
+        self.editor
+            .preview_fixture(ctx, &self.workflow.memory_pool());
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, ctx: &egui::Context) {
@@ -517,8 +519,14 @@ impl State {
                 }
                 return;
             }
-            Mode::Metadata => return self.metadata.ui(ui),
-            Mode::Editor => return self.editor.ui(ui),
+            Mode::Metadata => {
+                self.workflow.memory_ui(ui);
+                return self.metadata.ui(ui, &self.workflow.memory_pool());
+            }
+            Mode::Editor => {
+                self.workflow.memory_ui(ui);
+                return self.editor.ui(ui, &self.workflow.memory_pool());
+            }
             Mode::Screenshot => return self.screenshot.ui(ui),
             Mode::Workflow => {
                 let unlocked = !self.relay_active();
