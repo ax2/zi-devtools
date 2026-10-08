@@ -34,6 +34,7 @@ pub mod knowledge_search;
 pub mod knowledge_sources;
 mod local_files;
 pub mod markdown_preview;
+pub mod material_files;
 pub mod network_tools;
 pub mod planner;
 pub mod plugin_ui;
