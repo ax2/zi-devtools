@@ -12,10 +12,22 @@ struct Preview {
     batch: bool,
     tick: u32,
     shots: u32,
+    extra_passes: u32,
     started: Instant,
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        // Eframe calls this once per input frame, but update may run again for layout.
+        self.tick = self.tick.wrapping_add(1);
+        // This is a controlled synthetic-input fixture, not a physical focus test.
+        // Keep screenshot delivery, but do not mix OS focus/mouse events into it.
+        input
+            .events
+            .retain(|event| matches!(event, egui::Event::Screenshot { .. }));
+        input.focused = true;
+        if let Some(viewport) = input.viewports.get_mut(&egui::ViewportId::ROOT) {
+            viewport.focused = Some(true);
+        }
         if matches!(self.tick, 85 | 86) {
             input.events.push(egui::Event::Key {
                 key: egui::Key::Escape,
@@ -39,6 +51,14 @@ impl eframe::App for Preview {
                 ctx.screen_rect().contains_rect(rect),
                 "visible {id}: {rect:?}"
             );
+            println!(
+                "INPUT tick={} id={} rect={:?} focused={} pass={}",
+                self.tick,
+                id,
+                rect,
+                input.focused,
+                ctx.current_pass_index()
+            );
             input.events.push(egui::Event::PointerMoved(rect.center()));
             input.events.push(egui::Event::PointerButton {
                 pos: rect.center(),
@@ -50,6 +70,16 @@ impl eframe::App for Preview {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         assert!(self.started.elapsed() < Duration::from_secs(35));
+        if ctx.current_pass_index() > 0 {
+            self.extra_passes += 1;
+            self.app.update(ctx, frame);
+            return;
+        }
+        // Force layout retries immediately before simulated presses. The input
+        // schedule must still deliver both press and release on separate frames.
+        if matches!(self.tick, 29 | 64 | 99 | 109 | 144) {
+            ctx.request_discard("image report fixture verifies multipass input scheduling");
+        }
         if self.tick == 0 {
             if self.batch {
                 self.app.preview_batch_report_prepare(ctx, self.light);
@@ -92,13 +122,13 @@ impl eframe::App for Preview {
         }
         if self.tick == 175 {
             assert_eq!(self.shots, 4);
+            assert!(self.extra_passes >= 5, "forced layout retries ran");
             println!(
-                "PASS native image report: actual generate/send/JSON confirm/memo confirm clicks, Escape preserves source/target; memo target selected via fixture; no automatic processing/save; light={}",
-                self.light
+                "PASS native image report: actual generate/send/JSON confirm/memo confirm clicks, Escape preserves source/target; memo target selected via fixture; no automatic processing/save; light={} multipass={}",
+                self.light, self.extra_passes
             );
             self.app.preview_tray_workflow_finish(ctx);
         }
-        self.tick += 1;
         ctx.request_repaint_after(Duration::from_millis(35));
     }
 }
@@ -119,8 +149,9 @@ fn main() -> eframe::Result<()> {
                 folder,
                 light,
                 batch: std::env::args().nth(3).as_deref() == Some("batch"),
-                tick: 0,
+                tick: u32::MAX,
                 shots: 0,
+                extra_passes: 0,
                 started: Instant::now(),
             }))
         }),
