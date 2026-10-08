@@ -287,7 +287,7 @@ pub(super) struct State {
     report_current: bool,
     source_bytes: u64,
     jpeg_quality: u8,
-    encoded: Option<Vec<u8>>,
+    encoded: Option<Arc<Vec<u8>>>,
     texture: Option<egui::TextureHandle>,
     message: String,
     error: bool,
@@ -324,10 +324,38 @@ impl State {
         self.original = Some(Arc::new(image.clone()));
         self.cleaned_summary = Some(cleaned_summary);
         self.report_current = false;
-        self.encoded = Some(encoded);
+        self.encoded = Some(Arc::new(encoded));
         self.texture =
             Some(ctx.load_texture("metadata-preview", preview, egui::TextureOptions::LINEAR));
         self.message = "界面预览：输出复检无已识别元数据块；确认画面后另存副本。".into();
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_cleaned_snapshot(&self) -> Arc<Vec<u8>> {
+        assert!(self.relay_source().is_some());
+        assert_eq!(self.input, "C:\\Users\\demo\\Pictures\\trip.jpg");
+        self.encoded.as_ref().unwrap().clone()
+    }
+
+    pub(super) fn relay_source(
+        &self,
+    ) -> Option<(
+        super::relay::Source,
+        Vec<super::relay::Origin>,
+        &'static str,
+    )> {
+        if self.busy() {
+            return None;
+        }
+        let summary = self.cleaned_summary.as_ref()?;
+        if summary.has_source_metadata() || summary.animation {
+            return None;
+        }
+        Some((
+            super::relay::Source::Encoded(self.encoded.as_ref()?.clone()),
+            Vec::new(),
+            "image-metadata",
+        ))
     }
 
     pub(super) fn busy(&self) -> bool {
@@ -377,7 +405,7 @@ impl State {
                     "清理预览已生成：{:.2} MB；输出复检无已识别元数据块。",
                     encoded.len() as f64 / 1_000_000.0
                 );
-                self.encoded = Some(encoded);
+                self.encoded = Some(Arc::new(encoded));
                 self.texture = Some(ctx.load_texture(
                     "metadata-preview",
                     preview,
@@ -864,6 +892,7 @@ mod tests {
                 ..Default::default()
             };
             deliver(&mut state, inspect_file(&path).unwrap());
+            assert!(state.relay_source().is_none());
             let source_report = state.build_report().unwrap();
             let value: serde_json::Value = serde_json::from_str(&source_report).unwrap();
             assert!(value["cleanedPreview"].is_null());
@@ -893,6 +922,19 @@ mod tests {
             };
             let exact_bytes = encoded.len();
             deliver(&mut state, cleaned);
+            let (relay, origins, id) = state.relay_source().unwrap();
+            let super::super::relay::Source::Encoded(shared) = &relay else {
+                panic!("encoded cleaned snapshot")
+            };
+            assert!(Arc::ptr_eq(shared, state.encoded.as_ref().unwrap()));
+            let material = super::super::relay::prepare(relay, origins, id).unwrap();
+            assert_eq!(
+                material.image.to_rgba8(),
+                image::load_from_memory(state.encoded.as_ref().unwrap())
+                    .unwrap()
+                    .to_rgba8()
+            );
+            assert_eq!(material.origins[0].id, "image-metadata");
             let report = state.build_report().unwrap();
             let value: serde_json::Value = serde_json::from_str(&report).unwrap();
             assert_eq!(value["cleanedPreview"]["bytes"], exact_bytes);
@@ -919,6 +961,31 @@ mod tests {
     }
 
     #[test]
+    fn relay_refuses_busy_missing_or_unverified_cleaned_material() {
+        let image = Arc::new(DynamicImage::new_rgb8(3, 2));
+        let mut state = State {
+            original: Some(image.clone()),
+            source_summary: Some(Summary::default()),
+            ..Default::default()
+        };
+        assert!(state.relay_source().is_none());
+        let job = clean_preview(&image, state.source_summary.as_ref().unwrap(), 80).unwrap();
+        deliver(&mut state, job);
+        assert!(state.relay_source().is_some());
+        let (_tx, rx) = mpsc::channel();
+        state.pending = Some(rx);
+        assert!(state.relay_source().is_none());
+        state.pending = None;
+        state.cleaned_summary.as_mut().unwrap().text = 1;
+        assert!(state.relay_source().is_none());
+        state.cleaned_summary.as_mut().unwrap().text = 0;
+        state.cleaned_summary.as_mut().unwrap().animation = true;
+        assert!(state.relay_source().is_none());
+        state.cleaned_summary = None;
+        assert!(state.relay_source().is_none());
+    }
+
+    #[test]
     fn invalidating_quality_and_failed_jobs_preserve_old_report_but_block_transfer() {
         let image = Arc::new(DynamicImage::new_rgb8(2, 3));
         let mut state = State {
@@ -933,11 +1000,13 @@ mod tests {
         state.report = Some(report.clone());
         state.report_current = true;
         assert!(state.report().is_some());
+        assert!(state.relay_source().is_some());
         assert!(state.texture.is_some());
         state.jpeg_quality = 75;
         state.invalidate_preview();
         assert!(state.report().is_none());
         assert!(state.cleaned_summary.is_none());
+        assert!(state.relay_source().is_none());
         assert!(state.texture.is_none());
         assert_eq!(state.report.as_deref(), Some(report.as_str()));
         let (tx, rx) = mpsc::channel();
@@ -946,7 +1015,7 @@ mod tests {
         state.poll(&egui::Context::default());
         assert!(state.report().is_none());
         assert_eq!(state.report.as_deref(), Some(report.as_str()));
-        state.encoded = Some(vec![1]);
+        state.encoded = Some(Arc::new(vec![1]));
         assert!(state.build_report().is_err());
     }
 
@@ -1014,7 +1083,7 @@ mod tests {
             input: original.to_string_lossy().into_owned(),
             output: target.to_string_lossy().into_owned(),
             source_summary: Some(summary),
-            encoded: Some(encoded),
+            encoded: Some(Arc::new(encoded)),
             ..Default::default()
         };
         state.save();

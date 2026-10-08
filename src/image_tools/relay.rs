@@ -274,6 +274,97 @@ impl State {
         assert!(Arc::ptr_eq(self.source.as_ref().unwrap(), &source));
         true
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_fixture(&mut self, ctx: &egui::Context) -> Arc<Vec<u8>> {
+        self.preview_fixture(ctx);
+        self.editor.preview_fixture(ctx);
+        self.metadata.preview_fixture(ctx);
+        self.mode = Mode::Metadata;
+        self.metadata.preview_cleaned_snapshot()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_ready(&self) -> bool {
+        if let Some(transfer) = &self.relay {
+            assert!(
+                transfer.error.is_empty(),
+                "fixture relay error: {}",
+                transfer.error
+            );
+            transfer.prepared.is_some() && !transfer.busy()
+        } else {
+            false
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_status(&self) -> String {
+        self.relay
+            .as_ref()
+            .map(|t| {
+                format!(
+                    "prepared={} replace={} target={} error={}",
+                    t.prepared.is_some(),
+                    t.replace,
+                    t.target.label(),
+                    t.error
+                )
+            })
+            .unwrap_or_else(|| "no transfer".into())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_check(&self, phase: u8, expected: &Arc<Vec<u8>>) {
+        assert!(Arc::ptr_eq(
+            expected,
+            &self.metadata.preview_cleaned_snapshot()
+        ));
+        let clean = image::load_from_memory(expected).unwrap();
+        match phase {
+            1 | 2 => {
+                assert_eq!(self.input, "C:\\Users\\demo\\Pictures\\sample.png");
+                assert_eq!(self.output, "C:\\Users\\demo\\Pictures\\sample-edited.jpg");
+                assert!(self.encoded.is_some());
+                assert_eq!(self.editor.relay_target_state(), (false, true));
+                if phase == 1 {
+                    let transfer = self.relay.as_ref().unwrap();
+                    assert!(!transfer.replace);
+                    assert_eq!(transfer.source_id, "image-metadata");
+                    assert_eq!(
+                        transfer.prepared.as_ref().unwrap().image.to_rgba8(),
+                        clean.to_rgba8()
+                    );
+                } else {
+                    assert!(self.relay.is_none());
+                }
+            }
+            3 => {
+                assert!(self.relay.is_none());
+                assert_eq!(self.mode, Mode::Single);
+                assert_eq!(self.source.as_ref().unwrap().to_rgba8(), clean.to_rgba8());
+                assert!(self.input.is_empty() && self.output.is_empty() && self.encoded.is_none());
+                assert_eq!(self.origins[0].id, "image-metadata");
+                assert_eq!(
+                    self.origins[0].version,
+                    origin("image-metadata").unwrap().version
+                );
+            }
+            4 => {
+                assert!(self.relay.is_none());
+                assert_eq!(self.mode, Mode::Editor);
+                let (source, origins, id) = self.editor.relay_source().unwrap();
+                assert_eq!(id, "image-crop-annotate");
+                let Source::Image(image) = source else {
+                    panic!("received raw memory image")
+                };
+                assert_eq!(image.to_rgba8(), clean.to_rgba8());
+                self.editor.verify_relay_source(&image, 1);
+                assert_eq!(origins[0].id, "image-metadata");
+                assert_eq!(
+                    origins[0].version,
+                    origin("image-metadata").unwrap().version
+                );
+            }
+            _ => panic!("relay fixture phase"),
+        }
+    }
     pub fn relay_active(&self) -> bool {
         self.relay
             .as_ref()
@@ -301,6 +392,7 @@ impl State {
                     })
                 }),
             Mode::Editor => self.editor.relay_source(),
+            Mode::Metadata => self.metadata.relay_source(),
             Mode::Screenshot if !self.screenshot.busy() => self
                 .screenshot
                 .relay_source()
@@ -389,13 +481,14 @@ impl State {
         let source = self.relay_source();
         let available = source.is_some();
         ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(
-                    source.is_some() && self.relay.is_none(),
-                    egui::Button::new("发送图片到工具…"),
-                )
-                .clicked()
-            {
+            let response = ui.add_enabled(
+                source.is_some() && self.relay.is_none(),
+                egui::Button::new("发送图片到工具…"),
+            );
+            #[cfg(feature = "ui-preview")]
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("image-relay-send"), response.rect));
+            if response.clicked() {
                 if let Some((source, origins, id)) = source {
                     self.relay = Some(Transfer::start(ui.ctx(), source, origins, id));
                 }
@@ -417,37 +510,44 @@ impl State {
             self.source.is_some() || self.encoded.is_some() || !self.input.is_empty(),
         );
         let editor_state = self.editor.relay_target_state();
-        egui::Modal::new(egui::Id::new("image-relay-modal")).show(ui.ctx(), |ui| {
+        egui::Modal::new(egui::Id::new("image-relay-modal"))
+            .area(egui::Modal::default_area(egui::Id::new("image-relay-modal"))
+                .anchor(egui::Align2::CENTER_TOP,egui::vec2(0.0,48.0)))
+            .show(ui.ctx(), |ui| {
             ui.set_width(540.0_f32.min((ui.ctx().screen_rect().width() - 64.0).max(160.0)));
             ui.heading("图片接力");
             ui.small("来源时间记录接力时刻，不推断原图拍摄或文件创建时间。");
-            if transfer.busy() {
-                ui.spinner();
-                ui.label("正在后台准备图片快照");
+            if let Some(value)=&transfer.prepared {
+                ui.label(format!("{} · {} × {} · 来源链{}步",value.kind,value.image.width(),value.image.height(),value.origins.len()));
+            }else {ui.label("正在后台准备图片快照");}
+            // Reserve the same geometry before and after decoding so controls do
+            // not move underneath a pending pointer press/release.
+            let width=ui.available_width().min(480.0);
+            let (preview_rect,_)=ui.allocate_exact_size(egui::vec2(width,240.0),egui::Sense::hover());
+            if let Some(texture)=&transfer.texture {
+                let original=texture.size_vec2();
+                let size=original*(width/original.x).min(240.0/original.y).min(1.0);
+                ui.put(egui::Rect::from_center_size(preview_rect.center(),size),egui::Image::new((texture.id(),size)));
+            }else if transfer.busy() {
+                ui.put(egui::Rect::from_center_size(preview_rect.center(),egui::vec2(24.0,24.0)),egui::Spinner::new());
             }
-            if let Some(value) = &transfer.prepared {
-                ui.label(format!(
-                    "{} · {} × {} · 来源链{}步",
-                    value.kind, value.image.width(), value.image.height(), value.origins.len()
-                ));
-                if let Some(texture) = &transfer.texture {
-                    ui.add(egui::Image::new(texture).max_size(egui::vec2(480.0, 240.0)));
-                }
-                egui::CollapsingHeader::new("来源工具与版本").show(ui, |ui| {
-                    egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                        for origin in &value.origins {
-                            ui.small(format!("{} v{} · {}", origin.id, origin.version, origin.utc));
-                        }
-                    });
+            egui::CollapsingHeader::new("来源工具与版本").show(ui,|ui| {
+                egui::ScrollArea::vertical().max_height(120.0).show(ui,|ui| {
+                    if let Some(value)=&transfer.prepared {
+                        for origin in &value.origins {ui.small(format!("{} v{} · {}",origin.id,origin.version,origin.utc));}
+                    }else {ui.small("来源链准备中");}
                 });
-            }
+            });
             ui.horizontal(|ui| {
                 for target in [Target::Convert, Target::Edit] {
                     if !matches!(
                         (transfer.source_id, target),
                         ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit)
-                    ) && ui.selectable_value(&mut transfer.target, target, target.label()).changed() {
-                        transfer.replace = false;
+                    ) {
+                        let response=ui.selectable_value(&mut transfer.target,target,target.label());
+                        #[cfg(feature="ui-preview")]
+                        ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new(if target==Target::Edit {"image-relay-edit"}else{"image-relay-convert"}),response.rect));
+                        if response.changed() {transfer.replace=false;}
                     }
                 }
             });
@@ -459,7 +559,11 @@ impl State {
                 ui.label("目标后台任务未完成，不能替换");
             }
             if has_work {
-                ui.checkbox(&mut transfer.replace, "允许替换目标当前原图、操作和未保存预览");
+                let response=ui.checkbox(&mut transfer.replace,"允许替换目标当前原图、操作和未保存预览");
+                #[cfg(feature="ui-preview")]
+                ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new("image-relay-replace"),response.rect));
+                #[cfg(not(feature="ui-preview"))]
+                let _=response;
             }
             ui.small("来源图片和来源工具的工作保留；目标只接收内存原图，不自动编码、保存或联网。更换目标后需重新确认覆盖。");
             if !transfer.error.is_empty() {
@@ -467,10 +571,13 @@ impl State {
             }
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
-                apply = ui.add_enabled(
+                let response = ui.add_enabled(
                     !busy && (!has_work || transfer.replace) && transfer.prepared.is_some() && !transfer.cancelled,
                     egui::Button::new("确认接力并打开"),
-                ).clicked();
+                );
+                apply=response.clicked();
+                #[cfg(feature="ui-preview")]
+                ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new("image-relay-apply"),response.rect));
             });
         });
         if ui

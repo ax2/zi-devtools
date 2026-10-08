@@ -292,6 +292,36 @@ impl DevToolsApp {
         self.open_startup_tool("image-metadata");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_prepare(
+        &mut self,
+        ctx: &egui::Context,
+        light: bool,
+    ) -> std::sync::Arc<Vec<u8>> {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.page = Page::Images;
+        self.images = Default::default();
+        let source = self.images.preview_metadata_relay_fixture(ctx);
+        self.open_startup_tool("image-metadata");
+        source
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_ready(&self) -> bool {
+        self.images.preview_metadata_relay_ready()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_status(&self) -> String {
+        self.images.preview_metadata_relay_status()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_check(&self, phase: u8, source: &std::sync::Arc<Vec<u8>>) {
+        self.images.preview_metadata_relay_check(phase, source);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_relay_reopen(&mut self) {
+        self.open_startup_tool("image-metadata");
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_check(&self, phase: u8) {
         let text = self.images.preview_image_report_assert();
         match phase {
