@@ -6,6 +6,7 @@ mod relay;
 mod report;
 mod screenshot;
 mod workflow;
+pub(crate) use workflow::Definition as WorkflowDefinition;
 #[cfg(all(windows, feature = "ui-preview"))]
 pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
     screenshot::verify_capture()
@@ -227,6 +228,21 @@ impl State {
     pub fn show_batch(&mut self) {
         self.mode = Mode::Batch;
     }
+    pub(crate) fn can_receive_workflow(&self) -> bool {
+        !self.workflow.busy() && !self.workflow.pending_import() && !self.relay_active()
+    }
+    pub(crate) fn receive_workflow(&mut self, definition: WorkflowDefinition) -> Result<()> {
+        ensure!(
+            self.can_receive_workflow(),
+            "请先完成或取消图片流程当前任务和导入"
+        );
+        self.workflow.receive_definition(definition)?;
+        self.show_workflow();
+        Ok(())
+    }
+    pub(crate) fn take_workflow_loaded(&mut self) -> Option<crate::preferences::SavedWorkflow> {
+        self.workflow.take_loaded()
+    }
     pub fn show_workflow(&mut self) {
         self.mode = Mode::Workflow;
     }
@@ -234,6 +250,14 @@ impl State {
     pub fn preview_image_workflow_fixture(&mut self) {
         self.mode = Mode::Workflow;
         self.workflow.preview_fixture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_definition(&self) -> Vec<u8> {
+        self.workflow.preview_definition()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_import_pending(&self) -> bool {
+        self.workflow.pending_import()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_ready(&self) -> bool {

@@ -84,15 +84,10 @@ impl State {
         Ok(())
     }
     pub(super) fn modal_open(&self) -> bool {
-        self.files.review.is_some()
-            || self.files.tool_review.is_some()
-            || self.inspect.open
-            || self.output.modal_open()
+        self.files.pending_review() || self.inspect.open || self.output.modal_open()
     }
     pub(super) fn has_content(&self) -> bool {
-        !self.definition.steps.is_empty()
-            || self.files.review.is_some()
-            || self.files.tool_review.is_some()
+        !self.definition.steps.is_empty() || self.files.pending_review()
     }
     pub(super) fn invalidate(&mut self) {
         self.output.invalidate();
@@ -289,7 +284,9 @@ impl DataState {
     pub(super) fn poll_workflow(&mut self) {
         self.workflow.output.poll();
         self.workflow.files.poll();
-        if self.workflow.files.loaded_tool == Some("pipeline") {
+        if self.workflow.files.loaded_tool == Some("pipeline")
+            || self.workflow.files.image_review.is_some()
+        {
             self.show_workflow();
         }
         if !self.text_flow.busy()
@@ -722,7 +719,7 @@ impl DataState {
         }
         ui.horizontal_wrapped(|ui| {
             let allowed = !self.busy()
-                && self.workflow.files.review.is_none()
+                && !self.workflow.files.pending_review()
                 && !self.text_flow.modal_open();
             if ui
                 .add_enabled(
@@ -770,8 +767,18 @@ impl DataState {
         self.workflow_library_ui(ui);
     }
     pub(super) fn workflow_library_ui(&mut self, ui: &mut egui::Ui) {
+        if self.workflow.files.image_review.is_some() {
+            ui.group(|ui| {
+                ui.label("图片流程等待接收：请完成或取消图片页当前任务和导入；输入与结果保留。");
+                if ui.button("取消等待图片流程").clicked() {
+                    self.workflow.files.image_review = None;
+                    self.workflow.files.message = "已取消接收，原工作保留".into();
+                }
+            });
+        }
+
         let allowed =
-            !self.busy() && self.workflow.files.review.is_none() && !self.text_flow.modal_open();
+            !self.busy() && !self.workflow.files.pending_review() && !self.text_flow.modal_open();
         ui.horizontal_wrapped(|ui| {
             if ui
                 .add_enabled(allowed, egui::Button::new("流程文件夹…"))
@@ -794,7 +801,7 @@ impl DataState {
                 if ui
                     .add_enabled(
                         !self.busy()
-                            && self.workflow.files.review.is_none()
+                            && !self.workflow.files.pending_review()
                             && !self.text_flow.modal_open(),
                         egui::Button::new("刷新列表"),
                     )
@@ -854,7 +861,7 @@ impl DataState {
         }
         let mut selected = None;
         let allowed =
-            !self.busy() && self.workflow.files.review.is_none() && !self.text_flow.modal_open();
+            !self.busy() && !self.workflow.files.pending_review() && !self.text_flow.modal_open();
         if let Some(listing) = &self.workflow.files.listing {
             ui.add(
                 egui::TextEdit::singleline(&mut self.workflow.files.query)
@@ -1050,7 +1057,7 @@ fn ensure_not_busy(state: &DataState) -> Result<()> {
     );
     anyhow::ensure!(!state.busy(), "请等待当前实例任务结束");
     anyhow::ensure!(
-        state.workflow.files.review.is_none() && !state.text_flow.modal_open(),
+        !state.workflow.files.pending_review() && !state.text_flow.modal_open(),
         "请先确认或取消已读取的流程"
     );
     Ok(())

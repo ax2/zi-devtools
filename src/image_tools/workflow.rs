@@ -2,14 +2,16 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 mod core;
-use core::{Definition, Encoding, RECIPE_LIMIT, Run, Step, execute};
+pub(crate) use core::Definition;
+use core::{Encoding, RECIPE_LIMIT, Run, Step, execute};
 #[cfg(test)]
 mod tests;
 
 enum Reply {
     Input(Arc<DynamicImage>, String),
     Run(Run),
-    Definition(Definition),
+    Definition(Definition, crate::preferences::SavedWorkflow),
+    SavedDefinition(crate::preferences::SavedWorkflow),
     Saved(String),
 }
 pub(super) struct State {
@@ -24,6 +26,7 @@ pub(super) struct State {
     cancel: Arc<AtomicBool>,
     import: Option<Definition>,
     message: String,
+    loaded: Option<crate::preferences::SavedWorkflow>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -39,6 +42,7 @@ impl Default for State {
             cancel: Arc::new(AtomicBool::new(false)),
             import: None,
             message: String::new(),
+            loaded: None,
         }
     }
 }
@@ -72,6 +76,10 @@ impl State {
         ];
     }
     #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_definition(&self) -> Vec<u8> {
+        self.definition.bytes().unwrap()
+    }
+    #[cfg(feature = "ui-preview")]
     pub(super) fn preview_ready(&self) -> bool {
         !self.busy() && self.run.is_some()
     }
@@ -102,6 +110,18 @@ impl State {
     }
     pub(super) fn pending_import(&self) -> bool {
         self.import.is_some()
+    }
+    pub(super) fn receive_definition(&mut self, definition: Definition) -> Result<()> {
+        ensure!(
+            !self.busy() && !self.pending_import(),
+            "请先完成或取消图片流程当前任务和导入"
+        );
+        definition.validate()?;
+        self.import = Some(definition);
+        Ok(())
+    }
+    pub(super) fn take_loaded(&mut self) -> Option<crate::preferences::SavedWorkflow> {
+        self.loaded.take()
     }
     pub(super) fn target_state(&self) -> (bool, bool) {
         (
@@ -178,7 +198,14 @@ impl State {
                 self.texture = None;
                 self.run = Some(run);
             }
-            Ok(Reply::Definition(def)) => self.import = Some(def),
+            Ok(Reply::Definition(def, metadata)) => {
+                self.import = Some(def);
+                self.loaded = Some(metadata);
+            }
+            Ok(Reply::SavedDefinition(metadata)) => {
+                self.message = format!("流程定义已另存：{}", metadata.name);
+                self.loaded = Some(metadata);
+            }
             Ok(Reply::Saved(name)) => self.message = format!("已另存：{name}"),
             Err(e) => self.message = e,
         }
@@ -241,7 +268,11 @@ impl State {
                         let m = crate::material_files::FileMaterial::selected(&path, RECIPE_LIMIT)?;
                         let bytes = m.read_bytes(RECIPE_LIMIT)?;
                         ensure!(!cancel.load(Ordering::Relaxed), "已取消");
-                        Ok(Reply::Definition(Definition::parse(&bytes)?))
+                        let definition = Definition::parse(&bytes)?;
+                        let metadata =
+                            crate::workflow_document::Document::Image(definition.clone())
+                                .metadata(&path);
+                        Ok(Reply::Definition(definition, metadata))
                     });
                 }
                 if ui.button("保存流程定义…").clicked()
@@ -253,11 +284,8 @@ impl State {
                     self.launch(ui.ctx(), move |c| {
                         let b = def.bytes()?;
                         crate::local_files::save_new_moved(&path, &b, c)?;
-                        Ok(Reply::Saved(
-                            path.file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy()
-                                .into_owned(),
+                        Ok(Reply::SavedDefinition(
+                            crate::workflow_document::Document::Image(def).metadata(&path),
                         ))
                     });
                 }
@@ -270,7 +298,15 @@ impl State {
                     def.steps.len()
                 ));
                 ui.horizontal(|ui| {
-                    if ui.button("确认应用导入流程").clicked() {
+                    let apply = ui.button("确认应用导入流程");
+                    #[cfg(feature = "ui-preview")]
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(
+                            egui::Id::new("image-flow-import-apply"),
+                            apply.rect.intersect(ui.clip_rect()),
+                        )
+                    });
+                    if apply.clicked() {
                         self.definition = def;
                         self.import = None;
                         self.invalidate();

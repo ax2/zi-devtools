@@ -73,6 +73,17 @@ impl DevToolsApp {
         self.observe_tasks();
         let before = self.task_snapshots();
         self.data_state.poll();
+        if self.images.can_receive_workflow()
+            && let Some(definition) = self.data_state.take_image_workflow()
+        {
+            match self.images.receive_workflow(definition) {
+                Ok(()) => {
+                    self.page = Page::Images;
+                    self.visit("image-workflow");
+                }
+                Err(error) => self.toast = Some((format!("{error:#}"), Instant::now())),
+            }
+        }
         let visits = self.data_state.take_workflow_visits();
         if self.page == Page::Data {
             for tool in visits {
@@ -80,7 +91,10 @@ impl DevToolsApp {
             }
         }
 
-        let loads = self.data_state.take_workflow_loads();
+        let mut loads = self.data_state.take_workflow_loads();
+        if let Some(metadata) = self.images.take_workflow_loaded() {
+            loads.push(metadata);
+        }
         let mut history_error = None;
         if !loads.is_empty() {
             for loaded in loads {

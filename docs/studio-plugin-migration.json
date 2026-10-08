@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.91",
+  "sourceCatalogVersion": "0.82.0-dev.92",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -3307,7 +3307,7 @@
     {
       "sourceToolId": "image-workflow",
       "title": "图片操作流程",
-      "sourceVersion": "0.1.0",
+      "sourceVersion": "0.2.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -3316,9 +3316,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "开发中：单输入裁剪/缩放/实际编码/信息报告、逐步预览、图片接力与主动另存定义/结果；统一工作实例、保存流程的全局收藏最近及通用插件端口仍待完成",
+          "scope": "开发中：裁剪/缩放/实际编码/报告与逐步预览；保存定义接入统一流程库、搜索、收藏、最近和托盘读取确认；忙碌和待确认保护；独立图片工作实例及插件端口仍待完成",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.1.0",
+          "sourceVersion": "0.2.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }

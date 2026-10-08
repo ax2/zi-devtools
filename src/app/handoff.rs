@@ -354,6 +354,38 @@ impl DevToolsApp {
         self.open_startup_tool("image-workflow");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_saved_image_workflow_prepare(
+        &mut self,
+        ctx: &egui::Context,
+        light: bool,
+        folder: &std::path::Path,
+    ) {
+        self.preview_image_workflow_prepare(ctx, light);
+        let path = folder.join("saved-tutorial.json");
+        let bytes = self.images.preview_image_workflow_definition();
+        std::fs::write(&path, &bytes).unwrap();
+        let entry = crate::workflow_document::Document::parse(&bytes)
+            .unwrap()
+            .metadata(&path);
+        self.preferences.workflow_favorites.push(entry.clone());
+        self.open_search_choice(super::launcher::Choice::SavedWorkflow(entry));
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_saved_image_workflow_pending(&self) -> bool {
+        self.images.preview_image_workflow_import_pending()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_saved_image_workflow_check(&self) {
+        assert_eq!(self.page, Page::Images);
+        assert!(!self.images.preview_image_workflow_import_pending());
+        assert!(
+            self.preferences
+                .workflow_recent
+                .iter()
+                .any(|v| v.name == "图片流程 · saved-tutorial")
+        );
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_ready(&self) -> bool {
         self.images.preview_image_workflow_ready()
     }

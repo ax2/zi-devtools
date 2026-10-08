@@ -29,6 +29,7 @@ pub(super) struct State {
     receiver: Option<Receiver<std::result::Result<Reply, String>>>,
     pub(super) job: Job,
     pub(super) review: Option<Definition>,
+    pub(super) image_review: Option<crate::image_tools::WorkflowDefinition>,
     pub(super) tool_review: Option<crate::text_flow::Definition>,
     pub(super) loaded_tool: Option<&'static str>,
     pub(super) message: String,
@@ -45,9 +46,12 @@ pub(super) struct State {
     pub(super) memory_buttons: [Option<egui::Rect>; 2],
 }
 impl State {
+    pub(super) fn pending_review(&self) -> bool {
+        self.review.is_some() || self.tool_review.is_some() || self.image_review.is_some()
+    }
     pub(super) fn list(&mut self, folder: PathBuf) -> Result<()> {
         anyhow::ensure!(!self.job.phase.active(), "请等待当前流程文件操作结束");
-        anyhow::ensure!(self.review.is_none(), "请先确认或取消已读取的流程");
+        anyhow::ensure!(!self.pending_review(), "请先确认或取消已读取的流程");
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.message.clear();
@@ -66,7 +70,7 @@ impl State {
     }
     pub(super) fn save(&mut self, definition: Definition, path: PathBuf) -> Result<()> {
         anyhow::ensure!(!self.job.phase.active(), "请等待当前流程文件操作结束");
-        anyhow::ensure!(self.review.is_none(), "请先确认或取消已读取的流程");
+        anyhow::ensure!(!self.pending_review(), "请先确认或取消已读取的流程");
         definition.validate()?;
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
@@ -83,7 +87,7 @@ impl State {
     }
     pub(super) fn read(&mut self, path: PathBuf) -> Result<()> {
         anyhow::ensure!(!self.job.phase.active(), "请等待当前流程文件操作结束");
-        anyhow::ensure!(self.review.is_none(), "请先确认或取消已读取的流程");
+        anyhow::ensure!(!self.pending_review(), "请先确认或取消已读取的流程");
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.review = None;
@@ -121,6 +125,12 @@ impl State {
                     crate::workflow_document::Document::Table(definition) => {
                         self.review = Some(definition);
                         self.loaded_tool = Some("pipeline");
+                    }
+                    crate::workflow_document::Document::Image(definition) => {
+                        self.image_review = Some(definition);
+                        self.loaded_tool = Some("image-workflow");
+                        self.message =
+                            "图片流程已读取，等待图片页接收；可取消。未运行，当前数据保留。".into();
                     }
                     crate::workflow_document::Document::Tool(definition) => {
                         self.tool_review = Some(definition);

@@ -9,6 +9,7 @@ struct Preview {
     app: DevToolsApp,
     folder: PathBuf,
     light: bool,
+    saved: bool,
     tick: u32,
     shots: u32,
     extra: u32,
@@ -16,7 +17,9 @@ struct Preview {
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
-        if self.tick != 54 || self.app.preview_image_workflow_ready() {
+        if (self.tick != 54 || self.app.preview_image_workflow_ready())
+            && (!self.saved || self.tick != 9 || self.app.preview_saved_image_workflow_pending())
+        {
             self.tick = self.tick.wrapping_add(1);
         }
         input
@@ -27,6 +30,7 @@ impl eframe::App for Preview {
             v.focused = Some(true);
         }
         let id = match self.tick {
+            10 | 11 if self.saved => Some("image-flow-import-apply"),
             30 | 31 => Some("image-flow-run"),
             70 | 71 => Some("image-flow-step-0"),
             _ => None,
@@ -41,7 +45,7 @@ impl eframe::App for Preview {
             input.events.push(egui::Event::PointerButton {
                 pos: rect.center(),
                 button: egui::PointerButton::Primary,
-                pressed: matches!(self.tick, 30 | 70),
+                pressed: matches!(self.tick, 10 | 30 | 70),
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -54,7 +58,12 @@ impl eframe::App for Preview {
             return;
         }
         if self.tick == 0 {
-            self.app.preview_image_workflow_prepare(ctx, self.light);
+            if self.saved {
+                self.app
+                    .preview_saved_image_workflow_prepare(ctx, self.light, &self.folder);
+            } else {
+                self.app.preview_image_workflow_prepare(ctx, self.light);
+            }
         }
         if matches!(self.tick, 29 | 69 | 90) {
             ctx.request_discard("workflow fixture counts input frames once");
@@ -62,6 +71,9 @@ impl eframe::App for Preview {
         self.app.update(ctx, frame);
         if self.tick == 55 {
             self.app.preview_image_workflow_check(1);
+            if self.saved {
+                self.app.preview_saved_image_workflow_check();
+            }
         }
         if self.tick == 85 {
             self.app.preview_image_workflow_check(2);
@@ -104,6 +116,7 @@ fn main() -> eframe::Result<()> {
     std::fs::create_dir_all(&folder).unwrap();
     std::fs::write(folder.join("services.yml"), "services: {}\n").unwrap();
     let light = std::env::args().nth(2).as_deref() == Some("light");
+    let saved = std::env::args().nth(3).as_deref() == Some("saved");
     eframe::run_native(
         "Image workflow",
         eframe::NativeOptions {
@@ -115,6 +128,7 @@ fn main() -> eframe::Result<()> {
                 app: DevToolsApp::new(cc, folder.join("services.yml"), false),
                 folder,
                 light,
+                saved,
                 tick: u32::MAX,
                 shots: 0,
                 extra: 0,

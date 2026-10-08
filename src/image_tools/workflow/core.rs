@@ -6,7 +6,7 @@ const RESULT_LIMIT: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "action", deny_unknown_fields)]
-pub(super) enum Step {
+pub(crate) enum Step {
     #[serde(rename = "image.crop")]
     Crop {
         version: u32,
@@ -29,7 +29,7 @@ pub(super) enum Step {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub(super) enum Encoding {
+pub(crate) enum Encoding {
     Png,
     Jpeg,
     Webp,
@@ -87,7 +87,7 @@ impl Step {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Definition {
+pub(crate) struct Definition {
     pub(super) kind: String,
     pub(super) schema_version: u32,
     pub steps: Vec<Step>,
@@ -127,7 +127,7 @@ impl Definition {
         }
         Ok(())
     }
-    pub(super) fn parse(bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn parse(bytes: &[u8]) -> Result<Self> {
         ensure!(bytes.len() <= RECIPE_LIMIT, "流程文件最多64KiB");
         let value: Self = serde_json::from_slice(bytes)?;
         value.validate()?;

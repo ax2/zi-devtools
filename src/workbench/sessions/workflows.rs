@@ -142,6 +142,40 @@ mod tests {
         assert!(source.state.text_flow.modal_open());
         assert_eq!(source.state.active_tool_id(), "text-flow");
     }
+    #[test]
+    fn image_recipe_search_bookmark_revalidates_and_preserves_owner_draft() {
+        let fixture = Fixture::new();
+        let path = fixture.0.join("透明教程.json");
+        let bytes = br#"{"kind":"image-workflow","schema_version":1,"steps":[{"action":"image.info","version":1}]}"#;
+        std::fs::write(&path, bytes).unwrap();
+        let mut work = fixture.workspace();
+        work.input = "existing table draft".into();
+        work.workflow.files.list(fixture.0.clone()).unwrap();
+        wait(&mut work);
+        let found = work.workflow_matches("透明教程");
+        assert_eq!(found.total, 1);
+        let selected = found.entries[0].clone();
+        let bookmark = work.workflow_bookmark(&selected).unwrap();
+        work.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut work);
+        assert_eq!(work.input, "existing table draft");
+        assert!(work.workflow.files.pending_review());
+        assert!(work.workflow.files.read(path.clone()).is_err());
+        assert!(work.workflow.files.list(fixture.0.clone()).is_err());
+        assert_eq!(work.take_image_workflow().unwrap().steps.len(), 1);
+        assert!(work.take_image_workflow().is_none());
+        assert_eq!(work.take_workflow_loads()[0].name, "图片流程 · 透明教程");
+        std::fs::write(
+            &path,
+            br#"{"kind":"image-workflow","schema_version":9,"steps":[]}"#,
+        )
+        .unwrap();
+        work.open_workflow_bookmark(&bookmark).unwrap();
+        wait(&mut work);
+        assert!(work.take_image_workflow().is_none());
+        assert!(work.take_workflow_loads().is_empty());
+        assert_eq!(work.input, "existing table draft");
+    }
     fn wait(workspace: &mut Workspace) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while workspace

@@ -222,3 +222,45 @@ fn input_replacement_preserves_definition_and_import_blocks_exit() {
     images.workflow.import = None;
     assert!(!images.background_active());
 }
+
+#[test]
+fn shared_import_busy_cancel_and_definition_receipts_preserve_existing_pixels() {
+    let mut images = super::super::State::default();
+    images.workflow.source = Some(source());
+    let original = images.workflow.source.as_ref().unwrap().clone();
+    let old = images.workflow.definition.clone();
+    images.workflow.run = Some(execute(&old, original.clone(), &AtomicBool::new(false)).unwrap());
+    let replacement = Definition {
+        steps: vec![Step::Info { version: 1 }],
+        ..Definition::default()
+    };
+    images.receive_workflow(replacement.clone()).unwrap();
+    assert_eq!(images.workflow.definition, old);
+    assert!(images.workflow.run.is_some());
+    assert!(images.receive_workflow(replacement.clone()).is_err());
+    images.workflow.import = None;
+    assert!(Arc::ptr_eq(
+        images.workflow.source.as_ref().unwrap(),
+        &original
+    ));
+    assert!(images.workflow.run.is_some());
+    let (tx, rx) = mpsc::channel();
+    images.workflow.receiver = Some(rx);
+    assert!(images.receive_workflow(replacement.clone()).is_err());
+    let path = std::env::temp_dir().join("tutorial-workflow.json");
+    let metadata = crate::workflow_document::Document::Image(replacement.clone()).metadata(&path);
+    tx.send(Ok(Reply::SavedDefinition(metadata.clone())))
+        .unwrap();
+    images.workflow.poll(&egui::Context::default());
+    assert_eq!(images.take_workflow_loaded().unwrap().path, path);
+    assert!(images.take_workflow_loaded().is_none());
+    let (tx, rx) = mpsc::channel();
+    images.workflow.receiver = Some(rx);
+    tx.send(Ok(Reply::Saved("result.webp".into()))).unwrap();
+    images.workflow.poll(&egui::Context::default());
+    assert!(images.take_workflow_loaded().is_none());
+    assert!(images.workflow.run.is_some());
+    images.receive_workflow(replacement).unwrap();
+    assert!(images.workflow.pending_import());
+    assert_eq!(images.workflow.definition, old);
+}

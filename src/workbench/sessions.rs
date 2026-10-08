@@ -282,6 +282,9 @@ impl Workspace {
         self.deref_mut().set_active_tool("text-flow");
         Ok(())
     }
+    pub(crate) fn take_image_workflow(&mut self) -> Option<crate::image_tools::WorkflowDefinition> {
+        self.deref_mut().workflow.files.image_review.take()
+    }
     pub fn take_workflow_visits(&mut self) -> Vec<&'static str> {
         let active = self.active_id().to_owned();
         std::mem::take(&mut self.workflow_visits)
