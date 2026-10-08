@@ -410,7 +410,17 @@ impl State {
         self.image_report_ui(ui);
         ui.add_space(10.0);
         match self.mode {
-            Mode::Batch => return self.batch.ui(ui),
+            Mode::Batch => {
+                if let Some(source) = self.batch.ui(ui, self.relay.is_none()) {
+                    self.relay = Some(relay::Transfer::start(
+                        ui.ctx(),
+                        source,
+                        Vec::new(),
+                        "image-batch",
+                    ));
+                }
+                return;
+            }
             Mode::Metadata => return self.metadata.ui(ui),
             Mode::Editor => return self.editor.ui(ui),
             Mode::Screenshot => return self.screenshot.ui(ui),

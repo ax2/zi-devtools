@@ -11,6 +11,11 @@ pub(crate) enum Source {
     Image(Arc<DynamicImage>),
     Rgba(Arc<image::RgbaImage>),
     Encoded(Arc<Vec<u8>>),
+    Published {
+        path: PathBuf,
+        bytes: usize,
+        sha256: [u8; 32],
+    },
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -60,6 +65,21 @@ pub(super) fn origin(id: &str) -> Result<Origin> {
     })
 }
 pub(super) fn prepare(source: Source, mut origins: Vec<Origin>, id: &str) -> Result<Prepared> {
+    prepare_cancellable(
+        source,
+        &mut origins,
+        id,
+        &std::sync::atomic::AtomicBool::new(false),
+    )
+}
+fn prepare_cancellable(
+    source: Source,
+    origins: &mut Vec<Origin>,
+    id: &str,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<Prepared> {
+    use std::sync::atomic::Ordering;
+    ensure!(!cancel.load(Ordering::Relaxed), "接力已取消");
     ensure!(
         origins.len() < 128,
         "接力链已达128步，请保留结果后建立新的链"
@@ -70,6 +90,15 @@ pub(super) fn prepare(source: Source, mut origins: Vec<Origin>, id: &str) -> Res
             .all(|o| o.id.len() <= 128 && o.version.len() <= 64 && o.utc.len() <= 64),
         "来源链字段超限"
     );
+    let published = matches!(&source, Source::Published { .. });
+    let source = match source {
+        Source::Published {
+            path,
+            bytes,
+            sha256,
+        } => Source::Encoded(read_published(&path, bytes, sha256, cancel)?),
+        other => other,
+    };
     let (image, kind) = match source {
         Source::Image(image) => {
             check(&image)?;
@@ -112,16 +141,65 @@ pub(super) fn prepare(source: Source, mut origins: Vec<Origin>, id: &str) -> Res
             reader.limits(image_limits());
             (Arc::new(reader.decode()?), "当前编码结果")
         }
+        Source::Published { .. } => unreachable!("published source read above"),
     };
+    ensure!(!cancel.load(Ordering::Relaxed), "接力已取消");
     check(&image)?;
     origins.push(origin(id)?);
     let thumbnail = preview_image(&image);
     Ok(Prepared {
         image,
         thumbnail,
-        origins,
-        kind,
+        origins: std::mem::take(origins),
+        kind: if published {
+            "所选批量输出 · 内容已核对"
+        } else {
+            kind
+        },
     })
+}
+fn read_published(
+    path: &std::path::Path,
+    expected_bytes: usize,
+    expected_sha: [u8; 32],
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<Arc<Vec<u8>>> {
+    use sha2::{Digest, Sha256};
+    use std::{io::Read, sync::atomic::Ordering};
+    ensure!(
+        expected_bytes > 0 && expected_bytes <= MAX_OUTPUT_BYTES,
+        "输出大小超限"
+    );
+    ensure!(!cancel.load(Ordering::Relaxed), "接力已取消");
+    let material = crate::material_files::FileMaterial::selected(path, MAX_OUTPUT_BYTES)?;
+    ensure!(
+        material.bytes() == expected_bytes as u64,
+        "输出文件已改变，请重新生成"
+    );
+    let mut file = material.open(MAX_OUTPUT_BYTES)?;
+    let mut bytes = Vec::new();
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 65536];
+    loop {
+        ensure!(!cancel.load(Ordering::Relaxed), "接力已取消");
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        ensure!(
+            bytes.len().saturating_add(count) <= expected_bytes,
+            "输出文件已改变"
+        );
+        bytes.extend_from_slice(&buffer[..count]);
+        hash.update(&buffer[..count]);
+    }
+    ensure!(!cancel.load(Ordering::Relaxed), "接力已取消");
+    material.verify(&file, MAX_OUTPUT_BYTES)?;
+    ensure!(
+        bytes.len() == expected_bytes && <[u8; 32]>::from(hash.finalize()) == expected_sha,
+        "输出内容与生成时不一致，请重新生成"
+    );
+    Ok(Arc::new(bytes))
 }
 pub(super) struct Transfer {
     pub source_id: &'static str,
@@ -132,19 +210,22 @@ pub(super) struct Transfer {
     pub prepared: Option<Prepared>,
     pub texture: Option<egui::TextureHandle>,
     receiver: Option<mpsc::Receiver<Result<Prepared, String>>>,
+    cancel_work: Arc<std::sync::atomic::AtomicBool>,
 }
 impl Transfer {
     pub fn start(
         ctx: &egui::Context,
         source: Source,
-        origins: Vec<Origin>,
+        mut origins: Vec<Origin>,
         id: &'static str,
     ) -> Self {
         let (tx, rx) = mpsc::channel();
         let wake = ctx.clone();
+        let cancel_work = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_cancel = cancel_work.clone();
         std::thread::spawn(move || {
-            let result = prepare(source, origins, id)
-                .map_err(|_| "图片接力准备失败：格式、容量或来源不支持；原工作保留".to_string());
+            let result = prepare_cancellable(source, &mut origins, id, &worker_cancel)
+                .map_err(|_| "图片接力准备失败：文件已变化、不可用，或格式/容量/来源不支持；原工作与已生成文件保留".to_string());
             let _ = tx.send(result);
             wake.request_repaint();
         });
@@ -161,6 +242,7 @@ impl Transfer {
             prepared: None,
             texture: None,
             receiver: Some(rx),
+            cancel_work,
         }
     }
     pub fn busy(&self) -> bool {
@@ -316,6 +398,29 @@ impl State {
             expected,
             &self.metadata.preview_cleaned_snapshot()
         ));
+        self.preview_source_relay_check(phase, expected, "image-metadata");
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_relay_fixture(
+        &mut self,
+        ctx: &egui::Context,
+        root: &std::path::Path,
+    ) -> Arc<Vec<u8>> {
+        self.preview_fixture(ctx);
+        self.editor.preview_fixture(ctx);
+        self.mode = Mode::Batch;
+        self.batch.preview_relay_fixture(root)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_relay_check(&self, phase: u8, expected: &Arc<Vec<u8>>) {
+        assert_eq!(
+            self.batch.preview_output_bytes().as_slice(),
+            expected.as_slice()
+        );
+        self.preview_source_relay_check(phase, expected, "image-batch");
+    }
+    #[cfg(feature = "ui-preview")]
+    fn preview_source_relay_check(&self, phase: u8, expected: &Arc<Vec<u8>>, source_id: &str) {
         let clean = image::load_from_memory(expected).unwrap();
         match phase {
             1 | 2 => {
@@ -326,7 +431,7 @@ impl State {
                 if phase == 1 {
                     let transfer = self.relay.as_ref().unwrap();
                     assert!(!transfer.replace);
-                    assert_eq!(transfer.source_id, "image-metadata");
+                    assert_eq!(transfer.source_id, source_id);
                     assert_eq!(
                         transfer.prepared.as_ref().unwrap().image.to_rgba8(),
                         clean.to_rgba8()
@@ -340,11 +445,8 @@ impl State {
                 assert_eq!(self.mode, Mode::Single);
                 assert_eq!(self.source.as_ref().unwrap().to_rgba8(), clean.to_rgba8());
                 assert!(self.input.is_empty() && self.output.is_empty() && self.encoded.is_none());
-                assert_eq!(self.origins[0].id, "image-metadata");
-                assert_eq!(
-                    self.origins[0].version,
-                    origin("image-metadata").unwrap().version
-                );
+                assert_eq!(self.origins[0].id, source_id);
+                assert_eq!(self.origins[0].version, origin(source_id).unwrap().version);
             }
             4 => {
                 assert!(self.relay.is_none());
@@ -356,11 +458,8 @@ impl State {
                 };
                 assert_eq!(image.to_rgba8(), clean.to_rgba8());
                 self.editor.verify_relay_source(&image, 1);
-                assert_eq!(origins[0].id, "image-metadata");
-                assert_eq!(
-                    origins[0].version,
-                    origin("image-metadata").unwrap().version
-                );
+                assert_eq!(origins[0].id, source_id);
+                assert_eq!(origins[0].version, origin(source_id).unwrap().version);
             }
             _ => panic!("relay fixture phase"),
         }
@@ -493,7 +592,9 @@ impl State {
                     self.relay = Some(Transfer::start(ui.ctx(), source, origins, id));
                 }
             }
-            ui.small(if !available {
+            ui.small(if self.mode == Mode::Batch {
+                "在下方已完成输出中选择“发送此图片…”；只读取你明确选择的这一项。"
+            } else if !available {
                 "先载入图片或生成结果预览；有编辑操作时须先生成编码结果。"
             } else {
                 "当前编码结果优先，截图传递透明选区；预览后确认，不创建临时图片。"
@@ -587,6 +688,9 @@ impl State {
             cancel = true;
         }
         if cancel {
+            transfer
+                .cancel_work
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             if transfer.busy() {
                 transfer.cancelled = true;
             } else {
@@ -604,6 +708,37 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selected_output_rejects_cancel_relative_directory_and_over_budget_without_writes() {
+        use std::sync::atomic::AtomicBool;
+        let root =
+            std::env::temp_dir().join(format!("zi-published-reject-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let file = root.join("sentinel");
+        std::fs::write(&file, b"keep").unwrap();
+        assert!(read_published(&file, 4, [0; 32], &AtomicBool::new(true)).is_err());
+        assert!(
+            read_published(
+                &file,
+                MAX_OUTPUT_BYTES + 1,
+                [0; 32],
+                &AtomicBool::new(false)
+            )
+            .is_err()
+        );
+        assert!(
+            read_published(
+                std::path::Path::new("sentinel"),
+                4,
+                [0; 32],
+                &AtomicBool::new(false)
+            )
+            .is_err()
+        );
+        assert!(read_published(&root, 4, [0; 32], &AtomicBool::new(false)).is_err());
+        assert_eq!(std::fs::read(&file).unwrap(), b"keep");
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn encoded_result_preserves_alpha_and_dimensions_and_arc_source() {
         let source = Arc::new(DynamicImage::ImageRgba8(image::RgbaImage::from_fn(
@@ -665,6 +800,7 @@ mod tests {
             prepared: None,
             texture: None,
             receiver: Some(rx),
+            cancel_work: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         };
         tx.send(Ok(value)).unwrap();
         transfer.poll(&ctx);
@@ -694,6 +830,7 @@ mod tests {
             prepared: Some(prepared),
             texture: None,
             receiver: None,
+            cancel_work: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         });
         assert!(state.apply_relay(&ctx).is_err());
         assert!(Arc::ptr_eq(state.source.as_ref().unwrap(), &original));

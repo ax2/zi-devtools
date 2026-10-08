@@ -322,6 +322,29 @@ impl DevToolsApp {
         self.open_startup_tool("image-metadata");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_relay_prepare(
+        &mut self,
+        ctx: &egui::Context,
+        light: bool,
+        root: &std::path::Path,
+    ) -> std::sync::Arc<Vec<u8>> {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.page = Page::Images;
+        self.images = Default::default();
+        let source = self.images.preview_batch_relay_fixture(ctx, root);
+        self.open_startup_tool("image-batch");
+        source
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_relay_check(&self, phase: u8, source: &std::sync::Arc<Vec<u8>>) {
+        self.images.preview_batch_relay_check(phase, source);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_relay_reopen(&mut self) {
+        self.open_startup_tool("image-batch");
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_check(&self, phase: u8) {
         let text = self.images.preview_image_report_assert();
         match phase {

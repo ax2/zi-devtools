@@ -2,6 +2,7 @@
 use super::{Format, decode_image, encode_image, inspect_image};
 use anyhow::{Context, Result, ensure};
 use eframe::egui;
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
     fs,
@@ -15,6 +16,12 @@ use std::{
 
 const MAX_BATCH: usize = 100;
 
+#[derive(Clone, Copy)]
+struct SavedOutput {
+    bytes: usize,
+    sha256: [u8; 32],
+}
+
 #[derive(Clone)]
 struct Item {
     source: PathBuf,
@@ -24,12 +31,13 @@ struct Item {
     outcome: String,
     conflict: bool,
     saved_bytes: Option<usize>,
+    saved_sha256: Option<[u8; 32]>,
     failed: bool,
 }
 
 enum Event {
     Inspected(Result<Vec<Item>, String>),
-    Saved(usize, Result<usize, String>),
+    Saved(usize, Result<SavedOutput, String>),
     Finished { cancelled: bool },
 }
 
@@ -77,6 +85,43 @@ impl Default for State {
 
 impl State {
     #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_relay_fixture(&mut self, root: &Path) -> Arc<Vec<u8>> {
+        fs::create_dir_all(root).unwrap();
+        let source = root.join("批量示例.png");
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            320,
+            180,
+            image::Rgba([36, 108, 180, 160]),
+        ))
+        .save_with_format(&source, image::ImageFormat::Png)
+        .unwrap();
+        self.inputs = vec![source.clone()];
+        self.output_dir = root.to_string_lossy().into_owned();
+        self.format = Format::WebP;
+        self.max_width = 240;
+        self.items = inspect_batch(&[source], root, Format::WebP).unwrap();
+        let (tx, rx) = mpsc::channel();
+        run_batch(
+            &self.items,
+            240,
+            Format::WebP,
+            80,
+            &AtomicBool::new(false),
+            &tx,
+        );
+        self.receiver = Some(rx);
+        self.running = true;
+        self.poll(&egui::Context::default());
+        self.preview_output_bytes()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_output_bytes(&self) -> Arc<Vec<u8>> {
+        assert_eq!(self.completed, 1);
+        assert_eq!(self.failed, 0);
+        assert!(self.relay_source(0).is_some());
+        Arc::new(fs::read(&self.items[0].target).unwrap())
+    }
+    #[cfg(feature = "ui-preview")]
     pub(super) fn preview_fixture(&mut self) {
         self.inputs = vec![
             PathBuf::from("C:\\Users\\demo\\Pictures\\hero.png"),
@@ -101,6 +146,7 @@ impl State {
                 outcome: String::new(),
                 conflict: false,
                 saved_bytes: None,
+                saved_sha256: None,
                 failed: false,
             })
             .collect();
@@ -180,10 +226,13 @@ impl State {
                         self.failed += 1;
                     }
                     if let Some(item) = self.items.get_mut(index) {
-                        item.saved_bytes = result.as_ref().ok().copied();
+                        item.saved_bytes = result.as_ref().ok().map(|saved| saved.bytes);
+                        item.saved_sha256 = result.as_ref().ok().map(|saved| saved.sha256);
                         item.failed = result.is_err();
                         item.outcome = match result {
-                            Ok(bytes) => format!("完成 · {:.2} MB", bytes as f64 / 1_000_000.0),
+                            Ok(saved) => {
+                                format!("完成 · {:.2} MB", saved.bytes as f64 / 1_000_000.0)
+                            }
                             Err(error) => format!("失败：{error}"),
                         };
                     }
@@ -261,6 +310,7 @@ impl State {
         self.phase = "processing";
         for item in &mut self.items {
             item.saved_bytes = None;
+            item.saved_sha256 = None;
             item.failed = false;
             item.outcome.clear();
         }
@@ -349,7 +399,27 @@ impl State {
         }
     }
 
-    pub(super) fn ui(&mut self, ui: &mut egui::Ui) {
+    fn relay_source(&self, index: usize) -> Option<super::relay::Source> {
+        if self.busy() {
+            return None;
+        }
+        let item = self.items.get(index)?;
+        if item.conflict || item.failed {
+            return None;
+        }
+        Some(super::relay::Source::Published {
+            path: item.target.clone(),
+            bytes: item.saved_bytes?,
+            sha256: item.saved_sha256?,
+        })
+    }
+
+    pub(super) fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        allow_relay: bool,
+    ) -> Option<super::relay::Source> {
+        let mut selected = None;
         self.poll(ui.ctx());
         ui.heading("图片批处理");
         ui.label("先检查目标名称和冲突，再逐张转换。原图和已有输出不会被覆盖。");
@@ -472,7 +542,7 @@ impl State {
             egui::ScrollArea::vertical()
                 .max_height(340.0)
                 .show(ui, |ui| {
-                    for item in &self.items {
+                    for (index, item) in self.items.iter().enumerate() {
                         let name = item
                             .source
                             .file_name()
@@ -495,11 +565,33 @@ impl State {
                             } else {
                                 &item.outcome
                             });
+                            if item.saved_bytes.is_some() {
+                                let response = ui
+                                    .add_enabled(
+                                        allow_relay && self.relay_source(index).is_some(),
+                                        egui::Button::new("发送此图片…"),
+                                    )
+                                    .on_hover_text(
+                                        "只读取这一项，核对生成时的内容摘要，再预览并选择目标工具",
+                                    );
+                                #[cfg(feature = "ui-preview")]
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(
+                                        egui::Id::new(format!("image-batch-relay-{index}")),
+                                        response.rect,
+                                    )
+                                });
+                                if response.clicked() {
+                                    selected = self.relay_source(index);
+                                }
+                            }
                         });
                     }
                 });
         }
         ui.small("一次最多 100 张；每张输入 ≤32 MiB、≤1600 万像素。完成项保留，失败项会单独说明。预检后若外部文件变化，执行时仍拒绝覆盖。");
+        ui.small("发送此图片：明确选择一项后后台读取（≤128 MiB），核对生成时SHA-256；确认后只接收内存图片，不自动保存。文件身份从本次选择时开始核对。");
+        selected
     }
 }
 
@@ -546,6 +638,7 @@ fn inspect_batch(sources: &[PathBuf], dir: &Path, format: Format) -> Result<Vec<
             },
             conflict,
             saved_bytes: None,
+            saved_sha256: None,
             failed: false,
         });
     }
@@ -573,13 +666,17 @@ fn process_one(
     format: Format,
     quality: u8,
     cancel: &AtomicBool,
-) -> Result<usize> {
+) -> Result<SavedOutput> {
     ensure!(!cancel.load(Ordering::Relaxed), "操作已取消");
     let image = decode_image(&item.source).with_context(|| item.source.display().to_string())?;
     let width = image.width().min(max_width.max(1));
     let (bytes, _, _) = encode_image(&image, width, format, quality)?;
+    let saved = SavedOutput {
+        bytes: bytes.len(),
+        sha256: Sha256::digest(&bytes).into(),
+    };
     super::save_image_new(&item.target, &bytes, cancel)?;
-    Ok(bytes.len())
+    Ok(saved)
 }
 
 fn run_batch(
@@ -609,6 +706,99 @@ fn run_batch(
 mod tests {
     use super::*;
     use image::{DynamicImage, GenericImageView, ImageFormat};
+
+    #[test]
+    fn published_outputs_relay_exact_pixels_and_preserve_batch_and_target_drafts() {
+        let root = std::env::temp_dir().join(format!("zi-batch-relay-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let source = root.join("input.png");
+        DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            40,
+            20,
+            image::Rgba([30, 60, 90, 120]),
+        ))
+        .save_with_format(&source, ImageFormat::Png)
+        .unwrap();
+        let original = fs::read(&source).unwrap();
+        for format in Format::ALL {
+            let items = inspect_batch(&[source.clone()], &root, format).unwrap();
+            let (tx, rx) = mpsc::channel();
+            run_batch(&items, 32, format, 80, &AtomicBool::new(false), &tx);
+            drop(tx);
+            let mut batch = State {
+                items,
+                receiver: Some(rx),
+                running: true,
+                ..State::default()
+            };
+            assert!(batch.relay_source(0).is_none());
+            batch.poll(&egui::Context::default());
+            let output = fs::read(&batch.items[0].target).unwrap();
+            let expected = image::load_from_memory(&output).unwrap();
+            let prepared = super::super::relay::prepare(
+                batch.relay_source(0).unwrap(),
+                Vec::new(),
+                "image-batch",
+            )
+            .unwrap();
+            assert_eq!(prepared.image.to_rgba8(), expected.to_rgba8());
+            assert_eq!(prepared.origins[0].id, "image-batch");
+            assert_eq!(prepared.kind, "所选批量输出 · 内容已核对");
+            assert_eq!(batch.completed, 1);
+            assert!(!batch.busy());
+            assert_eq!(fs::read(&batch.items[0].target).unwrap(), output);
+            batch.items[0].failed = true;
+            assert!(batch.relay_source(0).is_none());
+            batch.items[0].failed = false;
+            batch.items[0].saved_sha256 = None;
+            assert!(batch.relay_source(0).is_none());
+        }
+        assert_eq!(fs::read(&source).unwrap(), original);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn published_hash_rejects_same_length_same_mtime_change_and_missing_file() {
+        let root = std::env::temp_dir().join(format!("zi-batch-changed-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let source = root.join("input.png");
+        DynamicImage::new_rgb8(32, 32)
+            .save_with_format(&source, ImageFormat::Png)
+            .unwrap();
+        let mut items = inspect_batch(&[source], &root, Format::WebP).unwrap();
+        let receipt =
+            process_one(&items[0], 32, Format::WebP, 80, &AtomicBool::new(false)).unwrap();
+        items[0].saved_bytes = Some(receipt.bytes);
+        items[0].saved_sha256 = Some(receipt.sha256);
+        let state = State {
+            items,
+            ..State::default()
+        };
+        let path = &state.items[0].target;
+        let mtime = fs::metadata(path).unwrap().modified().unwrap();
+        let mut changed = fs::read(path).unwrap();
+        changed[0] ^= 1;
+        fs::write(path, &changed).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(mtime))
+            .unwrap();
+        assert!(
+            super::super::relay::prepare(state.relay_source(0).unwrap(), Vec::new(), "image-batch")
+                .is_err()
+        );
+        assert_eq!(fs::read(path).unwrap(), changed);
+        assert_eq!(state.items[0].saved_bytes, Some(receipt.bytes));
+        fs::remove_file(path).unwrap();
+        assert!(
+            super::super::relay::prepare(state.relay_source(0).unwrap(), Vec::new(), "image-batch")
+                .is_err()
+        );
+        assert_eq!(state.items[0].saved_bytes, Some(receipt.bytes));
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn reports_distinguish_preflight_real_partial_results_and_stale_rules() {
@@ -684,6 +874,7 @@ mod tests {
                 outcome: String::new(),
                 conflict: false,
                 saved_bytes: None,
+                saved_sha256: None,
                 failed: false,
             })
             .collect();
@@ -714,6 +905,7 @@ mod tests {
                 outcome: String::new(),
                 conflict: false,
                 saved_bytes: None,
+                saved_sha256: None,
                 failed: false,
             }],
             ..State::default()
@@ -793,7 +985,12 @@ mod tests {
         assert!(duplicates.iter().all(|item| item.conflict));
         let one = inspect_batch(&[a.clone()], &output, Format::Jpeg).unwrap();
         assert!(!one[0].conflict);
-        assert!(process_one(&one[0], 40, Format::Jpeg, 75, &AtomicBool::new(false)).unwrap() > 0);
+        assert!(
+            process_one(&one[0], 40, Format::Jpeg, 75, &AtomicBool::new(false))
+                .unwrap()
+                .bytes
+                > 0
+        );
         assert_eq!(image::open(&one[0].target).unwrap().dimensions(), (40, 20));
         assert!(process_one(&one[0], 40, Format::Jpeg, 75, &AtomicBool::new(false)).is_err());
         assert_eq!(fs::read(&a).unwrap(), originals[0]);

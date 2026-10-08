@@ -6,6 +6,7 @@ use super::{
 use std::{collections::BTreeMap, sync::Weak};
 
 enum Key {
+    Unsupported,
     Image(Weak<DynamicImage>),
     Rgba(Weak<image::RgbaImage>),
     Encoded(Weak<Vec<u8>>),
@@ -16,6 +17,7 @@ impl Key {
             Source::Image(v) => Self::Image(Arc::downgrade(v)),
             Source::Rgba(v) => Self::Rgba(Arc::downgrade(v)),
             Source::Encoded(v) => Self::Encoded(Arc::downgrade(v)),
+            Source::Published { .. } => Self::Unsupported,
         }
     }
     fn matches(&self, source: &Source) -> bool {
@@ -52,6 +54,10 @@ pub(super) struct State {
     error: bool,
 }
 fn build(source: Source, origins: Vec<Origin>, id: &str) -> Result<String> {
+    ensure!(
+        !matches!(&source, Source::Published { .. }),
+        "图片信息报告仅接受内存快照，不读取输出文件"
+    );
     let encoding = match &source {
         Source::Encoded(bytes) => {
             ensure!(bytes.len() <= MAX_OUTPUT_BYTES, "编码结果超限");
