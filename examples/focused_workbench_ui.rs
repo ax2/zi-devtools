@@ -21,12 +21,29 @@ struct Preview {
     tick: u32,
     shots: u32,
     started: Instant,
+    header: Option<egui::Rect>,
+    scrolled: bool,
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
         if self.tick >= 30 {
             let index = ((self.tick - 30) / 25) as usize;
             let phase = (self.tick - 30) % 25;
+            if index < VIEWS.len() && (5..=8).contains(&phase) {
+                let (_, body, _) = ctx
+                    .data(|data| {
+                        data.get_temp::<(egui::Rect, egui::Rect, egui::Vec2)>(egui::Id::new(
+                            "workspace-layout",
+                        ))
+                    })
+                    .expect("workspace layout visible");
+                input.events.push(egui::Event::PointerMoved(body.center()));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -250.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
             if index < VIEWS.len() && phase <= 1 {
                 let rect = ctx
                     .data(|data| {
@@ -57,6 +74,29 @@ impl eframe::App for Preview {
             let index = ((self.tick - 30) / 25) as usize;
             if index < VIEWS.len() && (self.tick - 30) % 25 == 15 {
                 self.app.preview_focused_view_check(VIEWS[index]);
+                let (header, body, offset) = ctx
+                    .data(|data| {
+                        data.get_temp::<(egui::Rect, egui::Rect, egui::Vec2)>(egui::Id::new(
+                            "workspace-layout",
+                        ))
+                    })
+                    .expect("workspace layout recorded");
+                assert!(
+                    ctx.screen_rect().contains_rect(header),
+                    "instance controls clipped"
+                );
+                assert!(header.bottom() < body.top());
+                if let Some(previous) = self.header {
+                    assert_eq!(
+                        previous, header,
+                        "instance controls moved while tool content scrolls"
+                    );
+                }
+                self.header = Some(header);
+                if VIEWS[index] == "data" {
+                    assert!(offset.y > 100.0, "data content did not scroll: {offset:?}");
+                    self.scrolled = true;
+                }
                 ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
             }
         }
@@ -80,6 +120,7 @@ impl eframe::App for Preview {
         }
         if self.tick == 220 {
             assert_eq!(self.shots, 7);
+            assert!(self.scrolled);
             println!(
                 "PASS native pinned selector seven views; same-instance draft retained; light={}",
                 self.light
@@ -110,6 +151,8 @@ fn main() -> eframe::Result<()> {
                 tick: 0,
                 shots: 0,
                 started: Instant::now(),
+                header: None,
+                scrolled: false,
             }))
         }),
     )

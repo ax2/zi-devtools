@@ -5,6 +5,8 @@ impl Workspace {
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let active = self.active_id().to_owned();
         let pending = self.operation_pending();
+        #[cfg(any(test, feature = "ui-preview"))]
+        let header_top = ui.next_widget_position();
         card(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
@@ -95,9 +97,29 @@ impl Workspace {
                 ui.label(&self.status);
             }
         });
+        #[cfg(any(test, feature = "ui-preview"))]
+        let header_rect = egui::Rect::from_min_max(
+            header_top,
+            egui::pos2(ui.max_rect().right(), ui.next_widget_position().y),
+        );
         ui.add_space(10.0);
         let id = self.active_id().to_owned();
-        ui.push_id(id, |ui| self.deref_mut().ui(ui, ctx));
+        let view = self.active_tool_id().to_owned();
+        let content = egui::ScrollArea::vertical()
+            .id_salt(("data-page", &id, &view))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.push_id(&id, |ui| self.deref_mut().ui(ui, ctx));
+            });
+        #[cfg(any(test, feature = "ui-preview"))]
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                egui::Id::new("workspace-layout"),
+                (header_rect, content.inner_rect, content.state.offset),
+            );
+        });
+        #[cfg(not(any(test, feature = "ui-preview")))]
+        let _ = content;
         self.dialogs(ctx);
         if self.operation_pending() {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -310,5 +332,66 @@ impl Workspace {
         let live = self.active_id().to_owned();
         self.close(&live, true).unwrap();
         self.load_saved(saved.0);
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    #[test]
+    fn instance_controls_remain_visible_while_only_tool_content_scrolls() {
+        let ctx = egui::Context::default();
+        let mut workspace = Workspace::new(PathBuf::from("unused-layout.db"));
+        workspace.input = "name,count\nexample,2".into();
+        workspace.dataset = Some(Dataset::parse(&workspace.input, DataFormat::Csv, b',').unwrap());
+        workspace.visible = vec![0];
+        let mut initial = None;
+        let mut last_offset = 0.0;
+        for frame in 0..12 {
+            let mut input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(640.0, 480.0),
+                )),
+                time: Some(frame as f64 / 30.0),
+                ..Default::default()
+            };
+            if let Some((_, content, _)) = initial {
+                let content: egui::Rect = content;
+                input
+                    .events
+                    .push(egui::Event::PointerMoved(content.center()));
+                input.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -160.0),
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| workspace.ui(ui, ctx));
+            });
+            let layout = ctx
+                .data(|data| {
+                    data.get_temp::<(egui::Rect, egui::Rect, egui::Vec2)>(egui::Id::new(
+                        "workspace-layout",
+                    ))
+                })
+                .unwrap();
+            if let Some((header, _, _)) = initial {
+                assert_eq!(layout.0, header);
+            } else {
+                initial = Some(layout);
+            }
+            assert!(layout.0.bottom() < layout.1.top());
+            assert!(layout.1.bottom() <= 480.0);
+            last_offset = layout.2.y;
+        }
+        assert!(
+            last_offset > 100.0,
+            "tool content must actually scroll: {last_offset}"
+        );
+        assert_eq!(workspace.input, "name,count\nexample,2");
+        assert!(!workspace.busy());
     }
 }

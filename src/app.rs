@@ -5314,14 +5314,7 @@ impl eframe::App for DevToolsApp {
                     }
                     self.data_state
                         .workflow_folder_settings(&mut self.preferences, &self.preferences_path);
-                    let scroll_id = (
-                        "data-page",
-                        self.data_state.active_id().to_owned(),
-                        self.data_state.active_tool_id().to_owned(),
-                    );
-                    egui::ScrollArea::vertical()
-                        .id_salt(scroll_id)
-                        .show(ui, |ui| self.data_state.ui(ui, ctx));
+                    self.data_state.ui(ui, ctx);
                     self.data_state
                         .workflow_folder_settings(&mut self.preferences, &self.preferences_path);
                     if let Some(path) = self.data_state.take_sqlite_open_request() {
