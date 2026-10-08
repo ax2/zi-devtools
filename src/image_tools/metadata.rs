@@ -781,21 +781,7 @@ pub(super) fn oriented_static_image(path: &Path) -> Result<Arc<DynamicImage>> {
 }
 
 fn clean_preview(image: &DynamicImage, source: &Summary, quality: u8) -> Result<Job> {
-    let mut encoded = Vec::new();
-    match source.format {
-        ImageFormat::Jpeg => {
-            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                &mut encoded,
-                quality.clamp(35, 95),
-            );
-            encoder.encode_image(image)?;
-        }
-        ImageFormat::Png | ImageFormat::WebP => {
-            image.write_to(&mut Cursor::new(&mut encoded), source.format)?
-        }
-        _ => bail!("不支持该图片格式"),
-    }
-    ensure!(encoded.len() <= MAX_OUTPUT_BYTES, "输出超过 128 MiB");
+    let encoded = super::encoding::encode(image, source.format, quality, MAX_OUTPUT_BYTES)?;
     let output_summary = scan_metadata(&encoded)?;
     ensure!(
         !output_summary.has_source_metadata() && !output_summary.animation,

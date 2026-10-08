@@ -6,7 +6,6 @@ use eframe::egui::{self, Color32, Sense, Stroke};
 use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 use std::{
     fs,
-    io::Cursor,
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
@@ -825,18 +824,16 @@ fn render_output(
         }
     }
     let rendered = DynamicImage::ImageRgba8(pixels);
-    let mut encoded = Vec::new();
-    match format {
-        Format::Jpeg => {
-            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                &mut encoded,
-                quality.clamp(35, 95),
-            );
-            encoder.encode_image(&flatten_on_white(&rendered))?;
-        }
-        _ => rendered.write_to(&mut Cursor::new(&mut encoded), format.image_format())?,
-    }
-    ensure!(encoded.len() <= MAX_OUTPUT_BYTES, "输出超过 128 MiB");
+    let encoded = if format == Format::Jpeg {
+        super::encoding::encode(
+            &flatten_on_white(&rendered),
+            format.image_format(),
+            quality,
+            MAX_OUTPUT_BYTES,
+        )?
+    } else {
+        super::encoding::encode(&rendered, format.image_format(), quality, MAX_OUTPUT_BYTES)?
+    };
     let decoded = image::load_from_memory_with_format(&encoded, format.image_format())?;
     Ok(Job::Rendered {
         encoded,
@@ -1001,6 +998,7 @@ fn paint_text(
 mod tests {
     use super::*;
     use image::ImageFormat;
+    use std::io::Cursor;
     #[test]
     fn relay_refuses_unrendered_edits_and_invalidates_old_result() {
         let image = Arc::new(DynamicImage::new_rgba8(12, 8));

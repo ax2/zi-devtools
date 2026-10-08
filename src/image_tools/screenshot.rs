@@ -37,10 +37,11 @@ pub fn verify_capture() -> Result<(u32, u32)> {
         output.get_pixel(25, 25)[3] == 0 && output.get_pixel(4, 4)[3] == 255,
         "真实捕获透明裁剪验证失败"
     );
-    let mut encoded = std::io::Cursor::new(Vec::new());
+    let mut encoded = super::encoding::Output::new(super::MAX_OUTPUT_BYTES);
     output.write_to(&mut encoded, image::ImageFormat::Png)?;
+    let encoded = encoded.into_bytes()?;
     ensure!(
-        image::load_from_memory(encoded.get_ref())?.to_rgba8() == output,
+        image::load_from_memory(&encoded)?.to_rgba8() == output,
         "PNG重读不一致"
     );
     Ok((display.width, display.height))
@@ -128,9 +129,9 @@ fn crop(source: &RgbaImage, points: &[[f32; 2]]) -> Result<RgbaImage> {
 }
 
 fn save_png(path: &Path, image: &RgbaImage) -> Result<usize> {
-    let mut data = std::io::Cursor::new(Vec::new());
+    let mut data = super::encoding::Output::new(super::MAX_OUTPUT_BYTES);
     image.write_to(&mut data, image::ImageFormat::Png)?;
-    let data = data.into_inner();
+    let data = data.into_bytes()?;
     super::save_image_new(path, &data, &std::sync::atomic::AtomicBool::new(false))?;
     Ok(data.len())
 }

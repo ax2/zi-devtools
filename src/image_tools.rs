@@ -1,6 +1,7 @@
 //! Bounded, local image inspection and explicit preview-before-save transforms.
 mod batch;
 mod editor;
+mod encoding;
 mod metadata;
 mod relay;
 mod report;
@@ -731,21 +732,12 @@ pub(crate) fn encode_image(
     let height = ((u64::from(source.height()) * u64::from(width) + u64::from(source.width()) / 2)
         / u64::from(source.width()))
     .max(1) as u32;
-    let resized = source.resize_exact(width, height, FilterType::Lanczos3);
-    let mut encoded = Vec::new();
-    match format {
-        Format::Jpeg => {
-            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                &mut encoded,
-                quality.clamp(35, 95),
-            );
-            encoder.encode_image(&resized)?;
-        }
-        _ => resized.write_to(&mut Cursor::new(&mut encoded), format.image_format())?,
-    }
-    if encoded.len() > MAX_OUTPUT_BYTES {
-        bail!("输出超过 128 MiB，请减小尺寸");
-    }
+    let resized = if width == source.width() {
+        std::borrow::Cow::Borrowed(source)
+    } else {
+        std::borrow::Cow::Owned(source.resize_exact(width, height, FilterType::Lanczos3))
+    };
+    let encoded = encoding::encode(&resized, format.image_format(), quality, MAX_OUTPUT_BYTES)?;
     Ok((encoded, width, height))
 }
 
