@@ -9,6 +9,7 @@ struct Preview {
     app: DevToolsApp,
     folder: PathBuf,
     light: bool,
+    batch: bool,
     tick: u32,
     shots: u32,
     started: Instant,
@@ -50,7 +51,11 @@ impl eframe::App for Preview {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         assert!(self.started.elapsed() < Duration::from_secs(35));
         if self.tick == 0 {
-            self.app.preview_image_report_prepare(ctx, self.light);
+            if self.batch {
+                self.app.preview_batch_report_prepare(ctx, self.light);
+            } else {
+                self.app.preview_image_report_prepare(ctx, self.light);
+            }
         }
         if self.tick == 130 {
             self.app.preview_image_report_memo_prepare();
@@ -113,6 +118,7 @@ fn main() -> eframe::Result<()> {
                 app: DevToolsApp::new(cc, folder.join("services.yml"), false),
                 folder,
                 light,
+                batch: std::env::args().nth(3).as_deref() == Some("batch"),
                 tick: 0,
                 shots: 0,
                 started: Instant::now(),

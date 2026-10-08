@@ -280,6 +280,12 @@ impl DevToolsApp {
         self.tool_state.clear_result();
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_report_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.preview_image_report_prepare(ctx, light);
+        self.images.preview_batch_report_fixture();
+        self.open_startup_tool("image-batch");
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_check(&self, phase: u8) {
         let text = self.images.preview_image_report_assert();
         match phase {
@@ -545,10 +551,12 @@ impl DevToolsApp {
             )),
             Page::Clipboard => self.clipboard.transfer_text(),
             Page::Files => Some(("文件校验报告".into(), self.file_state.report())),
-            Page::Images => self
-                .images
-                .image_report()
-                .map(|text| ("图片信息报告（冻结快照）".into(), text)),
+            Page::Images => self.images.image_report().map(|text| {
+                (
+                    format!("{} 报告（冻结快照）", self.images.active_tool_id()),
+                    text,
+                )
+            }),
             Page::Data => Some(("数据工作台导出".into(), &self.data_state.output)),
             Page::Notes | Page::Calendar => self.planner.transfer_text(),
             Page::Diff => Some(("文本差异报告".into(), &self.diff_state.diff_output)),

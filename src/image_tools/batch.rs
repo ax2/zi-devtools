@@ -23,6 +23,8 @@ struct Item {
     original_bytes: u64,
     outcome: String,
     conflict: bool,
+    saved_bytes: Option<usize>,
+    failed: bool,
 }
 
 enum Event {
@@ -45,6 +47,9 @@ pub(super) struct State {
     completed: usize,
     failed: usize,
     message: String,
+    phase: &'static str,
+    report: Option<String>,
+    report_current: bool,
 }
 
 impl Default for State {
@@ -63,6 +68,9 @@ impl Default for State {
             completed: 0,
             failed: 0,
             message: String::new(),
+            phase: "empty",
+            report: None,
+            report_current: false,
         }
     }
 }
@@ -92,12 +100,18 @@ impl State {
                 original_bytes: [2_750_000, 1_180_000, 900_000][index],
                 outcome: String::new(),
                 conflict: false,
+                saved_bytes: None,
+                failed: false,
             })
             .collect();
+        self.phase = "preflight";
+        self.report_current = false;
         self.ready = true;
         self.message = "界面预览：3 张图片已检查，无命名冲突。".into();
     }
     fn invalidate(&mut self) {
+        self.report_current = false;
+        self.phase = "empty";
         self.items.clear();
         self.ready = false;
         self.completed = 0;
@@ -116,9 +130,14 @@ impl State {
         let mut disconnected = false;
         loop {
             let event = match rx.try_recv() {
-                Ok(event) => event,
+                Ok(event) => {
+                    self.report_current = false;
+                    event
+                }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
+                    self.report_current = false;
+                    self.phase = "interrupted";
                     if self.running {
                         self.running = false;
                         self.ready = false;
@@ -137,6 +156,7 @@ impl State {
             };
             match event {
                 Event::Inspected(Ok(items)) => {
+                    self.phase = "preflight";
                     let conflicts = items.iter().filter(|item| item.conflict).count();
                     self.ready = conflicts == 0;
                     self.message = if conflicts == 0 {
@@ -149,6 +169,7 @@ impl State {
                     break;
                 }
                 Event::Inspected(Err(error)) => {
+                    self.phase = "inspection_failed";
                     self.message = format!("检查失败：{error}");
                     disconnected = true;
                     break;
@@ -159,6 +180,8 @@ impl State {
                         self.failed += 1;
                     }
                     if let Some(item) = self.items.get_mut(index) {
+                        item.saved_bytes = result.as_ref().ok().copied();
+                        item.failed = result.is_err();
                         item.outcome = match result {
                             Ok(bytes) => format!("完成 · {:.2} MB", bytes as f64 / 1_000_000.0),
                             Err(error) => format!("失败：{error}"),
@@ -166,6 +189,7 @@ impl State {
                     }
                 }
                 Event::Finished { cancelled } => {
+                    self.phase = if cancelled { "cancelled" } else { "completed" };
                     self.running = false;
                     self.message = if cancelled {
                         format!(
@@ -200,6 +224,10 @@ impl State {
         if self.receiver.is_some() || self.running {
             return;
         }
+        self.report_current = false;
+        self.phase = "inspecting";
+        self.completed = 0;
+        self.failed = 0;
         self.items.clear();
         self.ready = false;
         let sources = self.inputs.clone();
@@ -229,6 +257,13 @@ impl State {
         let quality = self.jpeg_quality;
         let cancel = Arc::new(AtomicBool::new(false));
         self.cancel = cancel.clone();
+        self.report_current = false;
+        self.phase = "processing";
+        for item in &mut self.items {
+            item.saved_bytes = None;
+            item.failed = false;
+            item.outcome.clear();
+        }
         self.running = true;
         self.ready = false;
         self.completed = 0;
@@ -237,6 +272,81 @@ impl State {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         std::thread::spawn(move || run_batch(&items, max_width, format, quality, &cancel, &tx));
+    }
+
+    pub(super) fn report(&self) -> Option<&str> {
+        if self.report_current && !self.busy() {
+            self.report.as_deref()
+        } else {
+            None
+        }
+    }
+
+    fn build_report(&self) -> Result<String> {
+        ensure!(!self.busy() && !self.items.is_empty(), "请先完成检查或处理");
+        ensure!(self.items.len() <= MAX_BATCH, "报告条目超限");
+        let origin = super::relay::origin("image-batch")?;
+        let items = self.items.iter().map(|item| serde_json::json!({
+            "sourceName":item.source.file_name().map(|v|v.to_string_lossy()),
+            "outputName":item.target.file_name().map(|v|v.to_string_lossy()),
+            "sourceWidth":item.dimensions.0,"sourceHeight":item.dimensions.1,
+            "sourceBytes":item.original_bytes,"outputBytes":item.saved_bytes,
+            "status": if item.conflict {"conflict"} else if item.saved_bytes.is_some() {"saved"} else if item.failed {"failed"} else {"not_processed"}
+        })).collect::<Vec<_>>();
+        let text = serde_json::to_string_pretty(&serde_json::json!({
+            "schemaVersion":1,"material":"image-batch-report","phase":self.phase,
+            "origin":{"toolId":origin.id,"version":origin.version,"utc":origin.utc},
+            "settings":{"format":self.format.extension(),"maxWidth":self.max_width,"jpegQuality":if self.format==Format::Jpeg {Some(self.jpeg_quality)} else {None}},
+            "counts":{"total":items.len(),"saved":self.items.iter().filter(|i|i.saved_bytes.is_some()).count(),"failed":self.items.iter().filter(|i|i.failed).count(),"conflict":self.items.iter().filter(|i|i.conflict).count(),"notProcessed":self.items.iter().filter(|i|!i.conflict && !i.failed && i.saved_bytes.is_none()).count()},
+            "items":items,
+            "notes":"冻结清单：预检不代表已输出；outputBytes 仅来自实际成功保存结果。仅保留文件名，不含完整路径或原始错误；名称不是可执行文件引用。不重新读取或保存文件，不自动运行接收工具。"
+        }))?;
+        ensure!(
+            text.len() <= 256 * 1024,
+            "报告超过 256 KiB；原工作和旧报告保留"
+        );
+        Ok(text)
+    }
+
+    pub(super) fn report_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            let response = ui.add_enabled(
+                !self.busy() && !self.items.is_empty(),
+                egui::Button::new("生成批量图片报告"),
+            );
+            #[cfg(feature = "ui-preview")]
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("image-report-generate"), response.rect));
+            if response.clicked() {
+                match self.build_report() {
+                    Ok(text) => {
+                        self.report = Some(text);
+                        self.report_current = true;
+                    }
+                    Err(error) => {
+                        self.message = error.to_string();
+                    }
+                }
+            }
+            ui.small("预检 / 实际处理结果 → JSON、备忘；不重新读写图片。");
+        });
+        if let Some(text) = &self.report {
+            if !self.report_current {
+                ui.small("清单、规则或任务已改变，旧报告不可发送；请重新生成。");
+            }
+            egui::CollapsingHeader::new(if self.report_current {
+                "批量图片 JSON 报告"
+            } else {
+                "旧批量图片 JSON 报告"
+            })
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(170.0)
+                    .show(ui, |ui| {
+                        ui.monospace(text);
+                    });
+            });
+        }
     }
 
     pub(super) fn ui(&mut self, ui: &mut egui::Ui) {
@@ -435,6 +545,8 @@ fn inspect_batch(sources: &[PathBuf], dir: &Path, format: Format) -> Result<Vec<
                 String::new()
             },
             conflict,
+            saved_bytes: None,
+            failed: false,
         });
     }
     if items.iter().any(|item| item.conflict) {
@@ -497,6 +609,122 @@ fn run_batch(
 mod tests {
     use super::*;
     use image::{DynamicImage, GenericImageView, ImageFormat};
+
+    #[test]
+    fn reports_distinguish_preflight_real_partial_results_and_stale_rules() {
+        let root = std::env::temp_dir().join(format!("zi-batch-report-{}", uuid::Uuid::new_v4()));
+        let output = root.join("output");
+        fs::create_dir_all(&output).unwrap();
+        let good = root.join("图.png");
+        let missing = root.join("missing.png");
+        for file in [&good, &missing] {
+            DynamicImage::new_rgb8(40, 20)
+                .save_with_format(file, ImageFormat::Png)
+                .unwrap();
+        }
+        let items = inspect_batch(&[good.clone(), missing.clone()], &output, Format::WebP).unwrap();
+        let mut state = State {
+            items,
+            phase: "preflight",
+            format: Format::WebP,
+            ..State::default()
+        };
+        let preflight = state.build_report().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&preflight).unwrap();
+        assert_eq!(value["phase"], "preflight");
+        assert_eq!(value["counts"]["saved"], 0);
+        assert!(value["items"][0]["outputBytes"].is_null());
+        assert!(!preflight.contains(&root.to_string_lossy().to_string()));
+        state.report = Some(preflight.clone());
+        state.report_current = true;
+        assert!(state.report().is_some());
+        fs::remove_file(&missing).unwrap();
+        let (tx, rx) = mpsc::channel();
+        run_batch(
+            &state.items,
+            32,
+            Format::WebP,
+            80,
+            &AtomicBool::new(false),
+            &tx,
+        );
+        drop(tx);
+        state.receiver = Some(rx);
+        state.running = true;
+        state.report_current = false;
+        state.poll(&egui::Context::default());
+        let report = state.build_report().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["phase"], "completed");
+        assert_eq!(value["counts"]["saved"], 1);
+        assert_eq!(value["counts"]["failed"], 1);
+        assert_eq!(
+            value["items"][0]["outputBytes"],
+            fs::metadata(&state.items[0].target).unwrap().len()
+        );
+        assert_eq!(value["items"][1]["status"], "failed");
+        assert!(value["items"][1]["outputBytes"].is_null());
+        assert!(!report.contains(&root.to_string_lossy().to_string()));
+        state.report = Some(report.clone());
+        state.report_current = true;
+        state.invalidate();
+        assert!(state.report().is_none());
+        assert_eq!(state.report.as_deref(), Some(report.as_str()));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn hundred_item_report_keeps_every_name_without_truncation() {
+        let items = (0..100)
+            .map(|i| Item {
+                source: PathBuf::from(format!("{}-{i}.png", "图".repeat(60))),
+                target: PathBuf::from(format!("result-{i}.webp")),
+                dimensions: (400, 300),
+                original_bytes: 1000,
+                outcome: String::new(),
+                conflict: false,
+                saved_bytes: None,
+                failed: false,
+            })
+            .collect();
+        let state = State {
+            items,
+            phase: "preflight",
+            ..State::default()
+        };
+        let report = state.build_report().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["items"].as_array().unwrap().len(), 100);
+        assert_eq!(
+            value["items"][99]["sourceName"],
+            format!("{}-99.png", "图".repeat(60))
+        );
+        assert!(report.len() <= 256 * 1024);
+    }
+
+    #[test]
+    fn cancelled_report_does_not_claim_unprocessed_files_were_saved() {
+        let mut state = State {
+            phase: "cancelled",
+            items: vec![Item {
+                source: PathBuf::from("a.png"),
+                target: PathBuf::from("a.webp"),
+                dimensions: (2, 2),
+                original_bytes: 10,
+                outcome: String::new(),
+                conflict: false,
+                saved_bytes: None,
+                failed: false,
+            }],
+            ..State::default()
+        };
+        let value: serde_json::Value =
+            serde_json::from_str(&state.build_report().unwrap()).unwrap();
+        assert_eq!(value["counts"]["notProcessed"], 1);
+        assert_eq!(value["counts"]["saved"], 0);
+        state.items[0].source = PathBuf::from("a".repeat(300_000));
+        assert!(state.build_report().is_err());
+    }
 
     #[test]
     fn batch_finishes_from_another_tool_and_exit_guard_tracks_work() {

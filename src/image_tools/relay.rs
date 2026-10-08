@@ -46,7 +46,7 @@ fn check(image: &DynamicImage) -> Result<()> {
     );
     Ok(())
 }
-fn origin(id: &str) -> Result<Origin> {
+pub(super) fn origin(id: &str) -> Result<Origin> {
     let catalog: serde_json::Value = serde_json::from_str(include_str!("../../docs/tools.json"))?;
     let version = catalog["tools"]
         .as_array()

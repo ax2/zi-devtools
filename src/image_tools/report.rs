@@ -162,9 +162,24 @@ impl State {
 }
 impl super::State {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_report_fixture(&mut self) {
+        self.batch.preview_fixture();
+        self.mode = Mode::Batch;
+    }
+
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_assert(&self) -> String {
         let text = self.image_report().expect("current image report");
         let value: serde_json::Value = serde_json::from_str(text).unwrap();
+        if self.mode == Mode::Batch {
+            assert_eq!(value["material"], "image-batch-report");
+            assert_eq!(value["phase"], "preflight");
+            assert_eq!(value["counts"]["total"], 3);
+            assert_eq!(value["counts"]["saved"], 0);
+            assert!(value["items"][0]["outputBytes"].is_null());
+            assert!(!text.contains("Pictures"));
+            return text.to_owned();
+        }
         assert_eq!(value["width"], 720);
         assert_eq!(value["height"], 405);
         assert_eq!(value["encoding"]["format"], "jpeg");
@@ -177,6 +192,9 @@ impl super::State {
         text.to_string()
     }
     pub(crate) fn image_report(&self) -> Option<&str> {
+        if self.mode == Mode::Batch {
+            return self.batch.report();
+        }
         let (source, origins, id) = self.relay_source()?;
         self.reports.valid(&source, &origins, id)
     }
@@ -185,6 +203,10 @@ impl super::State {
         self.reports.poll(ctx, current);
     }
     pub(super) fn image_report_ui(&mut self, ui: &mut egui::Ui) {
+        if self.mode == Mode::Batch {
+            self.batch.report_ui(ui);
+            return;
+        }
         self.poll_image_report(ui.ctx());
         let source = self.relay_source();
         let available = source.is_some();
