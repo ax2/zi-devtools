@@ -322,6 +322,22 @@ impl State {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub fn preview_original_draft_check(&self) {
+        let text = "订单编号,客户,备注\nA-1024,示例用户,编码转换前请检查文字\nA-1025,测试用户,保留原文件\n";
+        assert_eq!(self.input, "C:\\Users\\demo\\Documents\\orders-gb18030.csv");
+        assert_eq!(
+            self.output,
+            "C:\\Users\\demo\\Documents\\orders-gb18030-utf8.csv"
+        );
+        assert!(self.material.is_none());
+        assert_eq!(self.decoded.as_deref(), Some(text));
+        assert_eq!(
+            self.bytes.as_deref(),
+            Some(encoding_rs::GB18030.encode(text).0.as_ref())
+        );
+        assert_eq!(self.encoded.as_deref(), Some(text.as_bytes()));
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_material_check(&self, loaded: bool) {
         assert!(self.material.is_some());
         assert_eq!(self.bytes.is_some(), loaded);
@@ -615,6 +631,34 @@ mod tests {
         std::fs::remove_dir(folder).unwrap();
     }
 
+    #[test]
+    fn failed_material_reception_preserves_existing_conversion_draft() {
+        let folder = std::env::temp_dir().join(format!("zi-reject-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let path = folder.join("source.txt");
+        std::fs::write(&path, b"original").unwrap();
+        let material = crate::material_files::FileMaterial::selected(&path, MAX_INPUT).unwrap();
+        let mut state = State {
+            input: "existing source".into(),
+            output: "existing output".into(),
+            bytes: Some(b"draft".to_vec()),
+            source: Some(Charset::Utf8),
+            target: Charset::Utf16Le,
+            decoded: Some("draft".into()),
+            encoded: Some(vec![1, 2, 3]),
+            ..Default::default()
+        };
+        std::fs::remove_file(&path).unwrap();
+        assert!(state.receive_material(material).is_err());
+        assert_eq!(state.input, "existing source");
+        assert_eq!(state.output, "existing output");
+        assert_eq!(state.bytes.as_deref(), Some(b"draft".as_slice()));
+        assert_eq!(state.decoded.as_deref(), Some("draft"));
+        assert_eq!(state.encoded.as_deref(), Some([1, 2, 3].as_slice()));
+        assert_eq!(state.source, Some(Charset::Utf8));
+        assert_eq!(state.target, Charset::Utf16Le);
+        std::fs::remove_dir(folder).unwrap();
+    }
     #[test]
     fn bom_and_ascii_are_distinguished_from_guesses() {
         let bom = detect(b"\xff\xfeA\0");

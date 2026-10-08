@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.82",
+  "sourceCatalogVersion": "0.82.0-dev.83",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -260,7 +260,7 @@
     {
       "sourceToolId": "files",
       "title": "批量文件校验",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",

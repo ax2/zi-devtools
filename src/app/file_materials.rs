@@ -6,7 +6,7 @@ impl DevToolsApp {
         };
         let check = material.bytes() <= 8 * 1024 * 1024;
         let mut decision = None;
-        egui::Modal::new(egui::Id::new("file-material-transfer")).show(ctx, |ui| {
+        let response = egui::Modal::new(egui::Id::new("file-material-transfer")).show(ctx, |ui| {
             ui.heading("将原文件送到编码检查？");
             ui.label(material.path().display().to_string());
             ui.label(format!("{}字节。确认后替换编码检查的现有草稿，清除旧检测/转换预览；不会自动读取、转换或写入文件。", material.bytes()));
@@ -20,6 +20,9 @@ impl DevToolsApp {
                 if confirm.clicked() { decision = Some(true); }
             });
         });
+        if decision.is_none() && response.should_close() {
+            decision = Some(false);
+        }
         if let Some(confirmed) = decision {
             let material = self.file_state.file_transfer.take().unwrap();
             if confirmed {
@@ -46,6 +49,7 @@ impl DevToolsApp {
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
         self.startup_warning = None;
         self.page = Page::Files;
+        self.file_encoding.preview_fixture();
         self.file_state.preview(path);
     }
     pub fn preview_file_material_check(&self, phase: usize) {
@@ -55,6 +59,11 @@ impl DevToolsApp {
             assert_eq!(report["bytes"], 3);
             assert!(!self.file_state.report().contains("Users"));
             assert!(self.handoff_source().is_some());
+        } else if phase == 3 {
+            assert!(self.page == Page::Files);
+            assert!(self.file_state.file_transfer.is_none());
+            assert!(!self.file_state.report().is_empty());
+            self.file_encoding.preview_original_draft_check();
         } else {
             assert!(self.page == Page::FileEncoding);
             self.file_encoding.preview_material_check(phase == 2);

@@ -15,11 +15,20 @@ struct Preview {
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        if matches!(self.tick, 70 | 71) {
+            input.events.push(egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: self.tick == 70,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         let id = match self.tick {
             30 | 31 => Some(egui::Id::new(("file-report", 0usize))),
-            60 | 61 => Some(egui::Id::new(("file-source", 0usize))),
-            80 | 81 => Some(egui::Id::new("file-material-confirm")),
-            110 | 111 => Some(egui::Id::new("file-material-read")),
+            60 | 61 | 80 | 81 => Some(egui::Id::new(("file-source", 0usize))),
+            100 | 101 => Some(egui::Id::new("file-material-confirm")),
+            130 | 131 => Some(egui::Id::new("file-material-read")),
             _ => None,
         };
         if let Some(id) = id {
@@ -34,7 +43,7 @@ impl eframe::App for Preview {
             input.events.push(egui::Event::PointerButton {
                 pos: rect.center(),
                 button: egui::PointerButton::Primary,
-                pressed: matches!(self.tick, 30 | 60 | 80 | 110),
+                pressed: matches!(self.tick, 30 | 60 | 80 | 100 | 130),
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -51,11 +60,12 @@ impl eframe::App for Preview {
                 self.app.preview_file_material_check(0);
                 self.app.preview_file_report_dispatch();
             }
-            95 => self.app.preview_file_material_check(1),
-            125 => self.app.preview_file_material_check(2),
+            75 => self.app.preview_file_material_check(3),
+            115 => self.app.preview_file_material_check(1),
+            145 => self.app.preview_file_material_check(2),
             _ => {}
         }
-        if matches!(self.tick, 45 | 75 | 125) {
+        if matches!(self.tick, 45 | 65 | 85 | 145) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         for event in ctx.input(|input| input.events.clone()) {
@@ -76,10 +86,10 @@ impl eframe::App for Preview {
                 self.shots += 1;
             }
         }
-        if self.tick == 145 {
-            assert_eq!(self.shots, 3);
+        if self.tick == 165 {
+            assert_eq!(self.shots, 4);
             println!(
-                "PASS selected report, original-file confirmation, no automatic read/write, explicit encoding read; light={}",
+                "PASS selected report, Escape cancels while preserving full target draft and source report, original-file confirmation, no automatic read/write, explicit encoding read; light={}",
                 self.light
             );
             self.app.preview_tray_workflow_finish(ctx);
