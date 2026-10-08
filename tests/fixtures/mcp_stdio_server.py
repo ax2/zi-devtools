@@ -3,11 +3,13 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 sys.stdin.reconfigure(encoding="utf-8")
 sys.stdout.reconfigure(encoding="utf-8")
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "normal"
+SYNC = Path(sys.argv[2]) if MODE == "delayed_tools" and len(sys.argv) > 2 else None
 
 
 def send(value):
@@ -43,7 +45,13 @@ for line in sys.stdin:
         }
     elif method == "tools/list":
         if MODE == "delayed_tools":
-            time.sleep(0.7)
+            if SYNC is not None and (SYNC / "hold-listing").exists():
+                (SYNC / "listing-started").write_text("started", encoding="utf-8")
+                deadline = time.monotonic() + 10
+                while not (SYNC / "release-listing").exists() and time.monotonic() < deadline:
+                    time.sleep(0.005)
+            else:
+                time.sleep(0.7)
         if MODE == "bad_tool":
             response = {"tools": [{"name": ""}]}
         elif request.get("params", {}).get("cursor") == "next":
@@ -77,6 +85,8 @@ for line in sys.stdin:
     elif method == "prompts/list":
         response = {"prompts": [{"name": "summary"}]}
     elif method == "tools/call":
+        if SYNC is not None:
+            (SYNC / "tool-called").write_text("called", encoding="utf-8")
         if MODE == "knowledge":
             response = {
                 "content": [{"type": "text", "text": "synthetic excerpt"}],

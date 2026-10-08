@@ -236,7 +236,8 @@ fn revocation_during_listing_prevents_the_tool_call() {
     let root = std::env::temp_dir().join(format!("zi-mcp-revoke-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&root).unwrap();
     let path = root.join("mcp-permissions.json");
-    let server = config("delayed_tools");
+    let mut server = config("delayed_tools");
+    server.args.push(root.to_string_lossy().into_owned());
     let scope = mcp_access::server_scope(&server).unwrap();
     let inspected = mcp::run(server.clone(), Action::Inspect, token()).unwrap();
     let tool = inspected.tools[1].clone();
@@ -246,7 +247,7 @@ fn revocation_during_listing_prevents_the_tool_call() {
         .unwrap();
     let call_path = path.clone();
     let call_tool = tool.clone();
-    let started = Instant::now();
+    std::fs::write(root.join("hold-listing"), b"hold").unwrap();
     let handle = std::thread::spawn(move || {
         mcp::run_with_access(
             server,
@@ -262,11 +263,27 @@ fn revocation_during_listing_prevents_the_tool_call() {
         .unwrap_err()
         .to_string()
     });
-    std::thread::sleep(Duration::from_millis(220));
+    // Wait for the actual listing phase rather than assuming worker startup
+    // occurred during a fixed sleep on a loaded Windows runner.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !root.join("listing-started").exists()
+        && Instant::now() < deadline
+        && !handle.is_finished()
+    {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        root.join("listing-started").exists(),
+        "fixture must reach listing before revocation"
+    );
     store.set(&scope, &tool, None).unwrap();
+    std::fs::write(root.join("release-listing"), b"release").unwrap();
     let message = handle.join().unwrap();
     assert!(message.contains("重新人工确认"), "{message}");
-    assert!(started.elapsed() >= Duration::from_millis(650));
+    assert!(
+        !root.join("tool-called").exists(),
+        "revoked tool must never execute"
+    );
     std::fs::remove_dir_all(root).unwrap();
 }
 

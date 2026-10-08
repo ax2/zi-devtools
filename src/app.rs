@@ -3076,6 +3076,8 @@ impl DevToolsApp {
             self.images.show_metadata();
         } else if e.id == "image-batch" {
             self.images.show_batch();
+        } else if e.id == "image-workflow" {
+            self.images.show_workflow();
         } else if e.id == "csv-merge" {
             self.data_state.show_join();
         } else if e.id == "data-transform" {

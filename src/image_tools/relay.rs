@@ -21,12 +21,14 @@ pub(crate) enum Source {
 pub(crate) enum Target {
     Convert,
     Edit,
+    Workflow,
 }
 impl Target {
     pub fn label(self) -> &'static str {
         match self {
             Self::Convert => "图片转换",
             Self::Edit => "裁剪与标注",
+            Self::Workflow => "图片流程",
         }
     }
 }
@@ -492,6 +494,7 @@ impl State {
                 }),
             Mode::Editor => self.editor.relay_source(),
             Mode::Metadata => self.metadata.relay_source(),
+            Mode::Workflow => self.workflow.relay_source(),
             Mode::Screenshot if !self.screenshot.busy() => self
                 .screenshot
                 .relay_source()
@@ -506,6 +509,7 @@ impl State {
                 self.source.is_some() || self.encoded.is_some() || !self.input.is_empty(),
             ),
             Target::Edit => self.editor.relay_target_state(),
+            Target::Workflow => self.workflow.target_state(),
         }
     }
     fn apply_relay(&mut self, ctx: &egui::Context) -> Result<()> {
@@ -521,7 +525,9 @@ impl State {
         ensure!(
             !matches!(
                 (transfer.source_id, transfer.target),
-                ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit)
+                ("image-tools", Target::Convert)
+                    | ("image-crop-annotate", Target::Edit)
+                    | ("image-workflow", Target::Workflow)
             ),
             "请选择其他工具，来源工作保留"
         );
@@ -556,6 +562,11 @@ impl State {
                 self.editor.receive_relay(ctx, prepared);
                 self.relay_route = Some("image-crop-annotate");
                 self.mode = Mode::Editor;
+            }
+            Target::Workflow => {
+                self.workflow.receive(prepared);
+                self.relay_route = Some("image-workflow");
+                self.mode = Mode::Workflow;
             }
         }
         self.relay = None;
@@ -611,6 +622,7 @@ impl State {
             self.source.is_some() || self.encoded.is_some() || !self.input.is_empty(),
         );
         let editor_state = self.editor.relay_target_state();
+        let workflow_state = self.workflow.target_state();
         egui::Modal::new(egui::Id::new("image-relay-modal"))
             .area(egui::Modal::default_area(egui::Id::new("image-relay-modal"))
                 .anchor(egui::Align2::CENTER_TOP,egui::vec2(0.0,48.0)))
@@ -640,14 +652,14 @@ impl State {
                 });
             });
             ui.horizontal(|ui| {
-                for target in [Target::Convert, Target::Edit] {
+                for target in [Target::Convert, Target::Edit, Target::Workflow] {
                     if !matches!(
                         (transfer.source_id, target),
-                        ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit)
+                        ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit) | ("image-workflow", Target::Workflow)
                     ) {
                         let response=ui.selectable_value(&mut transfer.target,target,target.label());
                         #[cfg(feature="ui-preview")]
-                        ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new(if target==Target::Edit {"image-relay-edit"}else{"image-relay-convert"}),response.rect));
+                        ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new(match target {Target::Edit=>"image-relay-edit",Target::Convert=>"image-relay-convert",Target::Workflow=>"image-relay-workflow"}),response.rect));
                         if response.changed() {transfer.replace=false;}
                     }
                 }
@@ -655,6 +667,7 @@ impl State {
             let (busy, has_work) = match transfer.target {
                 Target::Convert => converter_state,
                 Target::Edit => editor_state,
+                Target::Workflow => workflow_state,
             };
             if busy {
                 ui.label("目标后台任务未完成，不能替换");
@@ -666,6 +679,7 @@ impl State {
                 #[cfg(not(feature="ui-preview"))]
                 let _=response;
             }
+            if transfer.target == Target::Workflow { ui.small("图片流程的步骤定义保留；替换时只清除旧输入和运行结果。"); }
             ui.small("来源图片和来源工具的工作保留；目标只接收内存原图，不自动编码、保存或联网。更换目标后需重新确认覆盖。");
             if !transfer.error.is_empty() {
                 ui.label(&transfer.error);
@@ -708,6 +722,38 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn workflow_target_requires_replacement_and_receives_without_running() {
+        let ctx = egui::Context::default();
+        let source = Arc::new(DynamicImage::new_rgba8(24, 16));
+        let prepared = prepare(
+            Source::Image(source.clone()),
+            Vec::new(),
+            "screenshot-workbench",
+        )
+        .unwrap();
+        let mut state = State::default();
+        state.workflow.receive(&prepared);
+        state.relay = Some(Transfer {
+            source_id: "image-tools",
+            target: Target::Workflow,
+            replace: false,
+            cancelled: false,
+            error: String::new(),
+            prepared: Some(prepare(Source::Image(source), vec![], "image-tools").unwrap()),
+            texture: None,
+            receiver: None,
+            cancel_work: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        });
+        assert!(state.apply_relay(&ctx).is_err());
+        assert_eq!(state.mode, Mode::Single);
+        state.relay.as_mut().unwrap().replace = true;
+        state.apply_relay(&ctx).unwrap();
+        assert_eq!(state.mode, Mode::Workflow);
+        assert_eq!(state.workflow.target_state(), (false, true));
+        assert!(state.workflow.relay_source().is_none());
+        assert!(!state.background_active());
+    }
     #[test]
     fn selected_output_rejects_cancel_relative_directory_and_over_budget_without_writes() {
         use std::sync::atomic::AtomicBool;

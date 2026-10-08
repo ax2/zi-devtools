@@ -345,6 +345,23 @@ impl DevToolsApp {
         self.open_startup_tool("image-batch");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.page = Page::Images;
+        self.images = Default::default();
+        self.images.preview_image_workflow_fixture();
+        self.open_startup_tool("image-workflow");
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_ready(&self) -> bool {
+        self.images.preview_image_workflow_ready()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_check(&self, phase: u8) {
+        self.images.preview_image_workflow_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_check(&self, phase: u8) {
         let text = self.images.preview_image_report_assert();
         match phase {

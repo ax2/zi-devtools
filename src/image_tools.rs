@@ -5,6 +5,7 @@ mod metadata;
 mod relay;
 mod report;
 mod screenshot;
+mod workflow;
 #[cfg(all(windows, feature = "ui-preview"))]
 pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
     screenshot::verify_capture()
@@ -92,6 +93,7 @@ enum Mode {
     Metadata,
     Editor,
     Screenshot,
+    Workflow,
 }
 
 #[derive(Default)]
@@ -105,6 +107,7 @@ pub struct State {
     metadata: metadata::State,
     editor: editor::State,
     screenshot: screenshot::State,
+    workflow: workflow::State,
     input: String,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -126,6 +129,8 @@ impl State {
             || self.metadata.busy()
             || self.editor.busy()
             || self.screenshot.busy()
+            || self.workflow.busy()
+            || self.workflow.pending_import()
             || self.relay.as_ref().is_some_and(|transfer| transfer.busy())
     }
 
@@ -166,6 +171,7 @@ impl State {
             Mode::Metadata => "image-metadata",
             Mode::Editor => "image-crop-annotate",
             Mode::Screenshot => "screenshot-workbench",
+            Mode::Workflow => "image-workflow",
         }
     }
     pub fn take_relay_route(&mut self) -> Option<&'static str> {
@@ -189,6 +195,7 @@ impl State {
         self.metadata.poll(ctx);
         self.editor.poll(ctx);
         self.screenshot.poll(ctx);
+        self.workflow.poll(ctx);
     }
     pub fn take_screenshot_capture_request(&mut self) -> bool {
         self.screenshot.take_capture_request()
@@ -219,6 +226,22 @@ impl State {
     }
     pub fn show_batch(&mut self) {
         self.mode = Mode::Batch;
+    }
+    pub fn show_workflow(&mut self) {
+        self.mode = Mode::Workflow;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_fixture(&mut self) {
+        self.mode = Mode::Workflow;
+        self.workflow.preview_fixture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_ready(&self) -> bool {
+        self.workflow.preview_ready()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_check(&self, phase: u8) {
+        self.workflow.preview_check(phase);
     }
     pub fn show_metadata(&mut self) {
         self.mode = Mode::Metadata;
@@ -405,6 +428,7 @@ impl State {
             ui.selectable_value(&mut self.mode, Mode::Metadata, "元数据检查");
             ui.selectable_value(&mut self.mode, Mode::Editor, "裁剪与标注");
             ui.selectable_value(&mut self.mode, Mode::Screenshot, "截图与透明套索");
+            ui.selectable_value(&mut self.mode, Mode::Workflow, "图片流程");
         });
         self.relay_ui(ui);
         self.image_report_ui(ui);
@@ -424,6 +448,7 @@ impl State {
             Mode::Metadata => return self.metadata.ui(ui),
             Mode::Editor => return self.editor.ui(ui),
             Mode::Screenshot => return self.screenshot.ui(ui),
+            Mode::Workflow => return self.workflow.ui(ui),
             Mode::Single => {}
         }
         self.poll(ui.ctx());

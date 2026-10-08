@@ -404,6 +404,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "agent-replay" => Page::AgentRecords,
             "image-tools" => Page::Images,
             "image-batch" => Page::Images,
+            "image-workflow" => Page::Images,
             "image-metadata" => Page::Images,
             "image-crop-annotate" => Page::Images,
             "markdown" => Page::Markdown,
