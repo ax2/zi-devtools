@@ -2,7 +2,7 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 mod core;
-mod input;
+pub(in crate::image_tools) mod input;
 mod workspace;
 pub(crate) use core::Definition;
 #[cfg(any(test, feature = "ui-preview"))]

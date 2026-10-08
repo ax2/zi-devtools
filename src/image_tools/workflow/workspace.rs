@@ -340,10 +340,11 @@ impl Workspace {
             _ => panic!("unknown phase"),
         }
     }
-    pub(crate) fn ui(&mut self, ui: &mut egui::Ui, unlocked: bool) {
-        self.poll(ui.ctx());
-        ui.group(|ui| {
-            ui.horizontal_wrapped(|ui| {
+    pub(in crate::image_tools) fn memory_pool(&self) -> super::super::memory::Pool {
+        self.memory.clone()
+    }
+    pub(in crate::image_tools) fn memory_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
                 match self.memory.snapshot() {
                     Ok((retained, reserved, limit)) => { ui.small(format!("图片内存 {:.1} MiB · 处理中 {:.1} MiB / {:.0} MiB", retained as f64 / 1048576.0, reserved as f64 / 1048576.0, limit as f64 / 1048576.0)); },
                     Err(message) => { ui.label(message); }
@@ -354,7 +355,7 @@ impl Workspace {
                     .show(|ui| {
                     ui.set_max_width(340.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("本次流程预算 MiB");
+                    ui.label("本次图片预算 MiB");
                     let old = self.memory_limit_mb;
                     let budget = ui.add(egui::DragValue::new(&mut self.memory_limit_mb).range(64..=8192));
                     #[cfg(feature = "ui-preview")]
@@ -370,7 +371,7 @@ impl Workspace {
                     }
                 });
                 if !self.memory_message.is_empty() { ui.label(&self.memory_message); }
-                ui.small("包含流程图片、编码缓冲、文件载入缓冲与解码像素预留。其他图片工具、编解码器内部临时内存、预览和GPU未统一；不是程序总内存。不自动清除工作，仅当前会话有效。");
+                ui.small("包含单图与流程图片、编码缓冲、文件载入缓冲与解码像素预留。其他图片工具、编解码器内部临时内存、预览和GPU未统一；不是程序总内存。不自动清除工作，仅当前会话有效。");
                 });
                 #[cfg(feature = "ui-preview")]
                 ui.ctx().data_mut(|d| {
@@ -380,6 +381,11 @@ impl Workspace {
                 #[cfg(not(feature = "ui-preview"))]
                 let _ = memory_popup;
             });
+    }
+    pub(crate) fn ui(&mut self, ui: &mut egui::Ui, unlocked: bool) {
+        self.poll(ui.ctx());
+        ui.group(|ui| {
+            self.memory_ui(ui);
             ui.horizontal_wrapped(|ui| {
                 ui.strong("图片工作实例");
                 let enabled = unlocked && self.close_confirm.is_none();

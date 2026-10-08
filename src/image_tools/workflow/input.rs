@@ -3,7 +3,7 @@ use super::*;
 use image::ImageDecoder;
 use std::io::Read;
 
-pub(super) fn load(
+pub(in crate::image_tools) fn load(
     material: &crate::material_files::FileMaterial,
     cancel: &AtomicBool,
     memory: &super::super::memory::Pool,
@@ -26,7 +26,24 @@ pub(super) fn load(
     }
     material.verify(&file, MAX_INPUT_BYTES as usize)?;
     ensure!(!cancel.load(Ordering::Relaxed), "读取已取消");
-    let mut reader = ImageReader::new(Cursor::new(bytes.as_slice())).with_guessed_format()?;
+    let image = decode(&bytes, cancel, memory)?;
+    material.verify(&file, MAX_INPUT_BYTES as usize)?;
+    drop(bytes);
+    drop(input_guard);
+    Ok(image)
+}
+
+pub(in crate::image_tools) fn decode(
+    bytes: &[u8],
+    cancel: &AtomicBool,
+    memory: &super::super::memory::Pool,
+) -> Result<Arc<DynamicImage>> {
+    ensure!(!cancel.load(Ordering::Relaxed), "读取已取消");
+    ensure!(
+        !bytes.is_empty() && bytes.len() <= MAX_OUTPUT_BYTES,
+        "编码输入超限"
+    );
+    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
     ensure!(
         matches!(
             reader.format(),
@@ -35,7 +52,6 @@ pub(super) fn load(
         "仅支持PNG/JPEG/WebP"
     );
     reader.limits(image_limits());
-    // Decoder construction can allocate codec scratch; only its output pixels are managed here.
     let decoder = reader.into_decoder()?;
     let (width, height) = decoder.dimensions();
     ensure!(
@@ -52,12 +68,9 @@ pub(super) fn load(
     ensure!(!cancel.load(Ordering::Relaxed), "读取已取消");
     let image = Arc::new(DynamicImage::from_decoder(decoder)?);
     ensure!(!cancel.load(Ordering::Relaxed), "读取已取消");
-    material.verify(&file, MAX_INPUT_BYTES as usize)?;
     pixels
         .promote(&image, super::super::memory::pixels(&image))
         .map_err(anyhow::Error::msg)?;
-    drop(bytes);
-    drop(input_guard);
     Ok(image)
 }
 

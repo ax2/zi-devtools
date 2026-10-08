@@ -7,6 +7,7 @@ mod metadata;
 mod relay;
 mod report;
 mod screenshot;
+mod single;
 mod workflow;
 pub(crate) use workflow::Definition as WorkflowDefinition;
 #[cfg(all(windows, feature = "ui-preview"))]
@@ -79,9 +80,10 @@ enum Job {
         image: Arc<DynamicImage>,
         bytes: u64,
         preview: egui::ColorImage,
+        path: PathBuf,
     },
     Preview {
-        encoded: Vec<u8>,
+        encoded: Arc<Vec<u8>>,
         preview: egui::ColorImage,
         width: u32,
         height: u32,
@@ -115,6 +117,7 @@ pub struct State {
     output: String,
     source: Option<Arc<DynamicImage>>,
     source_bytes: u64,
+    loaded_source_path: Option<PathBuf>,
     width: u32,
     format: Format,
     jpeg_quality: u8,
@@ -325,10 +328,17 @@ impl State {
         let pixels = image::ImageBuffer::from_fn(960, 540, |x, y| {
             image::Rgba([(x / 4) as u8, (y / 3) as u8, 160, 255])
         });
-        let source = DynamicImage::ImageRgba8(pixels);
+        let source = Arc::new(DynamicImage::ImageRgba8(pixels));
         let Job::Preview {
             encoded, preview, ..
-        } = encode_preview(&source, 720, Format::Jpeg, 78).expect("image preview fixture")
+        } = single::preview(
+            source.clone(),
+            720,
+            Format::Jpeg,
+            78,
+            &self.workflow.memory_pool(),
+        )
+        .expect("image preview fixture")
         else {
             unreachable!()
         };
@@ -338,12 +348,13 @@ impl State {
         self.width = 720;
         self.format = Format::Jpeg;
         self.jpeg_quality = 78;
-        self.source = Some(Arc::new(source));
+        self.source = Some(source);
+        self.loaded_source_path = Some(PathBuf::from(&self.input));
         self.message = format!(
             "编码预览已生成：720 × 405 · {:.2} MB；可确认后另存新文件",
             encoded.len() as f64 / 1_000_000.0
         );
-        self.encoded = Some(Arc::new(encoded));
+        self.encoded = Some(encoded);
         self.texture = Some(ctx.load_texture(
             "image-workbench-preview",
             preview,
@@ -368,7 +379,10 @@ impl State {
                 image,
                 bytes,
                 preview,
+                path,
             }) => {
+                self.input = path.to_string_lossy().into_owned();
+                self.loaded_source_path = Some(path);
                 self.width = image.width();
                 self.source_bytes = bytes;
                 self.source = Some(image);
@@ -392,7 +406,7 @@ impl State {
                 height,
             }) => {
                 let size = encoded.len();
-                self.encoded = Some(Arc::new(encoded));
+                self.encoded = Some(encoded);
                 self.texture = Some(ctx.load_texture(
                     "image-workbench-preview",
                     preview,
@@ -415,14 +429,13 @@ impl State {
             return;
         }
         let path = PathBuf::from(self.input.trim());
-        self.source = None;
-        self.encoded = None;
-        self.texture = None;
+        let memory = self.workflow.memory_pool();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.message = "正在读取图片…".into();
         std::thread::spawn(move || {
-            let result = load_image(&path).map_err(|error| format!("读取失败：{error:#}"));
+            let result =
+                single::load(&path, &memory).map_err(|error| format!("读取失败：{error:#}"));
             let _ = tx.send(result);
         });
     }
@@ -438,10 +451,10 @@ impl State {
         let quality = self.jpeg_quality;
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        self.encoded = None;
+        let memory = self.workflow.memory_pool();
         self.message = "正在生成最终编码预览…".into();
         std::thread::spawn(move || {
-            let result = encode_preview(&image, width, format, quality)
+            let result = single::preview(image, width, format, quality, &memory)
                 .map_err(|error| format!("预览失败：{error:#}"));
             let _ = tx.send(result);
         });
@@ -450,11 +463,11 @@ impl State {
         let Some(bytes) = &self.encoded else {
             return;
         };
-        let source = Path::new(self.input.trim());
+        let source = self.loaded_source_path.as_deref();
         let target = Path::new(self.output.trim());
         let result = (|| -> Result<()> {
             ensure!(
-                !target.as_os_str().is_empty() && target != source,
+                !target.as_os_str().is_empty() && source != Some(target),
                 "请选择不同于原图的输出路径"
             );
             ensure!(
@@ -511,6 +524,7 @@ impl State {
             Mode::Single => {}
         }
         self.poll(ui.ctx());
+        self.workflow.memory_ui(ui);
         ui.heading("图片工作台");
         ui.label("在本机查看图片、缩小尺寸、转换格式并预览编码后的文件大小；原图不会被覆盖。");
         ui.add_space(12.0);
@@ -520,18 +534,11 @@ impl State {
         }
         ui.label("原图路径");
         ui.horizontal(|ui| {
-            if ui
-                .add_enabled(
-                    !busy,
-                    egui::TextEdit::singleline(&mut self.input)
-                        .desired_width((ui.available_width() - 190.0).max(180.0)),
-                )
-                .changed()
-            {
-                self.source = None;
-                self.encoded = None;
-                self.texture = None;
-            }
+            ui.add_enabled(
+                !busy,
+                egui::TextEdit::singleline(&mut self.input)
+                    .desired_width((ui.available_width() - 190.0).max(180.0)),
+            );
             if ui
                 .add_enabled(!busy, egui::Button::new("选择图片…"))
                 .clicked()
@@ -546,6 +553,17 @@ impl State {
                 self.start_load();
             }
         });
+        if self.source.is_some()
+            && !self.input.trim().is_empty()
+            && self
+                .loaded_source_path
+                .as_ref()
+                .map(|p| p.to_string_lossy())
+                .as_deref()
+                != Some(self.input.trim())
+        {
+            ui.label("新路径尚未成功读取，下方仍显示已载入图片；原工作保留。");
+        }
         let Some(source) = &self.source else {
             ui.label(&self.message);
             return;
@@ -584,8 +602,8 @@ impl State {
                                 .changed()
                             {
                                 self.encoded = None;
-                                if !self.input.trim().is_empty() {
-                                    self.output = suggested_output(Path::new(&self.input), format)
+                                if let Some(path) = &self.loaded_source_path {
+                                    self.output = suggested_output(path, format)
                                         .to_string_lossy()
                                         .into_owned();
                                 } else {
@@ -662,17 +680,9 @@ fn preview_image(image: &DynamicImage) -> egui::ColorImage {
         small.as_raw(),
     )
 }
+#[cfg(test)]
 fn load_image(path: &Path) -> Result<Job> {
-    let (_, _, size) = inspect_image(path)?;
-    let mut reader = ImageReader::open(path)?.with_guessed_format()?;
-    reader.limits(image_limits());
-    let image = reader.decode()?;
-    let preview = preview_image(&image);
-    Ok(Job::Loaded {
-        image: Arc::new(image),
-        bytes: size,
-        preview,
-    })
+    single::load(path, &memory::Pool::default())
 }
 pub(crate) fn inspect_image(path: &Path) -> Result<(u32, u32, u64)> {
     let size = fs::metadata(path)?.len();
@@ -710,15 +720,15 @@ fn image_limits() -> Limits {
     limits.max_alloc = Some(192 * 1024 * 1024);
     limits
 }
+#[cfg(test)]
 fn encode_preview(source: &DynamicImage, width: u32, format: Format, quality: u8) -> Result<Job> {
-    let (encoded, width, height) = encode_image(source, width, format, quality)?;
-    let decoded = image::load_from_memory_with_format(&encoded, format.image_format())?;
-    Ok(Job::Preview {
-        encoded,
-        preview: preview_image(&decoded),
+    single::preview(
+        Arc::new(source.clone()),
         width,
-        height,
-    })
+        format,
+        quality,
+        &memory::Pool::default(),
+    )
 }
 pub(crate) fn encode_image(
     source: &DynamicImage,
@@ -790,7 +800,7 @@ mod tests {
             input: original.to_string_lossy().into_owned(),
             output: target.to_string_lossy().into_owned(),
             format: Format::Jpeg,
-            encoded: Some(Arc::new(encoded)),
+            encoded: Some(encoded),
             ..Default::default()
         };
         state.save();

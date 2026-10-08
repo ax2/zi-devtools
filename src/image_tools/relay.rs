@@ -590,6 +590,11 @@ impl State {
         );
         match transfer.target {
             Target::Convert => {
+                self.workflow
+                    .memory_pool()
+                    .share(&prepared.image, super::memory::pixels(&prepared.image))
+                    .map_err(anyhow::Error::msg)?;
+                self.loaded_source_path = None;
                 self.source = Some(prepared.image.clone());
                 self.source_bytes = prepared.image.as_bytes().len() as u64;
                 self.width = prepared.image.width();
