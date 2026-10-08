@@ -120,7 +120,13 @@ pub struct State {
 }
 impl State {
     pub(crate) fn background_active(&self) -> bool {
-        self.pending.is_some() || self.reports.busy()
+        self.pending.is_some()
+            || self.reports.busy()
+            || self.batch.busy()
+            || self.metadata.busy()
+            || self.editor.busy()
+            || self.screenshot.busy()
+            || self.relay.as_ref().is_some_and(|transfer| transfer.busy())
     }
 
     pub fn screenshot_capture_active(&self) -> bool {
@@ -179,6 +185,8 @@ impl State {
         }
 
         self.poll(ctx);
+        self.batch.poll(ctx);
+        self.metadata.poll(ctx);
         self.editor.poll(ctx);
         self.screenshot.poll(ctx);
     }

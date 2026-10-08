@@ -105,7 +105,11 @@ impl State {
         self.message = "规则已变化，请重新检查。".into();
     }
 
-    fn poll(&mut self, ctx: &egui::Context) {
+    pub(super) fn busy(&self) -> bool {
+        self.receiver.is_some() || self.running
+    }
+
+    pub(super) fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = self.receiver.as_ref() else {
             return;
         };
@@ -115,6 +119,18 @@ impl State {
                 Ok(event) => event,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
+                    if self.running {
+                        self.running = false;
+                        self.ready = false;
+                        self.message = format!(
+                            "批处理线程意外结束；已处理 {} / {} 项。已完成文件保留，请检查后重新开始。",
+                            self.completed,
+                            self.items.len()
+                        );
+                    } else if self.items.is_empty() && self.message == "正在检查文件与输出冲突…"
+                    {
+                        self.message = "图片检查线程意外结束，请重新检查。".into();
+                    }
                     disconnected = true;
                     break;
                 }
@@ -129,8 +145,14 @@ impl State {
                         format!("检查完成：{conflicts} 项冲突；更改输入或输出目录后重新检查。")
                     };
                     self.items = items;
+                    disconnected = true;
+                    break;
                 }
-                Event::Inspected(Err(error)) => self.message = format!("检查失败：{error}"),
+                Event::Inspected(Err(error)) => {
+                    self.message = format!("检查失败：{error}");
+                    disconnected = true;
+                    break;
+                }
                 Event::Saved(index, result) => {
                     self.completed += 1;
                     if result.is_err() {
@@ -163,6 +185,7 @@ impl State {
                         )
                     };
                     disconnected = true;
+                    break;
                 }
             }
         }
@@ -474,6 +497,52 @@ fn run_batch(
 mod tests {
     use super::*;
     use image::{DynamicImage, GenericImageView, ImageFormat};
+
+    #[test]
+    fn batch_finishes_from_another_tool_and_exit_guard_tracks_work() {
+        let (tx, rx) = mpsc::channel();
+        let mut images = super::super::State::default();
+        images.batch.receiver = Some(rx);
+        images.batch.running = true;
+        assert_eq!(images.active_tool_id(), "image-tools");
+        assert!(images.background_active());
+        tx.send(Event::Finished { cancelled: false }).unwrap();
+        images.poll_screenshot(&egui::Context::default());
+        assert!(!images.background_active());
+        assert!(images.batch.message.starts_with("批处理结束"));
+    }
+
+    #[test]
+    fn disconnected_worker_releases_busy_and_preserves_completed_count() {
+        let (tx, rx) = mpsc::channel();
+        let mut state = State {
+            receiver: Some(rx),
+            running: true,
+            completed: 2,
+            ..State::default()
+        };
+        drop(tx);
+        state.poll(&egui::Context::default());
+        assert!(!state.busy());
+        assert_eq!(state.completed, 2);
+        assert!(state.message.contains("意外结束"));
+        assert!(!state.ready);
+    }
+
+    #[test]
+    fn terminal_completion_is_not_replaced_by_channel_disconnect() {
+        let (tx, rx) = mpsc::channel();
+        let mut state = State {
+            receiver: Some(rx),
+            running: true,
+            ..State::default()
+        };
+        tx.send(Event::Finished { cancelled: true }).unwrap();
+        drop(tx);
+        state.poll(&egui::Context::default());
+        assert!(!state.busy());
+        assert!(state.message.starts_with("已取消"));
+    }
 
     #[test]
     fn batch_checks_collisions_and_preserves_every_input() {

@@ -323,7 +323,11 @@ impl State {
         self.message = "界面预览：输出复检无已识别元数据块；确认画面后另存副本。".into();
     }
 
-    fn poll(&mut self, ctx: &egui::Context) {
+    pub(super) fn busy(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    pub(super) fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.pending else { return };
         let result = match rx.try_recv() {
             Ok(result) => result,
@@ -663,6 +667,19 @@ fn clean_preview(image: &DynamicImage, source: &Summary, quality: u8) -> Result<
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn metadata_failure_is_received_when_another_tool_is_open() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut images = super::super::State::default();
+        images.metadata.pending = Some(rx);
+        assert!(images.background_active());
+        tx.send(Err("fixture failure".into())).unwrap();
+        images.poll_screenshot(&eframe::egui::Context::default());
+        assert!(!images.background_active());
+        assert!(images.metadata.error);
+        assert_eq!(images.metadata.message, "fixture failure");
+    }
+
     use super::*;
     use image::GenericImageView;
 

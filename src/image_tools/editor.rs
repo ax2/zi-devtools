@@ -244,6 +244,10 @@ impl State {
         self.output_texture = None;
     }
 
+    pub(super) fn busy(&self) -> bool {
+        self.pending.is_some()
+    }
+
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
         let Some(rx) = &self.pending else { return };
         let result = match rx.try_recv() {
