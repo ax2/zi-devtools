@@ -17,6 +17,21 @@ pub(crate) struct Workspace {
     closed_tasks: std::collections::VecDeque<crate::tasks::Row>,
     closed_receipts: std::collections::VecDeque<crate::preferences::SavedWorkflow>,
 }
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Destination {
+    #[default]
+    New,
+    Existing {
+        id: String,
+        revision: u64,
+    },
+}
+pub(crate) struct RelayChoice {
+    pub destination: Destination,
+    pub title: String,
+    pub busy: bool,
+    pub has_work: bool,
+}
 impl Default for Workspace {
     fn default() -> Self {
         Self {
@@ -46,6 +61,84 @@ impl DerefMut for Workspace {
     }
 }
 impl Workspace {
+    pub(crate) fn active_id(&self) -> String {
+        self.instances[self.active].id.clone()
+    }
+    pub(crate) fn relay_choices(&self, source_id: Option<&str>) -> Vec<RelayChoice> {
+        self.instances
+            .iter()
+            .filter(|i| Some(i.id.as_str()) != source_id)
+            .map(|i| {
+                let (busy, has_work) = i.state.target_state();
+                RelayChoice {
+                    destination: Destination::Existing {
+                        id: i.id.clone(),
+                        revision: i.state.revision,
+                    },
+                    title: i.title.clone(),
+                    busy: busy || self.close_confirm.is_some(),
+                    has_work,
+                }
+            })
+            .collect()
+    }
+    pub(crate) fn relay_destination_state(
+        &self,
+        destination: &Destination,
+        source_id: Option<&str>,
+    ) -> Result<(bool, bool)> {
+        ensure!(self.close_confirm.is_none(), "请先确认或取消关闭实例");
+        match destination {
+            Destination::New => {
+                ensure!(
+                    self.instances.len() < MAX_INSTANCES,
+                    "已有8份图片实例，请先关闭不需要的实例"
+                );
+                Ok((false, false))
+            }
+            Destination::Existing { id, revision } => {
+                ensure!(
+                    Some(id.as_str()) != source_id,
+                    "不能替换来源实例，请选择另一实例或新建"
+                );
+                let instance = self
+                    .instances
+                    .iter()
+                    .find(|i| &i.id == id)
+                    .context("接收实例已关闭，请重新选择")?;
+                ensure!(
+                    instance.state.revision == *revision,
+                    "接收实例已变化，请重新选择并确认替换"
+                );
+                Ok(instance.state.target_state())
+            }
+        }
+    }
+    pub(crate) fn receive_at(
+        &mut self,
+        destination: &Destination,
+        source_id: Option<&str>,
+        replace: bool,
+        prepared: &relay::Prepared,
+    ) -> Result<()> {
+        let (busy, has_work) = self.relay_destination_state(destination, source_id)?;
+        ensure!(!busy, "接收实例正在处理或等待导入确认");
+        ensure!(!has_work || replace, "请明确允许替换接收实例的输入和结果");
+        let index = match destination {
+            Destination::New => {
+                self.create()?;
+                self.active
+            }
+            Destination::Existing { id, .. } => self
+                .instances
+                .iter()
+                .position(|i| &i.id == id)
+                .context("接收实例已关闭")?,
+        };
+        self.instances[index].state.receive(prepared);
+        self.active = index;
+        Ok(())
+    }
     pub(crate) fn background_active(&self) -> bool {
         self.instances
             .iter()
@@ -449,3 +542,9 @@ mod tests {
 mod task_preview;
 #[cfg(test)]
 mod task_tests;
+
+#[cfg(test)]
+mod relay_tests;
+
+#[cfg(feature = "ui-preview")]
+mod relay_preview;

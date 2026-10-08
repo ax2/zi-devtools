@@ -5,7 +5,7 @@ mod core;
 mod workspace;
 pub(crate) use core::Definition;
 use core::{Encoding, RECIPE_LIMIT, Run, Step, execute};
-pub(super) use workspace::Workspace;
+pub(super) use workspace::{Destination, Workspace};
 #[cfg(test)]
 mod tests;
 
@@ -52,6 +52,7 @@ pub(crate) struct State {
     completed_tasks: std::collections::VecDeque<crate::tasks::Row>,
     job: crate::tasks::Job,
     kind: Kind,
+    revision: u64,
 }
 impl Default for State {
     fn default() -> Self {
@@ -71,6 +72,7 @@ impl Default for State {
             completed_tasks: Default::default(),
             job: Default::default(),
             kind: Kind::default(),
+            revision: 0,
         }
     }
 }
@@ -165,6 +167,7 @@ impl State {
         self.message = "已接收输入，流程步骤保留；点击运行生成结果。".into();
     }
     fn invalidate(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
         self.run = None;
         self.texture = None;
         self.selected = 0;
@@ -178,6 +181,7 @@ impl State {
         if self.busy() {
             return;
         }
+        self.revision = self.revision.wrapping_add(1);
         self.job.begin();
         self.kind = kind;
         let (tx, rx) = mpsc::channel();
@@ -203,6 +207,7 @@ impl State {
             Err(_) => Err("后台任务提前结束，原工作保留".into()),
         };
         self.receiver = None;
+        self.revision = self.revision.wrapping_add(1);
         if self.cancel.load(Ordering::Relaxed)
             && matches!(&result, Ok(Reply::Input(..) | Reply::Definition(..)))
         {

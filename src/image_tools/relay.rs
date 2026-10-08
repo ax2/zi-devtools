@@ -206,6 +206,8 @@ fn read_published(
 pub(super) struct Transfer {
     pub source_id: &'static str,
     pub target: Target,
+    pub workflow_destination: workflow::Destination,
+    pub source_instance: Option<String>,
     pub replace: bool,
     pub cancelled: bool,
     pub error: String,
@@ -238,6 +240,8 @@ impl Transfer {
             } else {
                 Target::Convert
             },
+            workflow_destination: workflow::Destination::default(),
+            source_instance: None,
             replace: false,
             cancelled: false,
             error: String::new(),
@@ -466,6 +470,44 @@ impl State {
             _ => panic!("relay fixture phase"),
         }
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_instance_relay_fixture(&mut self) {
+        *self = Self::default();
+        self.workflow.preview_relay_instances();
+        self.mode = Mode::Workflow;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_instance_relay_ready(&self) -> bool {
+        self.relay
+            .as_ref()
+            .is_some_and(|t| t.prepared.is_some() && !t.busy())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_instance_relay_control(&self) -> String {
+        format!(
+            "image-relay-instance-{}",
+            self.workflow.preview_relay_target_id()
+        )
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_instance_relay_check(&self, phase: u8) {
+        self.workflow.preview_relay_check(phase);
+        if phase <= 2 {
+            let t = self.relay.as_ref().unwrap();
+            assert!(t.target == Target::Workflow);
+            assert_eq!(
+                t.source_instance.as_deref(),
+                Some(self.workflow.active_id().as_str())
+            );
+            assert!(
+                matches!(&t.workflow_destination,workflow::Destination::Existing{id,..} if id==&self.workflow.preview_relay_target_id())
+            );
+            assert_eq!(t.replace, phase == 2);
+        } else {
+            assert!(self.relay.is_none());
+            assert_eq!(self.mode, Mode::Workflow);
+        }
+    }
     pub fn relay_active(&self) -> bool {
         self.relay
             .as_ref()
@@ -525,13 +567,22 @@ impl State {
         ensure!(
             !matches!(
                 (transfer.source_id, transfer.target),
-                ("image-tools", Target::Convert)
-                    | ("image-crop-annotate", Target::Edit)
-                    | ("image-workflow", Target::Workflow)
+                ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit)
             ),
             "请选择其他工具，来源工作保留"
         );
-        let (busy, has_work) = self.target_state(transfer.target);
+        let (busy, has_work) = if transfer.target == Target::Workflow {
+            ensure!(
+                transfer.source_id != "image-workflow" || transfer.source_instance.is_some(),
+                "来源实例身份缺失，请重新发起接力"
+            );
+            self.workflow.relay_destination_state(
+                &transfer.workflow_destination,
+                transfer.source_instance.as_deref(),
+            )?
+        } else {
+            self.target_state(transfer.target)
+        };
         ensure!(!busy, "目标工具任务进行中，请等待完成");
         ensure!(
             !has_work || transfer.replace,
@@ -564,7 +615,12 @@ impl State {
                 self.mode = Mode::Editor;
             }
             Target::Workflow => {
-                self.workflow.receive(prepared);
+                self.workflow.receive_at(
+                    &transfer.workflow_destination,
+                    transfer.source_instance.as_deref(),
+                    transfer.replace,
+                    prepared,
+                )?;
                 self.relay_route = Some("image-workflow");
                 self.mode = Mode::Workflow;
             }
@@ -600,7 +656,11 @@ impl State {
                 .data_mut(|d| d.insert_temp(egui::Id::new("image-relay-send"), response.rect));
             if response.clicked() {
                 if let Some((source, origins, id)) = source {
-                    self.relay = Some(Transfer::start(ui.ctx(), source, origins, id));
+                    let mut transfer = Transfer::start(ui.ctx(), source, origins, id);
+                    if id == "image-workflow" {
+                        transfer.source_instance = Some(self.workflow.active_id());
+                    }
+                    self.relay = Some(transfer);
                 }
             }
             ui.small(if self.mode == Mode::Batch {
@@ -622,7 +682,9 @@ impl State {
             self.source.is_some() || self.encoded.is_some() || !self.input.is_empty(),
         );
         let editor_state = self.editor.relay_target_state();
-        let workflow_state = self.workflow.target_state();
+        let workflow_choices = self
+            .workflow
+            .relay_choices(transfer.source_instance.as_deref());
         egui::Modal::new(egui::Id::new("image-relay-modal"))
             .area(egui::Modal::default_area(egui::Id::new("image-relay-modal"))
                 .anchor(egui::Align2::CENTER_TOP,egui::vec2(0.0,48.0)))
@@ -655,7 +717,7 @@ impl State {
                 for target in [Target::Convert, Target::Edit, Target::Workflow] {
                     if !matches!(
                         (transfer.source_id, target),
-                        ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit) | ("image-workflow", Target::Workflow)
+                        ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit)
                     ) {
                         let response=ui.selectable_value(&mut transfer.target,target,target.label());
                         #[cfg(feature="ui-preview")]
@@ -664,16 +726,36 @@ impl State {
                     }
                 }
             });
+            if transfer.target == Target::Workflow {
+                ui.label("接收图片流程实例");
+                egui::ScrollArea::vertical().id_salt("image-relay-instances").max_height(130.0).show(ui, |ui| {
+                    let response = ui.selectable_value(&mut transfer.workflow_destination, workflow::Destination::New, "新建图片实例（确认后创建）");
+                    #[cfg(feature="ui-preview")]
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("image-relay-new-instance"), response.rect));
+                    if response.changed() { transfer.replace = false; }
+                    for choice in &workflow_choices {
+                        let label = format!("{} · {}", choice.title, if choice.busy { "处理中/待确认" } else if choice.has_work { "已有输入或结果" } else { "空输入" });
+                        let response = ui.selectable_value(&mut transfer.workflow_destination, choice.destination.clone(), label);
+                        #[cfg(feature="ui-preview")]
+                        if let workflow::Destination::Existing { id, .. } = &choice.destination {
+                            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(format!("image-relay-instance-{id}")), response.rect));
+                        }
+                        if response.changed() { transfer.replace = false; }
+                    }
+                });
+            }
+            let destination_state = self.workflow.relay_destination_state(&transfer.workflow_destination, transfer.source_instance.as_deref());
             let (busy, has_work) = match transfer.target {
                 Target::Convert => converter_state,
                 Target::Edit => editor_state,
-                Target::Workflow => workflow_state,
+                Target::Workflow => match &destination_state { Ok(value) => *value, Err(_) => (true, false) },
             };
+            if transfer.target == Target::Workflow { if let Err(error) = &destination_state { ui.label(error.to_string()); } }
             if busy {
-                ui.label("目标后台任务未完成，不能替换");
+                ui.label("目标暂不可接收，请完成任务或重新选择");
             }
             if has_work {
-                let response=ui.checkbox(&mut transfer.replace,"允许替换目标当前原图、操作和未保存预览");
+                let response=ui.checkbox(&mut transfer.replace,if transfer.target == Target::Workflow {"允许替换此实例的输入图片和结果（保留步骤）"} else {"允许替换目标当前原图、操作和未保存预览"});
                 #[cfg(feature="ui-preview")]
                 ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new("image-relay-replace"),response.rect));
                 #[cfg(not(feature="ui-preview"))]
@@ -737,6 +819,8 @@ mod tests {
         state.relay = Some(Transfer {
             source_id: "image-tools",
             target: Target::Workflow,
+            workflow_destination: workflow::Destination::default(),
+            source_instance: None,
             replace: false,
             cancelled: false,
             error: String::new(),
@@ -745,6 +829,8 @@ mod tests {
             receiver: None,
             cancel_work: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         });
+        state.relay.as_mut().unwrap().workflow_destination =
+            state.workflow.relay_choices(None)[0].destination.clone();
         assert!(state.apply_relay(&ctx).is_err());
         assert_eq!(state.mode, Mode::Single);
         state.relay.as_mut().unwrap().replace = true;
@@ -840,6 +926,8 @@ mod tests {
         let mut transfer = Transfer {
             source_id: "image-tools",
             target: Target::Edit,
+            workflow_destination: workflow::Destination::default(),
+            source_instance: None,
             replace: false,
             cancelled: true,
             error: String::new(),
@@ -870,6 +958,8 @@ mod tests {
         state.relay = Some(Transfer {
             source_id: "screenshot-workbench",
             target: Target::Convert,
+            workflow_destination: workflow::Destination::default(),
+            source_instance: None,
             replace: false,
             cancelled: false,
             error: String::new(),

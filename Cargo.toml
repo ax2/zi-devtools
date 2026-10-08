@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.94"
+version = "0.82.0-dev.95"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -202,4 +202,8 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "image_tasks_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "image_instance_relay_ui"
 required-features = ["ui-preview"]

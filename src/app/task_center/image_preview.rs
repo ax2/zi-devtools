@@ -50,3 +50,22 @@ impl DevToolsApp {
         }
     }
 }
+
+impl DevToolsApp {
+    pub fn preview_instance_relay_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.images.preview_instance_relay_fixture();
+        self.page = Page::Images;
+    }
+    pub fn preview_instance_relay_ready(&self) -> bool {
+        self.images.preview_instance_relay_ready()
+    }
+    pub fn preview_instance_relay_control(&self) -> String {
+        self.images.preview_instance_relay_control()
+    }
+    pub fn preview_instance_relay_check(&self, phase: u8) {
+        self.images.preview_instance_relay_check(phase);
+        assert_eq!(self.page, Page::Images);
+    }
+}
