@@ -2,6 +2,7 @@
 mod batch;
 mod editor;
 mod encoding;
+mod memory;
 mod metadata;
 mod relay;
 mod report;

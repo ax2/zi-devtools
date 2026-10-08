@@ -4,7 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 mod core;
 mod workspace;
 pub(crate) use core::Definition;
-use core::{Encoding, RECIPE_LIMIT, Run, Step, execute};
+#[cfg(any(test, feature = "ui-preview"))]
+use core::execute;
+use core::{Encoding, RECIPE_LIMIT, Run, Step, execute_budgeted};
 pub(super) use workspace::{Destination, Workspace};
 #[cfg(test)]
 mod tests;
@@ -53,9 +55,15 @@ pub(crate) struct State {
     job: crate::tasks::Job,
     kind: Kind,
     revision: u64,
+    memory: super::memory::Pool,
 }
 impl Default for State {
     fn default() -> Self {
+        Self::with_memory(Default::default())
+    }
+}
+impl State {
+    fn with_memory(memory: super::memory::Pool) -> Self {
         Self {
             definition: Definition::default(),
             source: None,
@@ -73,10 +81,10 @@ impl Default for State {
             job: Default::default(),
             kind: Kind::default(),
             revision: 0,
+            memory,
         }
     }
-}
-impl State {
+
     #[cfg(feature = "ui-preview")]
     pub(super) fn preview_fixture(&mut self) {
         self.source = Some(Arc::new(DynamicImage::ImageRgba8(
@@ -159,12 +167,16 @@ impl State {
             self.source.is_some() || self.run.is_some(),
         )
     }
-    pub(super) fn receive(&mut self, value: &relay::Prepared) {
+    pub(super) fn receive(&mut self, value: &relay::Prepared) -> Result<()> {
+        self.memory
+            .share(&value.image, super::memory::pixels(&value.image))
+            .map_err(anyhow::Error::msg)?;
         self.source = Some(value.image.clone());
         self.origins = value.origins.clone();
         self.name = "接力图片".into();
         self.invalidate();
         self.message = "已接收输入，流程步骤保留；点击运行生成结果。".into();
+        Ok(())
     }
     fn invalidate(&mut self) {
         self.revision = self.revision.wrapping_add(1);
@@ -314,6 +326,7 @@ impl State {
                         .add_filter("图片", &["png", "jpg", "jpeg", "webp"])
                         .pick_file()
                 {
+                    let memory = self.memory.clone();
                     self.launch(ui.ctx(), Kind::Input, move |cancel| {
                         ensure!(!cancel.load(Ordering::Relaxed), "已取消");
                         let material = crate::material_files::FileMaterial::selected(
@@ -327,6 +340,9 @@ impl State {
                             "image-workflow",
                         )?;
                         ensure!(!cancel.load(Ordering::Relaxed), "已取消");
+                        memory
+                            .share(&prepared.image, super::memory::pixels(&prepared.image))
+                            .map_err(anyhow::Error::msg)?;
                         Ok(Reply::Input(
                             prepared.image,
                             path.file_name()
@@ -546,8 +562,9 @@ impl State {
             if run.clicked() {
                 let def = self.definition.clone();
                 let image = self.source.clone().unwrap();
+                let memory = self.memory.clone();
                 self.launch(ui.ctx(), Kind::Run, move |cancel| {
-                    Ok(Reply::Run(execute(&def, image, cancel)?))
+                    Ok(Reply::Run(execute_budgeted(&def, image, cancel, &memory)?))
                 });
             }
             if self.busy() && ui.button("取消当前操作").clicked() {

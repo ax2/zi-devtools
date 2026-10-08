@@ -7,6 +7,7 @@ pub(super) struct Output {
     position: usize,
     limit: usize,
     failed: bool,
+    reservation: Option<super::memory::Reservation>,
 }
 impl Output {
     pub(super) fn new(limit: usize) -> Self {
@@ -15,7 +16,13 @@ impl Output {
             position: 0,
             limit,
             failed: false,
+            reservation: None,
         }
+    }
+    fn budgeted(limit: usize, pool: &super::memory::Pool) -> Result<Self> {
+        let mut value = Self::new(limit);
+        value.reservation = Some(pool.reserve(0).map_err(anyhow::Error::msg)?);
+        Ok(value)
     }
     fn reject(&mut self) -> io::Error {
         self.failed = true;
@@ -25,7 +32,7 @@ impl Output {
         )
     }
     pub(super) fn into_bytes(self) -> io::Result<Vec<u8>> {
-        if self.failed {
+        if self.failed || self.reservation.is_some() {
             Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "图片编码输出失败，未生成可保存结果",
@@ -51,13 +58,22 @@ impl Write for Output {
             return Ok(0);
         }
         if end > self.bytes.capacity() {
-            let target = self
+            let mut target = self
                 .bytes
                 .capacity()
                 .max(4096)
                 .saturating_mul(2)
                 .min(self.limit)
                 .max(end);
+            if let Some(reservation) = &mut self.reservation {
+                if reservation.grow(target).is_err() {
+                    target = end;
+                    if let Err(message) = reservation.grow(target) {
+                        self.failed = true;
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+                    }
+                }
+            }
             if self
                 .bytes
                 .try_reserve_exact(target - self.bytes.len())
@@ -115,6 +131,35 @@ pub(super) fn encode(
     }
     Ok(output.into_bytes()?)
 }
+pub(super) fn encode_tracked(
+    image: &DynamicImage,
+    format: ImageFormat,
+    quality: u8,
+    limit: usize,
+    pool: &super::memory::Pool,
+) -> Result<std::sync::Arc<Vec<u8>>> {
+    let mut output = Output::budgeted(limit, pool)?;
+    match format {
+        ImageFormat::Jpeg => {
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, quality.clamp(35, 95))
+                .encode_image(image)?
+        }
+        ImageFormat::Png | ImageFormat::WebP => image.write_to(&mut output, format)?,
+        _ => bail!("不支持该图片格式"),
+    }
+    if output.failed {
+        bail!("图片输出失败")
+    }
+    let bytes = std::sync::Arc::new(output.bytes);
+    output
+        .reservation
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("缺少编码预留"))?
+        .promote(&bytes, bytes.capacity())
+        .map_err(anyhow::Error::msg)?;
+    Ok(bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

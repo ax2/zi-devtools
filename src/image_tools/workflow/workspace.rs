@@ -10,6 +10,8 @@ struct Instance {
 }
 pub(crate) struct Workspace {
     instances: Vec<Instance>,
+    memory: super::super::memory::Pool,
+    memory_limit_mb: u32,
     active: usize,
     sequence: u64,
     close_confirm: Option<String>,
@@ -34,11 +36,14 @@ pub(crate) struct RelayChoice {
 }
 impl Default for Workspace {
     fn default() -> Self {
+        let memory = super::super::memory::Pool::default();
         Self {
+            memory: memory.clone(),
+            memory_limit_mb: 1024,
             instances: vec![Instance {
                 id: uuid::Uuid::new_v4().to_string(),
                 title: "图片流程 1".into(),
-                state: State::default(),
+                state: State::with_memory(memory.clone()),
             }],
             active: 0,
             sequence: 1,
@@ -124,6 +129,12 @@ impl Workspace {
         let (busy, has_work) = self.relay_destination_state(destination, source_id)?;
         ensure!(!busy, "接收实例正在处理或等待导入确认");
         ensure!(!has_work || replace, "请明确允许替换接收实例的输入和结果");
+        self.memory
+            .share(
+                &prepared.image,
+                super::super::memory::pixels(&prepared.image),
+            )
+            .map_err(anyhow::Error::msg)?;
         let index = match destination {
             Destination::New => {
                 self.create()?;
@@ -135,7 +146,7 @@ impl Workspace {
                 .position(|i| &i.id == id)
                 .context("接收实例已关闭")?,
         };
-        self.instances[index].state.receive(prepared);
+        self.instances[index].state.receive(prepared)?;
         self.active = index;
         Ok(())
     }
@@ -235,7 +246,7 @@ impl Workspace {
         self.instances.push(Instance {
             id: uuid::Uuid::new_v4().to_string(),
             title: format!("图片流程 {}", self.sequence),
-            state: State::default(),
+            state: State::with_memory(self.memory.clone()),
         });
         self.active = self.instances.len() - 1;
         self.message.clear();
@@ -292,7 +303,7 @@ impl Workspace {
             self.instances.push(Instance {
                 id: uuid::Uuid::new_v4().to_string(),
                 title: format!("图片流程 {}", self.sequence),
-                state: State::default(),
+                state: State::with_memory(self.memory.clone()),
             });
         }
         self.active = self.active.min(self.instances.len() - 1);
@@ -330,6 +341,13 @@ impl Workspace {
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui, unlocked: bool) {
         self.poll(ui.ctx());
         ui.group(|ui| {
+            if let Ok((retained,reserved,limit))=self.memory.snapshot() {
+                ui.label(format!("流程载荷 {:.1} MiB · 后台预留 {:.1} MiB / {:.0} MiB",retained as f64/1048576.0,reserved as f64/1048576.0,limit as f64/1048576.0));
+            }
+            ui.horizontal_wrapped(|ui| {ui.label("本次流程预算 MiB");let old=self.memory_limit_mb;if ui.add(egui::DragValue::new(&mut self.memory_limit_mb).range(64..=8192)).changed() {
+                if let Err(message)=self.memory.set_limit(self.memory_limit_mb as usize*1048576) {self.memory_limit_mb=old;self.message=message.into();}
+            }});
+            ui.small("目前覆盖流程共享像素、编码与执行预留；载入解码临时内存、其他图片工具、预览和GPU仍待统一。不自动清除其他工作。");
             ui.horizontal_wrapped(|ui| {
                 ui.strong("图片工作实例");
                 let enabled = unlocked && self.close_confirm.is_none();
@@ -548,3 +566,6 @@ mod relay_tests;
 
 #[cfg(feature = "ui-preview")]
 mod relay_preview;
+
+#[cfg(test)]
+mod memory_tests;

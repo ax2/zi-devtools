@@ -210,7 +210,7 @@ fn input_replacement_preserves_definition_and_import_blocks_exit() {
     let definition = state.definition.clone();
     state.run = Some(execute(&definition, source(), &AtomicBool::new(false)).unwrap());
     let prepared = relay::prepare(relay::Source::Image(source()), vec![], "image-tools").unwrap();
-    state.receive(&prepared);
+    state.receive(&prepared).unwrap();
     assert_eq!(state.definition, definition);
     assert!(state.run.is_none());
     assert!(Arc::ptr_eq(state.source.as_ref().unwrap(), &prepared.image));

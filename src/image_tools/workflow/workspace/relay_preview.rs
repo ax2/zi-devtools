@@ -6,10 +6,11 @@ impl Workspace {
         self.source = Some(Arc::new(DynamicImage::ImageRgba8(
             image::RgbaImage::from_pixel(20, 16, image::Rgba([210, 30, 40, 120])),
         )));
-        let run = execute(
+        let run = execute_budgeted(
             &self.definition,
             self.source.clone().unwrap(),
             &AtomicBool::new(false),
+            &self.memory,
         )
         .unwrap();
         assert!(run.failure.is_none());

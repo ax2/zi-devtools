@@ -822,7 +822,7 @@ mod tests {
         )
         .unwrap();
         let mut state = State::default();
-        state.workflow.receive(&prepared);
+        state.workflow.receive(&prepared).unwrap();
         state.relay = Some(Transfer {
             source_id: "image-tools",
             target: Target::Workflow,

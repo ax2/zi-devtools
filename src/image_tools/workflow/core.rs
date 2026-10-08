@@ -152,10 +152,19 @@ pub(super) struct Run {
     pub(super) failure: Option<String>,
     pub(super) cancelled: bool,
 }
+#[cfg(any(test, feature = "ui-preview"))]
 pub(super) fn execute(
     def: &Definition,
     source: Arc<DynamicImage>,
     cancel: &AtomicBool,
+) -> Result<Run> {
+    execute_budgeted(def, source, cancel, &super::super::memory::Pool::default())
+}
+pub(super) fn execute_budgeted(
+    def: &Definition,
+    source: Arc<DynamicImage>,
+    cancel: &AtomicBool,
+    memory: &super::super::memory::Pool,
 ) -> Result<Run> {
     def.validate()?;
     if cancel.load(Ordering::Relaxed) {
@@ -170,6 +179,9 @@ pub(super) fn execute(
         Vec::new(),
         "image-workflow",
     )?;
+    memory
+        .share(&source, super::super::memory::pixels(&source))
+        .map_err(anyhow::Error::msg)?;
     let mut current = source;
     let mut encoded: Option<Arc<Vec<u8>>> = None;
     let mut retained = current.as_bytes().len();
@@ -201,12 +213,21 @@ pub(super) fn execute(
                         ((x1 - x0) * (y1 - y0)) as usize
                             * usize::from(current.color().bytes_per_pixel()),
                     )?;
+                    let guard = memory
+                        .reserve(
+                            ((x1 - x0) * (y1 - y0)) as usize
+                                * usize::from(current.color().bytes_per_pixel()),
+                        )
+                        .map_err(anyhow::Error::msg)?;
                     current = Arc::new(current.crop_imm(
                         x0 as u32,
                         y0 as u32,
                         (x1 - x0) as u32,
                         (y1 - y0) as u32,
                     ));
+                    guard
+                        .promote(&current, super::super::memory::pixels(&current))
+                        .map_err(anyhow::Error::msg)?;
                     encoded = None;
                     retained = retained.saturating_add(current.as_bytes().len());
                 }
@@ -223,8 +244,18 @@ pub(super) fn execute(
                                 * height as usize
                                 * usize::from(current.color().bytes_per_pixel()),
                         )?;
+                        let guard = memory
+                            .reserve(
+                                width as usize
+                                    * height as usize
+                                    * usize::from(current.color().bytes_per_pixel()),
+                            )
+                            .map_err(anyhow::Error::msg)?;
                         current =
                             Arc::new(current.resize_exact(width, height, FilterType::Lanczos3));
+                        guard
+                            .promote(&current, super::super::memory::pixels(&current))
+                            .map_err(anyhow::Error::msg)?;
                         encoded = None;
                         retained = retained.saturating_add(current.as_bytes().len());
                     }
@@ -232,9 +263,20 @@ pub(super) fn execute(
                 Step::Encode {
                     format, quality, ..
                 } => {
-                    let (bytes, _, _) =
-                        encode_image(&current, current.width(), format.native(), *quality)?;
-                    let bytes = Arc::new(bytes);
+                    let guard = memory
+                        .reserve(
+                            current.width() as usize
+                                * current.height() as usize
+                                * usize::from(current.color().bytes_per_pixel().max(4)),
+                        )
+                        .map_err(anyhow::Error::msg)?;
+                    let bytes = super::super::encoding::encode_tracked(
+                        &current,
+                        format.native().image_format(),
+                        *quality,
+                        MAX_OUTPUT_BYTES,
+                        memory,
+                    )?;
                     reserve(
                         retained,
                         bytes.len().saturating_add(
@@ -249,6 +291,9 @@ pub(super) fn execute(
                         "image-workflow",
                     )?;
                     current = prepared.image;
+                    guard
+                        .promote(&current, super::super::memory::pixels(&current))
+                        .map_err(anyhow::Error::msg)?;
                     retained = retained
                         .saturating_add(current.as_bytes().len())
                         .saturating_add(bytes.len());

@@ -13,11 +13,11 @@ fn prepared(value: u8) -> relay::Prepared {
 fn existing_target_is_bound_to_id_preserves_definition_source_and_requires_fresh_consent() {
     let mut work = Workspace::default();
     let a = prepared(10);
-    work.receive(&a);
+    work.receive(&a).unwrap();
     let source_id = work.active_id();
     work.create().unwrap();
     let b = prepared(20);
-    work.receive(&b);
+    work.receive(&b).unwrap();
     work.definition.steps = vec![Step::Info { version: 1 }];
     let def = work.definition.clone();
     let target = work.relay_choices(Some(&source_id))[0].destination.clone();
@@ -53,7 +53,7 @@ fn existing_target_is_bound_to_id_preserves_definition_source_and_requires_fresh
 fn new_only_creates_on_success_capacity_closed_busy_and_import_are_guarded() {
     let mut work = Workspace::default();
     let a = prepared(10);
-    work.receive(&a);
+    work.receive(&a).unwrap();
     let source_id = work.active_id();
     work.receive_at(&Destination::New, Some(&source_id), false, &a)
         .unwrap();
@@ -99,7 +99,7 @@ fn new_only_creates_on_success_capacity_closed_busy_and_import_are_guarded() {
 fn async_completion_invalidates_preselected_target_token() {
     let mut work = Workspace::default();
     let a = prepared(10);
-    work.receive(&a);
+    work.receive(&a).unwrap();
     work.launch(&egui::Context::default(), Kind::Run, |_| {
         Ok(Reply::Run(Run::default()))
     });
