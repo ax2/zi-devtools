@@ -108,7 +108,7 @@ pub struct State {
     metadata: metadata::State,
     editor: editor::State,
     screenshot: screenshot::State,
-    workflow: workflow::State,
+    workflow: workflow::Workspace,
     input: String,
     output: String,
     source: Option<Arc<DynamicImage>>,
@@ -130,8 +130,7 @@ impl State {
             || self.metadata.busy()
             || self.editor.busy()
             || self.screenshot.busy()
-            || self.workflow.busy()
-            || self.workflow.pending_import()
+            || self.workflow.background_active()
             || self.relay.as_ref().is_some_and(|transfer| transfer.busy())
     }
 
@@ -229,7 +228,7 @@ impl State {
         self.mode = Mode::Batch;
     }
     pub(crate) fn can_receive_workflow(&self) -> bool {
-        !self.workflow.busy() && !self.workflow.pending_import() && !self.relay_active()
+        self.workflow.can_receive() && !self.relay_active()
     }
     pub(crate) fn receive_workflow(&mut self, definition: WorkflowDefinition) -> Result<()> {
         ensure!(
@@ -258,6 +257,10 @@ impl State {
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_import_pending(&self) -> bool {
         self.workflow.pending_import()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_instances_check(&self, phase: u8) {
+        self.workflow.preview_instance_check(phase);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_ready(&self) -> bool {
@@ -472,7 +475,10 @@ impl State {
             Mode::Metadata => return self.metadata.ui(ui),
             Mode::Editor => return self.editor.ui(ui),
             Mode::Screenshot => return self.screenshot.ui(ui),
-            Mode::Workflow => return self.workflow.ui(ui),
+            Mode::Workflow => {
+                let unlocked = !self.relay_active();
+                return self.workflow.ui(ui, unlocked);
+            }
             Mode::Single => {}
         }
         self.poll(ui.ctx());

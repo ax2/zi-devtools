@@ -5450,9 +5450,13 @@ impl eframe::App for DevToolsApp {
                     }
                 }
                 Page::Images => {
-                    egui::ScrollArea::vertical()
-                        .id_salt("image-tools-page")
-                        .show(ui, |ui| self.images.ui(ui));
+                    if self.images.active_tool_id() == "image-workflow" {
+                        self.images.ui(ui);
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .id_salt("image-tools-page")
+                            .show(ui, |ui| self.images.ui(ui));
+                    }
                 }
                 Page::Markdown => {
                     egui::ScrollArea::vertical()

@@ -2,8 +2,10 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 mod core;
+mod workspace;
 pub(crate) use core::Definition;
 use core::{Encoding, RECIPE_LIMIT, Run, Step, execute};
+pub(super) use workspace::Workspace;
 #[cfg(test)]
 mod tests;
 
@@ -14,7 +16,7 @@ enum Reply {
     SavedDefinition(crate::preferences::SavedWorkflow),
     Saved(String),
 }
-pub(super) struct State {
+pub(crate) struct State {
     definition: Definition,
     source: Option<Arc<DynamicImage>>,
     origins: Vec<relay::Origin>,
@@ -552,5 +554,11 @@ impl State {
             }
         }
         ui.small("最多16步；累计保留结果≤256MiB。PNG/WebP无损，JPEG质量可调。改步骤后旧结果失效；另存不覆盖已有文件。");
+    }
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
     }
 }

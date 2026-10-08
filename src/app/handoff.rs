@@ -386,6 +386,10 @@ impl DevToolsApp {
         );
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_image_instances_check(&self, phase: u8) {
+        self.images.preview_image_instances_check(phase);
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_ready(&self) -> bool {
         self.images.preview_image_workflow_ready()
     }
