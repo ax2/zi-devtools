@@ -5,7 +5,6 @@ use eframe::egui;
 use std::{
     collections::HashSet,
     fs,
-    io::Write,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -433,28 +432,18 @@ fn inspect_batch(sources: &[PathBuf], dir: &Path, format: Format) -> Result<Vec<
     Ok(items)
 }
 
-fn process_one(item: &Item, max_width: u32, format: Format, quality: u8) -> Result<usize> {
+fn process_one(
+    item: &Item,
+    max_width: u32,
+    format: Format,
+    quality: u8,
+    cancel: &AtomicBool,
+) -> Result<usize> {
+    ensure!(!cancel.load(Ordering::Relaxed), "操作已取消");
     let image = decode_image(&item.source).with_context(|| item.source.display().to_string())?;
     let width = image.width().min(max_width.max(1));
     let (bytes, _, _) = encode_image(&image, width, format, quality)?;
-    let mut created = false;
-    let result = (|| -> Result<()> {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&item.target)
-            .with_context(|| format!("目标已存在或不可写：{}", item.target.display()))?;
-        created = true;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-        Ok(())
-    })();
-    if let Err(error) = result {
-        if created {
-            let _ = fs::remove_file(&item.target);
-        }
-        return Err(error);
-    }
+    super::save_image_new(&item.target, &bytes, cancel)?;
     Ok(bytes.len())
 }
 
@@ -470,7 +459,8 @@ fn run_batch(
         if cancel.load(Ordering::Relaxed) {
             break;
         }
-        let result = process_one(item, max_width, format, quality).map_err(|e| format!("{e:#}"));
+        let result =
+            process_one(item, max_width, format, quality, cancel).map_err(|e| format!("{e:#}"));
         if tx.send(Event::Saved(index, result)).is_err() {
             return;
         }
@@ -506,9 +496,9 @@ mod tests {
         assert!(duplicates.iter().all(|item| item.conflict));
         let one = inspect_batch(&[a.clone()], &output, Format::Jpeg).unwrap();
         assert!(!one[0].conflict);
-        assert!(process_one(&one[0], 40, Format::Jpeg, 75).unwrap() > 0);
+        assert!(process_one(&one[0], 40, Format::Jpeg, 75, &AtomicBool::new(false)).unwrap() > 0);
         assert_eq!(image::open(&one[0].target).unwrap().dimensions(), (40, 20));
-        assert!(process_one(&one[0], 40, Format::Jpeg, 75).is_err());
+        assert!(process_one(&one[0], 40, Format::Jpeg, 75, &AtomicBool::new(false)).is_err());
         assert_eq!(fs::read(&a).unwrap(), originals[0]);
         assert_eq!(fs::read(&b).unwrap(), originals[1]);
         fs::remove_dir_all(root).unwrap();

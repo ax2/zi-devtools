@@ -3,7 +3,6 @@ use anyhow::{Result, ensure};
 use eframe::egui::{self, Color32, Pos2, Sense, Stroke};
 use image::RgbaImage;
 use std::{
-    io::Write,
     path::Path,
     sync::{Arc, mpsc},
 };
@@ -132,16 +131,7 @@ fn save_png(path: &Path, image: &RgbaImage) -> Result<usize> {
     let mut data = std::io::Cursor::new(Vec::new());
     image.write_to(&mut data, image::ImageFormat::Png)?;
     let data = data.into_inner();
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)?;
-    let result = file.write_all(&data).and_then(|_| file.sync_all());
-    drop(file);
-    if let Err(error) = result {
-        let _ = std::fs::remove_file(path);
-        return Err(error.into());
-    }
+    super::save_image_new(path, &data, &std::sync::atomic::AtomicBool::new(false))?;
     Ok(data.len())
 }
 

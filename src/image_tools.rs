@@ -8,14 +8,14 @@ mod screenshot;
 pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
     screenshot::verify_capture()
 }
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use eframe::egui;
 use image::{
     DynamicImage, GenericImageView, ImageFormat, ImageReader, Limits, imageops::FilterType,
 };
 use std::{
     fs,
-    io::{Cursor, Write},
+    io::Cursor,
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
@@ -23,6 +23,19 @@ use std::{
 const MAX_INPUT_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_PIXELS: u64 = 16_000_000;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
+
+fn save_image_new(
+    path: &Path,
+    bytes: &[u8],
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<PathBuf> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    crate::local_files::save_new_moved(&path, bytes, cancel)
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Format {
@@ -349,7 +362,6 @@ impl State {
         };
         let source = Path::new(self.input.trim());
         let target = Path::new(self.output.trim());
-        let mut created = false;
         let result = (|| -> Result<()> {
             ensure!(
                 !target.as_os_str().is_empty() && target != source,
@@ -361,16 +373,7 @@ impl State {
                     .eq_ignore_ascii_case(self.format.extension())),
                 "输出扩展名需与选择的格式一致"
             );
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(target)
-                .with_context(|| {
-                    format!("无法创建新文件；如已存在请更换名称：{}", target.display())
-                })?;
-            created = true;
-            file.write_all(bytes)?;
-            file.sync_all()?;
+            save_image_new(target, bytes, &std::sync::atomic::AtomicBool::new(false))?;
             Ok(())
         })();
         match result {
@@ -379,9 +382,6 @@ impl State {
                 self.error = false;
             }
             Err(error) => {
-                if created {
-                    let _ = fs::remove_file(target);
-                }
                 self.message = format!("保存失败：{error:#}");
                 self.error = true;
             }

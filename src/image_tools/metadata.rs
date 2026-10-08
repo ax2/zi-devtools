@@ -5,7 +5,7 @@ use eframe::egui;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader};
 use std::{
     fs,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
@@ -423,7 +423,6 @@ impl State {
         };
         let target = Path::new(self.output.trim());
         let source = Path::new(self.input.trim());
-        let mut created = false;
         let result = (|| -> Result<()> {
             ensure!(
                 !target.as_os_str().is_empty() && target != source,
@@ -435,14 +434,7 @@ impl State {
                     .eq_ignore_ascii_case(summary.extension())),
                 "输出扩展名需与源格式一致"
             );
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(target)
-                .with_context(|| format!("目标已存在或无法创建：{}", target.display()))?;
-            created = true;
-            file.write_all(bytes)?;
-            file.sync_all()?;
+            super::save_image_new(target, bytes, &std::sync::atomic::AtomicBool::new(false))?;
             Ok(())
         })();
         match result {
@@ -451,9 +443,6 @@ impl State {
                 self.error = false;
             }
             Err(error) => {
-                if created {
-                    let _ = fs::remove_file(target);
-                }
                 self.message = format!("保存失败：{error:#}");
                 self.error = true;
             }

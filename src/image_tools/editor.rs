@@ -1,12 +1,12 @@
 //! Local full-resolution crop, redaction, arrows and text with encoded preview.
 use super::{Format, MAX_OUTPUT_BYTES, metadata, preview_image};
 use ab_glyph::{Font, FontVec, PxScale, ScaleFont, point};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use eframe::egui::{self, Color32, Sense, Stroke};
 use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 use std::{
     fs,
-    io::{Cursor, Write},
+    io::Cursor,
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
 };
@@ -340,7 +340,6 @@ impl State {
         let Some(bytes) = &self.encoded else { return };
         let target = Path::new(self.output.trim());
         let source = Path::new(self.input.trim());
-        let mut created = false;
         let result = (|| -> Result<()> {
             ensure!(
                 !target.as_os_str().is_empty() && target != source,
@@ -352,14 +351,7 @@ impl State {
                     .eq_ignore_ascii_case(self.format.extension())),
                 "输出扩展名需与选择的格式一致"
             );
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(target)
-                .with_context(|| format!("目标已存在或无法创建：{}", target.display()))?;
-            created = true;
-            file.write_all(bytes)?;
-            file.sync_all()?;
+            super::save_image_new(target, bytes, &std::sync::atomic::AtomicBool::new(false))?;
             Ok(())
         })();
         match result {
@@ -368,9 +360,6 @@ impl State {
                 self.error = false;
             }
             Err(error) => {
-                if created {
-                    let _ = fs::remove_file(target);
-                }
                 self.message = format!("保存失败：{error:#}");
                 self.error = true;
             }
