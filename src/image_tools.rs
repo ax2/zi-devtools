@@ -3,6 +3,7 @@ mod batch;
 mod editor;
 mod metadata;
 mod relay;
+mod report;
 mod screenshot;
 #[cfg(all(windows, feature = "ui-preview"))]
 pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
@@ -99,6 +100,7 @@ pub struct State {
     origins: Vec<relay::Origin>,
     relay: Option<relay::Transfer>,
     relay_route: Option<&'static str>,
+    reports: report::State,
     batch: batch::State,
     metadata: metadata::State,
     editor: editor::State,
@@ -118,7 +120,7 @@ pub struct State {
 }
 impl State {
     pub(crate) fn background_active(&self) -> bool {
-        self.pending.is_some()
+        self.pending.is_some() || self.reports.busy()
     }
 
     pub fn screenshot_capture_active(&self) -> bool {
@@ -164,6 +166,7 @@ impl State {
         self.relay_route.take()
     }
     pub fn poll_screenshot(&mut self, ctx: &egui::Context) {
+        self.poll_image_report(ctx);
         if let Some(transfer) = &mut self.relay {
             transfer.poll(ctx);
         }
@@ -396,6 +399,7 @@ impl State {
             ui.selectable_value(&mut self.mode, Mode::Screenshot, "截图与透明套索");
         });
         self.relay_ui(ui);
+        self.image_report_ui(ui);
         ui.add_space(10.0);
         match self.mode {
             Mode::Batch => return self.batch.ui(ui),

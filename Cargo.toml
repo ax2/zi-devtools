@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.85"
+version = "0.82.0-dev.86"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -182,4 +182,8 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "file_material_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "image_report_ui"
 required-features = ["ui-preview"]

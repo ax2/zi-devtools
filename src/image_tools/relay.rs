@@ -59,7 +59,7 @@ fn origin(id: &str) -> Result<Origin> {
         utc: chrono::Utc::now().to_rfc3339(),
     })
 }
-fn prepare(source: Source, mut origins: Vec<Origin>, id: &str) -> Result<Prepared> {
+pub(super) fn prepare(source: Source, mut origins: Vec<Origin>, id: &str) -> Result<Prepared> {
     ensure!(
         origins.len() < 128,
         "接力链已达128步，请保留结果后建立新的链"
@@ -279,7 +279,7 @@ impl State {
             .as_ref()
             .is_some_and(|transfer| !transfer.cancelled)
     }
-    fn relay_source(&self) -> Option<(Source, Vec<Origin>, &'static str)> {
+    pub(super) fn relay_source(&self) -> Option<(Source, Vec<Origin>, &'static str)> {
         match self.mode {
             Mode::Single if self.pending.is_none() => self
                 .encoded

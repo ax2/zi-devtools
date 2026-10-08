@@ -268,6 +268,59 @@ impl Transfer {
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_image_report_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
+        self.startup_warning = None;
+        self.page = Page::Images;
+        self.images = Default::default();
+        self.images.preview_fixture(ctx);
+        self.open_startup_tool("image-tools");
+        self.tool_state.select(ToolKind::Json);
+        self.tool_state.input = "existing-target-draft".into();
+        self.tool_state.clear_result();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_report_check(&self, phase: u8) {
+        let text = self.images.preview_image_report_assert();
+        match phase {
+            0 => {
+                assert!(self.handoff.is_none());
+                assert_eq!(self.page, Page::Images);
+                assert_eq!(self.handoff_source().unwrap().1, text);
+            }
+            1 => {
+                assert_eq!(self.handoff.as_ref().unwrap().text, text);
+                assert_eq!(self.tool_state.input, "existing-target-draft");
+            }
+            2 => {
+                assert!(self.handoff.is_none());
+                assert_eq!(self.tool_state.input, "existing-target-draft");
+            }
+            3 => {
+                assert!(self.handoff.is_none());
+                assert_eq!(self.tool_state.selected, ToolKind::Json);
+                assert_eq!(self.tool_state.input, text);
+                assert!(!self.tool_state.has_result());
+            }
+            4 => {
+                assert!(self.handoff.is_none());
+                assert_eq!(self.page, Page::Notes);
+                assert!(self.planner.has_unsaved());
+                assert_eq!(self.planner.transfer_text().unwrap().1, text);
+            }
+            _ => panic!("image report phase"),
+        }
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_report_memo_prepare(&mut self) {
+        self.planner.preview(false, false);
+        let text = self.images.preview_image_report_assert();
+        let mut transfer = Transfer::new("图片信息报告（冻结快照）".into(), &text).unwrap();
+        transfer.target = Target::Memo;
+        self.handoff = Some(transfer);
+        self.page = Page::Images;
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_file_report_dispatch(&mut self) {
         let report = self.file_state.report().to_owned();
         let (source, text) = self.handoff_source().unwrap();
@@ -492,6 +545,10 @@ impl DevToolsApp {
             )),
             Page::Clipboard => self.clipboard.transfer_text(),
             Page::Files => Some(("文件校验报告".into(), self.file_state.report())),
+            Page::Images => self
+                .images
+                .image_report()
+                .map(|text| ("图片信息报告（冻结快照）".into(), text)),
             Page::Data => Some(("数据工作台导出".into(), &self.data_state.output)),
             Page::Notes | Page::Calendar => self.planner.transfer_text(),
             Page::Diff => Some(("文本差异报告".into(), &self.diff_state.diff_output)),
@@ -598,16 +655,21 @@ impl DevToolsApp {
         let body_source = matches!(self.page, Page::Notes | Page::Calendar);
         egui::TopBottomPanel::top("result-handoff").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                clicked = ui
-                    .add_enabled(
-                        !text.is_empty() && self.handoff.is_none(),
-                        egui::Button::new(if body_source {
-                            "发送正文到工具…"
-                        } else {
-                            "发送结果到工具…"
-                        }),
-                    )
-                    .clicked();
+                let response = ui.add_enabled(
+                    !text.is_empty() && self.handoff.is_none(),
+                    egui::Button::new(if body_source {
+                        "发送正文到工具…"
+                    } else {
+                        "发送结果到工具…"
+                    }),
+                );
+                clicked = response.clicked();
+                #[cfg(feature = "ui-preview")]
+                if self.page == Page::Images {
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(egui::Id::new("image-report-send"), response.rect)
+                    });
+                }
                 ui.small(if text.is_empty() {
                     "生成结果后，可交给其他工具继续处理"
                 } else {
@@ -733,7 +795,7 @@ impl DevToolsApp {
                 let response = ui.add_enabled(transfer.compatible(),egui::Button::new(if transfer.target == Target::Event {"创建日程草稿"} else if transfer.target == Target::Memo {"创建备忘草稿"} else if data_target && transfer.new_data_instance {"新建实例并打开"}else{"替换输入并打开"}));
                 apply = response.clicked();
                 #[cfg(feature = "ui-preview")]
-                { transfer.preview_rects[1] = Some(response.rect); }
+                { transfer.preview_rects[1] = Some(response.rect); ui.ctx().data_mut(|data|data.insert_temp(egui::Id::new("handoff-apply"),response.rect)); }
             });
         });
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
