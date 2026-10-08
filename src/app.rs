@@ -1,4 +1,5 @@
 mod commands;
+mod file_materials;
 mod handoff;
 mod launcher;
 mod navigation;
@@ -5688,6 +5689,7 @@ impl eframe::App for DevToolsApp {
             self.visit(id);
         }
         self.handoff_dialog(ctx);
+        self.file_material_dialog(ctx);
         self.overlays(ctx);
         self.launcher(ctx);
         self.clock.notice_ui(ctx);

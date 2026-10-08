@@ -78,7 +78,7 @@ impl FileMaterial {
     pub fn bytes(&self) -> u64 {
         self.identity.bytes
     }
-    fn open(&self, max_bytes: usize) -> Result<File> {
+    pub(crate) fn open(&self, max_bytes: usize) -> Result<File> {
         let file = crate::local_files::open_regular(&self.path, max_bytes)
             .context("源文件不可用，请重新选择")?;
         ensure!(
@@ -86,6 +86,28 @@ impl FileMaterial {
             "源文件已改变，请重新选择并审核"
         );
         Ok(file)
+    }
+    pub fn verify(&self, file: &File, max_bytes: usize) -> Result<()> {
+        ensure!(
+            identity(file)? == self.identity,
+            "读取期间源文件改变，本次结果未发布"
+        );
+        self.open(max_bytes)?;
+        Ok(())
+    }
+    pub fn validate(&self, max_bytes: usize) -> Result<()> {
+        self.open(max_bytes)?;
+        Ok(())
+    }
+    pub fn read_bytes(&self, max_bytes: usize) -> Result<Vec<u8>> {
+        let mut file = self.open(max_bytes)?;
+        let mut bytes = Vec::new();
+        (&mut file)
+            .take(max_bytes.saturating_add(1) as u64)
+            .read_to_end(&mut bytes)?;
+        ensure!(bytes.len() <= max_bytes, "文件超出本次允许大小");
+        self.verify(&file, max_bytes)?;
+        Ok(bytes)
     }
     /// Bounded streaming read. File size limits are supplied by the action, not
     /// inherited from the text pipeline's one-MiB input limit.

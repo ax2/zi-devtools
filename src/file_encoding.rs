@@ -293,6 +293,7 @@ fn suggested_output(source: &Path, charset: Charset) -> PathBuf {
 
 #[derive(Default)]
 pub struct State {
+    material: Option<crate::material_files::FileMaterial>,
     input: String,
     output: String,
     bytes: Option<Vec<u8>>,
@@ -306,6 +307,29 @@ pub struct State {
     error: bool,
 }
 impl State {
+    pub fn receive_material(
+        &mut self,
+        material: crate::material_files::FileMaterial,
+    ) -> Result<()> {
+        material.validate(MAX_INPUT)?;
+        *self = Self {
+            input: material.path().to_string_lossy().into_owned(),
+            material: Some(material),
+            message: "已接收原文件引用；点击读取检查编码，不自动转换或保存".into(),
+            ..Default::default()
+        };
+        Ok(())
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_material_check(&self, loaded: bool) {
+        assert!(self.material.is_some());
+        assert_eq!(self.bytes.is_some(), loaded);
+        if loaded {
+            assert_eq!(self.bytes.as_deref(), Some(b"abc".as_slice()));
+        }
+        assert!(self.encoded.is_none());
+    }
     fn invalidate(&mut self) {
         self.decoded = None;
         self.encoded = None;
@@ -315,7 +339,10 @@ impl State {
         self.detection = None;
         self.invalidate();
         let path = PathBuf::from(self.input.trim());
-        match read_input(&path) {
+        match self.material.as_ref().map_or_else(
+            || read_input(&path),
+            |material| material.read_bytes(MAX_INPUT),
+        ) {
             Ok(bytes) => {
                 let detection = detect(&bytes);
                 self.source = detection.charset;
@@ -423,6 +450,7 @@ impl State {
                 )
                 .changed()
             {
+                self.material = None;
                 self.bytes = None;
                 self.detection = None;
                 self.invalidate();
@@ -430,10 +458,15 @@ impl State {
             if ui.button("选择文件…").clicked()
                 && let Some(path) = rfd::FileDialog::new().pick_file()
             {
+                self.material = None;
                 self.input = path.to_string_lossy().into_owned();
                 self.load();
             }
-            if ui.button("读取").clicked() {
+            let read = ui.button("读取");
+            #[cfg(feature = "ui-preview")]
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(egui::Id::new("file-material-read"), read.rect));
+            if read.clicked() {
                 self.load();
             }
         });
@@ -558,6 +591,29 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn receiving_file_material_is_explicit_and_replacement_invalidates_later_read() {
+        let folder = std::env::temp_dir().join(format!("zi-receive-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&folder).unwrap();
+        let path = folder.join("source.txt");
+        std::fs::write(&path, b"original").unwrap();
+        let material = crate::material_files::FileMaterial::selected(&path, MAX_INPUT).unwrap();
+        let mut state = State::default();
+        state.receive_material(material.clone()).unwrap();
+        assert!(state.bytes.is_none() && state.encoded.is_none());
+        state.load();
+        assert_eq!(state.bytes.as_deref(), Some(b"original".as_slice()));
+        std::fs::rename(&path, folder.join("old.txt")).unwrap();
+        std::fs::write(&path, b"original").unwrap();
+        state.load();
+        assert!(state.error && state.bytes.is_none());
+        let before = state.input.clone();
+        assert!(state.receive_material(material).is_err());
+        assert_eq!(state.input, before);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(folder.join("old.txt")).unwrap();
+        std::fs::remove_dir(folder).unwrap();
+    }
 
     #[test]
     fn bom_and_ascii_are_distinguished_from_guesses() {

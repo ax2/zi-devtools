@@ -268,6 +268,19 @@ impl Transfer {
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
+    pub fn preview_file_report_dispatch(&mut self) {
+        let report = self.file_state.report().to_owned();
+        let (source, text) = self.handoff_source().unwrap();
+        let mut transfer = Transfer::new(source, text).unwrap();
+        transfer.target = Target::Tool(ToolKind::Json);
+        self.handoff = Some(transfer);
+        self.apply_handoff();
+        assert_eq!(self.tool_state.input, report);
+        assert!(!self.tool_state.has_result());
+        assert_eq!(self.file_state.report(), report);
+        self.page = Page::Files;
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_handoff_result_prepare(&mut self, ctx: &egui::Context, light: bool) {
         self.set_theme(ctx, if light { Theme::Light } else { Theme::Dark });
         self.startup_warning = None;
@@ -471,13 +484,14 @@ impl DevToolsApp {
             _ => unreachable!(),
         }
     }
-    fn handoff_source(&self) -> Option<(String, &str)> {
+    pub(super) fn handoff_source(&self) -> Option<(String, &str)> {
         match self.page {
             Page::SmallTools | Page::EncodingTools => Some((
                 self.tool_state.selected.label().into(),
                 &self.tool_state.output,
             )),
             Page::Clipboard => self.clipboard.transfer_text(),
+            Page::Files => Some(("文件校验报告".into(), self.file_state.report())),
             Page::Data => Some(("数据工作台导出".into(), &self.data_state.output)),
             Page::Notes | Page::Calendar => self.planner.transfer_text(),
             Page::Diff => Some(("文本差异报告".into(), &self.diff_state.diff_output)),

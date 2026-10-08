@@ -982,6 +982,7 @@ mod focused_views_tests {
 }
 
 pub struct FileDigest {
+    pub source: crate::material_files::FileMaterial,
     pub path: PathBuf,
     pub bytes: u64,
     pub sha256: String,
@@ -992,7 +993,8 @@ pub fn hash_file(
     cancel: &AtomicBool,
     mut progress: impl FnMut(u64, u64),
 ) -> Result<FileDigest> {
-    let mut file = File::open(&path).context("无法读取文件")?;
+    let source = crate::material_files::FileMaterial::selected(&path, usize::MAX)?;
+    let mut file = source.open(usize::MAX)?;
     let before = file.metadata()?;
     if !before.is_file() {
         bail!("仅支持普通文件");
@@ -1025,8 +1027,13 @@ pub fn hash_file(
     {
         bail!("文件在读取过程中发生变化，请重试");
     }
+    source.verify(&file, usize::MAX)?;
+    if cancel.load(Ordering::Relaxed) {
+        bail!("已取消");
+    }
     progress(bytes, bytes);
     Ok(FileDigest {
+        source,
         path,
         bytes,
         sha256: format!("{:x}", sha256.finalize()),
@@ -1050,8 +1057,14 @@ pub struct FileState {
     index: usize,
     total: usize,
     pub job: Job,
+    report: String,
+    pub file_transfer: Option<crate::material_files::FileMaterial>,
 }
 impl FileState {
+    pub fn report(&self) -> &str {
+        &self.report
+    }
+
     pub fn append_paths(&mut self, paths: &[PathBuf]) -> Result<()> {
         if self.receiver.is_some() {
             bail!("文件校验正在运行，请稍后重试");
@@ -1097,6 +1110,8 @@ impl FileState {
         self.index = 0;
         self.progress = 0.0;
         self.results.clear();
+        self.report.clear();
+        self.file_transfer = None;
         self.message.clear();
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = self.cancel.clone();
@@ -1207,6 +1222,14 @@ impl FileState {
             );
             ui.horizontal_wrapped(|ui| {
                 if ui
+                    .add_enabled(self.receiver.is_none(), egui::Button::new("选择文件…"))
+                    .clicked()
+                    && let Some(paths) = rfd::FileDialog::new().pick_files()
+                    && let Err(error) = self.append_paths(&paths)
+                {
+                    self.message = error.to_string();
+                }
+                if ui
                     .add_enabled(
                         self.receiver.is_none() && !self.paths.trim().is_empty(),
                         primary(ui, "开始校验"),
@@ -1267,6 +1290,23 @@ impl FileState {
                     match result {
                         Ok(d) => {
                             ui.label(RichText::new(format!("{} 字节", d.bytes)).small().weak());
+                            ui.horizontal_wrapped(|ui| {
+                                let report = ui.button("使用校验报告…");
+                                #[cfg(feature="ui-preview")]
+                                ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new(("file-report", i)), report.rect));
+                                if report.clicked() {
+                                    self.report = serde_json::to_string_pretty(&serde_json::json!({
+                                        "format_version": 1,
+                                        "file_name": path.file_name().unwrap_or_default().to_string_lossy(),
+                                        "bytes": d.bytes, "sha256": d.sha256, "sha512": d.sha512
+                                    })).unwrap();
+                                    self.message = "已选择报告输出，可通过顶部入口发送到其他工具；报告不包含完整路径".into();
+                                }
+                                let source = ui.add_enabled(self.file_transfer.is_none(), egui::Button::new("原文件 → 编码检查…"));
+                                #[cfg(feature="ui-preview")]
+                                ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new(("file-source", i)), source.rect));
+                                if source.clicked() { self.file_transfer = Some(d.source.clone()); }
+                            });
                             if valid_expected {
                                 let matches = if expected.len() == 64 {
                                     expected.eq_ignore_ascii_case(&d.sha256)
