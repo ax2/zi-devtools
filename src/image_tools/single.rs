@@ -21,6 +21,23 @@ pub(super) fn preview(
     quality: u8,
     memory: &memory::Pool,
 ) -> Result<Job> {
+    let (encoded, width, height) = encode(source, width, format, quality, memory)?;
+    let decoded = workflow::input::decode(&encoded, &AtomicBool::new(false), memory)?;
+    Ok(Job::Preview {
+        encoded,
+        preview: preview_image(&decoded),
+        width,
+        height,
+    })
+}
+
+pub(super) fn encode(
+    source: Arc<DynamicImage>,
+    width: u32,
+    format: Format,
+    quality: u8,
+    memory: &memory::Pool,
+) -> Result<(Arc<Vec<u8>>, u32, u32)> {
     ensure!(
         width >= 1 && width <= source.width(),
         "输出宽度超出原图范围"
@@ -59,13 +76,7 @@ pub(super) fn preview(
         MAX_OUTPUT_BYTES,
         memory,
     )?;
-    let decoded = workflow::input::decode(&encoded, &AtomicBool::new(false), memory)?;
-    Ok(Job::Preview {
-        encoded,
-        preview: preview_image(&decoded),
-        width,
-        height,
-    })
+    Ok((encoded, width, height))
 }
 
 #[cfg(test)]

@@ -19,8 +19,9 @@ use eframe::egui;
 use image::{
     DynamicImage, GenericImageView, ImageFormat, ImageReader, Limits, imageops::FilterType,
 };
+#[cfg(test)]
+use std::fs;
 use std::{
-    fs,
     io::Cursor,
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
@@ -504,7 +505,9 @@ impl State {
         ui.add_space(10.0);
         match self.mode {
             Mode::Batch => {
-                if let Some(source) = self.batch.ui(ui, self.relay.is_none()) {
+                self.workflow.memory_ui(ui);
+                let memory = self.workflow.memory_pool();
+                if let Some(source) = self.batch.ui(ui, self.relay.is_none(), &memory) {
                     self.relay = Some(relay::Transfer::start(
                         ui.ctx(),
                         source,
@@ -684,35 +687,6 @@ fn preview_image(image: &DynamicImage) -> egui::ColorImage {
 fn load_image(path: &Path) -> Result<Job> {
     single::load(path, &memory::Pool::default())
 }
-pub(crate) fn inspect_image(path: &Path) -> Result<(u32, u32, u64)> {
-    let size = fs::metadata(path)?.len();
-    ensure!(
-        size > 0 && size <= MAX_INPUT_BYTES,
-        "图片需为非空且不超过 32 MiB"
-    );
-    let bytes = fs::read(path)?;
-    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
-    ensure!(
-        matches!(
-            reader.format(),
-            Some(ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::WebP)
-        ),
-        "仅支持 PNG、JPEG、WebP"
-    );
-    reader.limits(image_limits());
-    let (width, height) = reader.into_dimensions()?;
-    ensure!(
-        u64::from(width) * u64::from(height) <= MAX_PIXELS,
-        "图片像素数超过 1600 万"
-    );
-    Ok((width, height, size))
-}
-pub(crate) fn decode_image(path: &Path) -> Result<DynamicImage> {
-    inspect_image(path)?;
-    let mut reader = ImageReader::open(path)?.with_guessed_format()?;
-    reader.limits(image_limits());
-    Ok(reader.decode()?)
-}
 fn image_limits() -> Limits {
     let mut limits = Limits::default();
     limits.max_image_width = Some(12_000);
@@ -729,27 +703,6 @@ fn encode_preview(source: &DynamicImage, width: u32, format: Format, quality: u8
         quality,
         &memory::Pool::default(),
     )
-}
-pub(crate) fn encode_image(
-    source: &DynamicImage,
-    width: u32,
-    format: Format,
-    quality: u8,
-) -> Result<(Vec<u8>, u32, u32)> {
-    ensure!(
-        width >= 1 && width <= source.width(),
-        "输出宽度超出原图范围"
-    );
-    let height = ((u64::from(source.height()) * u64::from(width) + u64::from(source.width()) / 2)
-        / u64::from(source.width()))
-    .max(1) as u32;
-    let resized = if width == source.width() {
-        std::borrow::Cow::Borrowed(source)
-    } else {
-        std::borrow::Cow::Owned(source.resize_exact(width, height, FilterType::Lanczos3))
-    };
-    let encoded = encoding::encode(&resized, format.image_format(), quality, MAX_OUTPUT_BYTES)?;
-    Ok((encoded, width, height))
 }
 
 #[cfg(test)]

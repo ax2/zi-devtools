@@ -1,7 +1,8 @@
 //! Explicit, conflict-checked image batch processing. Each output is created once.
-use super::{Format, decode_image, encode_image, inspect_image};
+use super::{Format, memory, single, workflow};
 use anyhow::{Context, Result, ensure};
 use eframe::egui;
+use image::GenericImageView;
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
@@ -25,6 +26,8 @@ struct SavedOutput {
 #[derive(Clone)]
 struct Item {
     source: PathBuf,
+    selected: Option<crate::material_files::FileMaterial>,
+    source_sha256: Option<[u8; 32]>,
     target: PathBuf,
     dimensions: (u32, u32),
     original_bytes: u64,
@@ -147,6 +150,8 @@ impl State {
                 conflict: false,
                 saved_bytes: None,
                 saved_sha256: None,
+                selected: None,
+                source_sha256: None,
                 failed: false,
             })
             .collect();
@@ -269,7 +274,7 @@ impl State {
         }
     }
 
-    fn inspect(&mut self) {
+    fn inspect(&mut self, memory: memory::Pool) {
         if self.receiver.is_some() || self.running {
             return;
         }
@@ -279,6 +284,8 @@ impl State {
         self.failed = 0;
         self.items.clear();
         self.ready = false;
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.cancel = cancel.clone();
         let sources = self.inputs.clone();
         let output_dir = PathBuf::from(self.output_dir.trim());
         let format = self.format;
@@ -286,12 +293,13 @@ impl State {
         self.receiver = Some(rx);
         self.message = "正在检查文件与输出冲突…".into();
         std::thread::spawn(move || {
-            let result = inspect_batch(&sources, &output_dir, format).map_err(|e| format!("{e:#}"));
+            let result = inspect_batch_budgeted(&sources, &output_dir, format, &cancel, &memory)
+                .map_err(|e| format!("{e:#}"));
             let _ = tx.send(Event::Inspected(result));
         });
     }
 
-    fn start(&mut self) {
+    fn start(&mut self, memory: memory::Pool) {
         if self.receiver.is_some()
             || self.running
             || !self.ready
@@ -321,7 +329,9 @@ impl State {
         self.message = "批量处理中…".into();
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
-        std::thread::spawn(move || run_batch(&items, max_width, format, quality, &cancel, &tx));
+        std::thread::spawn(move || {
+            run_batch_budgeted(&items, max_width, format, quality, &cancel, &tx, &memory)
+        });
     }
 
     pub(super) fn report(&self) -> Option<&str> {
@@ -418,6 +428,7 @@ impl State {
         &mut self,
         ui: &mut egui::Ui,
         allow_relay: bool,
+        memory: &memory::Pool,
     ) -> Option<super::relay::Source> {
         let mut selected = None;
         self.poll(ui.ctx());
@@ -513,7 +524,7 @@ impl State {
                 )
                 .clicked()
             {
-                self.inspect();
+                self.inspect(memory.clone());
             }
             if ui
                 .add_enabled(
@@ -522,11 +533,11 @@ impl State {
                 )
                 .clicked()
             {
-                self.start();
+                self.start(memory.clone());
             }
-            if self.running && ui.button("取消余下任务").clicked() {
+            if busy && ui.button("取消余下任务").clicked() {
                 self.cancel.store(true, Ordering::Relaxed);
-                self.message = "正在完成当前文件，随后停止…".into();
+                self.message = "正在取消；已保存的文件会保留…".into();
             }
         });
         if self.running {
@@ -603,7 +614,24 @@ fn target_for(source: &Path, dir: &Path, format: Format) -> Result<PathBuf> {
     Ok(dir.join(format!("{stem}-batch.{}", format.extension())))
 }
 
+#[cfg(any(test, feature = "ui-preview"))]
 fn inspect_batch(sources: &[PathBuf], dir: &Path, format: Format) -> Result<Vec<Item>> {
+    inspect_batch_budgeted(
+        sources,
+        dir,
+        format,
+        &AtomicBool::new(false),
+        &memory::Pool::default(),
+    )
+}
+
+fn inspect_batch_budgeted(
+    sources: &[PathBuf],
+    dir: &Path,
+    format: Format,
+    cancel: &AtomicBool,
+    memory: &memory::Pool,
+) -> Result<Vec<Item>> {
     ensure!(
         !sources.is_empty() && sources.len() <= MAX_BATCH,
         "请选择 1–100 张图片"
@@ -620,14 +648,42 @@ fn inspect_batch(sources: &[PathBuf], dir: &Path, format: Format) -> Result<Vec<
     );
     let mut items = Vec::with_capacity(sources.len());
     for source in sources {
-        let (width, height, size) =
-            inspect_image(source).with_context(|| source.display().to_string())?;
+        ensure!(!cancel.load(Ordering::Relaxed), "检查已取消");
+        let path = std::path::absolute(source)?;
+        let material =
+            crate::material_files::FileMaterial::selected(&path, super::MAX_INPUT_BYTES as usize)?;
+        let selected = workflow::input::read_selected(&material, cancel, memory)
+            .with_context(|| source.display().to_string())?;
+        let mut reader = image::ImageReader::new(std::io::Cursor::new(selected.bytes()))
+            .with_guessed_format()?;
+        ensure!(
+            matches!(
+                reader.format(),
+                Some(image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::WebP)
+            ),
+            "仅支持PNG/JPEG/WebP"
+        );
+        reader.limits(super::image_limits());
+        let (width, height) = reader.into_dimensions()?;
+        ensure!(
+            width > 0
+                && height > 0
+                && width <= 12000
+                && height <= 12000
+                && u64::from(width) * u64::from(height) <= super::MAX_PIXELS,
+            "输入图片尺寸超限"
+        );
+        let digest = Sha256::digest(selected.bytes()).into();
+        selected.verify()?;
+        let size = material.bytes();
         let target = target_for(source, dir, format)?;
         let target_key = target.to_string_lossy().to_lowercase();
         let repeated = !seen.insert(target_key);
         let conflict = repeated || target.exists() || canonical_sources.contains(&target);
         items.push(Item {
             source: source.clone(),
+            selected: Some(material),
+            source_sha256: Some(digest),
             target,
             dimensions: (width, height),
             original_bytes: size,
@@ -660,6 +716,7 @@ fn inspect_batch(sources: &[PathBuf], dir: &Path, format: Format) -> Result<Vec<
     Ok(items)
 }
 
+#[cfg(test)]
 fn process_one(
     item: &Item,
     max_width: u32,
@@ -667,18 +724,50 @@ fn process_one(
     quality: u8,
     cancel: &AtomicBool,
 ) -> Result<SavedOutput> {
+    process_one_budgeted(
+        item,
+        max_width,
+        format,
+        quality,
+        cancel,
+        &memory::Pool::default(),
+    )
+}
+
+fn process_one_budgeted(
+    item: &Item,
+    max_width: u32,
+    format: Format,
+    quality: u8,
+    cancel: &AtomicBool,
+    memory: &memory::Pool,
+) -> Result<SavedOutput> {
     ensure!(!cancel.load(Ordering::Relaxed), "操作已取消");
-    let image = decode_image(&item.source).with_context(|| item.source.display().to_string())?;
+    let material = item.selected.as_ref().context("请重新检查输入文件")?;
+    let expected = item.source_sha256.context("请重新检查输入内容")?;
+    let selected = workflow::input::read_selected(material, cancel, memory)?;
+    let actual: [u8; 32] = Sha256::digest(selected.bytes()).into();
+    ensure!(actual == expected, "输入内容在检查后发生变化，请重新检查");
+    let image = workflow::input::decode(selected.bytes(), cancel, memory)?;
+    selected.verify()?;
+    ensure!(
+        image.dimensions() == item.dimensions,
+        "输入尺寸在检查后发生变化"
+    );
+    drop(selected);
+    ensure!(!cancel.load(Ordering::Relaxed), "操作已取消");
     let width = image.width().min(max_width.max(1));
-    let (bytes, _, _) = encode_image(&image, width, format, quality)?;
+    let (bytes, _, _) = single::encode(image, width, format, quality, memory)?;
+    ensure!(!cancel.load(Ordering::Relaxed), "操作已取消");
     let saved = SavedOutput {
         bytes: bytes.len(),
-        sha256: Sha256::digest(&bytes).into(),
+        sha256: Sha256::digest(bytes.as_slice()).into(),
     };
     super::save_image_new(&item.target, &bytes, cancel)?;
     Ok(saved)
 }
 
+#[cfg(any(test, feature = "ui-preview"))]
 fn run_batch(
     items: &[Item],
     max_width: u32,
@@ -687,12 +776,32 @@ fn run_batch(
     cancel: &AtomicBool,
     tx: &mpsc::Sender<Event>,
 ) {
+    run_batch_budgeted(
+        items,
+        max_width,
+        format,
+        quality,
+        cancel,
+        tx,
+        &memory::Pool::default(),
+    );
+}
+
+fn run_batch_budgeted(
+    items: &[Item],
+    max_width: u32,
+    format: Format,
+    quality: u8,
+    cancel: &AtomicBool,
+    tx: &mpsc::Sender<Event>,
+    memory: &memory::Pool,
+) {
     for (index, item) in items.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             break;
         }
-        let result =
-            process_one(item, max_width, format, quality, cancel).map_err(|e| format!("{e:#}"));
+        let result = process_one_budgeted(item, max_width, format, quality, cancel, memory)
+            .map_err(|e| format!("{e:#}"));
         if tx.send(Event::Saved(index, result)).is_err() {
             return;
         }
@@ -706,6 +815,115 @@ fn run_batch(
 mod tests {
     use super::*;
     use image::{DynamicImage, GenericImageView, ImageFormat};
+
+    struct BudgetFixture(PathBuf);
+    impl BudgetFixture {
+        fn new() -> Self {
+            let path =
+                std::env::temp_dir().join(format!("zi-batch-budget-{}", uuid::Uuid::new_v4()));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+        fn image(&self, name: &str, side: u32) -> PathBuf {
+            let path = self.0.join(name);
+            DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+                side,
+                side,
+                image::Rgba([20, 70, 120, 180]),
+            ))
+            .save_with_format(&path, ImageFormat::Png)
+            .unwrap();
+            path
+        }
+    }
+    impl Drop for BudgetFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn shared_budget_partial_failure_preserves_published_file_and_retained_source() {
+        let fixture = BudgetFixture::new();
+        let pool = memory::Pool::new(1024);
+        let retained = Arc::new(DynamicImage::new_rgba8(10, 5));
+        pool.share(&retained, memory::pixels(&retained)).unwrap();
+        let inputs = [
+            fixture.image("small.png", 2),
+            fixture.image("large.png", 20),
+        ];
+        let cancel = AtomicBool::new(false);
+        let items =
+            inspect_batch_budgeted(&inputs, &fixture.0, Format::WebP, &cancel, &pool).unwrap();
+        assert_eq!(pool.snapshot().unwrap(), (200, 0, 1024));
+        let (tx, rx) = mpsc::channel();
+        run_batch_budgeted(&items, 20, Format::WebP, 80, &cancel, &tx, &pool);
+        let Event::Saved(0, Ok(receipt)) = rx.recv().unwrap() else {
+            panic!("small output must publish")
+        };
+        let saved = fs::read(&items[0].target).unwrap();
+        assert_eq!(receipt.sha256, <[u8; 32]>::from(Sha256::digest(&saved)));
+        assert_eq!(receipt.bytes, saved.len());
+        assert_eq!(
+            image::load_from_memory(&saved).unwrap().dimensions(),
+            (2, 2)
+        );
+        let Event::Saved(1, Err(error)) = rx.recv().unwrap() else {
+            panic!("large image must exceed shared quota")
+        };
+        assert!(error.contains("预算"), "{error}");
+        assert!(matches!(
+            rx.recv().unwrap(),
+            Event::Finished { cancelled: false }
+        ));
+        assert!(!items[1].target.exists());
+        assert_eq!(pool.snapshot().unwrap(), (200, 0, 1024));
+        cancel.store(true, Ordering::Relaxed);
+        assert!(inspect_batch_budgeted(&inputs, &fixture.0, Format::WebP, &cancel, &pool).is_err());
+        run_batch_budgeted(&items, 20, Format::WebP, 80, &cancel, &tx, &pool);
+        assert!(matches!(
+            rx.recv().unwrap(),
+            Event::Finished { cancelled: true }
+        ));
+        assert_eq!(fs::read(&items[0].target).unwrap(), saved);
+        assert!(retained.as_bytes().iter().all(|b| *b == 0));
+        drop(retained);
+        assert_eq!(pool.snapshot().unwrap(), (0, 0, 1024));
+    }
+
+    #[test]
+    fn preflight_content_change_with_same_size_and_timestamp_rejected_before_codec() {
+        let fixture = BudgetFixture::new();
+        let path = fixture.image("selected.png", 10);
+        let pool = memory::Pool::new(10000);
+        let cancel = AtomicBool::new(false);
+        let items = inspect_batch_budgeted(
+            std::slice::from_ref(&path),
+            &fixture.0,
+            Format::WebP,
+            &cancel,
+            &pool,
+        )
+        .unwrap();
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        let mut changed = fs::read(&path).unwrap();
+        changed[0] ^= 1;
+        fs::write(&path, &changed).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+        let error = process_one_budgeted(&items[0], 10, Format::WebP, 80, &cancel, &pool)
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(error.contains("输入内容在检查后发生变化"), "{error}");
+        assert!(!items[0].target.exists());
+        assert_eq!(fs::read(&path).unwrap(), changed);
+        assert_eq!(pool.snapshot().unwrap(), (0, 0, 10000));
+    }
 
     #[test]
     fn published_outputs_relay_exact_pixels_and_preserve_batch_and_target_drafts() {
@@ -875,6 +1093,8 @@ mod tests {
                 conflict: false,
                 saved_bytes: None,
                 saved_sha256: None,
+                selected: None,
+                source_sha256: None,
                 failed: false,
             })
             .collect();
@@ -906,6 +1126,8 @@ mod tests {
                 conflict: false,
                 saved_bytes: None,
                 saved_sha256: None,
+                selected: None,
+                source_sha256: None,
                 failed: false,
             }],
             ..State::default()

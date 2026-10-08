@@ -3,11 +3,37 @@ use super::*;
 use image::ImageDecoder;
 use std::io::Read;
 
+pub(in crate::image_tools) struct SelectedBytes {
+    bytes: Vec<u8>,
+    file: std::fs::File,
+    material: crate::material_files::FileMaterial,
+    _reservation: super::super::memory::Reservation,
+}
+impl SelectedBytes {
+    pub(in crate::image_tools) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    pub(in crate::image_tools) fn verify(&self) -> Result<()> {
+        self.material.verify(&self.file, MAX_INPUT_BYTES as usize)
+    }
+}
+
 pub(in crate::image_tools) fn load(
     material: &crate::material_files::FileMaterial,
     cancel: &AtomicBool,
     memory: &super::super::memory::Pool,
 ) -> Result<Arc<DynamicImage>> {
+    let selected = read_selected(material, cancel, memory)?;
+    let image = decode(selected.bytes(), cancel, memory)?;
+    selected.verify()?;
+    Ok(image)
+}
+
+pub(in crate::image_tools) fn read_selected(
+    material: &crate::material_files::FileMaterial,
+    cancel: &AtomicBool,
+    memory: &super::super::memory::Pool,
+) -> Result<SelectedBytes> {
     ensure!(!cancel.load(Ordering::Relaxed), "读取已取消");
     let size = usize::try_from(material.bytes())?;
     ensure!(
@@ -26,11 +52,12 @@ pub(in crate::image_tools) fn load(
     }
     material.verify(&file, MAX_INPUT_BYTES as usize)?;
     ensure!(!cancel.load(Ordering::Relaxed), "读取已取消");
-    let image = decode(&bytes, cancel, memory)?;
-    material.verify(&file, MAX_INPUT_BYTES as usize)?;
-    drop(bytes);
-    drop(input_guard);
-    Ok(image)
+    Ok(SelectedBytes {
+        bytes,
+        file,
+        material: material.clone(),
+        _reservation: input_guard,
+    })
 }
 
 pub(in crate::image_tools) fn decode(
