@@ -65,4 +65,4 @@
 
 ## Java/Django共享纯计算核心
 
-`zi-diagnostics-core`提供11项导入报告动作，桌面Java/Django模块重用相同代码。分析源码与dev83原算法完全一致，原诊断回归保持；环境采集/执行、文件获取、联网等仍需对应Host能力。`zi-diagnostics-wasi`命令适配器实际完成29组原生/WASI逐字节一致性验证，含全部11能力的结果断言及错误/预算边界。诊断schema及新增错误码为提供方提案，尚未获Host确认。插件迁移目录逐项列出sourceToolId、工具版本、操作范围、core/adapter版本和未交付原因；插件包、View与Host链仍未验收。
+`zi-diagnostics-core`提供11项导入报告动作，桌面Java/Django模块重用相同代码。分析源码与dev83原算法完全一致，原诊断回归保持；环境采集/执行、文件获取、联网等仍需对应Host能力。`zi-diagnostics-wasi`命令适配器实际完成29组原生/WASI逐字节一致性验证，含全部11能力的结果断言及错误/预算边界。自包含分类View实际以公开SDK替身连接WASI，完成11入口、双主题/响应式、草稿/失败保留与过期/超时验证。诊断schema及新增错误码为提供方提案，尚未获Host确认。unsigned候选目录提供模块/View/元数据/schema/许可证及外部摘要证据。插件迁移目录逐项列出sourceToolId、工具版本、操作范围、core/adapter版本和未交付原因；正式签名和真实Host生命周期仍未验收。

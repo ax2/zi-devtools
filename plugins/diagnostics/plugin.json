@@ -1,0 +1,678 @@
+{
+  "schemaVersion": 1,
+  "id": "com.zicode.devtools.diagnostics",
+  "name": "ZiDevTools Diagnostics",
+  "displayName": "ZiDevTools 诊断报告",
+  "description": "Imported Java/Django/Celery reports; provider diagnostics schema proposal, not Host-accepted.",
+  "version": "0.1.0",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "activationEvents": [
+    "onView:devtools.diagnostics.main",
+    "onCapability:devtools.diagnostics.java.threads",
+    "onCapability:devtools.diagnostics.java.dependencies",
+    "onCapability:devtools.diagnostics.java.gc",
+    "onCapability:devtools.diagnostics.java.jfr_json",
+    "onCapability:devtools.diagnostics.spring.config",
+    "onCapability:devtools.diagnostics.django.migrations",
+    "onCapability:devtools.diagnostics.django.sql",
+    "onCapability:devtools.diagnostics.django.urls",
+    "onCapability:devtools.diagnostics.django.openapi",
+    "onCapability:devtools.diagnostics.django.checks",
+    "onCapability:devtools.diagnostics.celery.report"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm"
+  },
+  "contributes": {
+    "activities": [
+      {
+        "id": "devtools.diagnostics",
+        "title": "诊断报告",
+        "order": 851
+      }
+    ],
+    "views": [
+      {
+        "id": "devtools.diagnostics.main",
+        "activity": "devtools.diagnostics",
+        "location": "main",
+        "title": "诊断报告",
+        "entry": "views/main.html"
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "devtools.diagnostics.java.threads",
+        "title": "Java 线程转储分析",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.java.dependencies",
+        "title": "Maven / Gradle 依赖冲突",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.java.gc",
+        "title": "Java GC 日志分析",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.java.jfr_json",
+        "title": "JFR 录制报告浏览",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.spring.config",
+        "title": "Spring 配置对比",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.django.migrations",
+        "title": "Django 迁移计划检查",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.django.sql",
+        "title": "Django SQL / N+1 分析",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.django.urls",
+        "title": "Django URL / reverse 检查",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.django.openapi",
+        "title": "DRF OpenAPI 契约对比",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.django.checks",
+        "title": "Django 部署检查报告",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "id": "devtools.diagnostics.celery.report",
+        "title": "Celery 任务故障分析",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      }
+    ],
+    "piTools": [
+      {
+        "name": "devtools_diagnostics_java_threads",
+        "title": "Java 线程转储分析",
+        "description": "导入jstack/jcmd文本分析，不采集进程",
+        "capability": "devtools.diagnostics.java.threads",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_java_dependencies",
+        "title": "Maven / Gradle 依赖冲突",
+        "description": "导入Maven/Gradle依赖文本，不执行构建",
+        "capability": "devtools.diagnostics.java.dependencies",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_java_gc",
+        "title": "Java GC 日志分析",
+        "description": "导入GC文本分析，不读取磁盘或采集进程",
+        "capability": "devtools.diagnostics.java.gc",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_java_jfr_json",
+        "title": "JFR 录制报告浏览",
+        "description": "导入JFR JSON，不读取二进制JFR或启动JDK",
+        "capability": "devtools.diagnostics.java.jfr_json",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_spring_config",
+        "title": "Spring 配置对比",
+        "description": "导入两份JSON/YAML配置差异/脱敏，不请求Actuator",
+        "capability": "devtools.diagnostics.spring.config",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_django_migrations",
+        "title": "Django 迁移计划检查",
+        "description": "导入迁移计划及SQL分析，不访问数据库或执行迁移",
+        "capability": "devtools.diagnostics.django.migrations",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_django_sql",
+        "title": "Django SQL / N+1 分析",
+        "description": "导入SQL查询日志JSON数组归一化/重复分析，不执行SQL",
+        "capability": "devtools.diagnostics.django.sql",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_django_urls",
+        "title": "Django URL / reverse 检查",
+        "description": "导入URL列表及检索，不加载Django项目",
+        "capability": "devtools.diagnostics.django.urls",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_django_openapi",
+        "title": "DRF OpenAPI 契约对比",
+        "description": "导入两份OpenAPI JSON差异，不调用远程API",
+        "capability": "devtools.diagnostics.django.openapi",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_django_checks",
+        "title": "Django 部署检查报告",
+        "description": "导入检查输出，不运行manage.py",
+        "capability": "devtools.diagnostics.django.checks",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      },
+      {
+        "name": "devtools_diagnostics_celery_report",
+        "title": "Celery 任务故障分析",
+        "description": "导入Celery任务日志文本分析，不连接Broker",
+        "capability": "devtools.diagnostics.celery.report",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+          "title": "Imported diagnostic reports input",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192,
+              "description": "Runtime additionally limits UTF-8 bytes to 8192."
+            },
+            "secondary": {
+              "type": "string",
+              "maxLength": 8192,
+              "default": "",
+              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
+            }
+          }
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "name": "pi.tools.register",
+        "reason": "显式授权后允许当前场景的 AI 分析已提供的诊断报告"
+      }
+    ]
+  }
+}

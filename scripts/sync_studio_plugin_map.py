@@ -47,13 +47,15 @@ for tool in catalog["tools"]:
         category = "await_host"
         reason = "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     rows.append(dict(sourceToolId=tool["id"], title=tool["name"], sourceVersion=tool["tool_version"],
-                     sourceStatus=tool["status"], migration=category, pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
+                     sourceStatus=tool["status"], migration=category, pluginStatus="candidate" if tool["id"] in pilot or tool["id"] in report_scopes else "not_delivered",
+                     candidateCapabilities=pilot.get(tool["id"], []) + (["devtools.diagnostics."+report_actions[tool["id"]]] if tool["id"] in report_scopes else []),
                      pilotCapabilities=pilot.get(tool["id"], []),
                      operationScopes=([dict(operationId=report_actions[tool["id"]], scopeKind="completed_imported_report_subset", scope=report_scopes[tool["id"]],
-                         sourceVersion=tool["tool_version"], pluginStatus="not_delivered",
+                         sourceVersion=tool["tool_version"], pluginStatus="candidate",
                          core="zi-diagnostics-core/0.1.0", adapter="zi-diagnostics-wasi/0.1.0",
                          runtimeVerification="native_wasi_byte_parity_29_cases",
-                         blockingReason="原生/WASI命令适配器已验证；插件包/View及Host验收未完成")]
+                         viewVerification="public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+                         blockingReason="unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收")]
                          if tool["id"] in report_scopes else [dict(scopeKind="declared_standalone_scope",
                              scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
                              pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",

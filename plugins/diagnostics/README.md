@@ -1,6 +1,6 @@
 # ZiDevTools Diagnostics 0.1.0 - command adapter
 
-本仓库的 `zi-diagnostics-core` 同时供原生桌面端和 `zi-diagnostics-wasi` 使用。11 项能力可分析导入报告；不会启动 JVM/Python、运行迁移或 SQL、连接 Broker、读取用户文件或访问网络。模块目前是可验证的命令适配器，**尚无完整插件包或 View，也未通过 Studio 接入验收**。
+本仓库的 `zi-diagnostics-core` 同时供原生桌面端和 `zi-diagnostics-wasi` 使用。11 项能力可分析导入报告；不会启动 JVM/Python、运行迁移或 SQL、连接 Broker、读取用户文件或访问网络。提供自包含 View、元数据及 unsigned 候选目录构建脚本，**没有正式签名发行包，也未通过 Studio 接入验收**。
 
 | Capability suffix | 输入 | secondary |
 | --- | --- | --- |
@@ -26,6 +26,12 @@
 cargo build -p zi-diagnostics-wasi
 cargo build -p zi-diagnostics-wasi --release --target wasm32-wasip1 --config 'target.wasm32-wasip1.rustflags=["-C","link-arg=--max-memory=67108864","-C","link-arg=-zstack-size=2097152"]'
 python scripts/verify_diagnostics_wasi.py --native target/debug/zi-diagnostics-wasi.exe --wasm target/wasm32-wasip1/release/zi-diagnostics-wasi.wasm --output <archive>/runtime-proof.json
+python scripts/sync_diagnostics_plugin.py --check
+python scripts/package_diagnostics_plugin.py --wasm target/wasm32-wasip1/release/zi-diagnostics-wasi.wasm --proof <archive>/runtime-proof.json --view-proof <archive>/view-qa.json --output release/<new-candidate>
 ```
 
-验证器覆盖全部11能力的独立结果断言、脱敏、错误报告、缺失/重复/未知字段、未知能力、请求/UTF-8输入预算及真实结果膨胀；共29组相同请求的原生/WASI逐字节比较，读取实际内存声明并检查64 MiB上限，记录模块/原生程序及每组请求/结果摘要。后续还需自包含 View、包元数据/清单、安装及升级/撤权/卸载/Host 验收。
+验证器覆盖全部11能力的独立结果断言、脱敏、错误报告、缺失/重复/未知字段、未知能力、请求/UTF-8输入预算及真实结果膨胀；共29组相同请求的原生/WASI逐字节比较，读取实际内存声明并检查64 MiB上限，记录模块/原生程序及每组请求/结果摘要。
+
+View 使用已有公开 window.zicode.ready/context.get/capabilities.invoke/setDirty 接口，不添加私有桥接。Java/Django/Celery 分类，按工具保留内存草稿/结果；左右配置/OpenAPI等显示补充输入，字节超限禁止调用，Ctrl+Enter分析，结果手动选中复制。修改输入将结果标为旧结果，失败保留输入/结果，过期响应不覆盖新输入，8秒等待超时可重试但不宣称取消Host任务。关闭后不恢复报告；没有共享独立版用户数据。
+
+候选目录仅用于开发交接；不能要求用户绕过宿主签名校验。包外 verification.json记录准确文件摘要、运行/View证据及未验收范围；packageSha256保持null，不以目录摘要冒充签名容器摘要。可选Pi工具注册仍需显式授权。正式签名、安装、升级/回滚、撤权、卸载和真实Host/Pi链等待接收方按公开诊断profile验收。

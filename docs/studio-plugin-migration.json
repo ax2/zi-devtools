@@ -16,6 +16,10 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.json.format",
+        "devtools.text.json.minify"
+      ],
       "pilotCapabilities": [
         "devtools.text.json.format",
         "devtools.text.json.minify"
@@ -39,6 +43,10 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.base64.encode",
+        "devtools.text.base64.decode"
+      ],
       "pilotCapabilities": [
         "devtools.text.base64.encode",
         "devtools.text.base64.decode"
@@ -62,6 +70,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -82,6 +91,9 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.sha256"
+      ],
       "pilotCapabilities": [
         "devtools.text.sha256"
       ],
@@ -104,6 +116,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -124,6 +137,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -144,6 +158,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -164,6 +179,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -184,6 +200,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -204,6 +221,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -224,6 +242,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -244,6 +263,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -264,6 +284,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -284,6 +305,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -304,6 +326,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -324,6 +347,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -344,6 +368,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -364,6 +389,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -384,6 +410,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -404,6 +431,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -424,6 +452,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -444,6 +473,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -464,6 +494,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -484,6 +515,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -504,6 +536,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -524,6 +557,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -544,6 +578,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -564,6 +599,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -584,6 +620,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -604,6 +641,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -624,6 +662,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -644,6 +683,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -664,6 +704,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -684,6 +725,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -704,6 +746,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -724,6 +767,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -744,6 +788,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -764,6 +809,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -784,6 +830,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -804,6 +851,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -824,6 +872,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -844,6 +893,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -864,6 +914,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -884,6 +935,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -904,6 +956,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -924,6 +977,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -944,6 +998,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -964,6 +1019,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -984,6 +1040,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1004,6 +1061,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1024,6 +1082,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1044,6 +1103,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1064,6 +1124,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1084,6 +1145,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1104,6 +1166,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1124,6 +1187,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1144,6 +1208,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1164,6 +1229,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1184,6 +1250,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1204,6 +1271,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1224,6 +1292,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1244,6 +1313,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1264,6 +1334,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1284,6 +1355,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1304,6 +1376,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1324,6 +1397,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1344,6 +1418,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1364,6 +1439,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1384,6 +1460,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1404,6 +1481,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1424,6 +1502,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1444,6 +1523,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1464,6 +1544,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1484,6 +1565,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1504,6 +1586,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1524,6 +1607,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1544,6 +1628,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1564,6 +1649,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1584,6 +1670,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1604,6 +1691,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1624,6 +1712,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1644,6 +1733,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1664,6 +1754,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1684,6 +1775,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1704,6 +1796,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1724,6 +1817,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1744,6 +1838,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1764,6 +1859,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1784,6 +1880,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1804,6 +1901,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1824,6 +1922,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1844,6 +1943,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1864,6 +1964,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1884,6 +1985,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1904,6 +2006,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1924,6 +2027,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1944,6 +2048,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1964,6 +2069,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1984,6 +2090,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2004,6 +2111,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2024,6 +2132,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2044,6 +2153,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2064,6 +2174,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2084,6 +2195,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2104,6 +2216,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2124,6 +2237,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2144,6 +2258,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2164,6 +2279,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2184,6 +2300,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2204,6 +2321,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2224,6 +2342,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2244,6 +2363,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2264,6 +2384,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2284,6 +2405,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2304,6 +2426,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2324,6 +2447,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2344,6 +2468,7 @@
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2363,7 +2488,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.threads"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2371,11 +2499,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "jstack/jcmd导入文本分析；进程采集另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2386,7 +2515,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.dependencies"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2394,11 +2526,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "Maven/Gradle依赖导入文本分析；构建执行另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2410,6 +2543,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2429,7 +2563,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.gc"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2437,11 +2574,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "GC日志导入文本分析；文件获取/进程采集另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2452,7 +2590,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.jfr_json"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2460,11 +2601,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "JFR导入JSON分析；二进制读取/导出另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2475,7 +2617,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.spring.config"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2483,11 +2628,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2499,6 +2645,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2519,6 +2666,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2538,7 +2686,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.migrations"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2546,11 +2697,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2561,7 +2713,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.sql"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2569,11 +2724,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "SQL查询日志JSON数组归一化与重复分析；执行另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2584,7 +2740,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.urls"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2592,11 +2751,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "URL导入列表检索；项目加载另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2607,7 +2767,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.openapi"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2615,11 +2778,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "两份OpenAPI JSON差异；联网另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2630,7 +2794,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.checks"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2638,11 +2805,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "检查输出导入分析；manage.py执行另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2653,7 +2821,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.celery.report"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2661,11 +2832,12 @@
           "scopeKind": "completed_imported_report_subset",
           "scope": "Celery任务日志导入分析；Broker/Worker操作另需Host",
           "sourceVersion": "1.1.1",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-diagnostics-core/0.1.0",
           "adapter": "zi-diagnostics-wasi/0.1.0",
           "runtimeVerification": "native_wasi_byte_parity_29_cases",
-          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
+          "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2677,6 +2849,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2697,6 +2870,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2717,6 +2891,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2737,6 +2912,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2757,6 +2933,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2777,6 +2954,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2797,6 +2975,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2817,6 +2996,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2837,6 +3017,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2857,6 +3038,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2877,6 +3059,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2897,6 +3080,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2917,6 +3101,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2937,6 +3122,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2957,6 +3143,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2977,6 +3164,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2997,6 +3185,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3017,6 +3206,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3037,6 +3227,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3057,6 +3248,7 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3077,6 +3269,7 @@
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3097,6 +3290,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {

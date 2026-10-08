@@ -1,0 +1,121 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.diagnostics",
+  "packageVersion": "0.1.0",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "java-thread-dump",
+      "toolId": "devtools.diagnostics.java.threads",
+      "capabilityId": "devtools.diagnostics.java.threads",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Java 线程转储分析",
+      "scope": "导入jstack/jcmd文本分析，不采集进程"
+    },
+    {
+      "sourceToolId": "java-dependencies",
+      "toolId": "devtools.diagnostics.java.dependencies",
+      "capabilityId": "devtools.diagnostics.java.dependencies",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Maven / Gradle 依赖冲突",
+      "scope": "导入Maven/Gradle依赖文本，不执行构建"
+    },
+    {
+      "sourceToolId": "java-gc-log",
+      "toolId": "devtools.diagnostics.java.gc",
+      "capabilityId": "devtools.diagnostics.java.gc",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Java GC 日志分析",
+      "scope": "导入GC文本分析，不读取磁盘或采集进程"
+    },
+    {
+      "sourceToolId": "java-jfr",
+      "toolId": "devtools.diagnostics.java.jfr_json",
+      "capabilityId": "devtools.diagnostics.java.jfr_json",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "JFR 录制报告浏览",
+      "scope": "导入JFR JSON，不读取二进制JFR或启动JDK"
+    },
+    {
+      "sourceToolId": "spring-config",
+      "toolId": "devtools.diagnostics.spring.config",
+      "capabilityId": "devtools.diagnostics.spring.config",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Spring 配置对比",
+      "scope": "导入两份JSON/YAML配置差异/脱敏，不请求Actuator"
+    },
+    {
+      "sourceToolId": "django-migrations",
+      "toolId": "devtools.diagnostics.django.migrations",
+      "capabilityId": "devtools.diagnostics.django.migrations",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Django 迁移计划检查",
+      "scope": "导入迁移计划及SQL分析，不访问数据库或执行迁移"
+    },
+    {
+      "sourceToolId": "django-sql",
+      "toolId": "devtools.diagnostics.django.sql",
+      "capabilityId": "devtools.diagnostics.django.sql",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Django SQL / N+1 分析",
+      "scope": "导入SQL查询日志JSON数组归一化/重复分析，不执行SQL"
+    },
+    {
+      "sourceToolId": "django-urls",
+      "toolId": "devtools.diagnostics.django.urls",
+      "capabilityId": "devtools.diagnostics.django.urls",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Django URL / reverse 检查",
+      "scope": "导入URL列表及检索，不加载Django项目"
+    },
+    {
+      "sourceToolId": "django-drf",
+      "toolId": "devtools.diagnostics.django.openapi",
+      "capabilityId": "devtools.diagnostics.django.openapi",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "DRF OpenAPI 契约对比",
+      "scope": "导入两份OpenAPI JSON差异，不调用远程API"
+    },
+    {
+      "sourceToolId": "django-checks",
+      "toolId": "devtools.diagnostics.django.checks",
+      "capabilityId": "devtools.diagnostics.django.checks",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Django 部署检查报告",
+      "scope": "导入检查输出，不运行manage.py"
+    },
+    {
+      "sourceToolId": "celery-diagnostics",
+      "toolId": "devtools.diagnostics.celery.report",
+      "capabilityId": "devtools.diagnostics.celery.report",
+      "version": "1.1.1",
+      "status": "candidate",
+      "profile": "diagnostics.compute.wasi.v1.proposal",
+      "title": "Celery 任务故障分析",
+      "scope": "导入Celery任务日志文本分析，不连接Broker"
+    }
+  ]
+}
