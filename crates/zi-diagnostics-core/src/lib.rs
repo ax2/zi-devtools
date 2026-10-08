@@ -57,7 +57,7 @@ pub const ACTIONS: &[Action] = &[
     Action {
         id: "django.sql",
         source_tool_id: "django-sql",
-        scope: "导入SQL文本归一化/重复查询分析，不执行SQL",
+        scope: "导入SQL查询日志JSON数组归一化/重复分析，不执行SQL",
     },
     Action {
         id: "django.urls",

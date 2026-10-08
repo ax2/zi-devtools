@@ -2373,7 +2373,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2394,7 +2396,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2435,7 +2439,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2456,7 +2462,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2477,7 +2485,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2538,7 +2548,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2555,11 +2567,13 @@
         {
           "operationId": "django.sql",
           "scopeKind": "completed_imported_report_subset",
-          "scope": "SQL导入文本归一化与重复分析；执行另需Host",
+          "scope": "SQL查询日志JSON数组归一化与重复分析；执行另需Host",
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2580,7 +2594,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2601,7 +2617,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2622,7 +2640,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2643,7 +2663,9 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "core": "zi-diagnostics-core/0.1.0",
-          "blockingReason": "共享原生核心已抽离；WASI/包/View及Host验收未完成"
+          "adapter": "zi-diagnostics-wasi/0.1.0",
+          "runtimeVerification": "native_wasi_byte_parity_29_cases",
+          "blockingReason": "原生/WASI命令适配器已验证；插件包/View及Host验收未完成"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"

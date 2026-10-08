@@ -17,7 +17,7 @@ report_scopes = {
     "java-jfr": "JFR导入JSON分析；二进制读取/导出另需Host",
     "spring-config": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
     "django-migrations": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
-    "django-sql": "SQL导入文本归一化与重复分析；执行另需Host",
+    "django-sql": "SQL查询日志JSON数组归一化与重复分析；执行另需Host",
     "django-urls": "URL导入列表检索；项目加载另需Host",
     "django-drf": "两份OpenAPI JSON差异；联网另需Host",
     "django-checks": "检查输出导入分析；manage.py执行另需Host",
@@ -51,7 +51,9 @@ for tool in catalog["tools"]:
                      pilotCapabilities=pilot.get(tool["id"], []),
                      operationScopes=([dict(operationId=report_actions[tool["id"]], scopeKind="completed_imported_report_subset", scope=report_scopes[tool["id"]],
                          sourceVersion=tool["tool_version"], pluginStatus="not_delivered",
-                         core="zi-diagnostics-core/0.1.0", blockingReason="共享原生核心已抽离；WASI/包/View及Host验收未完成")]
+                         core="zi-diagnostics-core/0.1.0", adapter="zi-diagnostics-wasi/0.1.0",
+                         runtimeVerification="native_wasi_byte_parity_29_cases",
+                         blockingReason="原生/WASI命令适配器已验证；插件包/View及Host验收未完成")]
                          if tool["id"] in report_scopes else [dict(scopeKind="declared_standalone_scope",
                              scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
                              pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",

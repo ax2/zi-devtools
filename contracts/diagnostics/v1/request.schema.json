@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/request.schema.json",
+  "title": "Diagnostics command request - provider proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pluginId", "sceneId", "capabilityId", "commandId", "input"],
+  "properties": {
+    "pluginId": {"const": "com.zicode.devtools.diagnostics"},
+    "sceneId": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Runtime additionally limits UTF-8 bytes to 128."},
+    "capabilityId": {"enum": [
+      "devtools.diagnostics.java.threads", "devtools.diagnostics.java.dependencies",
+      "devtools.diagnostics.java.gc", "devtools.diagnostics.java.jfr_json",
+      "devtools.diagnostics.spring.config", "devtools.diagnostics.django.migrations",
+      "devtools.diagnostics.django.sql", "devtools.diagnostics.django.urls",
+      "devtools.diagnostics.django.openapi", "devtools.diagnostics.django.checks",
+      "devtools.diagnostics.celery.report"
+    ]},
+    "commandId": {"type": "null"},
+    "input": {"$ref": "input.schema.json"}
+  }
+}

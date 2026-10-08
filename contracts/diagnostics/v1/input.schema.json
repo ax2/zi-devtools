@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
+  "title": "Imported diagnostic reports input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["text"],
+  "properties": {
+    "text": {"type": "string", "maxLength": 8192, "description": "Runtime additionally limits UTF-8 bytes to 8192."},
+    "secondary": {"type": "string", "maxLength": 8192, "default": "", "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."}
+  }
+}

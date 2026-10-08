@@ -5626,6 +5626,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-diagnostics-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-diagnostics-core",
+]
+
+[[package]]
 name = "zi-text-core"
 version = "0.1.0"
 dependencies = [

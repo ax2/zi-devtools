@@ -1,0 +1,11 @@
+[package]
+name = "zi-diagnostics-wasi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+zi-diagnostics-core = { path = "../zi-diagnostics-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

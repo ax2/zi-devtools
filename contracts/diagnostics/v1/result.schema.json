@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/result.schema.json",
+  "title": "Diagnostic report result - provider proposal",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "ok", "data", "error"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0-rc.1"}, "ok": {"const": true},
+        "data": {"type": "object", "additionalProperties": false, "required": ["text"], "properties": {"text": {"type": "string"}}},
+        "error": {"type": "null"}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "ok", "data", "error"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0-rc.1"}, "ok": {"const": false}, "data": {"type": "null"},
+        "error": {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {
+          "code": {"enum": ["INVALID_INPUT", "INPUT_TOO_LARGE", "UNSUPPORTED_OPERATION", "INVALID_REPORT", "OUTPUT_TOO_LARGE"]},
+          "message": {"type": "string", "minLength": 1, "maxLength": 240}
+        }}
+      }
+    }
+  ]
+}
