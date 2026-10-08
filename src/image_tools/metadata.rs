@@ -282,6 +282,9 @@ pub(super) struct State {
     output: String,
     original: Option<Arc<DynamicImage>>,
     source_summary: Option<Summary>,
+    cleaned_summary: Option<Summary>,
+    report: Option<String>,
+    report_current: bool,
     source_bytes: u64,
     jpeg_quality: u8,
     encoded: Option<Vec<u8>>,
@@ -308,7 +311,9 @@ impl State {
             ..Default::default()
         };
         let Job::Cleaned {
-            encoded, preview, ..
+            encoded,
+            summary: cleaned_summary,
+            preview,
         } = clean_preview(&image, &summary, 85).expect("metadata preview fixture")
         else {
             unreachable!()
@@ -317,6 +322,8 @@ impl State {
         self.source_bytes = 2_400_000;
         self.jpeg_quality = 85;
         self.original = Some(Arc::new(image.clone()));
+        self.cleaned_summary = Some(cleaned_summary);
+        self.report_current = false;
         self.encoded = Some(encoded);
         self.texture =
             Some(ctx.load_texture("metadata-preview", preview, egui::TextureOptions::LINEAR));
@@ -338,6 +345,7 @@ impl State {
             Err(mpsc::TryRecvError::Disconnected) => Err("元数据处理线程意外结束".into()),
         };
         self.pending = None;
+        self.report_current = false;
         match result {
             Ok(Job::Inspected {
                 summary,
@@ -351,7 +359,7 @@ impl State {
                 self.source_summary = Some(summary);
                 self.original = Some(image);
                 self.source_bytes = original_bytes;
-                self.encoded = None;
+                self.invalidate_preview();
                 self.texture = Some(ctx.load_texture(
                     "metadata-preview",
                     preview,
@@ -376,6 +384,7 @@ impl State {
                     egui::TextureOptions::LINEAR,
                 ));
                 self.error = summary.has_source_metadata();
+                self.cleaned_summary = Some(summary);
             }
             Err(error) => {
                 self.message = error;
@@ -390,7 +399,7 @@ impl State {
         }
         self.original = None;
         self.source_summary = None;
-        self.encoded = None;
+        self.invalidate_preview();
         self.texture = None;
         let path = PathBuf::from(self.input.trim());
         let (tx, rx) = mpsc::channel();
@@ -412,7 +421,7 @@ impl State {
         let quality = self.jpeg_quality;
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
-        self.encoded = None;
+        self.invalidate_preview();
         self.message = "正在重新编码并复检输出…".into();
         std::thread::spawn(move || {
             let _ = tx.send(
@@ -453,6 +462,114 @@ impl State {
         }
     }
 
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_report_assert(&self) -> String {
+        let text = self.report().expect("current metadata report");
+        let value: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(value["material"], "image-metadata-report");
+        assert_eq!(value["source"]["displayWidth"], 960);
+        assert_eq!(value["source"]["displayHeight"], 540);
+        assert_eq!(value["source"]["metadata"]["hasExifGpsDirectory"], true);
+        assert_eq!(
+            value["cleanedPreview"]["metadata"]["hasRecognizedMetadata"],
+            false
+        );
+        assert_eq!(
+            value["cleanedPreview"]["bytes"],
+            self.encoded.as_ref().unwrap().len()
+        );
+        assert!(value["cleanedPreview"]["saved"].is_null());
+        assert!(!text.contains("Pictures") && !text.contains("trip.jpg"));
+        text.to_owned()
+    }
+
+    fn invalidate_preview(&mut self) {
+        self.encoded = None;
+        self.cleaned_summary = None;
+        self.report_current = false;
+        self.texture = None;
+    }
+
+    pub(super) fn report(&self) -> Option<&str> {
+        if self.report_current && !self.busy() {
+            self.report.as_deref()
+        } else {
+            None
+        }
+    }
+
+    fn build_report(&self) -> Result<String> {
+        ensure!(!self.busy(), "请等待检查或清理结束");
+        let source = self
+            .source_summary
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("请先检查图片"))?;
+        let image = self
+            .original
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("原图摘要不可用"))?;
+        let origin = super::relay::origin("image-metadata")?;
+        let blocks = |v: &Summary| serde_json::json!({"format":v.label(),"exif":v.exif,"hasExifGpsDirectory":v.gps,"icc":v.icc,"xmp":v.xmp,"text":v.text,"iptc":v.iptc,"other":v.other,"animation":v.animation,"hasRecognizedMetadata":v.has_source_metadata()});
+        let cleaned = match (&self.encoded, &self.cleaned_summary) {
+            (Some(bytes), Some(summary)) => Some(
+                serde_json::json!({"bytes":bytes.len(),"metadata":blocks(summary),"jpegQuality":if summary.format==ImageFormat::Jpeg {Some(self.jpeg_quality.clamp(35, 95))} else {None},"kind":"encoded-preview","saved":null}),
+            ),
+            (None, None) => None,
+            _ => bail!("清理预览与复检摘要不一致，请重新生成预览"),
+        };
+        let text = serde_json::to_string_pretty(&serde_json::json!({
+            "schemaVersion":1,"material":"image-metadata-report",
+            "origin":{"toolId":origin.id,"version":origin.version,"utc":origin.utc},
+            "source":{"bytes":self.source_bytes,"displayWidth":image.width(),"displayHeight":image.height(),"metadata":blocks(source)},
+            "cleanedPreview":cleaned,
+            "notes":"已加载图片的冻结摘要；仅含标准元数据块数量/标志，不含文件路径、GPS坐标、EXIF/XMP/文本原值。不重新读写文件，不自动清理或保存。displayWidth/Height为按EXIF方向显示的尺寸。清理预览大小为已有编码精确字节，saved=null不证明已保存。标准块复检不能保证不存在未知私有内容；移除ICC/EXIF方向或JPEG重新编码可能改变颜色、方向或画质，请核对预览。"
+        }))?;
+        ensure!(text.len() <= 48 * 1024, "元数据报告超限");
+        Ok(text)
+    }
+
+    pub(super) fn report_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            let response = ui.add_enabled(
+                !self.busy() && self.source_summary.is_some(),
+                egui::Button::new("生成元数据报告"),
+            );
+            #[cfg(feature = "ui-preview")]
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("image-report-generate"), response.rect));
+            if response.clicked() {
+                match self.build_report() {
+                    Ok(text) => {
+                        self.report = Some(text);
+                        self.report_current = true;
+                    }
+                    Err(error) => {
+                        self.message = error.to_string();
+                        self.error = true;
+                    }
+                }
+            }
+            ui.small("原图摘要 / 清理预览复检 → JSON、备忘；不自动清理或保存。");
+        });
+        if let Some(text) = &self.report {
+            if !self.report_current {
+                ui.small("原图、质量或任务已改变，旧报告不可发送；请重新生成。");
+            }
+            egui::CollapsingHeader::new(if self.report_current {
+                "元数据 JSON 报告"
+            } else {
+                "旧元数据 JSON 报告"
+            })
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(170.0)
+                    .show(ui, |ui| {
+                        ui.monospace(text);
+                    });
+            });
+        }
+    }
+
     pub(super) fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll(ui.ctx());
         ui.heading("图片元数据检查与清理");
@@ -470,7 +587,7 @@ impl State {
             {
                 self.original = None;
                 self.source_summary = None;
-                self.encoded = None;
+                self.invalidate_preview();
                 self.texture = None;
             }
             if ui
@@ -531,7 +648,7 @@ impl State {
                     )
                     .changed()
                 {
-                    self.encoded = None;
+                    self.invalidate_preview();
                 }
                 if self.jpeg_quality == 0 {
                     self.jpeg_quality = 85;
@@ -682,6 +799,156 @@ mod tests {
 
     use super::*;
     use image::GenericImageView;
+
+    fn deliver(state: &mut State, job: Job) {
+        let (tx, rx) = mpsc::channel();
+        state.pending = Some(rx);
+        tx.send(Ok(job)).unwrap();
+        state.poll(&egui::Context::default());
+    }
+
+    #[test]
+    fn reports_use_real_container_counts_and_cleaned_bytes_without_metadata_values() {
+        let root =
+            std::env::temp_dir().join(format!("zi-metadata-report-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let secret = b"fixture-private-location-value";
+        for format in [ImageFormat::Jpeg, ImageFormat::Png, ImageFormat::WebP] {
+            let mut bytes = if format == ImageFormat::Jpeg {
+                jpeg_with_exif_gps()
+            } else {
+                let mut raw = Cursor::new(Vec::new());
+                DynamicImage::new_rgba8(32, 16)
+                    .write_to(&mut raw, format)
+                    .unwrap();
+                raw.into_inner()
+            };
+            if format == ImageFormat::Png {
+                let mut data = b"Comment\0".to_vec();
+                data.extend_from_slice(secret);
+                let mut chunk = b"tEXt".to_vec();
+                chunk.extend_from_slice(&data);
+                let mut crc = 0xffff_ffffu32;
+                for byte in &chunk {
+                    crc ^= u32::from(*byte);
+                    for _ in 0..8 {
+                        crc = (crc >> 1) ^ if crc & 1 == 1 { 0xedb8_8320 } else { 0 };
+                    }
+                }
+                let mut encoded = (data.len() as u32).to_be_bytes().to_vec();
+                encoded.extend_from_slice(&chunk);
+                encoded.extend_from_slice(&(!crc).to_be_bytes());
+                bytes.splice(bytes.len() - 12..bytes.len() - 12, encoded);
+            } else if format == ImageFormat::WebP {
+                bytes.extend_from_slice(b"XMP ");
+                bytes.extend_from_slice(&(secret.len() as u32).to_le_bytes());
+                bytes.extend_from_slice(secret);
+                if secret.len() % 2 == 1 {
+                    bytes.push(0);
+                }
+                let length = (bytes.len() - 8) as u32;
+                bytes[4..8].copy_from_slice(&length.to_le_bytes());
+            }
+            let path = root.join(format!(
+                "source.{}",
+                Summary {
+                    format,
+                    ..Default::default()
+                }
+                .extension()
+            ));
+            fs::write(&path, &bytes).unwrap();
+            let mut state = State {
+                input: path.to_string_lossy().into_owned(),
+                jpeg_quality: 85,
+                ..Default::default()
+            };
+            deliver(&mut state, inspect_file(&path).unwrap());
+            let source_report = state.build_report().unwrap();
+            let value: serde_json::Value = serde_json::from_str(&source_report).unwrap();
+            assert!(value["cleanedPreview"].is_null());
+            assert_eq!(value["source"]["bytes"], bytes.len());
+            assert_eq!(
+                value["source"]["metadata"][if format == ImageFormat::Jpeg {
+                    "exif"
+                } else if format == ImageFormat::Png {
+                    "text"
+                } else {
+                    "xmp"
+                }],
+                1
+            );
+            assert_eq!(
+                value["source"]["metadata"]["hasExifGpsDirectory"],
+                format == ImageFormat::Jpeg
+            );
+            let cleaned = clean_preview(
+                state.original.as_ref().unwrap(),
+                state.source_summary.as_ref().unwrap(),
+                85,
+            )
+            .unwrap();
+            let Job::Cleaned { encoded, .. } = &cleaned else {
+                unreachable!()
+            };
+            let exact_bytes = encoded.len();
+            deliver(&mut state, cleaned);
+            let report = state.build_report().unwrap();
+            let value: serde_json::Value = serde_json::from_str(&report).unwrap();
+            assert_eq!(value["cleanedPreview"]["bytes"], exact_bytes);
+            assert_eq!(
+                value["cleanedPreview"]["metadata"]["hasRecognizedMetadata"],
+                false
+            );
+            assert!(value["cleanedPreview"]["saved"].is_null());
+            assert!(!report.contains(std::str::from_utf8(secret).unwrap()));
+            assert!(!report.contains(&root.to_string_lossy().to_string()));
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+            assert_eq!(
+                fs::read_dir(&root).unwrap().count(),
+                if format == ImageFormat::Jpeg {
+                    1
+                } else if format == ImageFormat::Png {
+                    2
+                } else {
+                    3
+                }
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalidating_quality_and_failed_jobs_preserve_old_report_but_block_transfer() {
+        let image = Arc::new(DynamicImage::new_rgb8(2, 3));
+        let mut state = State {
+            original: Some(image.clone()),
+            source_summary: Some(Summary::default()),
+            source_bytes: 100,
+            ..Default::default()
+        };
+        let cleaned = clean_preview(&image, state.source_summary.as_ref().unwrap(), 85).unwrap();
+        deliver(&mut state, cleaned);
+        let report = state.build_report().unwrap();
+        state.report = Some(report.clone());
+        state.report_current = true;
+        assert!(state.report().is_some());
+        assert!(state.texture.is_some());
+        state.jpeg_quality = 75;
+        state.invalidate_preview();
+        assert!(state.report().is_none());
+        assert!(state.cleaned_summary.is_none());
+        assert!(state.texture.is_none());
+        assert_eq!(state.report.as_deref(), Some(report.as_str()));
+        let (tx, rx) = mpsc::channel();
+        state.pending = Some(rx);
+        tx.send(Err("fixture failure".into())).unwrap();
+        state.poll(&egui::Context::default());
+        assert!(state.report().is_none());
+        assert_eq!(state.report.as_deref(), Some(report.as_str()));
+        state.encoded = Some(vec![1]);
+        assert!(state.build_report().is_err());
+    }
 
     fn jpeg_with_exif_gps() -> Vec<u8> {
         let mut raw = Vec::new();

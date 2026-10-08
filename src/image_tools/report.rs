@@ -168,7 +168,16 @@ impl super::State {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_report_fixture(&mut self, ctx: &egui::Context) {
+        self.metadata.preview_fixture(ctx);
+        self.mode = Mode::Metadata;
+    }
+
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_assert(&self) -> String {
+        if self.mode == Mode::Metadata {
+            return self.metadata.preview_report_assert();
+        }
         let text = self.image_report().expect("current image report");
         let value: serde_json::Value = serde_json::from_str(text).unwrap();
         if self.mode == Mode::Batch {
@@ -192,6 +201,9 @@ impl super::State {
         text.to_string()
     }
     pub(crate) fn image_report(&self) -> Option<&str> {
+        if self.mode == Mode::Metadata {
+            return self.metadata.report();
+        }
         if self.mode == Mode::Batch {
             return self.batch.report();
         }
@@ -203,6 +215,10 @@ impl super::State {
         self.reports.poll(ctx, current);
     }
     pub(super) fn image_report_ui(&mut self, ui: &mut egui::Ui) {
+        if self.mode == Mode::Metadata {
+            self.metadata.report_ui(ui);
+            return;
+        }
         if self.mode == Mode::Batch {
             self.batch.report_ui(ui);
             return;

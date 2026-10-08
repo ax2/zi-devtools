@@ -10,6 +10,7 @@ struct Preview {
     folder: PathBuf,
     light: bool,
     batch: bool,
+    metadata: bool,
     tick: u32,
     shots: u32,
     extra_passes: u32,
@@ -81,7 +82,9 @@ impl eframe::App for Preview {
             ctx.request_discard("image report fixture verifies multipass input scheduling");
         }
         if self.tick == 0 {
-            if self.batch {
+            if self.metadata {
+                self.app.preview_metadata_report_prepare(ctx, self.light);
+            } else if self.batch {
                 self.app.preview_batch_report_prepare(ctx, self.light);
             } else {
                 self.app.preview_image_report_prepare(ctx, self.light);
@@ -149,6 +152,7 @@ fn main() -> eframe::Result<()> {
                 folder,
                 light,
                 batch: std::env::args().nth(3).as_deref() == Some("batch"),
+                metadata: std::env::args().nth(3).as_deref() == Some("metadata"),
                 tick: u32::MAX,
                 shots: 0,
                 extra_passes: 0,

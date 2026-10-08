@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.87",
+  "sourceCatalogVersion": "0.82.0-dev.88",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -1120,7 +1120,7 @@
     {
       "sourceToolId": "image-metadata",
       "title": "图片元数据检查与清理",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1131,7 +1131,7 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "本机有界扫描 PNG/JPEG/WebP 常见 EXIF/GPS、ICC、XMP、文本与 IPTC 块，不显示敏感原值；应用 EXIF 方向后重新编码、预览并复检清理副本，明确另存且不覆盖；动画图片拒绝处理，不能保证识别所有私有元数据 另存先完整写入同目录暂存，再无覆盖发布，不暴露半成品；失败清理暂存并保留已有目标。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.2",
+          "sourceVersion": "1.1.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }

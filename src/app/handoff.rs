@@ -286,6 +286,12 @@ impl DevToolsApp {
         self.open_startup_tool("image-batch");
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_metadata_report_prepare(&mut self, ctx: &egui::Context, light: bool) {
+        self.preview_image_report_prepare(ctx, light);
+        self.images.preview_metadata_report_fixture(ctx);
+        self.open_startup_tool("image-metadata");
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_image_report_check(&self, phase: u8) {
         let text = self.images.preview_image_report_assert();
         match phase {

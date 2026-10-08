@@ -1,5 +1,5 @@
 {
-  "version": "0.82.0-dev.87",
+  "version": "0.82.0-dev.88",
   "updated": "2026-10-08",
   "tools": [
     {
@@ -1735,7 +1735,7 @@
         "keywords": "image metadata exif gps icc xmp privacy 图片 元数据 隐私 清理",
         "aliases": []
       },
-      "tool_version": "1.0.2",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
@@ -1751,6 +1751,11 @@
           "version": "1.0.2",
           "date": "2026-10-08",
           "changes": "后台任务纳入统一退出保护；离开工具页面仍更新任务结果。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-08",
+          "changes": "冻结原图元数据摘要及清理预览真实复检 JSON，保留实际编码字节，不传原始位置/EXIF值；确认后可交给 JSON/备忘，输入质量任务变化使旧报告不可发送。"
         }
       ]
     },
