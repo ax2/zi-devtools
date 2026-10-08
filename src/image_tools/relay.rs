@@ -690,6 +690,10 @@ impl State {
                 .anchor(egui::Align2::CENTER_TOP,egui::vec2(0.0,48.0)))
             .show(ui.ctx(), |ui| {
             ui.set_width(540.0_f32.min((ui.ctx().screen_rect().width() - 64.0).max(160.0)));
+            let body_height = (ui.ctx().screen_rect().height() - 150.0).max(100.0);
+            let preview_height = (ui.ctx().screen_rect().height() - 470.0).clamp(48.0,240.0);
+            let can_apply = egui::ScrollArea::vertical().id_salt("image-relay-body")
+                .max_height(body_height).show(ui, |ui| {
             ui.heading("图片接力");
             ui.small("来源时间记录接力时刻，不推断原图拍摄或文件创建时间。");
             if let Some(value)=&transfer.prepared {
@@ -698,10 +702,10 @@ impl State {
             // Reserve the same geometry before and after decoding so controls do
             // not move underneath a pending pointer press/release.
             let width=ui.available_width().min(480.0);
-            let (preview_rect,_)=ui.allocate_exact_size(egui::vec2(width,240.0),egui::Sense::hover());
+            let (preview_rect,_)=ui.allocate_exact_size(egui::vec2(width,preview_height),egui::Sense::hover());
             if let Some(texture)=&transfer.texture {
                 let original=texture.size_vec2();
-                let size=original*(width/original.x).min(240.0/original.y).min(1.0);
+                let size=original*(width/original.x).min(preview_height/original.y).min(1.0);
                 ui.put(egui::Rect::from_center_size(preview_rect.center(),size),egui::Image::new((texture.id(),size)));
             }else if transfer.busy() {
                 ui.put(egui::Rect::from_center_size(preview_rect.center(),egui::vec2(24.0,24.0)),egui::Spinner::new());
@@ -713,7 +717,7 @@ impl State {
                     }else {ui.small("来源链准备中");}
                 });
             });
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 for target in [Target::Convert, Target::Edit, Target::Workflow] {
                     if !matches!(
                         (transfer.source_id, target),
@@ -766,10 +770,13 @@ impl State {
             if !transfer.error.is_empty() {
                 ui.label(&transfer.error);
             }
+            !busy && (!has_work || transfer.replace) && transfer.prepared.is_some() && !transfer.cancelled
+            }).inner;
+            ui.separator();
             ui.horizontal(|ui| {
                 cancel = ui.button("取消").clicked();
                 let response = ui.add_enabled(
-                    !busy && (!has_work || transfer.replace) && transfer.prepared.is_some() && !transfer.cancelled,
+                    can_apply,
                     egui::Button::new("确认接力并打开"),
                 );
                 apply=response.clicked();

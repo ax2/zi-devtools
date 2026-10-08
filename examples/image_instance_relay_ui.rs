@@ -121,10 +121,15 @@ fn main() -> eframe::Result<()> {
     std::fs::create_dir_all(&folder).unwrap();
     std::fs::write(folder.join("services.yml"), "services: {}\n").unwrap();
     let light = std::env::args().nth(2).as_deref() == Some("light");
+    let small = std::env::args().nth(3).as_deref() == Some("small");
     eframe::run_native(
         "Image instance relay",
         eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default().with_inner_size([1100.0, 900.0]),
+            viewport: egui::ViewportBuilder::default().with_inner_size(if small {
+                [760.0, 520.0]
+            } else {
+                [1100.0, 900.0]
+            }),
             ..Default::default()
         },
         Box::new(move |cc| {
