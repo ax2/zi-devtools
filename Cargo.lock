@@ -5560,7 +5560,7 @@ dependencies = [
 
 [[package]]
 name = "zi-devtools"
-version = "0.82.0-dev.103"
+version = "0.82.0-dev.104"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -5617,17 +5617,18 @@ dependencies = [
 
 [[package]]
 name = "zi-diagnostics-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "regex",
+ "regex-syntax",
  "serde_json",
  "serde_yaml_ng",
 ]
 
 [[package]]
 name = "zi-diagnostics-wasi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",

@@ -15,52 +15,7 @@ parser.add_argument('--native', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 
-def request(action, text, secondary=''):
-    return dict(pluginId='com.zicode.devtools.diagnostics', sceneId='coding',
-                capabilityId='devtools.diagnostics.'+action, commandId=None,
-                input=dict(text=text, secondary=secondary))
-
-# Independent observable invariants, rather than merely equal outputs.
-samples = [
-    ('java.threads', '"worker" #1 nid=0x1\n java.lang.Thread.State: RUNNABLE\n at app.Main.run(Main.java:1)', '', {'threadCount':1}),
-    ('java.dependencies', '[INFO] demo:app:jar:1.0\n[INFO] +- org.example:client:jar:2.0:compile', '', {'entries/0/module':'demo:app'}),
-    ('java.gc', '[0.002s][info][gc] Using G1\n[1.020s][info][gc] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 24M->3M(256M) 4.500ms', '', {'pauseCount':1,'totalPauseMs':4.5}),
-    ('java.jfr_json', '{"recording":{"events":[{"type":"jdk.GarbageCollection","values":{"duration":"PT0.004S"}}]}}', '', {'eventCount':1,'timeline/0/durationSeconds':0.004}),
-    ('spring.config', 'server:\n  port: 8080\npassword: synthetic-private-value', 'server:\n  port: 8081\npassword: changed-private-value', {'changes/0/left':'[REDACTED]'}),
-    ('django.migrations', '[X] shop.0001\n[ ] shop.0002 ... (shop.0001)', 'DROP TABLE old_orders;', {'migrations/0/id':'shop.0001','dependencies/0/dependsOn':'shop.0001'}),
-    ('django.sql', '[{"requestId":"r","sql":"SELECT name FROM users WHERE id=1","durationMs":2.5},{"requestId":"r","sql":"SELECT name FROM users WHERE id=2","durationMs":3}]', '', {'queryCount':2,'totalMs':5.5,'groups/0/count':2}),
-    ('django.urls', '[{"route":"users/<int:pk>/","name":"detail","namespace":"api"}]', '{"name":"api:detail","kwargs":{"pk":42}}', {'routeCount':1,'reverseCheck/candidates/0/parameterNamesMatch':True}),
-    ('django.openapi', '{"openapi":"3.0.3","paths":{"/users/":{"get":{"responses":{"200":{"description":"OK"}}}}}}', '{"openapi":"3.0.3","paths":{}}', {'operationChanges/0/change':'removed'}),
-    ('django.checks', '?: (security.W018) DEBUG enabled', '', {'items/0/id':'security.W018'}),
-    ('celery.report', 'Task demo.send[task-1] received\nTask demo.send[task-1] retry: Retry in 1s\nTask demo.send[task-1] succeeded in 0.25s: None', '', {'tasks/0/retries':1,'tasks/0/lastObservedState':'succeeded'}),
-]
-cases = [(action, request(action,text,second), checks, None) for action,text,second,checks in samples]
-registry=set(re.findall(r'Action\s*\{\s*id:\s*"([^"]+)"', (root/'crates/zi-diagnostics-core/src/lib.rs').read_text(encoding='utf-8')))
-assert registry=={row[0] for row in samples}, 'Every registered action needs an observable success fixture'
-schema=json.loads((root/'contracts/diagnostics/v1/request.schema.json').read_text(encoding='utf-8'))
-assert set(schema['properties']['capabilityId']['enum'])=={'devtools.diagnostics.'+action for action in registry}
-base = request('django.checks', '?: (security.W018) DEBUG enabled')
-for field in ['pluginId','sceneId','capabilityId','commandId','input']:
-    value=copy.deepcopy(base);del value[field]
-    cases.append(('missing-'+field,value,None,'INVALID_INPUT'))
-for field,value,error in [('pluginId','other','INVALID_INPUT'),('sceneId','','INVALID_INPUT'),
-                          ('capabilityId','devtools.diagnostics.unknown','UNSUPPORTED_OPERATION'),
-                          ('commandId','other','INVALID_INPUT')]:
-    case=copy.deepcopy(base);case[field]=value
-    cases.append(('invalid-'+field,case,None,error))
-case=copy.deepcopy(base);case['capabilityId']=None;case['commandId']='other'
-cases.append(('command-not-registered',case,None,'UNSUPPORTED_OPERATION'))
-for field in ['text','secondary']:
-    case=copy.deepcopy(base);case['input'][field]='中'*2731
-    cases.append(('utf8-limit-'+field,case,None,'INPUT_TOO_LARGE'))
-case=copy.deepcopy(base);case['input']['extra']='secret-test'
-cases.append(('unknown-input-field',case,None,'INVALID_INPUT'))
-cases += [('request-limit',b' '*(48*1024+1),None,'INPUT_TOO_LARGE'),
-          ('invalid-utf8',b'\xff',None,'INVALID_INPUT'),
-          ('invalid-report',request('java.jfr_json','secret-test'),None,'INVALID_REPORT')]
-encoded=json.dumps(base,separators=(',',':')).encode()
-cases.append(('duplicate-envelope',encoded.replace(b'"input":',b'"pluginId":"other","input":'),None,'INVALID_INPUT'))
-cases.append(('output-expansion',request('java.threads',''.join(f'"t{i}" #1\n' for i in range(500))),None,'OUTPUT_TOO_LARGE'))
+from diagnostics_vectors import cases, samples
 
 wasm=args.wasm.read_bytes()
 assert wasm[:8]==b'\0asm\x01\0\0\0'

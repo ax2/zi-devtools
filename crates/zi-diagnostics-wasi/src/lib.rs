@@ -107,20 +107,45 @@ pub fn execute_request(bytes: &[u8]) -> Envelope {
     {
         return Envelope::failure("UNSUPPORTED_OPERATION", "未知分析能力");
     }
-    match zi_diagnostics_core::execute(action, &request.input.text, &request.input.secondary) {
+    match zi_diagnostics_core::execute_plugin(
+        action,
+        &request.input.text,
+        &request.input.secondary,
+        REQUEST_LIMIT,
+    ) {
         Ok(text) => Envelope {
             contract_version: CONTRACT_VERSION.into(),
             ok: true,
             data: Some(Text { text }),
             error: None,
         },
+        Err(error)
+            if error
+                .downcast_ref::<zi_diagnostics_core::ReportTooLarge>()
+                .is_some() =>
+        {
+            Envelope::failure("OUTPUT_TOO_LARGE", "完整结果超过48 KiB，请缩小输入范围")
+        }
         Err(_) => Envelope::failure("INVALID_REPORT", "报告格式或分析范围无效，请核对输入"),
     }
 }
 pub fn serialize_result(result: &Envelope) -> Vec<u8> {
-    let bytes = serde_json::to_vec(result).expect("fixed diagnostic envelope serialization");
-    if bytes.len() <= REQUEST_LIMIT {
-        bytes
+    struct Bounded(Vec<u8>);
+    impl std::io::Write for Bounded {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if bytes.len() > REQUEST_LIMIT - self.0.len() {
+                return Err(std::io::Error::other("result byte budget"));
+            }
+            self.0.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut output = Bounded(Vec::new());
+    if serde_json::to_writer(&mut output, result).is_ok() {
+        output.0
     } else {
         serde_json::to_vec(&Envelope::failure(
             "OUTPUT_TOO_LARGE",
@@ -178,5 +203,35 @@ mod tests {
         };
         let parsed: Envelope = serde_json::from_slice(&serialize_result(&result)).unwrap();
         assert!(!parsed.ok && parsed.data.is_none());
+    }
+    #[test]
+    fn serialized_result_accepts_exact_boundary_and_rejects_one_byte_over() {
+        for prefix in ["", "中\0\"\\"] {
+            let mut result = Envelope {
+                contract_version: CONTRACT_VERSION.into(),
+                ok: true,
+                data: Some(Text {
+                    text: prefix.into(),
+                }),
+                error: None,
+            };
+            let overhead = serde_json::to_vec(&result).unwrap().len();
+            result
+                .data
+                .as_mut()
+                .unwrap()
+                .text
+                .push_str(&"a".repeat(REQUEST_LIMIT - overhead));
+            assert_eq!(serialize_result(&result).len(), REQUEST_LIMIT);
+            assert!(
+                serde_json::from_slice::<Envelope>(&serialize_result(&result))
+                    .unwrap()
+                    .ok
+            );
+            result.data.as_mut().unwrap().text.push('a');
+            let rejected: Envelope = serde_json::from_slice(&serialize_result(&result)).unwrap();
+            assert_eq!(rejected.error.unwrap().code, "OUTPUT_TOO_LARGE");
+            assert!(rejected.data.is_none());
+        }
     }
 }

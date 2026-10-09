@@ -1,7 +1,11 @@
 //! Pure imported-report diagnostics. No process, filesystem, network or desktop APIs.
+mod config_json;
 pub mod contracts;
 pub mod django;
 pub mod java;
+#[cfg(test)]
+mod parser_tests;
+mod text_parse;
 use anyhow::{Result, ensure};
 use serde_json::Value;
 fn bounded(input: &str) -> Result<()> {
@@ -9,13 +13,120 @@ fn bounded(input: &str) -> Result<()> {
     ensure!(input.lines().count() <= 20000, "输入超过 20000 行");
     Ok(())
 }
-fn report(value: Value) -> Result<String> {
-    let text = serde_json::to_string_pretty(&value)?;
-    ensure!(
-        text.len() <= 8 * 1024 * 1024,
-        "报告超过 8 MiB，请缩小输入范围"
-    );
-    Ok(text)
+#[derive(Debug)]
+pub struct ReportTooLarge;
+impl std::fmt::Display for ReportTooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("report byte budget")
+    }
+}
+impl std::error::Error for ReportTooLarge {}
+fn string_size(s: &str, escaped: bool) -> usize {
+    let mut size = if escaped { 4 } else { 2 };
+    for byte in s.bytes() {
+        size += match byte {
+            b'"' | b'\\' => {
+                if escaped {
+                    4
+                } else {
+                    2
+                }
+            }
+            b'\n' | b'\r' | b'\t' | 8 | 12 => {
+                if escaped {
+                    3
+                } else {
+                    2
+                }
+            }
+            0..=31 => {
+                if escaped {
+                    7
+                } else {
+                    6
+                }
+            }
+            _ => 1,
+        };
+    }
+    size
+}
+fn measure(
+    value: &Value,
+    depth: usize,
+    escaped: bool,
+    total: &mut usize,
+    limit: usize,
+) -> Result<()> {
+    let newline = if escaped { 2 } else { 1 };
+    let count = match value {
+        Value::Null => 4,
+        Value::Bool(b) => {
+            if *b {
+                4
+            } else {
+                5
+            }
+        }
+        Value::Number(n) => n.to_string().len(),
+        Value::String(s) => string_size(s, escaped),
+        Value::Array(items) => {
+            if items.is_empty() {
+                2
+            } else {
+                *total += 2
+                    + newline * (items.len() + 1)
+                    + (items.len() - 1)
+                    + (depth + 1) * 2 * items.len()
+                    + depth * 2;
+                for item in items {
+                    measure(item, depth + 1, escaped, total, limit)?;
+                }
+                0
+            }
+        }
+        Value::Object(items) => {
+            if items.is_empty() {
+                2
+            } else {
+                *total += 2
+                    + newline * (items.len() + 1)
+                    + (items.len() - 1)
+                    + (depth + 1) * 2 * items.len()
+                    + depth * 2;
+                for (key, item) in items {
+                    *total += string_size(key, escaped) + 2;
+                    measure(item, depth + 1, escaped, total, limit)?;
+                }
+                0
+            }
+        }
+    };
+    *total += count;
+    if *total > limit {
+        return Err(ReportTooLarge.into());
+    }
+    Ok(())
+}
+fn report_limited(value: Value, limit: usize) -> Result<String> {
+    let mut total = 0;
+    measure(&value, 0, limit == 48 * 1024, &mut total, limit)?;
+    Ok(serde_json::to_string_pretty(&value)?)
+}
+struct CollectionBudget {
+    limit: usize,
+    charge: usize,
+}
+impl CollectionBudget {
+    fn new(limit: usize) -> Self {
+        Self { limit, charge: 0 }
+    }
+    fn add(&mut self, value: &Value) -> Result<()> {
+        if self.limit == 48 * 1024 {
+            measure(value, 2, true, &mut self.charge, self.limit)?;
+        }
+        Ok(())
+    }
 }
 #[derive(Clone, Copy)]
 pub struct Action {
@@ -95,6 +206,29 @@ pub fn execute(id: &str, input: &str, secondary: &str) -> Result<String> {
         "django.openapi" => contracts::openapi(input, secondary),
         "django.checks" => django::checks(input),
         "celery.report" => django::celery(input),
+        _ => anyhow::bail!("未知报告分析能力"),
+    }
+}
+pub fn execute_plugin(
+    id: &str,
+    input: &str,
+    secondary: &str,
+    report_limit: usize,
+) -> Result<String> {
+    bounded(input)?;
+    bounded(secondary)?;
+    match id {
+        "java.threads" => java::threads_limited(input, report_limit),
+        "java.dependencies" => java::dependencies_limited(input, report_limit),
+        "java.gc" => java::gc_limited(input, report_limit),
+        "java.jfr_json" => java::jfr_limited(input, report_limit),
+        "spring.config" => contracts::config_limited(input, secondary, report_limit),
+        "django.migrations" => django::migrations_limited(input, secondary, report_limit),
+        "django.sql" => django::sql_limited(input, report_limit),
+        "django.urls" => django::urls_limited(input, secondary, report_limit),
+        "django.openapi" => contracts::openapi_limited(input, secondary, report_limit),
+        "django.checks" => django::checks_limited(input, report_limit),
+        "celery.report" => django::celery_limited(input, report_limit),
         _ => anyhow::bail!("未知报告分析能力"),
     }
 }

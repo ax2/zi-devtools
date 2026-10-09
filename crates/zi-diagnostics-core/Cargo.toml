@@ -1,6 +1,6 @@
 [package]
 name = "zi-diagnostics-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 rust-version = "1.88"
@@ -8,5 +8,6 @@ rust-version = "1.88"
 [dependencies]
 anyhow = "1.0"
 regex = "1.11"
+regex-syntax = "0.8"
 serde_json = "1.0"
 serde_yaml_ng = "0.10"
