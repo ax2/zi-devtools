@@ -2,6 +2,10 @@
 
 项目采用 MIT 许可证。产品主页：https://devtools.zicode.com/ 。
 
+## 本地开发不自动发版
+
+本地dev版本保持不变，日常迭代记录提交号和工作日志；不要每次修改递增版本、创建标签、MSI或新的冻结目录。需要发布程序或新的插件包时才更新对应版本并走以下流程。固定构建入口与缓存保留规则见[本地开发](development.md)。
+
 ## 自动工作流
 
 参考 ZiFile 的标签触发、版本一致性、质量检查、安装包、便携 EXE、SHA-256 和 GitHub Release 流程。Zi DevTools 当前仅发布 Windows x64，安装器使用固定版本 WiX Toolset 5.0.2 生成原生 MSI；没有复用 ZiFile 的 MSIX 身份、签名证书或 ARM64 成熟度声明。

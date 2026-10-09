@@ -51,7 +51,7 @@ try {
     & pwsh -NoProfile -File $script -Deep -Apply -BuildCacheRoot $external
     Check ($LASTEXITCODE -eq 0 -and -not (Test-Path "$project\target\debug") -and -not (Test-Path "$external\debug") -and (Test-Path "$project\target\release\keep.txt") -and (Test-Path "$external\release\keep.txt") -and (Test-Path "$fixture\sentinel\keep.txt")) 'explicit manual debug cleanup preserves both release directories and sentinel'
     $launcher=Get-Content (Join-Path $PSScriptRoot 'dev.ps1') -Raw
-    Check ($launcher -notmatch 'maintenance.ps1|CARGO_INCREMENTAL') 'development launcher does not scan, clear or override caches'
+    Check ($launcher -notmatch 'maintenance.ps1|Set-Item.*Env:|\$env:CARGO_INCREMENTAL\s*=') 'development launcher does not scan, clear or override caches'
 } finally {
     if($ownedProcess){Stop-Process -Id $ownedProcess.Id -Force -ErrorAction SilentlyContinue}
     if($junction -and (Test-Path -LiteralPath $junction)){Remove-Item -LiteralPath $junction -Force}
