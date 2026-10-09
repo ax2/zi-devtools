@@ -118,7 +118,7 @@ for row in rows:
         for scope in row["operationScopes"]:
             scope["design"] = "docs/character-plugin-design.md"
             scope["core"] = "zi-character-core/0.1.0"
-            scope["coreStatus"] = "standalone_shared_core_under_verification_no_wasi_adapter"
+            scope["coreStatus"] = "standalone_shared_core_native_tests_and_wasi_compile_pass_no_adapter"
             scope["blockingReason"] = row["reason"]
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,

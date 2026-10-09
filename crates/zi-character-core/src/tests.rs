@@ -167,7 +167,33 @@ fn png_jpeg_webp_byte_input_and_resource_boundaries() {
             let mut oversized_pixels = bytes.clone();
             oversized_pixels[16..20].copy_from_slice(&5001u32.to_be_bytes());
             oversized_pixels[20..24].copy_from_slice(&4000u32.to_be_bytes());
-            assert!(image_art_bytes(&oversized_pixels, 8).is_err());
+            // Keep the IHDR checksum valid: this must fail for pixel count,
+            // not merely because editing dimensions corrupted the PNG header.
+            let crc = png_crc32(&oversized_pixels[12..29]);
+            oversized_pixels[29..33].copy_from_slice(&crc.to_be_bytes());
+            let dimensions = image::ImageReader::new(Cursor::new(&oversized_pixels))
+                .with_guessed_format()
+                .unwrap()
+                .into_dimensions()
+                .unwrap();
+            assert_eq!(dimensions, (5001, 4000));
+            assert_eq!(
+                image_art_bytes(&oversized_pixels, 8)
+                    .unwrap_err()
+                    .to_string(),
+                "图片像素超过上限"
+            );
+            let expected = image_art_bytes(&bytes, 8).unwrap();
+            let mut exact_file_limit = bytes.clone();
+            exact_file_limit.resize(10 * 1024 * 1024, 0);
+            assert_eq!(image_art_bytes(&exact_file_limit, 8).unwrap(), expected);
+            exact_file_limit.push(0);
+            assert_eq!(
+                image_art_bytes(&exact_file_limit, 8)
+                    .unwrap_err()
+                    .to_string(),
+                "图片超过 10 MiB 上限"
+            );
         }
     }
     assert!(image_art_bytes(&[], 8).is_err());
@@ -178,4 +204,29 @@ fn png_jpeg_webp_byte_input_and_resource_boundaries() {
             .to_string()
             .contains("10 MiB")
     );
+}
+
+// PNG's standard CRC-32, local to this compatibility test (no product dependency).
+fn png_crc32(bytes: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1));
+        }
+    }
+    !crc
+}
+
+#[test]
+fn exact_twenty_megapixel_png_is_not_rejected_as_oversized() {
+    use image::ImageEncoder;
+    let pixels = vec![255; 20_000_000];
+    let mut bytes = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut bytes)
+        .write_image(&pixels, 5000, 4000, image::ExtendedColorType::L8)
+        .unwrap();
+    assert!(bytes.len() <= 10 * 1024 * 1024);
+    // 4000/5000 * 8 * 0.5 = 3.2, rounded to three rows.
+    assert_eq!(image_art_bytes(&bytes, 8).unwrap(), "        \n".repeat(3));
 }

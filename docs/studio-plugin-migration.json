@@ -352,7 +352,7 @@
           "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
           "design": "docs/character-plugin-design.md",
           "core": "zi-character-core/0.1.0",
-          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter"
+          "coreStatus": "standalone_shared_core_native_tests_and_wasi_compile_pass_no_adapter"
         }
       ],
       "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
@@ -376,7 +376,7 @@
           "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
           "design": "docs/character-plugin-design.md",
           "core": "zi-character-core/0.1.0",
-          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter"
+          "coreStatus": "standalone_shared_core_native_tests_and_wasi_compile_pass_no_adapter"
         }
       ],
       "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
@@ -400,7 +400,7 @@
           "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
           "design": "docs/character-plugin-design.md",
           "core": "zi-character-core/0.1.0",
-          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter"
+          "coreStatus": "standalone_shared_core_native_tests_and_wasi_compile_pass_no_adapter"
         }
       ],
       "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"

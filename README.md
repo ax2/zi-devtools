@@ -395,4 +395,4 @@ Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整
 
 2026-10-09：Java/Django 堆栈两项工具共享完整纯 Rust 核心，新增未签名 trace 0.1.0 提供方候选（约 1.4 MB）。59 条实际原生/WASI 对照、预算与冷启动通过，完整回归 829 通过；根开发版本保持 dev105。实际 Studio/Worker/Pi 尚待验收，详见 [交付说明](docs/trace-plugin-handoff.md)。
 
-2026-10-09：字符工具提取同仓 zi-character-core，独立版复用 ASCII/字符库/横幅及图片转换。834项工作区测试、严格Clippy和WASI目标编译检查通过；原生优化构建仍在进行。[字符插件设计与完整输入范围提案](docs/character-plugin-design.md)保留资源、复制、保存与图片完整范围，当前仍未交付插件。
+2026-10-09：字符工具提取同仓 zi-character-core，独立版复用 ASCII/字符库/横幅及图片转换。835项工作区测试、严格Clippy和WASI目标编译检查通过；原生优化构建及隔离服务启停通过。[字符插件设计与完整输入范围提案](docs/character-plugin-design.md)保留资源、复制、保存与图片完整范围，当前仍未交付插件。
