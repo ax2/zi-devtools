@@ -113,15 +113,27 @@ for operation, source_id, title in trace_actions:
         blockingReason="unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收")]
 for row in rows:
     if row["sourceToolId"] in {"json-path", "json-diff"}:
+        row["reason"] = "完整JSON核心已共享；四操作实验模块仍有正则预算失败，未冻结或Host验收。"
         assert row["pluginStatus"] == "not_delivered"
         for scope in row["operationScopes"]:
             scope["core"] = "zi-json-core/0.1.0"
             scope["coreStatus"] = "standalone_shared_core_verified_experimental_fields_adapter_not_delivered"
             scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
-            scope["adapterVerification"] = "147_native_wasi_byte_and_schema_vectors_budget_cold_pass_not_complete_adversarial_or_Host_proof"
+            scope["adapterVerification"] = "186_native_wasi_functional_schema_vectors_184_budget_pass_2_regex_fuel_fail_latest_module_cold_not_verified"
             scope["design"] = "docs/json-plugin-design.md"
-            scope["blockingReason"] = "三项JSON实验适配已验证147条；需完整恶意向量、View、协议协商及真实Host验收，不是五操作提案全实现或插件交付。"
+            scope["blockingReason"] = "当前四操作模块功能186条通过，预算184通过/2正则失败，尚无最终冷启动、View、协议协商或Host验收；不是完整五操作提案或交付插件。"
+    if row["sourceToolId"] == "regex":
+        row["reason"] = "完整正则核心与四操作适配已实现功能验证；两条预算失败，未冻结或Host验收。"
+        assert row["pluginStatus"] == "not_delivered"
+        for scope in row["operationScopes"]:
+            scope["core"] = "zi-regex-core/0.1.0"
+            scope["coreStatus"] = "complete_standalone_core_verified_experimental_adapter_budget_incomplete"
+            scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
+            scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
+            scope["adapterVerification"] = "186_native_wasi_functional_schema_vectors_184_budget_pass_2_regex_fuel_fail_latest_module_cold_not_verified"
+            scope["design"] = "docs/regex-plugin-design.md"
+            scope["blockingReason"] = "完整算法已共享；两条正则编译/捕获组放大耗尽10M预算，仍需优化或明确Host预算协商、最终冷启动、View与真实Host验收。"
     if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
         assert row["pluginStatus"] == "not_delivered"
         row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"

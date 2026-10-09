@@ -1,14 +1,15 @@
-//! Experimental proposal.2 adapter for three complete JSON operations.
+//! Experimental proposal.2 adapter for four complete JSON/regex operations.
 //! Not frozen rc.1, not a Host-negotiated plugin, and not the full five-operation draft.
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 pub const CONTRACT_VERSION: &str = "1.1.0-proposal.2";
 pub const REQUEST_LIMIT: usize = 48 * 1024;
-pub const OPERATIONS: [&str; 3] = [
+pub const OPERATIONS: [&str; 4] = [
     "devtools.compare.json.path",
     "devtools.compare.json.diff.ordered",
     "devtools.compare.json.diff.unordered",
+    "devtools.compare.regex.matches",
 ];
 
 #[derive(Deserialize)]
@@ -32,6 +33,12 @@ struct PathInput {
 struct DiffInput {
     left: String,
     right: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RegexInput {
+    text: String,
+    pattern: String,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,6 +96,15 @@ fn handle(bytes: &[u8]) -> ResultEnvelope {
         return ResultEnvelope::failure("INVALID_INPUT", "协议、插件或场景标识无效");
     }
     let result = match request.capability_id.as_str() {
+        "devtools.compare.regex.matches" => {
+            let Ok(input) = serde_json::from_str::<RegexInput>(request.input.get()) else {
+                return ResultEnvelope::failure("INVALID_INPUT", "正则输入结构无效");
+            };
+            if input.text.len() > 8192 || input.pattern.len() > 4096 {
+                return ResultEnvelope::failure("INPUT_TOO_LARGE", "正则字段超过 UTF-8 字节限制");
+            }
+            zi_regex_core::test_regex_with_result_budget(&input.pattern, &input.text, REQUEST_LIMIT)
+        }
         "devtools.compare.json.path" => {
             let Ok(input) = serde_json::from_str::<PathInput>(request.input.get()) else {
                 return ResultEnvelope::failure("INVALID_INPUT", "查询输入结构无效");
@@ -116,7 +132,10 @@ fn handle(bytes: &[u8]) -> ResultEnvelope {
     };
     match result {
         Ok(text) => ResultEnvelope::success(text),
-        Err(error) if error.is::<zi_json_core::ReportTooLarge>() => {
+        Err(error)
+            if error.is::<zi_json_core::ReportTooLarge>()
+                || error.is::<zi_regex_core::ReportTooLarge>() =>
+        {
             ResultEnvelope::failure("INPUT_TOO_LARGE", "结果超过 48 KiB")
         }
         Err(_) => ResultEnvelope::failure("INVALID_INPUT", "输入无法按该操作处理"),

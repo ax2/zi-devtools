@@ -18,7 +18,7 @@ rows=[
  ('duplicates',request('json.diff.unordered',dict(left='[1,1,2]',right='[1,2,2]')),success(diff(False,[dict(path='',kind='changed',before=[1,1,2],after=[1,2,2])],True))),
  ('missing-query',request('json.path',dict(text='{}')),failure('INVALID_INPUT','查询输入结构无效')),
  ('query-byte-over',request('json.path',dict(text='{}',query='中'*1366)),failure('INPUT_TOO_LARGE','查询字段超过 UTF-8 字节限制')),
- ('unsupported-draft-operation',request('regex.matches',dict(text='a',pattern='a')),failure('UNSUPPORTED_OPERATION','该实验适配未注册此能力')),
+ ('unsupported-text-diff',request('text.diff',dict(left='a',right='a')),failure('UNSUPPORTED_OPERATION','该实验适配未注册此能力')),
 ]
 old=request('json.path',dict(text='{}',query='$')).replace(version.encode(),b'1.0.0-rc.1')
 rows.append(('old-contract',old,failure('INVALID_INPUT','协议、插件或场景标识无效')))
@@ -103,4 +103,41 @@ for depth in [30, 100]:
   changes=[dict(path='/x'*depth,kind='changed',before=left_leaf,after=right_leaf)] if unordered else [dict(path='/x'*depth+'/249',kind='changed',before=249,after=-1)]
   add('deep-'+str(depth)+'-'+cap,request(cap,dict(left=left,right=right)),success(diff(False,changes,unordered)))
  add('deep-'+str(depth)+'-unordered-reordered-equal',request('json.diff.unordered',dict(left=left,right=raw(reordered).decode())),success(diff(True,[],True)))
+
+# Regex reports have fixed UTF-8 byte offsets and original numeric capture labels.
+for name,pattern,text,expected in [
+ ('ascii-captures',r'(zi)-(\d+)','zi-42 and zi-7','#1 字节 0..5: zi-42\n  $1: zi\n  $2: 42\n#2 字节 10..14: zi-7\n  $1: zi\n  $2: 7\n'),
+ ('unicode-offset',r'(zi)-(\d+)','甲zi-7','#1 字节 3..7: zi-7\n  $1: zi\n  $2: 7\n'),
+ ('optional-capture','(a)?b','b','#1 字节 0..1: b\n'),
+ ('zero-width','','中a','#1 字节 0..0: \n#2 字节 3..3: \n#3 字节 4..4: \n'),
+ ('named-unicode',r'(?P<word>\p{L}+)-(\d+)','甲-42','#1 字节 0..6: 甲-42\n  $1: 甲\n  $2: 42\n'),
+ ('unicode-word',r'\w+','a中🙂','#1 字节 0..4: a中\n'),
+ ('no-match','z','甲','没有匹配'),
+]:
+ add('regex-'+name,request('regex.matches',dict(text=text,pattern=pattern)),success(expected))
+for pattern in ['(',r'(?=a)',r'(a)\1','a{1000000}']:
+ add('regex-invalid-'+str(len(rows)),request('regex.matches',dict(text='a',pattern=pattern)),algorithm_error)
+regex_error=failure('INVALID_INPUT','正则输入结构无效')
+regex_size=failure('INPUT_TOO_LARGE','正则字段超过 UTF-8 字节限制')
+for field in ['text','pattern']:
+ values=dict(text='a',pattern='a');del values[field]
+ add('regex-missing-'+field,request('regex.matches',values),regex_error)
+ for tag,value in [('null',None),('number',1),('bool',False),('array',[]),('object',{})]:
+  values=dict(text='a',pattern='a');values[field]=value
+  add('regex-type-'+field+'-'+tag,request('regex.matches',values),regex_error)
+ body=request('regex.matches',dict(text='a',pattern='a'));literal='"'+field+'":"a"'
+ add('regex-duplicate-'+field,body.replace(literal.encode(),(literal+','+literal).encode()),regex_error)
+add('regex-extra',request('regex.matches',dict(text='a',pattern='a',hidden=True)),regex_error)
+for name,text,pattern in [('text-ascii','a'*8192,'^$'),('text-unicode','中'*2730+'aa','^$'),('pattern-ascii','','a'*4096),('pattern-unicode','','中'*1365+'a')]:
+ add('regex-'+name+'-exact',request('regex.matches',dict(text=text,pattern=pattern)),success('没有匹配'))
+ add('regex-'+name+'-over',request('regex.matches',dict(text=text+('a' if name.startswith('text') else ''),pattern=pattern+('a' if name.startswith('pattern') else ''))),regex_size)
+for count in [100,101]:
+ report=''.join(f'#{i+1} 字节 {i}..{i+1}: a\n' for i in range(100))
+ if count>100:report+='\n... 仅展示前 100 个匹配 ...'
+ add('regex-matches-'+str(count),request('regex.matches',dict(text='a'*count,pattern='a')),success(report))
+for count in [120,121]:
+ shown='中'*120+('…' if count>120 else '')
+ report=f'#1 字节 0..{count*3}: {shown}\n  $1: {shown}\n'
+ add('regex-display-'+str(count),request('regex.matches',dict(text='中'*count,pattern='(.+)')),success(report))
+add('regex-output-amplification',request('regex.matches',dict(text='aaaaaaa',pattern='()'*1000)),failure('INPUT_TOO_LARGE','结果超过 48 KiB'))
 assert len({name for name,_,_ in rows})==len(rows)

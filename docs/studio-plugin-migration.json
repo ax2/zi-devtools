@@ -221,7 +221,7 @@
     {
       "sourceToolId": "regex",
       "title": "正则表达式",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -232,12 +232,18 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "查找匹配与捕获组",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.2",
+          "sourceVersion": "1.0.3",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "blockingReason": "完整算法已共享；两条正则编译/捕获组放大耗尽10M预算，仍需优化或明确Host预算协商、最终冷启动、View与真实Host验收。",
+          "core": "zi-regex-core/0.1.0",
+          "coreStatus": "complete_standalone_core_verified_experimental_adapter_budget_incomplete",
+          "experimentalAdapter": "zi-fields-wasi/0.1.0",
+          "adapterContract": "1.1.0-proposal.2_not_Host_negotiated",
+          "adapterVerification": "186_native_wasi_functional_schema_vectors_184_budget_pass_2_regex_fuel_fail_latest_module_cold_not_verified",
+          "design": "docs/regex-plugin-design.md"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "完整正则核心与四操作适配已实现功能验证；两条预算失败，未冻结或Host验收。"
     },
     {
       "sourceToolId": "number",
@@ -1128,16 +1134,16 @@
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.3",
           "pluginStatus": "not_delivered",
-          "blockingReason": "三项JSON实验适配已验证147条；需完整恶意向量、View、协议协商及真实Host验收，不是五操作提案全实现或插件交付。",
+          "blockingReason": "当前四操作模块功能186条通过，预算184通过/2正则失败，尚无最终冷启动、View、协议协商或Host验收；不是完整五操作提案或交付插件。",
           "core": "zi-json-core/0.1.0",
           "coreStatus": "standalone_shared_core_verified_experimental_fields_adapter_not_delivered",
           "experimentalAdapter": "zi-fields-wasi/0.1.0",
           "adapterContract": "1.1.0-proposal.2_not_Host_negotiated",
-          "adapterVerification": "147_native_wasi_byte_and_schema_vectors_budget_cold_pass_not_complete_adversarial_or_Host_proof",
+          "adapterVerification": "186_native_wasi_functional_schema_vectors_184_budget_pass_2_regex_fuel_fail_latest_module_cold_not_verified",
           "design": "docs/json-plugin-design.md"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "完整JSON核心已共享；四操作实验模块仍有正则预算失败，未冻结或Host验收。"
     },
     {
       "sourceToolId": "json-diff",
@@ -1155,16 +1161,16 @@
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.4",
           "pluginStatus": "not_delivered",
-          "blockingReason": "三项JSON实验适配已验证147条；需完整恶意向量、View、协议协商及真实Host验收，不是五操作提案全实现或插件交付。",
+          "blockingReason": "当前四操作模块功能186条通过，预算184通过/2正则失败，尚无最终冷启动、View、协议协商或Host验收；不是完整五操作提案或交付插件。",
           "core": "zi-json-core/0.1.0",
           "coreStatus": "standalone_shared_core_verified_experimental_fields_adapter_not_delivered",
           "experimentalAdapter": "zi-fields-wasi/0.1.0",
           "adapterContract": "1.1.0-proposal.2_not_Host_negotiated",
-          "adapterVerification": "147_native_wasi_byte_and_schema_vectors_budget_cold_pass_not_complete_adversarial_or_Host_proof",
+          "adapterVerification": "186_native_wasi_functional_schema_vectors_184_budget_pass_2_regex_fuel_fail_latest_module_cold_not_verified",
           "design": "docs/json-plugin-design.md"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "完整JSON核心已共享；四操作实验模块仍有正则预算失败，未冻结或Host验收。"
     },
     {
       "sourceToolId": "data-schema",

@@ -1,4 +1,4 @@
-"""Experimental proposal.2 JSON adapter functional parity only, not Host or fuel proof."""
+"""Experimental proposal.2 JSON/regex adapter functional parity only, not Host or fuel proof."""
 import argparse
 import hashlib
 import json
@@ -22,7 +22,7 @@ for name,body,expected in rows:
   assert completed.stdout==expected,(name,kind,completed.stdout,expected)
   validator.validate(json.loads(completed.stdout))
  proof.append(dict(id=name,passed=True,requestSha256=hashlib.sha256(body).hexdigest(),resultSha256=hashlib.sha256(expected).hexdigest()))
-value=dict(contractVersion=version,experimentalOperations=3,cases=proof,wasmSha256=hashlib.sha256(args.wasm.read_bytes()).hexdigest(),nativeSha256=hashlib.sha256(args.native.read_bytes()).hexdigest(),limitations=[f'{len(rows)} functional vectors only; not complete adversarial/budget/cold verification','Experimental proposal.2 only; no frozen rc.1 fallback, plugin View, package, negotiated Host or Pi acceptance','Node is not a fuel or production isolation proof'])
+value=dict(contractVersion=version,experimentalOperations=4,cases=proof,wasmSha256=hashlib.sha256(args.wasm.read_bytes()).hexdigest(),nativeSha256=hashlib.sha256(args.native.read_bytes()).hexdigest(),limitations=[f'{len(rows)} functional vectors only; not complete adversarial/budget/cold verification','Experimental proposal.2 only; no frozen rc.1 fallback, plugin View, package, negotiated Host or Pi acceptance','Node is not a fuel or production isolation proof'])
 if args.fixtures:
  args.fixtures.mkdir(parents=True,exist_ok=False)
  portable=[]
@@ -35,4 +35,4 @@ if args.fixtures:
  (args.fixtures/'fuel-proof.json').write_text(json.dumps(dict(status='Portable functional expectations only; not budget proof',cases=portable),ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 args.output.parent.mkdir(parents=True,exist_ok=True)
 args.output.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-print(f'PASS {len(proof)} actual native/WASI proposal.2 JSON vectors and result schemas; experimental only')
+print(f'PASS {len(proof)} actual native/WASI proposal.2 JSON/regex vectors and result schemas; experimental only')

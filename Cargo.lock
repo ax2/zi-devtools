@@ -5622,6 +5622,7 @@ dependencies = [
  "zi-diagnostics-core",
  "zi-inspect-core",
  "zi-json-core",
+ "zi-regex-core",
  "zi-text-core",
  "zi-trace-core",
  "zip",
@@ -5654,6 +5655,7 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-json-core",
+ "zi-regex-core",
 ]
 
 [[package]]
@@ -5683,6 +5685,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
+]
+
+[[package]]
+name = "zi-regex-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "regex",
 ]
 
 [[package]]

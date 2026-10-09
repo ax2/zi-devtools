@@ -7,7 +7,7 @@ fn run(value: &Value) -> Value {
     serde_json::from_slice(&execute_request(&serde_json::to_vec(value).unwrap())).unwrap()
 }
 #[test]
-fn all_three_operations_use_complete_shared_core() {
+fn all_four_operations_use_complete_shared_core() {
     for (cap, input, expected) in [
         (
             OPERATIONS[0],
@@ -23,6 +23,11 @@ fn all_three_operations_use_complete_shared_core() {
             OPERATIONS[2],
             json!({"left":"[1,1,2]","right":"[1,2,2]"}),
             zi_json_core::json_diff("[1,1,2]", "[1,2,2]", true).unwrap(),
+        ),
+        (
+            OPERATIONS[3],
+            json!({"text":"甲zi-7","pattern":"(zi)-(\\d+)"}),
+            zi_regex_core::test_regex(r"(zi)-(\d+)", "甲zi-7").unwrap(),
         ),
     ] {
         let result = run(&request(cap, input));
@@ -70,8 +75,8 @@ fn identity_required_fields_types_and_duplicate_fields_are_rejected() {
     assert_eq!(output["error"]["code"], "INVALID_INPUT");
     assert_eq!(
         run(&request(
-            "devtools.compare.regex.matches",
-            json!({"text":"a","pattern":"a"})
+            "devtools.compare.text.diff",
+            json!({"left":"a","right":"a"})
         ))["error"]["code"],
         "UNSUPPORTED_OPERATION"
     );
