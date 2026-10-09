@@ -1,21 +1,11 @@
-use regex_syntax::hir::{Class, HirKind};
-use std::sync::LazyLock;
+include!(concat!(env!("OUT_DIR"), "/unicode_decimal.rs"));
 
 pub fn digit(c: char) -> bool {
     if c.is_ascii() {
         return c.is_ascii_digit();
     }
-    static RANGES: LazyLock<Vec<(char, char)>> = LazyLock::new(|| {
-        let hir = regex_syntax::Parser::new()
-            .parse(r"\d")
-            .expect("Unicode decimal class");
-        let HirKind::Class(Class::Unicode(class)) = hir.kind() else {
-            unreachable!()
-        };
-        class.iter().map(|r| (r.start(), r.end())).collect()
-    });
-    let at = RANGES.partition_point(|(start, _)| *start <= c);
-    at > 0 && c <= RANGES[at - 1].1
+    let at = DECIMAL_RANGES.partition_point(|(start, _)| *start <= c);
+    at > 0 && c <= DECIMAL_RANGES[at - 1].1
 }
 pub fn decimal(s: &str) -> Option<(&str, &str)> {
     let mut end = s.find(|c| !digit(c)).unwrap_or(s.len());

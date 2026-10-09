@@ -1,6 +1,5 @@
 use super::bounded;
 use anyhow::{Context, Result, ensure};
-use regex::Regex;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,10 +8,6 @@ pub fn threads(input: &str) -> Result<String> {
 }
 pub(crate) fn threads_limited(input: &str, report_limit: usize) -> Result<String> {
     bounded(input)?;
-    let state = Regex::new(r"java.lang.Thread.State:\s+([A-Z_]+)")?;
-    let lock = Regex::new(
-        r"- (locked|waiting on|waiting to lock|parking to wait for)\s+<(0x[0-9a-fA-F]+)>",
-    )?;
     let mut rows: Vec<Value> = vec![];
     let mut explicit_deadlock = false;
     for (i, line) in input.lines().enumerate() {
@@ -32,11 +27,11 @@ pub(crate) fn threads_limited(input: &str, report_limit: usize) -> Result<String
             }
             rows.push(json!({"index":rows.len(),"name":name,"line":i+1,"state":"UNKNOWN","held":[],"wait":[],"releasedForWait":[],"frames":[]}));
         } else if let Some(row) = rows.last_mut() {
-            if let Some(c) = state.captures(line) {
-                row["state"] = json!(&c[1]);
+            if let Some(state) = thread_state(line) {
+                row["state"] = json!(state);
             }
-            if let Some(c) = lock.captures(line) {
-                let key = match &c[1] {
+            if let Some((kind, lock)) = thread_lock(line) {
+                let key = match kind {
                     "locked" => "held",
                     "waiting on" => "releasedForWait",
                     _ => "wait",
@@ -44,7 +39,7 @@ pub(crate) fn threads_limited(input: &str, report_limit: usize) -> Result<String
                 row[key]
                     .as_array_mut()
                     .unwrap()
-                    .push(json!({"lock":&c[2],"kind":&c[1],"line":i+1}));
+                    .push(json!({"lock":lock,"kind":kind,"line":i+1}));
             }
             if line.trim_start().starts_with("at ") {
                 row["frames"]
@@ -137,13 +132,87 @@ fn thread_name(line: &str) -> Option<&str> {
     });
     (numbered || tail.contains("tid=") || tail.contains("nid=")).then_some(name)
 }
+fn thread_state(line: &str) -> Option<&str> {
+    // Preserve the old regex's wildcard separators as well as normal dots.
+    for (at, _) in line.match_indices("java") {
+        let mut rest = &line[at + 4..];
+        let mut matched = true;
+        for part in ["lang", "Thread", "State:"] {
+            let Some(c) = rest.chars().next() else {
+                matched = false;
+                break;
+            };
+            if c == '\n' {
+                matched = false;
+                break;
+            }
+            rest = &rest[c.len_utf8()..];
+            let Some(next) = rest.strip_prefix(part) else {
+                matched = false;
+                break;
+            };
+            rest = next;
+        }
+        if !matched || !rest.starts_with(char::is_whitespace) {
+            continue;
+        }
+        let rest = rest.trim_start();
+        let end = rest
+            .find(|c: char| !(c.is_ascii_uppercase() || c == '_'))
+            .unwrap_or(rest.len());
+        if end > 0 {
+            return Some(&rest[..end]);
+        }
+    }
+    None
+}
+fn thread_lock(line: &str) -> Option<(&str, &str)> {
+    for (at, _) in line.match_indices("- ") {
+        let rest = &line[at + 2..];
+        for kind in [
+            "locked",
+            "waiting on",
+            "waiting to lock",
+            "parking to wait for",
+        ] {
+            let Some(tail) = rest.strip_prefix(kind) else {
+                continue;
+            };
+            if !tail.starts_with(char::is_whitespace) {
+                continue;
+            }
+            let Some(lock) = tail.trim_start().strip_prefix('<') else {
+                continue;
+            };
+            let Some(digits) = lock.strip_prefix("0x") else {
+                continue;
+            };
+            let length = digits
+                .find(|c: char| !c.is_ascii_hexdigit())
+                .unwrap_or(digits.len());
+            if length > 0 && digits[length..].starts_with('>') {
+                return Some((kind, &lock[..length + 2]));
+            }
+        }
+    }
+    None
+}
+fn omitted_version(tail: &str) -> Option<&str> {
+    for (at, _) in tail.match_indices("omitted for conflict with ") {
+        let rest = &tail[at + 26..];
+        let end = rest.find([' ', ')']).unwrap_or(rest.len());
+        if end > 0 {
+            return Some(&rest[..end]);
+        }
+    }
+    None
+}
 
 pub fn dependencies(input: &str) -> Result<String> {
     dependencies_limited(input, 8 * 1024 * 1024)
 }
 pub(crate) fn dependencies_limited(input: &str, report_limit: usize) -> Result<String> {
     bounded(input)?;
-    let omitted = Regex::new(r"omitted for conflict with ([^ )]+)")?;
     let mut entries = vec![];
     let mut output_budget = super::CollectionBudget::new(report_limit);
     let mut stack: Vec<(usize, String)> = vec![];
@@ -182,8 +251,8 @@ pub(crate) fn dependencies_limited(input: &str, report_limit: usize) -> Result<S
         };
         let selected = if let Some((_, after)) = tail.split_once(" -> ") {
             after.split_whitespace().next().unwrap_or(requested)
-        } else if let Some(o) = omitted.captures(tail) {
-            o.get(1).unwrap().as_str()
+        } else if let Some(version) = omitted_version(tail) {
+            version
         } else {
             requested
         };
@@ -419,4 +488,60 @@ pub(crate) fn jfr_limited(input: &str, report_limit: usize) -> Result<String> {
         json!({"eventCount":events.len(),"counts":counts,"sampleTopFrames":hot.into_iter().take(30).map(|(name,count)|json!({"method":name,"samples":count})).collect::<Vec<_>>(),"timeline":timeline,"notes":"支持 JDK jfr print --json 事件结构；热点为 ExecutionSample 顶层帧样本数，不是 CPU 百分比。没有完整调用树或火焰图，不替代 JMC。"}),
         report_limit,
     )
+}
+
+#[cfg(test)]
+mod scanner_tests {
+    use super::*;
+    #[test]
+    fn scanners_preserve_previous_regex_capture_semantics() {
+        let state = regex::Regex::new(r"java.lang.Thread.State:\s+([A-Z_]+)").unwrap();
+        let lock = regex::Regex::new(
+            r"- (locked|waiting on|waiting to lock|parking to wait for)\s+<(0x[0-9a-fA-F]+)>",
+        )
+        .unwrap();
+        let omitted = regex::Regex::new(r"omitted for conflict with ([^ )]+)").unwrap();
+        for whitespace in [" ", "\t", "\u{2003}", "", "  "] {
+            for prefix in ["", "prefix invalid java.lang.Thread.State: x "] {
+                for separator in [".", "X", "中", ""] {
+                    let line = format!(
+                        "{prefix}java{separator}lang{separator}Thread{separator}State:{whitespace}WAITING extra"
+                    );
+                    assert_eq!(
+                        thread_state(&line),
+                        state.captures(&line).map(|c| c.get(1).unwrap().as_str()),
+                        "{line:?}"
+                    );
+                }
+            }
+            for kind in [
+                "locked",
+                "waiting on",
+                "waiting to lock",
+                "parking to wait for",
+                "lockedd",
+            ] {
+                for id in ["0xAb01", "0x", "0xg1", "0X123", "0x12", "0x中"] {
+                    let line = format!("- bad <0xff> then - {kind}{whitespace}<{id}> trailing");
+                    assert_eq!(
+                        thread_lock(&line),
+                        lock.captures(&line)
+                            .map(|c| (c.get(1).unwrap().as_str(), c.get(2).unwrap().as_str())),
+                        "{line:?}"
+                    );
+                }
+            }
+        }
+        for text in [
+            "prefix omitted for conflict with 2.0)",
+            "omitted for conflict with ) omitted for conflict with 3.0",
+            "omitted for conflict with \t中)",
+            "omitted for conflict with ",
+        ] {
+            assert_eq!(
+                omitted_version(text),
+                omitted.captures(text).map(|c| c.get(1).unwrap().as_str())
+            );
+        }
+    }
 }

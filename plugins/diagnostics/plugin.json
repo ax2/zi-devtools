@@ -4,7 +4,7 @@
   "name": "ZiDevTools Diagnostics",
   "displayName": "ZiDevTools 诊断报告",
   "description": "Imported Java/Django/Celery reports; provider diagnostics schema proposal, not Host-accepted.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "zicode",
   "license": "MIT",
   "engines": {

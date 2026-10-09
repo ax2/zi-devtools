@@ -18,7 +18,14 @@ parser.add_argument('--fixtures', type=Path)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--allow-traps', action='store_true')
 parser.add_argument('--serializer-boundary', action='store_true')
+parser.add_argument('--engine-provenance',type=Path)
 args = parser.parse_args()
+engine_provenance=None
+if args.engine_provenance:
+    engine_provenance=json.loads(args.engine_provenance.read_text(encoding='utf-8'))
+    from wasmtime import _ffi
+    assert Path(_ffi.dll._name).resolve()==Path(engine_provenance['dllPath']).resolve()
+    assert hashlib.sha256(Path(_ffi.dll._name).read_bytes()).hexdigest()==engine_provenance['dllSha256']
 portable={}
 if args.fixtures:
     saved=json.loads((args.fixtures/'fuel-proof.json').read_text(encoding='utf-8'))
@@ -113,5 +120,6 @@ for index, (name, value, checks, error) in enumerate(cases):
     rows.append(dict(id=name,passBudget=success,trap=trap,fuelUsed=10_000_000-remaining,fuelRemaining=remaining,elapsedMs=round(elapsed*1000),memoryBytes=memory,requestBytes=len(data),resultBytes=len(output),requestFile=stem+'.request',expectedFile=stem+'.expected.json',requestSha256=hashlib.sha256(data).hexdigest(),expectedSha256=hashlib.sha256(expected).hexdigest(),checks=checks,expectedError=error))
     print(f'{name}: fuel={10_000_000-remaining} pass={success}', flush=True)
 proof = dict(fixtureKind='shared-serializer-only' if args.serializer_boundary else 'plugin-runtime',wasmBytes=len(module_bytes),wasmSha256=hashlib.sha256(module_bytes).hexdigest(),wasmtimeVersion=importlib.metadata.version('wasmtime'),budget=dict(fuel=10_000_000,deadlineSeconds=5,memoryBytes=64*1024*1024,guestStackBytes=2*1024*1024),cases=rows,failures=failures,limitations=['Independent Wasmtime runner; fuel accounting depends on runtime version','Not Studio installation, Pi, permission, View or Host acceptance','No inherited environment or preopened directories; stdout is a runner file, not production pipe testing'])
+proof['engineProvenance']=engine_provenance
 (args.output/'fuel-proof.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 assert args.allow_traps or not failures, failures

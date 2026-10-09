@@ -1,4 +1,4 @@
-# ZiDevTools Diagnostics 0.1.1 - command adapter
+# ZiDevTools Diagnostics 0.1.2 - command adapter
 
 本仓库的 `zi-diagnostics-core` 同时供原生桌面端和 `zi-diagnostics-wasi` 使用。11 项能力可分析导入报告；不会启动 JVM/Python、运行迁移或 SQL、连接 Broker、读取用户文件或访问网络。提供自包含 View、元数据及 unsigned 候选目录构建脚本，**没有正式签名发行包，也未通过 Studio 接入验收**。
 
@@ -24,10 +24,10 @@
 
 ```powershell
 cargo build -p zi-diagnostics-wasi
-cargo build -p zi-diagnostics-wasi --release --target wasm32-wasip1 --config 'target.wasm32-wasip1.rustflags=["-C","link-arg=--max-memory=67108864","-C","link-arg=-zstack-size=2097152"]'
-python scripts/verify_diagnostics_wasi.py --native target/debug/zi-diagnostics-wasi.exe --wasm target/wasm32-wasip1/release/zi-diagnostics-wasi.wasm --output <archive>/runtime-proof.json
+cargo build -p zi-diagnostics-wasi --profile plugin --target wasm32-wasip1 --config 'target.wasm32-wasip1.rustflags=["-C","link-arg=--max-memory=67108864","-C","link-arg=-zstack-size=2097152"]'
+python scripts/verify_diagnostics_wasi.py --native target/debug/zi-diagnostics-wasi.exe --wasm target/wasm32-wasip1/plugin/zi-diagnostics-wasi.wasm --output <archive>/runtime-proof.json
 python scripts/sync_diagnostics_plugin.py --check
-python scripts/package_diagnostics_plugin.py --wasm target/wasm32-wasip1/release/zi-diagnostics-wasi.wasm --proof <archive>/runtime-proof.json --view-proof <archive>/view-qa.json --fuel-proof <archive>/budget-fixtures --serializer-proof <archive>/serializer-fixtures --serializer-module target/wasm32-wasip1/release/examples/output_boundary.wasm --output release/<new-candidate>
+python scripts/package_diagnostics_plugin.py --wasm target/wasm32-wasip1/plugin/zi-diagnostics-wasi.wasm --proof <archive>/runtime-proof.json --view-proof <archive>/view-qa.json --fuel-proof <archive>/budget-fixtures --serializer-proof <archive>/serializer-fixtures --serializer-module target/wasm32-wasip1/plugin/examples/output_boundary.wasm --cold-proof <archive>/cold-proof.json --output release/<new-candidate>
 ```
 
 验证器覆盖全部11能力的独立结果断言、脱敏、错误报告、缺失/重复/未知字段、未知能力、请求/UTF-8输入预算及真实结果膨胀；至少188组相同请求的原生/WASI逐字节比较，读取实际内存声明并检查64 MiB上限，记录模块/原生程序及每组请求/结果摘要。
@@ -36,9 +36,9 @@ View 使用已有公开 window.zicode.ready/context.get/capabilities.invoke/setD
 
 候选目录仅用于开发交接；不能要求用户绕过宿主签名校验。包外 verification.json记录准确文件摘要、运行/View证据及未验收范围；packageSha256保持null，不以目录摘要冒充签名容器摘要。可选Pi工具注册仍需显式授权。正式签名、安装、升级/回滚、撤权、卸载和真实Host/Pi链等待接收方按公开诊断profile验收。
 
-0.1.1 使用 Unicode 属性扫描降低冷启动 regex NFA 编译开销，JFR duration 不再逐事件编译正则，Spring JSON 配置使用快速 JSON 路径并保留 YAML fallback 与既有重复键处理规则。独立程序仍支持较大报告；插件按实际 pretty JSON 及外层字符串转义计算结果预算，超过预算返回完整错误。
+0.1.1曾使用 Unicode 属性扫描降低冷启动 regex NFA 编译开销，JFR duration 不再逐事件编译正则，Spring JSON 配置使用快速 JSON 路径并保留 YAML fallback 与既有重复键处理规则。独立程序仍支持较大报告；插件按实际 pretty JSON 及外层字符串转义计算结果预算，超过预算返回完整错误。
 
-独立预算验证使用官方 wasmtime Python 49.0.0（仅开发验证依赖，不是桌面/插件运行依赖），每请求新 Store：10M fuel、5s epoch中断、64MiB、2MiB guest stack。Fuel计量因Wasmtime版本不同，不用此结果代替Studio Host验收。`scripts/verify_diagnostics_fuel.py` 提供可移植请求、期望结果和SHA摘要；`output_boundary` 是只验证共享序列化器的独立 example，不进入插件 runtime 或注册能力。它验证ASCII、UTF8和转义数据的49151/49152/49153字节结果。
+早期0.1.1预算验证使用官方 wasmtime Python 49.0.0（仅开发验证依赖，不是桌面/插件运行依赖），每请求新 Store：10M fuel、5s epoch中断、64MiB、2MiB guest stack。Fuel计量因Wasmtime版本不同，不用此结果代替Studio Host验收。`scripts/verify_diagnostics_fuel.py` 提供可移植请求、期望结果和SHA摘要；`output_boundary` 是只验证共享序列化器的独立 example，不进入插件 runtime 或注册能力。它验证ASCII、UTF8和转义数据的49151/49152/49153字节结果。
 
 本包不声明 diagnostics 或 output.schema.v1 是已采纳的 requiredProfiles；schema仍为提供方1.0.0-rc.1提案。完整工具迁移仍154项、Host accepted=0；11项仅导入报告子能力。不得用源目录、独立EXE或本地HTTP代替Host接口。
 
@@ -50,3 +50,9 @@ python verification/verify_diagnostics_fuel.py --wasm runtime/tools.wasm --fixtu
 python verification/verify_diagnostics_fuel.py --serializer-boundary --wasm verification/serializer.wasm --fixtures fixtures/serializer --output <new-local-serializer-proof-directory>
 ```
 serializer.wasm仅验证函数，不是插件runtime；不要注册为能力。交付请求/期望文件逐个记录SHA256，重跑器核对后实际执行新Store。
+
+0.1.2进一步移除运行时Regex依赖；线程状态/锁/omitted捕获与旧正则进行差分测试，Unicode Nd由锁定regex-syntax在构建时生成、全部有效Unicode码点对比。标准release保持thin LTO；独立plugin采用opt-level3、fat LTO、panic abort，避免单纯opt-z缩小体积导致fuel增长。
+
+独立验证环境：Python绑定36.0.0 + 官方C-API36.0.2 DLL（严格摘要）；仅依赖requirements.txt会使用36.0.0引擎，不能冒称36.0.2。需要精确36.0.2时使用verification/bootstrap_diagnostics_engine.py在自有target缓存安装，并在新进程设置PYTHONPATH，再向验证器传入--engine-provenance。DLL与第三方ZIP不进入产品运行依赖；下载ZIP仅内存消费，不保留ZIP。冷验证使用每向量新Python进程，计量setup/compile/instantiate/execute与完整外部5秒时间，无提前编译缓存；这不等于Studio完整EXE/Worker请求重建方式。
+
+Studio candidate02已验证11基本View调用，22墙钟边界仍失败、46不能原样传递用例仍skipped。提供方独立全部188raw向量不能将这些skipped或失败改称Studio通过。154完整工具接入accepted仍0。

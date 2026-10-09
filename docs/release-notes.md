@@ -1,3 +1,7 @@
+## 0.82.0-dev.105：诊断插件冷编译体积优化
+
+诊断core/adapter/plugin0.1.2，六项相关工具记录新补丁版本。剩余runtime Regex移除，线程状态/锁/版本选择保持旧捕获语义；Unicode Nd移到构建期生成并全码点核对。新增独立plugin profile，独立版release保持原配置。相同188原始fixtures、10M fuel/5s/64MiB/2MiB预算；官方独立C-API36.0.2分段冷启动验证与Studio真实Worker验收区分。unsigned候选03不覆盖01/02，不宣称profile/Host/Pi/154工具接受。
+
 ## 0.82.0-dev.104：诊断插件预算优化
 
 诊断core/adapter/plugin升级0.1.1，11项导入报告工具各自记录补丁版本。迁移、URL、Celery、checks、线程头和GC改用保留Unicode语义的扫描器，JFR duration免逐事件正则编译；Spring JSON快速解析保留YAMLfallback。所有报告先计量完整输出，超限返回错误，独立版保留8MiB范围。View通过可选Error.code提供固定中文提示，不显示原始错误；fuel耗尽避免反复重试。

@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.104"
+version = "0.82.0-dev.105"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -89,6 +89,13 @@ winresource = "0.1"
 lto = "thin"
 strip = "symbols"
 codegen-units = 1
+
+# Standalone keeps its release profile. WASI gets a separate, fully linked build.
+[profile.plugin]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+panic = "abort"
 
 # Reuse incremental compilation for fast local iteration. Symbols remain optional:
 # CARGO_PROFILE_DEV_DEBUG=1 enables them for a debugging session.

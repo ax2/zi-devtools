@@ -2,6 +2,23 @@ use crate::django;
 use serde_json::Value;
 
 #[test]
+fn generated_unicode_decimal_table_matches_locked_unicode_definition() {
+    use regex_syntax::hir::{Class, HirKind};
+    let hir = regex_syntax::Parser::new().parse(r"\d").unwrap();
+    let HirKind::Class(Class::Unicode(class)) = hir.kind() else {
+        panic!("decimal class")
+    };
+    let ranges: Vec<_> = class.iter().collect();
+    for value in 0..=0x10ffff {
+        if let Some(c) = char::from_u32(value) {
+            let at = ranges.partition_point(|r| r.start() <= c);
+            let expected = at > 0 && c <= ranges[at - 1].end();
+            assert_eq!(crate::text_parse::digit(c), expected, "U+{value:X}");
+        }
+    }
+}
+
+#[test]
 fn unicode_migration_names_dependencies_cycles_and_sql_evidence_are_preserved() {
     let report: Value = serde_json::from_str(&django::migrations("app\n[X] 0001_初始\n[ ] app.0002_更新 ... (app.0001_初始, app.0003)\n[ ] app.0003 ... (app.0002_更新)", "DROP TABLE old; ALTER TABLE new ADD x int;").unwrap()).unwrap();
     assert_eq!(report["migrations"].as_array().unwrap().len(), 3);

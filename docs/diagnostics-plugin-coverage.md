@@ -1,6 +1,6 @@
-# 诊断插件0.1.1范围与验收边界
+# 诊断插件0.1.2范围与验收边界
 
-提供方契约沿用contracts/diagnostics/v1（1.0.0-rc.1提案），插件包和core/adapter各0.1.1。本表不表示Studio接受。所有11动作共享双输入8192 UTF8字节、请求/结果48KiB、严格外壳；portable预算向量覆盖ASCII/中文精确输入、超限、精确请求、未知字段、无效报告、大结果；共享序列化example另验证ASCII/中文/转义的49151/49152/49153字节结果。实际运行摘要与fuel按交付fixtures核对。
+提供方契约沿用contracts/diagnostics/v1（1.0.0-rc.1提案），插件包和core/adapter各0.1.2。本表不表示Studio接受。所有11动作共享双输入8192 UTF8字节、请求/结果48KiB、严格外壳；portable预算向量覆盖ASCII/中文精确输入、超限、精确请求、未知字段、无效报告、大结果；共享序列化example另验证ASCII/中文/转义的49151/49152/49153字节结果。实际运行摘要与fuel按交付fixtures核对。
 
 | 能力 | 已实现的导入报告范围 | 明确缺口 |
 | --- | --- | --- |
@@ -19,3 +19,5 @@
 验证不枚举任意合法输入或全部框架版本。图可达性仍有复杂度保护；病态深层/高边数报告需单独评估，不能用有限fixtures声称全输入1000万fuel保证。Host安装、授权、撤权、取消、升级/回滚、签名和真实Pi调用由Studio单独验收，154项迁移accepted仍0。
 
 业务错误仅允许INVALID_INPUT、INPUT_TOO_LARGE、UNSUPPORTED_OPERATION、INVALID_REPORT、OUTPUT_TOO_LARGE；固定中文消息不回显报告/底层错误。Host Error.code为可选兼容字段，View固定映射fuel/memory/stack/timeout/cancelled/busy/disabled/failed及未知fallback。页面等待超时不代表Host已取消或回滚。没有声明新diagnostics/output.schema.v1 requiredProfiles，不要求扩大Host预算。
+
+0.1.2冷验证区分官方独立C-API36.0.2与Studio生产EXE；不使用Studio源码/EXE替代独立工具，也不宣称诊断profile已采纳。
