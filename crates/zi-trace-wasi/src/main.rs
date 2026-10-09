@@ -51,17 +51,12 @@ mod tests {
     use super::*;
     #[test]
     fn output_budget_does_not_change_standalone_or_invalid_input_semantics() {
-        for count in [350, 512] {
+        for count in [350, 351, 352, 512] {
             let input = "Error\n".repeat(count);
             let standalone = zi_trace_core::java_trace(&input).unwrap();
             assert!(standalone.len() > REQUEST_LIMIT);
-            assert_eq!(
-                execute("devtools.trace.java.trace", &input)
-                    .error
-                    .unwrap()
-                    .code,
-                "INPUT_TOO_LARGE"
-            );
+            let output = serialize_result(&execute("devtools.trace.java.trace", &input));
+            assert_eq!(output, r#"{"contractVersion":"1.0.0-rc.1","ok":false,"data":null,"error":{"code":"INPUT_TOO_LARGE","message":"结果超过 48 KiB"}}"#.as_bytes());
         }
         assert_eq!(
             execute("devtools.trace.java.trace", &"Error\n".repeat(513))
