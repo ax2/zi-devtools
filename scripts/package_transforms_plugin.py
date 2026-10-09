@@ -140,6 +140,8 @@ for name, data in sorted(payload.items()):
     files.append(dict(path=Path(name).as_posix(), size=len(data), sha256=digest(data)))
 assert len(files) <= 2048 and sum(f['size'] for f in files) <= 50 * 1024 * 1024
 verification = dict(**provenance, files=files, directoryIndexSha256=digest(json.dumps(files, ensure_ascii=False, separators=(',', ':')).encode()),
+                    directoryIndexEncoding=dict(hash='SHA-256', encoding='UTF-8', content='files array in listed order',
+                        objectKeyOrder=['path', 'size', 'sha256'], ensureAscii=False, separators=[',', ':'], trailingNewline=False),
                     packageSha256=None, signature='unsigned directory; no signing key or container',
                     functionalProof=parity, fuelProof=budget, viewProof=view_proof, coldProof=cold, coldHistory=cold_history, schemaProof=schema_proof,
                     unverified=['Actual Studio SDK/installation/update/rollback/revoke/uninstall',

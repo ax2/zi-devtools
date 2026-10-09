@@ -23,3 +23,5 @@ Unicode 按码点而非字形检查，attention 是常见字符提示而非完�
 候选范围内完整操作覆盖不代表全 154 项工具或生产 Host 接受。交付为无签名目录及外部文件索引，不是签名安装容器；实际 Studio 安装/更新/回滚/撤权/卸载、生产 Worker 管道与预算、Pi 授权和其他 OS 待接收方验收。桌面开发版保持 `0.82.0-dev.105`，不因每轮开发创建正式 Release。
 
 `sync_inspect_plugin.py --check` 从 Rust 注册表校验清单、目录、分组 View 和可选 Pi 声明。共用 verifier 使用 `--plugin inspect` 验证独立预期向量、实际 native/WASI 字节一致和 JSON Schema；其结果可用附带独立 Wasmtime 运行器重放，不作为生产沙箱验收。
+
+外部验证文件的 `directoryIndexEncoding` 明确提供方索引摘要口径：按 `files` 列表顺序，每行键顺序 `path,size,sha256`，UTF-8 JSON，非 ASCII 不转义，逗号/冒号紧凑分隔，无尾随换行，再取 SHA-256。此为提供方外部证据格式，未改冻结契约；接收方自有索引若使用不同结构或序列化，摘要不能直接混比，应先核对每个相对路径、大小与文件摘要。`coldHistory` 保留此前完整实测及失败，复查成功不删除它。
