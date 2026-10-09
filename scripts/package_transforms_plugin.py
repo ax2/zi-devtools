@@ -1,20 +1,20 @@
-"""Freeze an unsigned transform candidate bound to actual module and View proofs."""
+"""Freeze unsigned compute candidates bound to exact runtime and View proofs."""
 import argparse
 import hashlib
 import json
 import subprocess
 from pathlib import Path
-from plugin_proof import validate_cold
+from plugin_proof import validate_cold, validate_compute_metadata, validate_budget
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 for name in ['wasm', 'parity', 'budget', 'view-proof', 'cold-proof', 'schema-proof', 'output']:
     parser.add_argument('--' + name, type=Path, required=True)
-parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
+parser.add_argument('--plugin', choices=['transforms', 'inspect', 'trace'], default='transforms')
 parser.add_argument('--cold-history', type=Path, action='append', default=[], help='Preserve previous full cold runs, including failures; repeat for each run')
 args = parser.parse_args()
 plugin_dir = ROOT / 'plugins' / args.plugin
-adapter = 'zi-inspect-wasi' if args.plugin == 'inspect' else 'zi-text-wasi'
+adapter = {'transforms': 'zi-text-wasi', 'inspect': 'zi-inspect-wasi', 'trace': 'zi-trace-wasi'}[args.plugin]
 sync_script = 'scripts/sync_' + args.plugin + '_plugin.py'
 fixture_spec = json.loads((plugin_dir / 'fixtures.json').read_text(encoding='utf-8'))
 case_count = len(fixture_spec['cases']) + 19
@@ -41,8 +41,9 @@ assert {c['id'] for c in fixture_spec['cases']} <= {c['id'] for c in parity['cas
 assert budget['budget'] == dict(fuel=10000000, deadlineSeconds=5, memoryBytes=67108864, guestStackBytes=2097152)
 assert budget['engineProvenance']['nativeEngineVersion'] == '36.0.2'
 assert all(c['passBudget'] for c in budget['cases'])
+validate_budget(budget, parity, digest(module), len(module))
 assert view_proof['viewSha256'] == digest(view.read_bytes()) and view_proof['offlinePass']
-validate_cold(cold, parity, digest(module), len(module), budget['engineProvenance'], require_pass=args.plugin == 'inspect')
+validate_cold(cold, parity, digest(module), len(module), budget['engineProvenance'], require_pass=args.plugin != 'transforms')
 for previous in cold_history:
     validate_cold(previous, parity, digest(module), len(module), budget['engineProvenance'], require_pass=False)
 assert schema_proof['wasmSha256'] == digest(module) and schema_proof['resultCases'] == case_count
@@ -53,8 +54,9 @@ assert schema_proof['contractIndexSha256'] == digest((ROOT / 'contracts/studio-d
 subprocess.run(['python', str(ROOT / sync_script), '--check'], cwd=ROOT, check=True)
 manifest = json.loads((plugin_dir / 'plugin.json').read_text(encoding='utf-8'))
 catalog = json.loads((plugin_dir / 'catalog.json').read_text(encoding='utf-8'))
+validate_compute_metadata(manifest, catalog, json.loads((ROOT / 'contracts/studio-devtools/v1/plugin.example.json').read_text(encoding='utf-8')))
 caps = {c['id'] for c in manifest['contributes']['capabilities']}
-assert len(caps) == (8 if args.plugin == 'inspect' else 23) and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
+assert len(caps) == {'transforms': 23, 'inspect': 8, 'trace': 2}[args.plugin] and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
 assert caps == {c['capabilityId'] for c in catalog['tools']}
 actions = {c.removeprefix('devtools.' + args.plugin + '.') for c in caps}
 assert len(view_proof['results']) >= 2 and all(r['pass'] and r['actualWasi'] and set(r['actions']) == actions for r in view_proof['results'])
@@ -68,6 +70,9 @@ folders = ['crates/zi-text-core', 'crates/' + adapter, 'plugins/' + args.plugin,
 if args.plugin == 'inspect':
     folders.append('crates/zi-inspect-core')
     paths += [ROOT / 'plugins/transforms/views/main.html', ROOT / 'src/tools_advanced.rs']
+if args.plugin == 'trace':
+    folders.append('crates/zi-trace-core')
+    paths += [ROOT / 'plugins/transforms/views/main.html', ROOT / 'src/diagnostics.rs', ROOT / 'docs/tools.json']
 for folder in folders:
     paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
 provenance = dict(source=source, profile='compute.wasi.v1', status='unsigned provider candidate; not Host-accepted',

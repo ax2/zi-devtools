@@ -77,7 +77,7 @@
         "name": "devtools_trace_java_trace",
         "title": "Java 异常链",
         "description": "Analyze pasted trace locally, at most 8192 UTF-8 bytes. Paths remain text; no file/process/network access. Clues are not confirmed causes.",
-        "capabilityId": "devtools.trace.java.trace",
+        "capability": "devtools.trace.java.trace",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -96,7 +96,7 @@
         "name": "devtools_trace_django_trace",
         "title": "Django / Python 堆栈",
         "description": "Analyze pasted trace locally, at most 8192 UTF-8 bytes. Paths remain text; no file/process/network access. Clues are not confirmed causes.",
-        "capabilityId": "devtools.trace.django.trace",
+        "capability": "devtools.trace.django.trace",
         "inputSchema": {
           "type": "object",
           "properties": {

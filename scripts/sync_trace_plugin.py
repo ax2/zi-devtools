@@ -25,7 +25,7 @@ manifest['contributes'] = dict(
     capabilities=[dict(id='devtools.trace.' + a['id'], title=a['title'], inputSchema=copy.deepcopy(schema)) for a in actions],
     piTools=[dict(name='devtools_trace_' + a['id'].replace('.', '_'), title=a['title'],
                   description='Analyze pasted trace locally, at most 8192 UTF-8 bytes. Paths remain text; no file/process/network access. Clues are not confirmed causes.',
-                  capabilityId='devtools.trace.' + a['id'], inputSchema=copy.deepcopy(schema)) for a in actions])
+                  capability='devtools.trace.' + a['id'], inputSchema=copy.deepcopy(schema)) for a in actions])
 catalog = dict(contract='zicode.devtools-plugin/1.0.0-rc.1', packageId=manifest['id'], packageVersion=manifest['version'],
                source=dict(revision='REPLACE_WITH_PROVIDER_SOURCE_REVISION', dirty=True),
                tools=[dict(sourceToolId=a['sourceToolId'], toolId='devtools.trace.' + a['id'], capabilityId='devtools.trace.' + a['id'],

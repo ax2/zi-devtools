@@ -17,4 +17,6 @@
 
 复现：`python scripts/sync_trace_plugin.py --check`；通过 `scripts/dev.ps1` 构建 `zi-trace-wasi` 原生与现有 plugin/WASI profile，再运行 `verify_transforms_wasi.py --plugin trace`、`verify_transforms_schema.py --plugin trace`，独立预算/冷启动使用既有验证脚本。独立验证依赖留在本地 target，不成为产品依赖。
 
+Pi 声明使用冻结字段 `capability`（不是 `capabilityId`）；独立元数据检查将路由、单文本输入结构和可选授权与冻结示例对照。候选生成器已支持 `--plugin trace`，仅在逐条绑定的预算和完整冷启动证据全部通过后才允许生成新目录。
+
 尚未冻结、签名或发布；最终原生构建和服务检查、所有边界预算、完整独立冷启动及实际 Host 安装/权限/生命周期/Pi 都需如实推进。旧 text/diagnostics/transforms/inspect 候选及 Inspect 0.1.1 的三轮失败记录不被本插件覆盖。

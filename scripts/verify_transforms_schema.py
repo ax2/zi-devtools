@@ -10,6 +10,7 @@ from pathlib import Path
 
 import jsonschema
 from referencing import Registry, Resource
+from plugin_proof import validate_compute_metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -23,6 +24,7 @@ manifest = json.loads((plugin / 'plugin.json').read_text(encoding='utf-8'))
 digest = lambda data: hashlib.sha256(data).hexdigest()
 load = lambda path: json.loads(path.read_text(encoding='utf-8'))
 base = load(snapshot / 'request.schema.json')
+validate_compute_metadata(manifest, load(plugin / 'catalog.json'), load(snapshot / 'plugin.example.json'))
 request = load(plugin / 'request.schema.json')
 reverted = copy.deepcopy(request)
 assert reverted.pop('$comment').startswith('Derived from frozen rc.1')
