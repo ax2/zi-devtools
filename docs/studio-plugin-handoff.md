@@ -1,5 +1,9 @@
 # Studio 插件提供方交接
 
+## 当前增量：2026-10-09 格式与检查候选
+
+[独立交付说明](inspect-plugin-handoff.md)：4 工具、7 操作共享 Rust 核心，94 条实际字节对照、预算与冷启动通过。unsigned 目录 `release/inspect-0.1.0-candidate-01` 已冻结，493 文件逐件摘要复核；不覆盖现有 text、diagnostics、transforms 候选，不将提供方验证当作 Host 接受。全目录仍为 154 项，完整接受为 0。
+
 ## 当前增量：2026-10-09 文本转换分组候选
 
 提供方算法源码 `66a83bf797a87e13532f49b0d61e4569dbcf28a6`，请求 schema 绑定修订 `255c967f0d45892bcd1f509f10fe3d19798907ab`。本地桌面版保持 `0.82.0-dev.105`，不因每轮开发递增版本或创建正式 Release。新增 `com.zicode.devtools.transforms/0.1.0`，与原文本和诊断候选并存，不覆盖旧目录。
