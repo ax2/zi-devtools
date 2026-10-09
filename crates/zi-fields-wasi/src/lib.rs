@@ -105,16 +105,20 @@ fn handle(bytes: &[u8]) -> ResultEnvelope {
             if input.left.len() > 8192 || input.right.len() > 8192 {
                 return ResultEnvelope::failure("INPUT_TOO_LARGE", "差异字段超过 UTF-8 字节限制");
             }
-            zi_json_core::json_diff(
+            zi_json_core::json_diff_with_result_budget(
                 &input.left,
                 &input.right,
                 request.capability_id.ends_with(".unordered"),
+                REQUEST_LIMIT,
             )
         }
         _ => return ResultEnvelope::failure("UNSUPPORTED_OPERATION", "该实验适配未注册此能力"),
     };
     match result {
         Ok(text) => ResultEnvelope::success(text),
+        Err(error) if error.is::<zi_json_core::ReportTooLarge>() => {
+            ResultEnvelope::failure("INPUT_TOO_LARGE", "结果超过 48 KiB")
+        }
         Err(_) => ResultEnvelope::failure("INVALID_INPUT", "输入无法按该操作处理"),
     }
 }

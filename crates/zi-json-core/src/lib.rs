@@ -115,18 +115,48 @@ fn canonical(value: &Value) -> Value {
     }
 }
 
+/// A proven lower bound already exceeds the caller's serialized result budget.
+#[derive(Debug)]
+pub struct ReportTooLarge;
+impl std::fmt::Display for ReportTooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("JSON diff report exceeds result budget")
+    }
+}
+impl std::error::Error for ReportTooLarge {}
+
 pub fn json_diff(left: &str, right: &str, unordered: bool) -> Result<String> {
+    json_diff_with_result_budget(left, right, unordered, usize::MAX)
+}
+
+/// Stops only when changed paths alone cannot fit; callers still serialize and
+/// check the complete envelope. Equal paths do not consume the lower bound.
+pub fn json_diff_with_result_budget(
+    left: &str,
+    right: &str,
+    unordered: bool,
+    result_budget: usize,
+) -> Result<String> {
     bounded(left)?;
     bounded(right)?;
     let left: Value = serde_json::from_str(left).context("左侧 JSON 无效")?;
     let right: Value = serde_json::from_str(right).context("右侧 JSON 无效")?;
     let mut changes = Vec::new();
+    let mut remaining = result_budget;
+    fn record(changes: &mut Vec<Value>, remaining: &mut usize, change: Value) -> Result<()> {
+        // JSON escaping and envelopes only increase these UTF-8 path bytes.
+        let bytes = change["path"].as_str().expect("generated path").len();
+        *remaining = remaining.checked_sub(bytes).ok_or(ReportTooLarge)?;
+        changes.push(change);
+        Ok(())
+    }
     fn visit(
         a: &Value,
         b: &Value,
         path: &str,
         unordered: bool,
         changes: &mut Vec<Value>,
+        remaining: &mut usize,
     ) -> Result<()> {
         if a == b || (unordered && canonical(a) == canonical(b)) {
             return Ok(());
@@ -137,13 +167,17 @@ pub fn json_diff(left: &str, right: &str, unordered: bool) -> Result<String> {
                 for key in a.keys().chain(b.keys()).collect::<BTreeSet<_>>() {
                     let path = format!("{path}/{}", key.replace('~', "~0").replace('/', "~1"));
                     match (a.get(key), b.get(key)) {
-                        (Some(a), Some(b)) => visit(a, b, &path, unordered, changes)?,
-                        (Some(a), None) => {
-                            changes.push(json!({"path":path,"kind":"removed","before":a}))
-                        }
-                        (None, Some(b)) => {
-                            changes.push(json!({"path":path,"kind":"added","after":b}))
-                        }
+                        (Some(a), Some(b)) => visit(a, b, &path, unordered, changes, remaining)?,
+                        (Some(a), None) => record(
+                            changes,
+                            remaining,
+                            json!({"path":path,"kind":"removed","before":a}),
+                        )?,
+                        (None, Some(b)) => record(
+                            changes,
+                            remaining,
+                            json!({"path":path,"kind":"added","after":b}),
+                        )?,
                         _ => unreachable!(),
                     }
                     ensure!(changes.len() <= 10_000, "差异超过 10000 项，请缩小输入");
@@ -153,23 +187,31 @@ pub fn json_diff(left: &str, right: &str, unordered: bool) -> Result<String> {
                 for i in 0..a.len().max(b.len()) {
                     let path = format!("{path}/{i}");
                     match (a.get(i), b.get(i)) {
-                        (Some(a), Some(b)) => visit(a, b, &path, unordered, changes)?,
-                        (Some(a), None) => {
-                            changes.push(json!({"path":path,"kind":"removed","before":a}))
-                        }
-                        (None, Some(b)) => {
-                            changes.push(json!({"path":path,"kind":"added","after":b}))
-                        }
+                        (Some(a), Some(b)) => visit(a, b, &path, unordered, changes, remaining)?,
+                        (Some(a), None) => record(
+                            changes,
+                            remaining,
+                            json!({"path":path,"kind":"removed","before":a}),
+                        )?,
+                        (None, Some(b)) => record(
+                            changes,
+                            remaining,
+                            json!({"path":path,"kind":"added","after":b}),
+                        )?,
                         _ => unreachable!(),
                     }
                     ensure!(changes.len() <= 10_000, "差异超过 10000 项，请缩小输入");
                 }
             }
-            _ => changes.push(json!({"path":path,"kind":"changed","before":a,"after":b})),
+            _ => record(
+                changes,
+                remaining,
+                json!({"path":path,"kind":"changed","before":a,"after":b}),
+            )?,
         }
         Ok(())
     }
-    visit(&left, &right, "", unordered, &mut changes)?;
+    visit(&left, &right, "", unordered, &mut changes, &mut remaining)?;
     pretty(
         &json!({"equal":changes.is_empty(),"arrayOrder":if unordered {"ignored (duplicates retained)"} else {"by index"},"changes":changes}),
     )

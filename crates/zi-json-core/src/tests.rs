@@ -211,3 +211,48 @@ fn array_index_semantics_do_not_depend_on_pointer_width() {
             .contains("数组索引过大")
     );
 }
+#[test]
+fn result_budget_counts_only_actual_changes_and_preserves_full_report() {
+    use crate::{ReportTooLarge, json_diff_with_result_budget};
+    let prefix = "x".repeat(6000);
+    let left_values: serde_json::Map<String, serde_json::Value> = (0..100)
+        .map(|i| (format!("key{i}"), serde_json::json!(0)))
+        .collect();
+    let right_values: serde_json::Map<String, serde_json::Value> = (0..100)
+        .map(|i| (format!("key{i}"), serde_json::json!(1)))
+        .collect();
+    let left = serde_json::to_string(&serde_json::json!({(prefix.clone()):left_values})).unwrap();
+    let right = serde_json::to_string(&serde_json::json!({(prefix):right_values})).unwrap();
+    for unordered in [false, true] {
+        let full = crate::json_diff(&left, &right, unordered).unwrap();
+        assert!(full.len() > 48 * 1024);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&full).unwrap()["changes"]
+                .as_array()
+                .unwrap()
+                .len(),
+            100
+        );
+        assert!(
+            json_diff_with_result_budget(&left, &right, unordered, 48 * 1024)
+                .unwrap_err()
+                .is::<ReportTooLarge>()
+        );
+        assert_eq!(
+            json_diff_with_result_budget(&left, &left, unordered, 0).unwrap(),
+            crate::json_diff(&left, &left, unordered).unwrap()
+        );
+        assert!(
+            !json_diff_with_result_budget(&left, "{", unordered, 0)
+                .unwrap_err()
+                .is::<ReportTooLarge>()
+        );
+    }
+    // /a~1b~0 is seven bytes: exact lower bound remains eligible for final serialization.
+    assert!(json_diff_with_result_budget("{\"a/b~\":0}", "{}", false, 7).is_ok());
+    assert!(
+        json_diff_with_result_budget("{\"a/b~\":0}", "{}", false, 6)
+            .unwrap_err()
+            .is::<ReportTooLarge>()
+    );
+}
