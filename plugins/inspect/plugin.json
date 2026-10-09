@@ -4,7 +4,7 @@
   "name": "ZiDevTools Inspect",
   "displayName": "ZiDevTools 格式与检查",
   "description": "Complete bounded standalone format conversion and inspection operations; no Host resources.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "zicode",
   "license": "MIT",
   "engines": {
@@ -13,6 +13,7 @@
   },
   "activationEvents": [
     "onView:devtools.inspect.main",
+    "onCapability:devtools.inspect.color.convert",
     "onCapability:devtools.inspect.yaml.to_json",
     "onCapability:devtools.inspect.yaml.from_json",
     "onCapability:devtools.inspect.cidr.inspect",
@@ -42,6 +43,23 @@
       }
     ],
     "capabilities": [
+      {
+        "id": "devtools.inspect.color.convert",
+        "title": "HEX / RGB / HSL",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
       {
         "id": "devtools.inspect.yaml.to_json",
         "title": "YAML → JSON",
@@ -163,6 +181,25 @@
       }
     ],
     "piTools": [
+      {
+        "name": "devtools_inspect_color_convert",
+        "title": "HEX / RGB / HSL",
+        "description": "Run bounded local HEX / RGB / HSL on supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.inspect.color.convert",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
       {
         "name": "devtools_inspect_yaml_to_json",
         "title": "YAML → JSON",

@@ -408,44 +408,7 @@ pub fn case_convert(input: &str, mode: &str) -> String {
 }
 
 pub fn color_convert(input: &str) -> Result<String> {
-    let value = input.trim().trim_start_matches('#');
-    let hex = match value.len() {
-        3 if value.chars().all(|ch| ch.is_ascii_hexdigit()) => {
-            value.chars().flat_map(|ch| [ch, ch]).collect::<String>()
-        }
-        6 if value.chars().all(|ch| ch.is_ascii_hexdigit()) => value.to_owned(),
-        _ => return Err(anyhow!("请输入 #RGB 或 #RRGGBB 格式的颜色")),
-    };
-    let rgb = u32::from_str_radix(&hex, 16)?;
-    let (r, g, b) = (
-        ((rgb >> 16) & 255) as u8,
-        ((rgb >> 8) & 255) as u8,
-        (rgb & 255) as u8,
-    );
-    let values = [r, g, b].map(|value| value as f64 / 255.0);
-    let max = values.iter().copied().fold(0.0_f64, f64::max);
-    let min = values.iter().copied().fold(1.0_f64, f64::min);
-    let delta = max - min;
-    let lightness = (max + min) / 2.0;
-    let saturation = if delta == 0.0 {
-        0.0
-    } else {
-        delta / (1.0 - (2.0 * lightness - 1.0).abs())
-    };
-    let hue = if delta == 0.0 {
-        0.0
-    } else if max == values[0] {
-        60.0 * ((values[1] - values[2]) / delta).rem_euclid(6.0)
-    } else if max == values[1] {
-        60.0 * ((values[2] - values[0]) / delta + 2.0)
-    } else {
-        60.0 * ((values[0] - values[1]) / delta + 4.0)
-    };
-    Ok(format!(
-        "HEX  #{r:02X}{g:02X}{b:02X}\nRGB  rgb({r}, {g}, {b})\nHSL  hsl({hue:.0}, {:.0}%, {:.0}%)",
-        saturation * 100.0,
-        lightness * 100.0
-    ))
+    zi_inspect_core::color_convert(input)
 }
 
 pub fn text_stats(input: &str) -> Result<String> {

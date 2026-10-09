@@ -44,7 +44,7 @@ inspect_actions = {}
 for operation, source, title in re.findall(
     r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"\s*,\s*title:\s*"([^"]+)"', inspect_source):
     inspect_actions.setdefault(source, []).append((operation, title))
-assert sum(map(len, inspect_actions.values())) == 7 and len(inspect_actions) == 4
+assert sum(map(len, inspect_actions.values())) == 8 and len(inspect_actions) == 5
 candidate_ids = set(pilot) | set(report_scopes) | set(transform_actions) | set(inspect_actions)
 ids = {tool["id"] for tool in catalog["tools"]}
 assert compute <= ids
@@ -81,12 +81,12 @@ for tool in catalog["tools"]:
                              for op, title in transform_actions[tool["id"]]] if tool["id"] in transform_actions else [dict(operationId=op, title=title,
                              scopeKind="complete_inspection_operation_within_plugin_budget", scope=tool["scope"],
                              sourceVersion=tool["tool_version"], pluginStatus="candidate",
-                             core="zi-inspect-core/0.1.0", adapter="zi-inspect-wasi/0.1.0",
-                             packageId="com.zicode.devtools.inspect", packageVersion="0.1.0",
+                             core="zi-inspect-core/0.1.1", adapter="zi-inspect-wasi/0.1.1",
+                             packageId="com.zicode.devtools.inspect", packageVersion="0.1.1",
                              limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
-                             runtimeVerification="94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-                             viewVerification="public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-                             blockingReason="unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收")
+                             runtimeVerification="121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+                             viewVerification="public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+                             blockingReason="0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收")
                              for op, title in inspect_actions[tool["id"]]] if tool["id"] in inspect_actions else [dict(scopeKind="declared_standalone_scope",
                              scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
                              pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",

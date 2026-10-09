@@ -21,6 +21,47 @@ fn pretty(value: &Value) -> Result<String> {
     Ok(text)
 }
 
+pub fn color_convert(input: &str) -> Result<String> {
+    let value = input.trim().trim_start_matches('#');
+    let hex = match value.len() {
+        3 if value.chars().all(|ch| ch.is_ascii_hexdigit()) => {
+            value.chars().flat_map(|ch| [ch, ch]).collect::<String>()
+        }
+        6 if value.chars().all(|ch| ch.is_ascii_hexdigit()) => value.to_owned(),
+        _ => return Err(anyhow!("请输入 #RGB 或 #RRGGBB 格式的颜色")),
+    };
+    let rgb = u32::from_str_radix(&hex, 16)?;
+    let (r, g, b) = (
+        ((rgb >> 16) & 255) as u8,
+        ((rgb >> 8) & 255) as u8,
+        (rgb & 255) as u8,
+    );
+    let values = [r, g, b].map(|value| value as f64 / 255.0);
+    let max = values.iter().copied().fold(0.0_f64, f64::max);
+    let min = values.iter().copied().fold(1.0_f64, f64::min);
+    let delta = max - min;
+    let lightness = (max + min) / 2.0;
+    let saturation = if delta == 0.0 {
+        0.0
+    } else {
+        delta / (1.0 - (2.0 * lightness - 1.0).abs())
+    };
+    let hue = if delta == 0.0 {
+        0.0
+    } else if max == values[0] {
+        60.0 * ((values[1] - values[2]) / delta).rem_euclid(6.0)
+    } else if max == values[1] {
+        60.0 * ((values[2] - values[0]) / delta + 2.0)
+    } else {
+        60.0 * ((values[0] - values[1]) / delta + 4.0)
+    };
+    Ok(format!(
+        "HEX  #{r:02X}{g:02X}{b:02X}\nRGB  rgb({r}, {g}, {b})\nHSL  hsl({hue:.0}, {:.0}%, {:.0}%)",
+        saturation * 100.0,
+        lightness * 100.0
+    ))
+}
+
 pub fn yaml_to_json(input: &str) -> Result<String> {
     bounded(input)?;
     let value: serde_json::Value = serde_yaml_ng::from_str(input)?;
@@ -124,6 +165,12 @@ pub struct Action {
 }
 pub const ACTIONS: &[Action] = &[
     Action {
+        id: "color.convert",
+        source_tool_id: "color",
+        title: "HEX / RGB / HSL",
+        group: "颜色",
+    },
+    Action {
         id: "yaml.to_json",
         source_tool_id: "yaml",
         title: "YAML → JSON",
@@ -168,6 +215,7 @@ pub const ACTIONS: &[Action] = &[
 ];
 pub fn run(id: &str, input: &str) -> Result<String> {
     match id {
+        "color.convert" => color_convert(input),
         "yaml.to_json" => yaml_to_json(input),
         "yaml.from_json" => json_to_yaml(input),
         "cidr.inspect" => inspect_cidr(input),
@@ -182,6 +230,21 @@ pub fn run(id: &str, input: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_preserves_original_hex_policy_and_achromatic_hue() {
+        assert_eq!(
+            color_convert("  ###f80\n").unwrap(),
+            "HEX  #FF8800\nRGB  rgb(255, 136, 0)\nHSL  hsl(32, 100%, 50%)"
+        );
+        assert_eq!(
+            color_convert("808080").unwrap(),
+            "HEX  #808080\nRGB  rgb(128, 128, 128)\nHSL  hsl(0, 0%, 50%)"
+        );
+        for value in ["", "＃fff", "#xyz", "rgb(255,0,0)", "#1234"] {
+            assert!(color_convert(value).is_err());
+        }
+    }
 
     #[test]
     fn cidr_boundary_ranges_and_invalid_prefixes() {

@@ -5638,7 +5638,7 @@ dependencies = [
 
 [[package]]
 name = "zi-inspect-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -5649,7 +5649,7 @@ dependencies = [
 
 [[package]]
 name = "zi-inspect-wasi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",

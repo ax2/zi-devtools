@@ -1,12 +1,21 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
   "packageId": "com.zicode.devtools.inspect",
-  "packageVersion": "0.1.0",
+  "packageVersion": "0.1.1",
   "source": {
     "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
     "dirty": true
   },
   "tools": [
+    {
+      "sourceToolId": "color",
+      "toolId": "devtools.inspect.color.convert",
+      "capabilityId": "devtools.inspect.color.convert",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "HEX / RGB / HSL"
+    },
     {
       "sourceToolId": "yaml",
       "toolId": "devtools.inspect.yaml.to_json",

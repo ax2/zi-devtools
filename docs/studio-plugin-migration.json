@@ -203,17 +203,17 @@
           "scope": "查看 Header 与 Payload；不验证签名",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -423,17 +423,30 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.color.convert"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "color.convert",
+          "title": "HEX / RGB / HSL",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
           "scope": "HEX、RGB、HSL 颜色表示",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.1",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -694,17 +707,17 @@
           "scope": "YAML 与 JSON 双向转换",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         },
         {
           "operationId": "yaml.from_json",
@@ -713,17 +726,17 @@
           "scope": "YAML 与 JSON 双向转换",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -949,17 +962,17 @@
           "scope": "IPv4 掩码、网络地址与可用范围",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -1636,17 +1649,17 @@
           "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         },
         {
           "operationId": "unicode.nfc",
@@ -1655,17 +1668,17 @@
           "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         },
         {
           "operationId": "unicode.nfkc",
@@ -1674,17 +1687,17 @@
           "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
           "sourceVersion": "1.0.2",
           "pluginStatus": "candidate",
-          "core": "zi-inspect-core/0.1.0",
-          "adapter": "zi-inspect-wasi/0.1.0",
+          "core": "zi-inspect-core/0.1.1",
+          "adapter": "zi-inspect-wasi/0.1.1",
           "packageId": "com.zicode.devtools.inspect",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
-          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
-          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+          "runtimeVerification": "121_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_8_actions_desktop_mobile_light_dark",
+          "blockingReason": "0.1.1提供方验证中，尚未冻结新版；冷启动复核及完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"

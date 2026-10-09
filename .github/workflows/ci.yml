@@ -46,6 +46,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/verify_transforms_schema.py --fixtures "$env:RUNNER_TEMP/transforms-parity" --output "$env:RUNNER_TEMP/transforms-schema-proof.json"
           exit $LASTEXITCODE
+      - name: Draft multi-field schema and byte budgets
+        run: python scripts/verify_fields_proposal.py
       - name: Real native and WASI format inspection parity
         shell: pwsh
         run: |

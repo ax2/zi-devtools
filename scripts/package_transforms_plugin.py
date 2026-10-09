@@ -53,7 +53,7 @@ subprocess.run(['python', str(ROOT / sync_script), '--check'], cwd=ROOT, check=T
 manifest = json.loads((plugin_dir / 'plugin.json').read_text(encoding='utf-8'))
 catalog = json.loads((plugin_dir / 'catalog.json').read_text(encoding='utf-8'))
 caps = {c['id'] for c in manifest['contributes']['capabilities']}
-assert len(caps) == (7 if args.plugin == 'inspect' else 23) and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
+assert len(caps) == (8 if args.plugin == 'inspect' else 23) and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
 assert caps == {c['capabilityId'] for c in catalog['tools']}
 actions = {c.removeprefix('devtools.' + args.plugin + '.') for c in caps}
 assert len(view_proof['results']) >= 2 and all(r['pass'] and r['actualWasi'] and set(r['actions']) == actions for r in view_proof['results'])

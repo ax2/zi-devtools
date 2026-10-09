@@ -1,0 +1,153 @@
+{
+  "status": "provider_proposal_not_frozen_not_Host_supported",
+  "proposalVersion": "0.1.0",
+  "profile": "compute.fields.v1",
+  "contractVersion": "1.1.0-proposal.1",
+  "packageId": "com.zicode.devtools.compare",
+  "budget": {
+    "requestBytes": 49152,
+    "resultBytes": 49152,
+    "totalInputUtf8Bytes": 16384,
+    "fuel": 10000000,
+    "deadlineSeconds": 5,
+    "memoryBytes": 67108864,
+    "guestStackBytes": 2097152,
+    "moduleBytes": 2097152
+  },
+  "operations": [
+    {
+      "id": "devtools.compare.regex.matches",
+      "sourceToolId": "regex",
+      "sourceVersion": "1.0.2",
+      "title": "正则匹配",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "pattern": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "text",
+          "pattern"
+        ],
+        "additionalProperties": false
+      },
+      "utf8Limits": {
+        "text": 8192,
+        "pattern": 4096
+      },
+      "relayFields": [
+        "text",
+        "pattern"
+      ]
+    },
+    {
+      "id": "devtools.compare.text.diff",
+      "sourceToolId": "diff",
+      "sourceVersion": "1.0.0",
+      "title": "文本差异",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "right": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "left",
+          "right"
+        ],
+        "additionalProperties": false
+      },
+      "utf8Limits": {
+        "left": 8192,
+        "right": 8192
+      },
+      "relayFields": [
+        "left",
+        "right"
+      ]
+    },
+    {
+      "id": "devtools.compare.json.diff.ordered",
+      "sourceToolId": "json-diff",
+      "sourceVersion": "1.0.2",
+      "title": "JSON 差异（按下标）",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "right": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "left",
+          "right"
+        ],
+        "additionalProperties": false
+      },
+      "utf8Limits": {
+        "left": 8192,
+        "right": 8192
+      },
+      "relayFields": [
+        "left",
+        "right"
+      ]
+    },
+    {
+      "id": "devtools.compare.json.diff.unordered",
+      "sourceToolId": "json-diff",
+      "sourceVersion": "1.0.2",
+      "title": "JSON 差异（忽略数组顺序）",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "right": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "left",
+          "right"
+        ],
+        "additionalProperties": false
+      },
+      "utf8Limits": {
+        "left": 8192,
+        "right": 8192
+      },
+      "relayFields": [
+        "left",
+        "right"
+      ]
+    }
+  ],
+  "unverified": [
+    "Host protocol negotiation and Worker reconstruction",
+    "Shared Rust extraction and actual WASI implementation",
+    "CPU/memory budget and real result size",
+    "Real native/Host/View/Pi lifecycle and field relay"
+  ]
+}
