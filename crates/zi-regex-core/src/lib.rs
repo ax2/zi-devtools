@@ -1,5 +1,6 @@
 //! Complete standalone regex matching with no Host IO.
 use anyhow::{Context, Result, anyhow};
+mod empty;
 
 #[derive(Debug)]
 pub struct ReportTooLarge;
@@ -23,6 +24,33 @@ pub fn test_regex_with_result_budget(
 ) -> Result<String> {
     if pattern.len() > 4_096 || input.len() > 2 * 1024 * 1024 {
         return Err(anyhow!("正则表达式或输入文本超过大小限制"));
+    }
+    if let Some(groups) = empty::groups(pattern) {
+        let mut output = String::new();
+        let offsets = input
+            .char_indices()
+            .map(|(offset, _)| offset)
+            .chain(std::iter::once(input.len()));
+        for (index, offset) in offsets.take(101).enumerate() {
+            if index == 100 {
+                output.push_str("\n... 仅展示前 100 个匹配 ...");
+                break;
+            }
+            output.push_str(&format!("#{} 字节 {offset}..{offset}: \n", index + 1));
+            if output.len() > result_budget {
+                return Err(ReportTooLarge.into());
+            }
+            for group in &groups {
+                output.push_str(&format!("  ${group}: \n"));
+                if output.len() > result_budget {
+                    return Err(ReportTooLarge.into());
+                }
+            }
+        }
+        if output.len() > result_budget {
+            return Err(ReportTooLarge.into());
+        }
+        return Ok(output);
     }
     let expression = regex::Regex::new(pattern).context("正则表达式无效")?;
     let mut output = String::new();

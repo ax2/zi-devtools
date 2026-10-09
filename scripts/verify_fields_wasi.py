@@ -22,7 +22,7 @@ for name,body,expected in rows:
   assert completed.stdout==expected,(name,kind,completed.stdout,expected)
   validator.validate(json.loads(completed.stdout))
  proof.append(dict(id=name,passed=True,requestSha256=hashlib.sha256(body).hexdigest(),resultSha256=hashlib.sha256(expected).hexdigest()))
-value=dict(contractVersion=version,experimentalOperations=4,cases=proof,wasmSha256=hashlib.sha256(args.wasm.read_bytes()).hexdigest(),nativeSha256=hashlib.sha256(args.native.read_bytes()).hexdigest(),limitations=[f'{len(rows)} functional vectors only; not complete adversarial/budget/cold verification','Experimental proposal.2 only; no frozen rc.1 fallback, plugin View, package, negotiated Host or Pi acceptance','Node is not a fuel or production isolation proof'])
+value=dict(contractVersion=version,experimentalOperations=4,cases=proof,wasmSha256=hashlib.sha256(args.wasm.read_bytes()).hexdigest(),nativeSha256=hashlib.sha256(args.native.read_bytes()).hexdigest(),limitations=[f'{len(rows)} functional vectors only; not complete adversarial/budget/cold verification','Experimental proposal.2 only; no frozen rc.1 fallback, plugin View, package, negotiated Host or Pi acceptance','Node is not a fuel or production isolation proof','Separate verify_regex_program_limits.py currently fails at a{400000}; fixed matrix is not complete regex parity'])
 if args.fixtures:
  args.fixtures.mkdir(parents=True,exist_ok=False)
  portable=[]

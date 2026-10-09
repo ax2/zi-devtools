@@ -1,16 +1,20 @@
 # 实验多字段适配（非交付插件）
 
-当前 zi-fields-wasi/0.1.0 实现[多字段提案0.1.1](../../proposals/studio-fields/v0.1.1/README.md)的四项完整操作：json.path、json.diff.ordered、json.diff.unordered、regex.matches，前缀devtools.compare.。明确协议1.1.0-proposal.2；text.diff仍返回UNSUPPORTED_OPERATION。不接受冻结rc.1，不是完整五操作提案，没有View、manifest、签名容器或安装入口，未被Host接受。
+当前zi-fields-wasi/0.1.0实现proposal.2四操作：json.path、json.diff.ordered、json.diff.unordered、regex.matches，前缀devtools.compare.。text.diff未接入，仍返回UNSUPPORTED_OPERATION。不接受冻结rc.1，无View、manifest、安装候选、签名包或Host接受。
 
-JSON共用zi-json-core，正则共用zi-regex-core，独立原生版复用相同完整算法。请求/最终结果各48KiB，text/left/right各8192 UTF8字节，query/pattern各4096字节；场景1–128字节，显式null commandId，具名字段拒绝缺失、重复、未知与错误类型。正则保留原捕获组、Unicode字节位置、100匹配与120字符展示省略规则，独立版仍支持2MiB输入。原生工具的完整范围不等于插件输入预算。
+JSON与正则分别共用完整zi-json-core/zi-regex-core；原生输入范围不减。请求/最终结果48KiB，text/left/right8192 UTF8字节，query/pattern4096；场景1–128字节，显式null commandId，严格拒绝缺失/重复/额外/类型错误字段。原生正则保留2MiB文本、捕获组、Unicode字节位置、100匹配和120字符展示。
 
-当前模块1,413,434字节，SHA-256 `a3f0e82a243b5b909e9faac7ff7fc2bba7831a795c91f6c5519d92ec72589a1f`。186条实际native/WASI精确结果字节与结果Schema通过；新增正则语法、捕获、零宽、Unicode、无效表达式、字段结构及精确字节边界。原unsupported-regex用例因操作已实现，明确改为unsupported-text-diff；其余JSON用例保留。
+当前模块1425085字节，SHA-256 `8aee2ae20f295b0b95c1602be236e7ed17a2e4db4765323b6ca1d649a07887ac`。197条固定native/WASI精确字节与结果Schema通过；原186条期望保留，新增11条空捕获嵌套/命名/flags/死捕获编号/交替/断言/非空回退及100匹配边界。它们不是完整正则语义证明。
 
-独立Wasmtime36.0.2在10M fuel/五秒/64MiB/2MiB栈预算下184通过、2失败：`a{1000000}`编译至原生引擎大小拒绝前已耗尽fuel；1000个空捕获组的输出放大也耗尽fuel。功能期望分别为INVALID_INPUT和INPUT_TOO_LARGE，实际预算执行却trap；不能把功能正确或CI绿色视为预算通过。原失败证明保留，不扩大预算、不删除用例、不改为ASCII子集。本最终模块尚未进行冷启动完整验收；不会套用旧三JSON模块的冷启动成功。
+独立Wasmtime36.0.2在原10M/五秒/64MiB/2MiB栈预算下196通过、1失败：`a{1000000}`在返回原引擎程序大小拒绝前耗尽fuel。1000个空捕获的输出放大已通过精确语法识别与HIR Empty/Capture/Concat路径优化降至fuel3019147，结果仍为INPUT_TOO_LARGE；其他语法继续原引擎。初始通用HIR路径仍耗尽fuel的v2记录保留，最终平铺空组识别无需大型解析器记账。
 
-正则核心4组回归和适配4组回归通过，全features严格Clippy通过；完整43组工作区850项通过、0失败、34忽略。原生优化构建/新EXE服务链仍在运行。根dev105不变；正则1.0.3、查询1.0.3、JSON对比1.0.4。两类工具均not_delivered，Host接受0。
+另有真实语义失败：独立脚本verify_regex_program_limits.py在`a{400000}`发现native64返回INVALID_INPUT、WASI32却返回没有匹配；200000/700000两侧一致。原因与引擎编译程序内存限额/指针宽度有关，不能仅靠197条绿向量声称全范围可移植。该诊断真实exit1，源码和失败证明保留；冻结前必须解决，不改成接受不同结果。未做当前最终模块冷启动验收，不借旧三JSON模块的成功。
 
-还需处理编译预算及大量捕获组问题、扩展恶意组合、最终预算和冷启动、通用元数据/View、Host协议协商与实际安装/权限/更新/撤权/卸载/Pi。验证脚本verify_fields_wasi.py只做实际功能/Schema，Node不是fuel或生产隔离证据。
+当前核心5组与适配4组回归通过，全features严格Clippy通过；完整43组工作区851通过/0失败/34忽略，最新优化构建/新EXE服务链仍运行。正则工具1.0.4、JSON查询1.0.3、JSON对比1.0.4，根dev105保持，所有相关插件仍not_delivered、Host接受0。
+
+先解决大重复编译budget与跨架构程序限额，再验证最终预算/冷启动、完整恶意输入、View/通用元数据与真实Host安装/授权/更新/撤权/卸载/Pi。CI固定功能矩阵不是提供方交付或Host接受。所有历史失败保留，未放宽预算、删除失败或缩减语法。
+
+历史186条阶段模块1413434B曾预算184通过/2失败；该版优化构建/服务及主CI37940068942均已通过，但不替代本轮源码和模块证明。
 
 ## 历史三JSON模块验证
 

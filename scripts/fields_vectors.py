@@ -140,4 +140,15 @@ for count in [120,121]:
  report=f'#1 字节 0..{count*3}: {shown}\n  $1: {shown}\n'
  add('regex-display-'+str(count),request('regex.matches',dict(text='中'*count,pattern='(.+)')),success(report))
 add('regex-output-amplification',request('regex.matches',dict(text='aaaaaaa',pattern='()'*1000)),failure('INPUT_TOO_LARGE','结果超过 48 KiB'))
+
+for name,pattern,groups in [('nested','(())',[1,2]),('concat','(()())',[1,2,3]),('named','(?P<a>())',[1,2]),('flags','(?i:())',[1]),('dead','(){0}',[]),('dead-numbering','(?:(){0})()',[2]),('alternation','()|()',[1])]:
+ text='中🙂a';report=''
+ for i,offset in enumerate([0,3,7,8],1):
+  report+=f'#{i} 字节 {offset}..{offset}: \n'+''.join(f'  ${g}: \n' for g in groups)
+ add('regex-empty-'+name,request('regex.matches',dict(text=text,pattern=pattern)),success(report))
+add('regex-empty-anchor-match',request('regex.matches',dict(text='',pattern='^()$')),success('#1 字节 0..0: \n  $1: \n'))
+add('regex-empty-anchor-no-match',request('regex.matches',dict(text='a',pattern='^()$')),success('没有匹配'))
+add('regex-empty-nonempty-fallback',request('regex.matches',dict(text='甲a',pattern='a()')),success('#1 字节 3..4: a\n  $1: \n'))
+report=''.join(f'#{i+1} 字节 {i}..{i}: \n  $1: \n' for i in range(100))+'\n... 仅展示前 100 个匹配 ...'
+add('regex-empty-match-limit',request('regex.matches',dict(text='a'*100,pattern='()')),success(report))
 assert len({name for name,_,_ in rows})==len(rows)

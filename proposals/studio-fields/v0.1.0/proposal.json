@@ -18,7 +18,7 @@
     {
       "id": "devtools.compare.regex.matches",
       "sourceToolId": "regex",
-      "sourceVersion": "1.0.3",
+      "sourceVersion": "1.0.4",
       "title": "正则匹配",
       "inputSchema": {
         "type": "object",

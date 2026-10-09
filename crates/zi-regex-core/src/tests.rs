@@ -113,3 +113,49 @@ fn result_budget_rejects_only_proven_oversize_without_changing_full_output() {
             .is::<ReportTooLarge>()
     );
 }
+
+#[test]
+fn empty_capture_fast_path_matches_engine_including_dead_and_nested_groups() {
+    for pattern in [
+        "()",
+        "(())",
+        "(()())",
+        "(?P<a>())",
+        "(?i:())",
+        "(?-u:())",
+        "(){0}",
+        "(){1}",
+        "(?:(){0})()",
+        "()|()",
+        "^()$",
+        "a()",
+        "(){0,2}",
+        "()(",
+    ] {
+        for input in ["", "中🙂a", "a\na", &"a".repeat(101)] {
+            assert_eq!(
+                outcome(test_regex(pattern, input)),
+                outcome(legacy::test_regex(pattern, input)),
+                "{pattern:?} {input:?}"
+            );
+        }
+    }
+    for pattern in ["()|()", "^()$", "a()", "(){0,2}", "()("] {
+        assert!(empty::groups(pattern).is_none(), "{pattern}");
+    }
+    assert_eq!(empty::groups("(?:(){0})()"), Some(vec![2]));
+    for count in [1, 100, 1000] {
+        let pattern = "()".repeat(count);
+        let full = test_regex(&pattern, "中🙂a").unwrap();
+        assert_eq!(full, legacy::test_regex(&pattern, "中🙂a").unwrap());
+        assert_eq!(
+            test_regex_with_result_budget(&pattern, "中🙂a", full.len()).unwrap(),
+            full
+        );
+        assert!(
+            test_regex_with_result_budget(&pattern, "中🙂a", full.len() - 1)
+                .unwrap_err()
+                .is::<ReportTooLarge>()
+        );
+    }
+}

@@ -284,7 +284,7 @@
         "keywords": "regex match 正则 匹配",
         "aliases": []
       },
-      "tool_version": "1.0.3",
+      "tool_version": "1.0.4",
       "version_history": [
         {
           "version": "1.0.0",
@@ -305,6 +305,11 @@
           "version": "1.0.3",
           "date": "2026-10-09",
           "changes": "提取完整正则共享Rust核心，保留Unicode字节位置、捕获组、100匹配/120字符展示与独立2MiB输入范围；实验多字段插件提供明确pattern/text，仍非Host验收。"
+        },
+        {
+          "version": "1.0.4",
+          "date": "2026-10-09",
+          "changes": "纯空捕获组经完整语法解析后直接按Unicode边界生成匹配，避免构建大型匹配程序；保留捕获编号、死捕获、原报告、匹配和结果边界，其他表达式继续使用原引擎。"
         }
       ]
     },
