@@ -119,9 +119,9 @@ for row in rows:
             scope["coreStatus"] = "standalone_shared_core_verified_experimental_fields_adapter_not_delivered"
             scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
-            scope["adapterVerification"] = "141_native_wasi_byte_and_schema_vectors_budget_cold_pass_not_complete_adversarial_or_Host_proof"
+            scope["adapterVerification"] = "147_native_wasi_byte_and_schema_vectors_budget_cold_pass_not_complete_adversarial_or_Host_proof"
             scope["design"] = "docs/json-plugin-design.md"
-            scope["blockingReason"] = "三项JSON实验适配已验证19条；需完整恶意向量、View、协议协商及真实Host验收，不是五操作提案全实现或插件交付。"
+            scope["blockingReason"] = "三项JSON实验适配已验证147条；需完整恶意向量、View、协议协商及真实Host验收，不是五操作提案全实现或插件交付。"
     if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
         assert row["pluginStatus"] == "not_delivered"
         row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"

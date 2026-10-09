@@ -158,7 +158,14 @@ pub fn json_diff_with_result_budget(
         changes: &mut Vec<Value>,
         remaining: &mut usize,
     ) -> Result<()> {
-        if a == b || (unordered && canonical(a) == canonical(b)) {
+        // Object keys are traversed below; normalize arrays once at their node,
+        // not again for every ancestor. At the change limit retain the original
+        // unordered equality check before rejecting another non-equal subtree.
+        if a == b
+            || (unordered
+                && ((a.is_array() && b.is_array()) || changes.len() >= 10_000)
+                && canonical(a) == canonical(b))
+        {
             return Ok(());
         }
         ensure!(changes.len() < 10_000, "差异超过 10000 项，请缩小输入");

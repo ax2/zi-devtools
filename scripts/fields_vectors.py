@@ -90,4 +90,17 @@ left=json.dumps({prefix:{f'key{i}':0 for i in range(100)}},separators=(',',':'))
 right=json.dumps({prefix:{f'key{i}':1 for i in range(100)}},separators=(',',':'))
 assert len(left.encode())<=8192 and len(right.encode())<=8192
 add('diff-path-amplification',request('json.diff.ordered',dict(left=left,right=right)),failure('INPUT_TOO_LARGE','结果超过 48 KiB'))
+# Deep object ancestry with sizeable leaves must not repeatedly normalize the
+# same unordered arrays at every ancestor. Expectations retain original order.
+for depth in [30, 100]:
+ left_leaf=list(range(250));right_leaf=list(range(249))+[-1]
+ left_value=left_leaf;right_value=right_leaf;reordered=list(reversed(left_leaf))
+ for _ in range(depth):
+  left_value={'x':left_value};right_value={'x':right_value};reordered={'x':reordered}
+ left=raw(left_value).decode();right=raw(right_value).decode()
+ assert len(left.encode())<=8192 and len(right.encode())<=8192
+ for cap,unordered in [('json.diff.ordered',False),('json.diff.unordered',True)]:
+  changes=[dict(path='/x'*depth,kind='changed',before=left_leaf,after=right_leaf)] if unordered else [dict(path='/x'*depth+'/249',kind='changed',before=249,after=-1)]
+  add('deep-'+str(depth)+'-'+cap,request(cap,dict(left=left,right=right)),success(diff(False,changes,unordered)))
+ add('deep-'+str(depth)+'-unordered-reordered-equal',request('json.diff.unordered',dict(left=left,right=raw(reordered).decode())),success(diff(True,[],True)))
 assert len({name for name,_,_ in rows})==len(rows)

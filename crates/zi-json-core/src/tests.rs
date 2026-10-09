@@ -256,3 +256,50 @@ fn result_budget_counts_only_actual_changes_and_preserves_full_report() {
             .is::<ReportTooLarge>()
     );
 }
+
+#[test]
+fn deep_unordered_arrays_and_exact_change_limit_match_original() {
+    let mut left = json!((0..250).collect::<Vec<_>>());
+    let mut right_values = (0..249).collect::<Vec<_>>();
+    right_values.push(-1);
+    let mut right = json!(right_values);
+    let mut reordered = json!((0..250).rev().collect::<Vec<_>>());
+    for _ in 0..100 {
+        left = json!({"x":left});
+        right = json!({"x":right});
+        reordered = json!({"x":reordered});
+    }
+    let left = serde_json::to_string(&left).unwrap();
+    for other in [right, reordered] {
+        let other = serde_json::to_string(&other).unwrap();
+        for unordered in [false, true] {
+            assert_eq!(
+                outcome(json_diff(&left, &other, unordered)),
+                outcome(legacy::json_diff(&left, &other, unordered))
+            );
+        }
+    }
+    // The final object is equal only after array normalization. With 10000
+    // prior changes it must still be skipped, not rejected as change 10001.
+    let mut left: serde_json::Map<String, Value> =
+        (0..10000).map(|i| (format!("a{i:05}"), json!(0))).collect();
+    let mut right: serde_json::Map<String, Value> =
+        (0..10000).map(|i| (format!("a{i:05}"), json!(1))).collect();
+    left.insert("z".into(), json!({"nested":{"array":[1,2,2]}}));
+    right.insert("z".into(), json!({"nested":{"array":[2,1,2]}}));
+    let left = serde_json::to_string(&left).unwrap();
+    let right = serde_json::to_string(&right).unwrap();
+    let result = json_diff(&left, &right, true).unwrap();
+    assert_eq!(result, legacy::json_diff(&left, &right, true).unwrap());
+    assert_eq!(
+        serde_json::from_str::<Value>(&result).unwrap()["changes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        10000
+    );
+    assert_eq!(
+        outcome(json_diff(&left, &right, false)),
+        outcome(legacy::json_diff(&left, &right, false))
+    );
+}
