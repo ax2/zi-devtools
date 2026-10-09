@@ -5559,6 +5559,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-character-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "image",
+]
+
+[[package]]
 name = "zi-devtools"
 version = "0.82.0-dev.105"
 dependencies = [
@@ -5610,6 +5618,7 @@ dependencies = [
  "windows-sys 0.59.0",
  "winresource",
  "zeroize",
+ "zi-character-core",
  "zi-diagnostics-core",
  "zi-inspect-core",
  "zi-text-core",

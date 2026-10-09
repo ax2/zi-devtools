@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "status": "provider_scope_proposal_not_Host_supported",
+  "packageId": "com.zicode.devtools.character",
+  "proposalVersion": "0.1.0",
+  "core": "zi-character-core/0.1.0",
+  "frozenContractModified": false,
+  "operations": [
+    {
+      "id": "ascii.lookup",
+      "sourceToolId": "ascii-codes",
+      "sourceVersion": "1.0.1",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        }
+      },
+      "execution": "pure_text",
+      "scope": "完整0–127表；trim后十六进制/十进制优先于单字符，之后名称匹配",
+      "hostActions": [
+        "copy_selected_printable_character"
+      ]
+    },
+    {
+      "id": "symbols.search",
+      "sourceToolId": "symbol-library",
+      "sourceVersion": "1.0.1",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query",
+          "category"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "全部",
+              "标点与排版",
+              "数学与单位",
+              "箭头与状态",
+              "表情",
+              "颜文字"
+            ]
+          }
+        }
+      },
+      "execution": "pure_text",
+      "scope": "全部37项原始名称、分类和值；分类与查询同时匹配，组合字符完整保留",
+      "hostActions": [
+        "copy_selected_symbol"
+      ]
+    },
+    {
+      "id": "art.banner",
+      "sourceToolId": "ascii-art",
+      "sourceVersion": "1.0.1",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "ink"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "ink": {
+            "type": "string",
+            "pattern": "^[!-~]$",
+            "minLength": 1,
+            "maxLength": 1
+          }
+        }
+      },
+      "execution": "pure_text",
+      "scope": "全部原有5×7字形、替代计数及尾空白；40码点UI边界",
+      "hostActions": [
+        "copy_result_text",
+        "save_new_utf8_txt"
+      ]
+    },
+    {
+      "id": "art.image",
+      "sourceToolId": "ascii-art",
+      "sourceVersion": "1.0.1",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "resourceHandle",
+          "width"
+        ],
+        "properties": {
+          "resourceHandle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 120
+          }
+        }
+      },
+      "execution": "authorized_resource_bytes",
+      "scope": "PNG/JPEG/WebP，10MiB/20MP；Triangle、白底透明合成和原灰度梯度，高最多120行",
+      "hostActions": [
+        "pick_single_image",
+        "read_authorized_image",
+        "copy_result_text",
+        "save_new_utf8_txt"
+      ]
+    }
+  ],
+  "resourceLimits": {
+    "encodedBytes": 10485760,
+    "pixels": 20000000,
+    "formats": [
+      "png",
+      "jpeg",
+      "webp"
+    ],
+    "widthMin": 8,
+    "widthMax": 120,
+    "heightMax": 120
+  },
+  "runtimeBudget": null,
+  "runtimeBudgetStatus": "not_negotiated_or_measured; 20MP RGBA exceeds existing 64MiB compute memory; do not narrow scope",
+  "hostRequirements": {
+    "resourceAuthority": "opaque reference verified by Host against plugin, scene, operation, grant and expiry; schema string is not authorization",
+    "resourceTransport": "not defined; no filesystem path, base64 in old input.text, EXE delegation or local HTTP",
+    "clipboard": "explicit user gesture and exact output text; separate grant; never clipboard read",
+    "save": "preview content and destination; create_new/no overwrite; cancellation writes nothing; stale revision or revoke aborts commit",
+    "lifecycle": "scoped references invalidated on revoke/scene change/uninstall; release resources on terminal state",
+    "relay": "explicit source result to one chosen field; preview all fields; preserve other drafts; never auto-run"
+  }
+}

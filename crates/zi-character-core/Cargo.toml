@@ -1,0 +1,10 @@
+[package]
+name = "zi-character-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+anyhow = "1.0"
+image = { version = "0.25.8", default-features = false, features = ["png", "jpeg", "webp"] }

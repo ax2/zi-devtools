@@ -336,7 +336,7 @@
     {
       "sourceToolId": "ascii-codes",
       "title": "ASCII 码表",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -347,10 +347,12 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "0–127 十进制、十六进制、可显示字符与控制符名称查询；可复制可显示字符",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.0",
+          "sourceVersion": "1.0.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
-          "design": "docs/character-plugin-design.md"
+          "design": "docs/character-plugin-design.md",
+          "core": "zi-character-core/0.1.0",
+          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter"
         }
       ],
       "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
@@ -358,7 +360,7 @@
     {
       "sourceToolId": "symbol-library",
       "title": "特殊字符与表情",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -369,10 +371,12 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "按分类或名称搜索常用符号、Emoji 和颜文字，一键复制；精选库不等于完整 Unicode",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.0",
+          "sourceVersion": "1.0.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
-          "design": "docs/character-plugin-design.md"
+          "design": "docs/character-plugin-design.md",
+          "core": "zi-character-core/0.1.0",
+          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter"
         }
       ],
       "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
@@ -380,7 +384,7 @@
     {
       "sourceToolId": "ascii-art",
       "title": "ASCII Art 字符画",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -391,10 +395,12 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "内置 5×7 英文与数字横幅、本机 PNG/JPEG/WebP 按亮度转换字符画，宽度控制、复制和不覆盖另存 TXT",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.0",
+          "sourceVersion": "1.0.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
-          "design": "docs/character-plugin-design.md"
+          "design": "docs/character-plugin-design.md",
+          "core": "zi-character-core/0.1.0",
+          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter"
         }
       ],
       "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"

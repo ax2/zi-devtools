@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Character operation input scope proposal; not Host protocol",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "input"
+      ],
+      "properties": {
+        "operationId": {
+          "const": "ascii.lookup"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "query"
+          ],
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "input"
+      ],
+      "properties": {
+        "operationId": {
+          "const": "symbols.search"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "query",
+            "category"
+          ],
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "category": {
+              "enum": [
+                "全部",
+                "标点与排版",
+                "数学与单位",
+                "箭头与状态",
+                "表情",
+                "颜文字"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "input"
+      ],
+      "properties": {
+        "operationId": {
+          "const": "art.banner"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "ink"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "ink": {
+              "type": "string",
+              "pattern": "^[!-~]$",
+              "minLength": 1,
+              "maxLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "input"
+      ],
+      "properties": {
+        "operationId": {
+          "const": "art.image"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "resourceHandle",
+            "width"
+          ],
+          "properties": {
+            "resourceHandle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 120
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -12,6 +12,7 @@ name = "ZiDevTools"
 path = "src/main.rs"
 
 [dependencies]
+zi-character-core = { path = "crates/zi-character-core" }
 zi-trace-core = { path = "crates/zi-trace-core" }
 zi-text-core = { path = "crates/zi-text-core" }
 zi-inspect-core = { path = "crates/zi-inspect-core" }
@@ -64,7 +65,7 @@ rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
 ui-preview = []
 
 [workspace]
-members = ["crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
+members = ["crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
 default-members = ["."]
 resolver = "3"
 

@@ -117,6 +117,8 @@ for row in rows:
         row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
         for scope in row["operationScopes"]:
             scope["design"] = "docs/character-plugin-design.md"
+            scope["core"] = "zi-character-core/0.1.0"
+            scope["coreStatus"] = "standalone_shared_core_under_verification_no_wasi_adapter"
             scope["blockingReason"] = row["reason"]
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,

@@ -394,3 +394,5 @@ Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整
 2026-10-09 本地开发保持 `0.82.0-dev.105`：新增[文本转换分组插件候选](plugins/transforms/README.md)，9 个工具的 23 个既有操作共用 Rust 核心，并提供单入口分类、搜索、各操作草稿保留和结果复用。174 个独立预期用例通过真实 native/WASI 一致性及独立 Wasmtime 36.0.2 预算验证；原有文本插件 36 个用例保持一致。完整工作区测试 818 项通过、0 失败、34 跳过；页面验证使用注入公共 SDK 的真实 WASI fixture，不代表生产 Studio Host/Pi/安装生命周期验收。[逐工具迁移状态](docs/studio-plugin-migration.json)仍保留全部 154 项和未完成范围，没有把候选标为已接入。
 
 2026-10-09：Java/Django 堆栈两项工具共享完整纯 Rust 核心，新增未签名 trace 0.1.0 提供方候选（约 1.4 MB）。59 条实际原生/WASI 对照、预算与冷启动通过，完整回归 829 通过；根开发版本保持 dev105。实际 Studio/Worker/Pi 尚待验收，详见 [交付说明](docs/trace-plugin-handoff.md)。
+
+2026-10-09：字符工具提取同仓 zi-character-core，独立版复用 ASCII/字符库/横幅及图片转换。834项工作区测试、严格Clippy和WASI目标编译检查通过；原生优化构建仍在进行。[字符插件设计与完整输入范围提案](docs/character-plugin-design.md)保留资源、复制、保存与图片完整范围，当前仍未交付插件。

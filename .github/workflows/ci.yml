@@ -48,6 +48,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/verify_transforms_schema.py --fixtures "$env:RUNNER_TEMP/transforms-parity" --output "$env:RUNNER_TEMP/transforms-schema-proof.json"
           exit $LASTEXITCODE
+      - name: Character core WASI target compilation
+        run: cargo check -p zi-character-core --profile plugin --target wasm32-wasip1 --locked
+      - name: Character input scope proposal (structure only)
+        run: python scripts/verify_character_proposal.py
       - name: Draft multi-field schema and byte budgets
         run: python scripts/verify_fields_proposal.py
       - name: Real native and WASI format inspection parity
