@@ -5648,6 +5648,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-fields-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-json-core",
+]
+
+[[package]]
 name = "zi-inspect-core"
 version = "0.1.1"
 dependencies = [

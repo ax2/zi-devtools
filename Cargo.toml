@@ -66,7 +66,7 @@ rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
 ui-preview = []
 
 [workspace]
-members = ["crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
+members = ["crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
 default-members = ["."]
 resolver = "3"
 

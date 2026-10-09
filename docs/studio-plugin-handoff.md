@@ -2,7 +2,7 @@
 
 ## 当前开发：JSON完整共享核心与查询多字段提案
 
-[JSON核心说明](json-plugin-design.md)：完整JSONPath子集和有序/无序差异提取zi-json-core，独立版复用；原1MiB输入、4096字节查询、128步、10000项、8MiB输出及重复键/宽整数/Pointer语义保留。修正usize造成的大索引跨平台差异，实际native64/WASI32固定fixture10条独立预期一致，5组核心兼容边界测试通过；这是算法fixture，不是通用WASI适配或Host协议执行。原生完整构建仍在进行，根dev105，两工具1.0.3，均not_delivered。
+[JSON核心说明](json-plugin-design.md)：完整JSONPath子集和有序/无序差异提取zi-json-core，独立版复用；原1MiB输入、4096字节查询、128步、10000项、8MiB输出及重复键/宽整数/Pointer语义保留。修正usize造成的大索引跨平台差异，实际native64/WASI32固定fixture10条独立预期一致，5组核心兼容边界测试通过；这是算法fixture，不是通用WASI适配或Host协议执行。完整JSON核心回归840通过，优化构建11m09s和隔离服务2177ms通过；随后三项JSON实验适配的19条真实native/WASI字节/Schema、独立预算和冷启动通过，工作区844通过。[实验说明](../plugins/fields/README.md)明确无View/包/Host协商，不是五操作提案全实现。根dev105，两工具1.0.3，仍not_delivered。
 
 [多字段提案0.1.1](../proposals/studio-fields/v0.1.1/README.md)新增json.path(text/query)，连同前四项共五操作，明确1.1.0-proposal.2；98请求/17结果结构与UTF-8预算验证通过，前版68/17仍通过，旧目录与冻结rc.1不变。Host尚未协商接受，regex/text.diff完整运行及500ms计时接口问题仍待解决；不把结构验证推广为运行/Host/Pi通过。
 

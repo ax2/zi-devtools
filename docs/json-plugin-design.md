@@ -15,3 +15,9 @@ JSON差异保留有序和无序两种显式模式：有序按下标，无序递�
 新版[多字段提案0.1.1](../proposals/studio-fields/v0.1.1/README.md)新增json.path的text/query与独立8192/4096 UTF-8字节限制，协议明确为1.1.0-proposal.2，五操作均显式声明。98请求/17结果结构正反例通过（包括孤立代理码点、重复query、字段/场景字节边界）；前版68/17仍通过，旧目录及冻结契约不改。该提案不等于通用WASI适配或Host协商通过。
 
 完整工作区检查点：38组840通过/0失败/34忽略，全特性严格Clippy通过；唯一原生优化构建仍在运行。新增多字段提案与校验脚本不改变本次Rust编译输入，后续构建结果单独记录。
+
+## 实验适配进展
+
+[zi-fields-wasi实验说明](../plugins/fields/README.md)：三项JSON操作使用显式proposal.2请求，19条实际native/WASI精确字节/Schema、独立预算和新进程冷启动通过。仍未实现整个五操作提案，没有View/安装包/Host协商，映射保持not_delivered。4项适配单测及最终41组工作区844通过/0失败/34忽略，严格Clippy通过。
+
+前序JSON核心优化构建11m09s、新EXE隔离服务2177ms/exit0/端口释放。新增实验crate后独立版release复核复用缓存0.58s，EXE摘要保持`5ec222eabac6b28ad83ed4cf1cca177a9a3bcfd677329ba41df26fdd469e72ca`（31,593,472字节），不重复制造运行副本。纯文本完整核心、实验适配和真实Host支持分别记录，不能相互替代。
