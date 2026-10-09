@@ -4,7 +4,6 @@ use chrono::{DateTime, Datelike, Duration, FixedOffset, TimeZone, Utc};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use unicode_normalization::UnicodeNormalization;
 
 fn pretty(value: &Value) -> Result<String> {
     let text = serde_json::to_string_pretty(value)?;
@@ -379,20 +378,7 @@ pub fn random(input: &str, seeded: bool) -> Result<String> {
 }
 
 pub fn unicode(input: &str, action: usize) -> Result<String> {
-    ensure!(
-        input.chars().count() <= 10_000,
-        "Unicode 工具最多处理 10000 个码点"
-    );
-    match action {
-        1 => Ok(input.nfc().collect()),
-        2 => Ok(input.nfkc().collect()),
-        _ => {
-            let points: Vec<_> = input.char_indices().map(|(offset,c)| json!({"byteOffset":offset,"character":c.to_string(),"codePoint":format!("U+{:04X}",c as u32),"utf8":c.to_string().as_bytes().iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" "),"attention": c.is_control() || c.is_whitespace() || matches!(c,'\u{00ad}'|'\u{034f}'|'\u{061c}'|'\u{180e}'|'\u{200b}'..='\u{200f}'|'\u{202a}'..='\u{202e}'|'\u{2060}'..='\u{206f}'|'\u{feff}'|'\u{fe00}'..='\u{fe0f}') })).collect();
-            pretty(
-                &json!({"codePoints":points,"nfc":input.nfc().collect::<String>(),"nfkc":input.nfkc().collect::<String>(),"notes":"按 Unicode 码点而非可见字形列出；attention 标记常见控制、空白与格式字符，并非完整安全检测。NFKC 可能改变字符语义。"}),
-            )
-        }
-    }
+    zi_inspect_core::unicode(input, action)
 }
 
 #[cfg(test)]

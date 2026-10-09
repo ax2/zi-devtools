@@ -1,5 +1,4 @@
-use anyhow::{Result, anyhow, bail};
-use std::net::Ipv4Addr;
+use anyhow::{Result, bail};
 
 pub const TEXT_LIMIT: usize = 1024 * 1024;
 
@@ -11,15 +10,11 @@ pub fn bounded(input: &str) -> Result<()> {
 }
 
 pub fn yaml_to_json(input: &str) -> Result<String> {
-    bounded(input)?;
-    let value: serde_json::Value = serde_yaml_ng::from_str(input)?;
-    Ok(serde_json::to_string_pretty(&value)?)
+    zi_inspect_core::yaml_to_json(input)
 }
 
 pub fn json_to_yaml(input: &str) -> Result<String> {
-    bounded(input)?;
-    let value: serde_json::Value = serde_json::from_str(input)?;
-    Ok(serde_yaml_ng::to_string(&value)?)
+    zi_inspect_core::json_to_yaml(input)
 }
 
 pub fn hex_encode(input: &str) -> Result<String> {
@@ -39,41 +34,7 @@ pub fn inspect_url(input: &str) -> Result<String> {
 }
 
 pub fn inspect_cidr(input: &str) -> Result<String> {
-    let (address, prefix) = input
-        .trim()
-        .split_once('/')
-        .ok_or_else(|| anyhow!("请输入 IPv4/CIDR，例如 192.168.10.42/24"))?;
-    let address: Ipv4Addr = address.parse().map_err(|_| anyhow!("IPv4 地址无效"))?;
-    let prefix: u32 = prefix
-        .parse()
-        .map_err(|_| anyhow!("前缀须为 0–32 的整数"))?;
-    if prefix > 32 {
-        bail!("前缀须在 0–32 之间");
-    }
-    let mask = if prefix == 0 {
-        0
-    } else {
-        u32::MAX << (32 - prefix)
-    };
-    let network = u32::from(address) & mask;
-    let broadcast = network | !mask;
-    let count = 1u64 << (32 - prefix);
-    let (first, last, usable) = if prefix >= 31 {
-        (network, broadcast, count)
-    } else {
-        (network + 1, broadcast - 1, count - 2)
-    };
-    Ok(format!(
-        "网络地址  {}/{}\n子网掩码  {}\n地址上界  {}\n地址总数  {}\n可用地址  {}\n可用范围  {} — {}\n\n/31 按 RFC 3021 点对点链路计算；/32 表示单一主机。",
-        Ipv4Addr::from(network),
-        prefix,
-        Ipv4Addr::from(mask),
-        Ipv4Addr::from(broadcast),
-        count,
-        usable,
-        Ipv4Addr::from(first),
-        Ipv4Addr::from(last)
-    ))
+    zi_inspect_core::inspect_cidr(input)
 }
 
 #[cfg(test)]

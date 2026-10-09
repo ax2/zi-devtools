@@ -190,17 +190,30 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.jwt.inspect"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "jwt.inspect",
+          "title": "JWT 内容",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
           "scope": "查看 Header 与 Payload；不验证签名",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -667,17 +680,50 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.yaml.to_json",
+        "devtools.inspect.yaml.from_json"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "yaml.to_json",
+          "title": "YAML → JSON",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
           "scope": "YAML 与 JSON 双向转换",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "yaml.from_json",
+          "title": "JSON → YAML",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "YAML 与 JSON 双向转换",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -890,17 +936,30 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.cidr.inspect"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "cidr.inspect",
+          "title": "IPv4 CIDR",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
           "scope": "IPv4 掩码、网络地址与可用范围",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -1562,17 +1621,70 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.unicode.inspect",
+        "devtools.inspect.unicode.nfc",
+        "devtools.inspect.unicode.nfkc"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "unicode.inspect",
+          "title": "Unicode 码点",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
           "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "unicode.nfc",
+          "title": "NFC 规范化",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "unicode.nfkc",
+          "title": "NFKC 规范化",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-inspect-core/0.1.0",
+          "adapter": "zi-inspect-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "94_independent_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_7_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"

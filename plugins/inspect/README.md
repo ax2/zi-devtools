@@ -1,0 +1,24 @@
+# ZiDevTools 格式与检查插件候选
+
+同一共享 Rust 核心供独立桌面版和 WASI 使用。一个分组入口提供 4 个工具的 7 个完整既有操作，不调用其他项目、独立 EXE、HTTP 服务、文件、网络、命令、时钟或模型。
+
+| 工具 | 能力后缀 | 范围 |
+| --- | --- | --- |
+| YAML / JSON | `yaml.to_json`、`yaml.from_json` | 双向转换，保留独立版的解析和格式化语义 |
+| IPv4 CIDR | `cidr.inspect` | IPv4 前缀 0–32，网络/掩码/范围/地址数，/31 点对点和 /32 单主机 |
+| JWT | `jwt.inspect` | 三段文本，Header/Payload 为 Base64URL 无填充 JSON 对象；只查看内容 |
+| Unicode | `unicode.inspect`、`unicode.nfc`、`unicode.nfkc` | 码点/UTF-8 字节/常见不可见字符检查及显式 NFC/NFKC 规范化 |
+
+输入采用冻结 `1.0.0-rc.1` 的 `input.text`：最多 8192 UTF-8 字节，请求和完整序列化结果各最多 48 KiB。错误枚举不扩展。模块 ≤2 MiB，10M fuel/5 秒/64 MiB 内存/2 MiB guest stack；页面等待上限不是 Host 取消保证。新包 `com.zicode.devtools.inspect/0.1.0`，能力前缀 `devtools.inspect.`，场景 ID 限定 1–128 字节。请求 schema 仅特化本包 ID，原始契约快照保持摘要。
+
+YAML 和 JSON 转换保持独立版的重复键后值覆盖策略，以及原有数值范围；不是旧 JSON 试点的安全整数/重复键严格模式。宽整数保留在结果文本中，页面不会将内部报告解析成 JavaScript 数值。YAML 多文档输入不支持，不能以此工具代表完整 YAML 标准检查器或数据库操作。
+
+JWT 输出明确提示未验证签名、有效期或可信度；签名段允许为空，但不能据此认证用户。查询值、JWT claims 和其他用户文本可能含敏感内容，输出不宣称自动脱敏；可选 Pi 声明只有 Host 授权后才可注册。
+
+Unicode 按码点而非字形检查，attention 是常见字符提示而非完整安全检测。NFKC 可能改变文本语义，必须选择对应操作。插件仅对已确定必然超过结果预算的码点报告提前拒绝，避免耗尽 fuel；独立版的原有 10000 码点/8 MiB 结果范围保留，规范化也不会因报告膨胀而被拒绝。
+
+页面提供名称/ID 搜索、`Ctrl+K`、`Ctrl+Enter`、每操作草稿和结果保留、旧结果提示、显式结果复用与手动选中复制。错误和过期响应不覆盖当前内容；草稿只在当前页面内存中保留。关闭后不恢复，不自动写剪贴板。
+
+候选范围内完整操作覆盖不代表全 154 项工具或生产 Host 接受。交付为无签名目录及外部文件索引，不是签名安装容器；实际 Studio 安装/更新/回滚/撤权/卸载、生产 Worker 管道与预算、Pi 授权和其他 OS 待接收方验收。桌面开发版保持 `0.82.0-dev.105`，不因每轮开发创建正式 Release。
+
+`sync_inspect_plugin.py --check` 从 Rust 注册表校验清单、目录、分组 View 和可选 Pi 声明。共用 verifier 使用 `--plugin inspect` 验证独立预期向量、实际 native/WASI 字节一致和 JSON Schema；其结果可用附带独立 Wasmtime 运行器重放，不作为生产沙箱验收。

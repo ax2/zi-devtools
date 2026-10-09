@@ -9,7 +9,13 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 for name in ['wasm', 'parity', 'budget', 'view-proof', 'cold-proof', 'schema-proof', 'output']:
     parser.add_argument('--' + name, type=Path, required=True)
+parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
 args = parser.parse_args()
+plugin_dir = ROOT / 'plugins' / args.plugin
+adapter = 'zi-inspect-wasi' if args.plugin == 'inspect' else 'zi-text-wasi'
+sync_script = 'scripts/sync_' + args.plugin + '_plugin.py'
+fixture_spec = json.loads((plugin_dir / 'fixtures.json').read_text(encoding='utf-8'))
+case_count = len(fixture_spec['cases']) + 19
 output = args.output.absolute()
 assert not output.exists(), 'Never replace a prior candidate'
 assert output.resolve().is_relative_to((ROOT / 'release').resolve())
@@ -19,41 +25,49 @@ encoded = lambda value: (json.dumps(value, ensure_ascii=False, indent=2) + '\n')
 module = args.wasm.read_bytes()
 parity = json.loads((args.parity / 'fuel-proof.json').read_text(encoding='utf-8'))
 budget = json.loads((args.budget / 'fuel-proof.json').read_text(encoding='utf-8'))
-view = ROOT / 'plugins/transforms/views/main.html'
+view = plugin_dir / 'views/main.html'
 view_proof = json.loads(args.view_proof.read_text(encoding='utf-8'))
 cold = json.loads(args.cold_proof.read_text(encoding='utf-8'))
 schema_proof = json.loads(args.schema_proof.read_text(encoding='utf-8'))
 assert len(module) <= 2 * 1024 * 1024 and parity['wasmSha256'] == budget['wasmSha256'] == view_proof['wasmSha256'] == digest(module)
 assert parity['memoryMaxBytes'] == 64 * 1024 * 1024
-assert len(parity['cases']) == len(budget['cases']) == 174 and not budget['failures']
+assert len(parity['cases']) == len(budget['cases']) == case_count and not budget['failures']
+assert parity['fixtureSha256'] == digest((plugin_dir / 'fixtures.json').read_bytes())
+assert {c['id'] for c in fixture_spec['cases']} <= {c['id'] for c in parity['cases']}
 assert budget['budget'] == dict(fuel=10000000, deadlineSeconds=5, memoryBytes=67108864, guestStackBytes=2097152)
 assert budget['engineProvenance']['nativeEngineVersion'] == '36.0.2'
 assert all(c['passBudget'] for c in budget['cases'])
 assert view_proof['viewSha256'] == digest(view.read_bytes()) and view_proof['offlinePass']
-assert cold['wasmSha256'] == digest(module) and len(cold['rows']) == 174 and cold['remaining'] == 0
+assert cold['wasmSha256'] == digest(module) and len(cold['rows']) == case_count and cold['remaining'] == 0
 assert cold['engine']['nativeEngineVersion'] == '36.0.2'
 # Preserve every measured cold-start failure instead of widening the deadline.
 assert all(r['closed'] for r in cold['rows'])
-assert schema_proof['wasmSha256'] == digest(module) and schema_proof['resultCases'] == 174
-assert schema_proof['requestSchemaSha256'] == digest((ROOT / 'plugins/transforms/request.schema.json').read_bytes())
-assert schema_proof['catalogSha256'] == digest((ROOT / 'plugins/transforms/catalog.json').read_bytes())
+if args.plugin == 'inspect':
+    assert not cold['failures'] and all(r['passed'] for r in cold['rows'])
+assert schema_proof['wasmSha256'] == digest(module) and schema_proof['resultCases'] == case_count
+assert schema_proof['requestSchemaSha256'] == digest((plugin_dir / 'request.schema.json').read_bytes())
+assert schema_proof['catalogSha256'] == digest((plugin_dir / 'catalog.json').read_bytes())
 assert schema_proof['fixtureProofSha256'] == digest((args.parity / 'fuel-proof.json').read_bytes())
 assert schema_proof['contractIndexSha256'] == digest((ROOT / 'contracts/studio-devtools/v1/SHA256SUMS.json').read_bytes())
-subprocess.run(['python', str(ROOT / 'scripts/sync_transforms_plugin.py'), '--check'], cwd=ROOT, check=True)
-manifest = json.loads((ROOT / 'plugins/transforms/plugin.json').read_text(encoding='utf-8'))
-catalog = json.loads((ROOT / 'plugins/transforms/catalog.json').read_text(encoding='utf-8'))
+subprocess.run(['python', str(ROOT / sync_script), '--check'], cwd=ROOT, check=True)
+manifest = json.loads((plugin_dir / 'plugin.json').read_text(encoding='utf-8'))
+catalog = json.loads((plugin_dir / 'catalog.json').read_text(encoding='utf-8'))
 caps = {c['id'] for c in manifest['contributes']['capabilities']}
-assert len(caps) == 23 and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
+assert len(caps) == (7 if args.plugin == 'inspect' else 23) and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
 assert caps == {c['capabilityId'] for c in catalog['tools']}
-actions = {c.removeprefix('devtools.transforms.') for c in caps}
+actions = {c.removeprefix('devtools.' + args.plugin + '.') for c in caps}
 assert len(view_proof['results']) >= 2 and all(r['pass'] and r['actualWasi'] and set(r['actions']) == actions for r in view_proof['results'])
 git = lambda *argv: subprocess.check_output(['git', *argv], cwd=ROOT).decode().strip()
 source = dict(revision=git('rev-parse', 'HEAD'), dirty=bool(git('status', '--porcelain')))
 catalog['source'] = source
-paths = [ROOT / p for p in ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', 'scripts/sync_transforms_plugin.py',
+paths = [ROOT / p for p in ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', sync_script,
                           'scripts/package_transforms_plugin.py', 'scripts/verify_transforms_wasi.py',
                           'scripts/verify_transforms_schema.py', 'scripts/verify_diagnostics_fuel.py', 'scripts/run_text_wasi.mjs', 'src/tools.rs', 'src/tools_extra.rs']]
-for folder in ['crates/zi-text-core', 'crates/zi-text-wasi', 'plugins/transforms', 'contracts/studio-devtools/v1']:
+folders = ['crates/zi-text-core', 'crates/' + adapter, 'plugins/' + args.plugin, 'contracts/studio-devtools/v1']
+if args.plugin == 'inspect':
+    folders.append('crates/zi-inspect-core')
+    paths += [ROOT / 'plugins/transforms/views/main.html', ROOT / 'src/tools_advanced.rs']
+for folder in folders:
     paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
 provenance = dict(source=source, profile='compute.wasi.v1', status='unsigned provider candidate; not Host-accepted',
                   sourceFiles=[dict(path=p.relative_to(ROOT).as_posix(), sha256=digest(p.read_bytes())) for p in sorted(set(paths))],
@@ -83,22 +97,22 @@ write('plugin.json', encoded(manifest))
 write('catalog.json', encoded(catalog))
 write('provenance.json', encoded(provenance))
 write('views/main.html', view.read_bytes())
-write('fixtures/transforms.json', (ROOT / 'plugins/transforms/fixtures.json').read_bytes())
+write('fixtures/' + args.plugin + '.json', (plugin_dir / 'fixtures.json').read_bytes())
 write('verification/view-proof.json', encoded(view_proof))
 write('verification/cold-proof.json', encoded(cold))
 write('verification/schema-proof.json', encoded(schema_proof))
 for name in ['verify_diagnostics_fuel.py', 'bootstrap_diagnostics_engine.py', 'verify_diagnostics_cold.py']:
     write('verification/' + name, (ROOT / 'scripts' / name).read_bytes())
 write('verification/requirements.txt', b'wasmtime==36.0.0\n')
-write('README.md', (ROOT / 'plugins/transforms/README.md').read_bytes())
+write('README.md', (plugin_dir / 'README.md').read_bytes())
 write('LICENSE', (ROOT / 'LICENSE').read_bytes())
 for p in (ROOT / 'contracts/studio-devtools/v1').glob('*.schema.json'):
-    schema_path = ROOT / 'plugins/transforms/request.schema.json' if p.name == 'request.schema.json' else p
+    schema_path = plugin_dir / 'request.schema.json' if p.name == 'request.schema.json' else p
     write('schemas/' + p.name, schema_path.read_bytes())
 metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--offline', '--locked', '--filter-platform', 'wasm32-wasip1', '--format-version', '1'], cwd=ROOT))
 packages = {p['id']: p for p in metadata['packages']}
 nodes = {n['id']: n for n in metadata['resolve']['nodes']}
-pending = [next(p['id'] for p in packages.values() if p['name'] == 'zi-text-wasi')]
+pending = [next(p['id'] for p in packages.values() if p['name'] == adapter)]
 seen, notices = set(), []
 while pending:
     id_ = pending.pop()
@@ -117,7 +131,7 @@ while pending:
         assert licenses, f'Missing license text: {package["name"]}'
         for p in set(licenses):
             write(f'licenses/{package["name"]}-{package["version"]}/{p.name}', p.read_bytes())
-write('NOTICE', ('ZiDevTools Transforms 0.1.0. MIT. Resolved Cargo dependency closure (including build dependencies):\n' + '\n'.join(sorted(notices)) + '\nRust standard library: MIT OR Apache-2.0.\n').encode())
+write('NOTICE', (manifest['name'] + ' ' + manifest['version'] + '. MIT. Resolved Cargo dependency closure (including build dependencies):\n' + '\n'.join(sorted(notices)) + '\nRust standard library: MIT OR Apache-2.0.\n').encode())
 files = []
 for name, data in sorted(payload.items()):
     assert len(data) <= 10 * 1024 * 1024
@@ -137,4 +151,4 @@ for name, data in payload.items():
 output.parent.joinpath(output.name + '-verification.json').write_bytes(encoded(verification))
 for row in files:
     assert digest((output / row['path']).read_bytes()) == row['sha256']
-print(f'Unsigned transforms candidate: {output}; {len(files)} files, {sum(f["size"] for f in files)} bytes; not Host-accepted')
+print(f'Unsigned {args.plugin} candidate: {output}; {len(files)} files, {sum(f["size"] for f in files)} bytes; not Host-accepted')

@@ -27,6 +27,7 @@ jobs:
       - run: python scripts/sync_studio_plugin_map.py --check
       - run: python scripts/sync_diagnostics_plugin.py --check
       - run: python scripts/sync_transforms_plugin.py --check
+      - run: python scripts/sync_inspect_plugin.py --check
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --locked
@@ -44,6 +45,17 @@ jobs:
           python -m pip install jsonschema==4.25.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/verify_transforms_schema.py --fixtures "$env:RUNNER_TEMP/transforms-parity" --output "$env:RUNNER_TEMP/transforms-schema-proof.json"
+          exit $LASTEXITCODE
+      - name: Real native and WASI format inspection parity
+        shell: pwsh
+        run: |
+          cargo build -p zi-inspect-wasi --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p zi-inspect-wasi --locked --profile plugin --target wasm32-wasip1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_transforms_wasi.py --plugin inspect --wasm target/wasm32-wasip1/plugin/zi-inspect-wasi.wasm --native target/debug/zi-inspect-wasi.exe --output-dir "$env:RUNNER_TEMP/inspect-parity"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_transforms_schema.py --plugin inspect --fixtures "$env:RUNNER_TEMP/inspect-parity" --output "$env:RUNNER_TEMP/inspect-schema-proof.json"
           exit $LASTEXITCODE
       - name: Real native and WASI diagnostics proposal parity
         shell: pwsh

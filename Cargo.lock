@@ -5611,6 +5611,7 @@ dependencies = [
  "winresource",
  "zeroize",
  "zi-diagnostics-core",
+ "zi-inspect-core",
  "zi-text-core",
  "zip",
 ]
@@ -5633,6 +5634,27 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-diagnostics-core",
+]
+
+[[package]]
+name = "zi-inspect-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "serde_json",
+ "serde_yaml_ng",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "zi-inspect-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-inspect-core",
+ "zi-text-core",
 ]
 
 [[package]]

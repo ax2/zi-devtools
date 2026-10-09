@@ -104,30 +104,62 @@ struct Request {
 }
 
 pub fn execute_request(bytes: &[u8]) -> ResultEnvelope {
+    with_request(bytes, |request| {
+        if !["com.zicode.devtools.text", "com.zicode.devtools.transforms"]
+            .contains(&request.plugin_id.as_str())
+            || request.scene_id.is_empty()
+            || (request.plugin_id == "com.zicode.devtools.transforms"
+                && request.scene_id.len() > 128)
+        {
+            return ResultEnvelope::failure("INVALID_INPUT", "插件或场景标识无效");
+        }
+        dispatch_request(&request, |cap, text| {
+            if request.plugin_id == "com.zicode.devtools.transforms" {
+                execute_transforms(cap, text)
+            } else {
+                execute(cap, text)
+            }
+        })
+    })
+}
+
+/// Shared frozen envelope validation, with each adapter bound to its own ID.
+/// No plugin discovery, dynamic code or Host resource access is performed here.
+pub fn execute_plugin_request(
+    bytes: &[u8],
+    plugin_id: &str,
+    handler: impl FnOnce(&str, &str) -> ResultEnvelope,
+) -> ResultEnvelope {
+    with_request(bytes, |request| {
+        if request.plugin_id != plugin_id
+            || request.scene_id.is_empty()
+            || request.scene_id.len() > 128
+        {
+            return ResultEnvelope::failure("INVALID_INPUT", "插件或场景标识无效");
+        }
+        dispatch_request(&request, handler)
+    })
+}
+
+fn with_request(bytes: &[u8], handler: impl FnOnce(Request) -> ResultEnvelope) -> ResultEnvelope {
     if bytes.len() > REQUEST_LIMIT {
         return ResultEnvelope::failure("INPUT_TOO_LARGE", "请求超过 48 KiB");
     }
     let Ok(request) = serde_json::from_slice::<Request>(bytes) else {
         return ResultEnvelope::failure("INVALID_INPUT", "请求结构无效");
     };
-    if !["com.zicode.devtools.text", "com.zicode.devtools.transforms"]
-        .contains(&request.plugin_id.as_str())
-        || request.scene_id.is_empty()
-        || (request.plugin_id == "com.zicode.devtools.transforms" && request.scene_id.len() > 128)
-    {
-        return ResultEnvelope::failure("INVALID_INPUT", "插件或场景标识无效");
-    }
+    handler(request)
+}
+
+fn dispatch_request(
+    request: &Request,
+    handler: impl FnOnce(&str, &str) -> ResultEnvelope,
+) -> ResultEnvelope {
     if request.input.text.len() > TEXT_LIMIT {
         return ResultEnvelope::failure("INPUT_TOO_LARGE", "文本超过 8192 UTF-8 字节");
     }
     match (&request.capability_id.0, &request.command_id.0) {
-        (Some(cap), None) if !cap.is_empty() => {
-            if request.plugin_id == "com.zicode.devtools.transforms" {
-                execute_transforms(cap, &request.input.text)
-            } else {
-                execute(cap, &request.input.text)
-            }
-        }
+        (Some(cap), None) if !cap.is_empty() => handler(cap, &request.input.text),
         (None, Some(command)) if !command.is_empty() => {
             ResultEnvelope::failure("UNSUPPORTED_OPERATION", "未注册后台命令")
         }
@@ -441,5 +473,34 @@ mod transform_contract_tests {
                 .code,
             "INPUT_TOO_LARGE"
         );
+    }
+
+    #[test]
+    fn shared_decoder_checks_identity_before_input_size_and_keeps_namespace_binding() {
+        let bytes = request(
+            "wrong-plugin",
+            "devtools.inspect.unicode.nfc",
+            &"a".repeat(8193),
+        );
+        let envelope = execute_plugin_request(&bytes, "com.zicode.devtools.inspect", |_, _| {
+            panic!("invalid request must never reach handler")
+        });
+        assert_eq!(envelope.error.unwrap().code, "INVALID_INPUT");
+        let bytes = request(
+            "com.zicode.devtools.inspect",
+            "devtools.inspect.unicode.nfc",
+            "abc",
+        );
+        assert_eq!(
+            execute_plugin_request(&bytes, "com.zicode.devtools.inspect", |cap, text| {
+                assert_eq!(cap, "devtools.inspect.unicode.nfc");
+                ResultEnvelope::success(text.to_owned())
+            })
+            .data
+            .unwrap()
+            .text,
+            "abc"
+        );
+        assert_eq!(execute_request(&bytes).error.unwrap().code, "INVALID_INPUT");
     }
 }

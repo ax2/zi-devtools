@@ -1,0 +1,74 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.inspect",
+  "packageVersion": "0.1.0",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "yaml",
+      "toolId": "devtools.inspect.yaml.to_json",
+      "capabilityId": "devtools.inspect.yaml.to_json",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "YAML → JSON"
+    },
+    {
+      "sourceToolId": "yaml",
+      "toolId": "devtools.inspect.yaml.from_json",
+      "capabilityId": "devtools.inspect.yaml.from_json",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "JSON → YAML"
+    },
+    {
+      "sourceToolId": "cidr",
+      "toolId": "devtools.inspect.cidr.inspect",
+      "capabilityId": "devtools.inspect.cidr.inspect",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "IPv4 CIDR"
+    },
+    {
+      "sourceToolId": "jwt",
+      "toolId": "devtools.inspect.jwt.inspect",
+      "capabilityId": "devtools.inspect.jwt.inspect",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "JWT 内容"
+    },
+    {
+      "sourceToolId": "unicode",
+      "toolId": "devtools.inspect.unicode.inspect",
+      "capabilityId": "devtools.inspect.unicode.inspect",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "Unicode 码点"
+    },
+    {
+      "sourceToolId": "unicode",
+      "toolId": "devtools.inspect.unicode.nfc",
+      "capabilityId": "devtools.inspect.unicode.nfc",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "NFC 规范化"
+    },
+    {
+      "sourceToolId": "unicode",
+      "toolId": "devtools.inspect.unicode.nfkc",
+      "capabilityId": "devtools.inspect.unicode.nfkc",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "NFKC 规范化"
+    }
+  ]
+}

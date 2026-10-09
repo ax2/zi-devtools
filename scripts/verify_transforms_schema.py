@@ -15,16 +15,18 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--fixtures', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
 args = parser.parse_args()
 snapshot = ROOT / 'contracts/studio-devtools/v1'
-plugin = ROOT / 'plugins/transforms'
+plugin = ROOT / 'plugins' / args.plugin
+manifest = json.loads((plugin / 'plugin.json').read_text(encoding='utf-8'))
 digest = lambda data: hashlib.sha256(data).hexdigest()
 load = lambda path: json.loads(path.read_text(encoding='utf-8'))
 base = load(snapshot / 'request.schema.json')
 request = load(plugin / 'request.schema.json')
 reverted = copy.deepcopy(request)
 assert reverted.pop('$comment').startswith('Derived from frozen rc.1')
-assert reverted['properties']['pluginId']['const'] == 'com.zicode.devtools.transforms'
+assert reverted['properties']['pluginId']['const'] == manifest['id']
 reverted['properties']['pluginId']['const'] = 'com.zicode.devtools.text'
 assert reverted == base, 'Only the manifest ID binding may differ from frozen request schema'
 registry = Registry().with_resources((p.name, Resource.from_contents(load(p))) for p in snapshot.glob('*.schema.json'))
@@ -51,7 +53,7 @@ result = dict(wasmSha256=proof['wasmSha256'], requestSchemaSha256=digest((plugin
               catalogSha256=digest((plugin / 'catalog.json').read_bytes()),
               fixtureProofSha256=digest((args.fixtures / 'fuel-proof.json').read_bytes()),
               contractIndexSha256=digest((snapshot / 'SHA256SUMS.json').read_bytes()),
-              resultCases=len(proof['cases']), successfulRequestCases=valid, catalogOperations=23,
+              resultCases=len(proof['cases']), successfulRequestCases=valid, catalogOperations=len(manifest['contributes']['capabilities']),
               binding='Only pluginId.const specialized; frozen snapshot preserved',
               limitations=['Provider schema validation; not production Host acceptance'])
 args.output.parent.mkdir(parents=True, exist_ok=True)

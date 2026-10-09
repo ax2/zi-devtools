@@ -1,0 +1,12 @@
+[package]
+name = "zi-inspect-wasi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+zi-inspect-core = { path = "../zi-inspect-core" }
+zi-text-core = { path = "../zi-text-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

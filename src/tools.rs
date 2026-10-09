@@ -1,7 +1,8 @@
 use std::{collections::HashMap, fs::File, path::Path};
 
 use anyhow::{Context, Result, anyhow};
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+#[cfg(test)]
+use base64::Engine;
 use chrono::{DateTime, Local, LocalResult, NaiveDateTime, TimeZone};
 use qrcode::{Color, QrCode};
 
@@ -717,31 +718,7 @@ pub fn generate_uuid() -> String {
 }
 
 pub fn inspect_jwt(input: &str) -> Result<String> {
-    let parts: Vec<&str> = input.trim().split('.').collect();
-    if parts.len() != 3 || parts[0].is_empty() || parts[1].is_empty() {
-        return Err(anyhow!("请输入由 header.payload.signature 组成的 JWT"));
-    }
-    let decode_json = |part: &str| -> Result<serde_json::Value> {
-        if part.len() > 64 * 1024 {
-            return Err(anyhow!("JWT 单段超过 64 KB 限制"));
-        }
-        let decoded = URL_SAFE_NO_PAD
-            .decode(part)
-            .context("JWT Base64URL 数据无效")?;
-        let value: serde_json::Value =
-            serde_json::from_slice(&decoded).context("JWT 中的 JSON 无效")?;
-        if !value.is_object() {
-            return Err(anyhow!("JWT header 和 payload 必须是 JSON 对象"));
-        }
-        Ok(value)
-    };
-    let header = decode_json(parts[0])?;
-    let payload = decode_json(parts[1])?;
-    Ok(format!(
-        "仅解码内容；未验证签名、有效期或可信度。\n\nHeader:\n{}\n\nPayload:\n{}",
-        serde_json::to_string_pretty(&header)?,
-        serde_json::to_string_pretty(&payload)?
-    ))
+    zi_inspect_core::inspect_jwt(input)
 }
 
 pub fn test_regex(pattern: &str, input: &str) -> Result<String> {

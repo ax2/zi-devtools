@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--wasm', type=Path, required=True)
 parser.add_argument('--native', type=Path, required=True)
 parser.add_argument('--output-dir', type=Path, required=True)
+parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
 args = parser.parse_args()
 module = args.wasm.read_bytes()
 assert module[:8] == b'\0asm\x01\0\0\0' and len(module) <= 2 * 1024 * 1024
@@ -47,16 +48,20 @@ while offset < len(module):
 assert memory_max == 1024
 
 
-def request(capability='devtools.transforms.url.encode', value=None, **changes):
-    data = dict(pluginId='com.zicode.devtools.transforms', sceneId='coding',
-                capabilityId=capability, commandId=None,
-                input={'text': 'a+b 中'} if value is None else value)
+fixture_path = ROOT / 'plugins' / args.plugin / 'fixtures.json'
+fixtures = json.loads(fixture_path.read_text(encoding='utf-8'))['cases']
+plugin_id = 'com.zicode.devtools.' + args.plugin
+sample = next(c for c in fixtures if c['expectedError'] is None)
+
+
+def request(capability=None, value=None, **changes):
+    data = dict(pluginId=plugin_id, sceneId='coding',
+                capabilityId=sample['capabilityId'] if capability is None else capability, commandId=None,
+                input=sample['input'] if value is None else value)
     data.update(changes)
     return data
 
 
-fixture_path = ROOT / 'plugins/transforms/fixtures.json'
-fixtures = json.loads(fixture_path.read_text(encoding='utf-8'))['cases']
 cases = [(c['id'], request(c['capabilityId'], c['input']),
           c['expectedText'], c['expectedError']) for c in fixtures]
 for field in ['pluginId', 'sceneId', 'capabilityId', 'commandId', 'input']:
@@ -66,23 +71,23 @@ for field in ['pluginId', 'sceneId', 'capabilityId', 'commandId', 'input']:
 for name, changes, error in [
     ('unknown-outer-field', {'extra': True}, 'INVALID_INPUT'),
     ('unknown-input-field', {'input': {'text': 'x', 'extra': True}}, 'INVALID_INPUT'),
-    ('unknown-operation', {'capabilityId': 'devtools.transforms.missing'}, 'UNSUPPORTED_OPERATION'),
+    ('unknown-operation', {'capabilityId': 'devtools.' + args.plugin + '.missing'}, 'UNSUPPORTED_OPERATION'),
     ('foreign-text-capability', {'capabilityId': 'devtools.text.sha256'}, 'UNSUPPORTED_OPERATION'),
     ('foreign-plugin', {'pluginId': 'other'}, 'INVALID_INPUT'),
-    ('old-plugin-new-capability', {'pluginId': 'com.zicode.devtools.text'}, 'UNSUPPORTED_OPERATION'),
+    ('old-plugin-new-capability', {'pluginId': 'com.zicode.devtools.text'}, 'UNSUPPORTED_OPERATION' if args.plugin == 'transforms' else 'INVALID_INPUT'),
     ('scene-empty', {'sceneId': ''}, 'INVALID_INPUT'),
     ('scene-over', {'sceneId': 'a' * 129}, 'INVALID_INPUT'),
     ('command-not-null', {'commandId': 'anything'}, 'INVALID_INPUT'),
 ]:
     cases.append((name, request(**changes), None, error))
-cases.append(('scene-exact-128', request(sceneId='a' * 128), 'a%2Bb%20%E4%B8%AD', None))
+cases.append(('scene-exact-128', request(sceneId='a' * 128), sample['expectedText'], None))
 cases.extend([
     ('invalid-request-utf8', b'\xff', None, 'INVALID_INPUT'),
     ('request-over-limit', b' ' * (49152 + 1), None, 'INPUT_TOO_LARGE'),
-    ('duplicate-input-key', b'{"pluginId":"com.zicode.devtools.transforms","sceneId":"coding","capabilityId":"devtools.transforms.url.encode","commandId":null,"input":{"text":"secret-test","text":"other"}}', None, 'INVALID_INPUT'),
-    ('duplicate-outer-key', b'{"pluginId":"com.zicode.devtools.transforms","pluginId":"other","sceneId":"coding","capabilityId":"devtools.transforms.url.encode","commandId":null,"input":{"text":"secret-test"}}', None, 'INVALID_INPUT'),
+    ('duplicate-input-key', ('{"pluginId":' + json.dumps(plugin_id) + ',"sceneId":"coding","capabilityId":' + json.dumps(sample['capabilityId']) + ',"commandId":null,"input":{"text":"secret-test","text":"other"}}').encode(), None, 'INVALID_INPUT'),
+    ('duplicate-outer-key', ('{"pluginId":' + json.dumps(plugin_id) + ',"pluginId":"other","sceneId":"coding","capabilityId":' + json.dumps(sample['capabilityId']) + ',"commandId":null,"input":{"text":"secret-test"}}').encode(), None, 'INVALID_INPUT'),
 ])
-manifest = json.loads((ROOT / 'plugins/transforms/plugin.json').read_text(encoding='utf-8'))
+manifest = json.loads((ROOT / 'plugins' / args.plugin / 'plugin.json').read_text(encoding='utf-8'))
 registered = {c['id'] for c in manifest['contributes']['capabilities']}
 assert registered == {c['capabilityId'] for c in fixtures}
 assert len({c[0] for c in cases}) == len(cases)
