@@ -2971,17 +2971,19 @@
       "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.trace.java.trace"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
           "operationId": "java.trace",
           "title": "Java 异常链",
-          "scopeKind": "complete_trace_operation_in_development",
+          "scopeKind": "complete_trace_operation_within_plugin_budget",
           "scope": "离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧",
           "sourceVersion": "1.0.3",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-trace-core/0.1.0",
           "adapter": "zi-trace-wasi/0.1.0",
           "packageId": "com.zicode.devtools.trace",
@@ -2990,12 +2992,15 @@
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "development_checkpoints_see_plugins_trace_README",
-          "viewVerification": "public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
-          "blockingReason": "开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证"
+          "candidateDirectory": "release/trace-0.1.0-candidate-01",
+          "moduleSha256": "bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e",
+          "directoryIndexSha256": "45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+          "runtimeVerification": "59_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
+          "viewVerification": "public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
+          "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。"
     },
     {
       "sourceToolId": "django-trace",
@@ -3003,17 +3008,19 @@
       "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.trace.django.trace"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
           "operationId": "django.trace",
           "title": "Django / Python 堆栈",
-          "scopeKind": "complete_trace_operation_in_development",
+          "scopeKind": "complete_trace_operation_within_plugin_budget",
           "scope": "离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目",
           "sourceVersion": "1.0.3",
-          "pluginStatus": "not_delivered",
+          "pluginStatus": "candidate",
           "core": "zi-trace-core/0.1.0",
           "adapter": "zi-trace-wasi/0.1.0",
           "packageId": "com.zicode.devtools.trace",
@@ -3022,12 +3029,15 @@
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "runtimeVerification": "development_checkpoints_see_plugins_trace_README",
-          "viewVerification": "public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
-          "blockingReason": "开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证"
+          "candidateDirectory": "release/trace-0.1.0-candidate-01",
+          "moduleSha256": "bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e",
+          "directoryIndexSha256": "45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+          "runtimeVerification": "59_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
+          "viewVerification": "public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
+          "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。"
     },
     {
       "sourceToolId": "java-thread-dump",

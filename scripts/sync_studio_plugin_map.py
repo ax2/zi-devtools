@@ -45,7 +45,10 @@ for operation, source, title in re.findall(
     r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"\s*,\s*title:\s*"([^"]+)"', inspect_source):
     inspect_actions.setdefault(source, []).append((operation, title))
 assert sum(map(len, inspect_actions.values())) == 8 and len(inspect_actions) == 5
-candidate_ids = set(pilot) | set(report_scopes) | set(transform_actions) | set(inspect_actions)
+trace_source = (ROOT / "crates/zi-trace-core/src/lib.rs").read_text(encoding="utf-8")
+trace_actions = re.findall(r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"\s*,\s*title:\s*"([^"]+)"', trace_source)
+assert len(trace_actions) == 2
+candidate_ids = {source for _, source, _ in trace_actions} | set(pilot) | set(report_scopes) | set(transform_actions) | set(inspect_actions)
 ids = {tool["id"] for tool in catalog["tools"]}
 assert compute <= ids
 rows = []
@@ -91,21 +94,23 @@ for tool in catalog["tools"]:
                              scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
                              pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
                              blockingReason=reason)]), reason=reason))
-trace_source = (ROOT / "crates/zi-trace-core/src/lib.rs").read_text(encoding="utf-8")
-trace_actions = re.findall(r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"\s*,\s*title:\s*"([^"]+)"', trace_source)
-assert len(trace_actions) == 2
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
-    assert row["pluginStatus"] == "not_delivered"
+    assert row["pluginStatus"] == "candidate"
+    row["candidateCapabilities"] = ["devtools.trace." + operation]
+    row["reason"] = "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。"
     row["operationScopes"] = [dict(operationId=operation, title=title,
-        scopeKind="complete_trace_operation_in_development", scope=next(t["scope"] for t in catalog["tools"] if t["id"] == source_id),
-        sourceVersion=row["sourceVersion"], pluginStatus="not_delivered",
+        scopeKind="complete_trace_operation_within_plugin_budget", scope=next(t["scope"] for t in catalog["tools"] if t["id"] == source_id),
+        sourceVersion=row["sourceVersion"], pluginStatus="candidate",
         core="zi-trace-core/0.1.0", adapter="zi-trace-wasi/0.1.0",
         packageId="com.zicode.devtools.trace", packageVersion="0.1.0",
         limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
-        runtimeVerification="development_checkpoints_see_plugins_trace_README",
-        viewVerification="public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
-        blockingReason="开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证")]
+        candidateDirectory="release/trace-0.1.0-candidate-01",
+        moduleSha256="bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e",
+        directoryIndexSha256="45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+        runtimeVerification="59_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
+        viewVerification="public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
+        blockingReason="unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收")]
 for row in rows:
     if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
         assert row["pluginStatus"] == "not_delivered"

@@ -1,8 +1,10 @@
 # Studio 插件提供方交接
 
-## 当前开发：Java / Django 堆栈
+## 当前交付：Java / Django 堆栈候选
 
-[开发说明](../plugins/trace/README.md)：完整两项文本堆栈算法提取zi-trace-core，独立版复用；固定扫描器与旧正则捕获、完整报告和错误对照。新com.zicode.devtools.trace/0.1.0检查点模块241986字节、56实际字节对照通过，预算55/56，512节点超大报告仍耗尽fuel；源码已加入仅拒绝必定超限输出的下界检查，最终WASI重建/完整重放待完成。两主题公开SDK+实际检查点WASI页面检查通过，但不代表当前最终模块、原生GUI或实际Host验收。根dev105固定，两源工具1.0.3，目录仍not_delivered，无新冻结包。完整质量链运行中，保留失败证据。
+[完整交付说明](trace-plugin-handoff.md)：两项完整文本堆栈操作共用 zi-trace-core，源工具 1.0.3，根 dev105 保持。unsigned `release/trace-0.1.0-candidate-01` 已冻结，346 文件共 1,403,946 字节；最终模块 241,191 字节。59 条实际字节对照、Wasmtime 36.0.2 预算及全新进程冷启动全部通过，最慢 504.374ms，所有验证子进程关闭。最终 Schema、两主题公开 SDK + 实际 WASI View 检查通过；完整工作区测试 829 通过、0 失败、34 忽略，严格 Clippy 和原生优化构建/隔离服务启停通过。两项映射更新为提供方 candidate，实际 Host 安装/生命周期/Worker/Pi 未验收，完整接受仍为 0。
+
+[主 CI 37928511885](https://github.com/ax2/zi-devtools/actions/runs/37928511885) 对 c431fe9 已完成并通过。更正早期记录：37889396659 是增量更新工作流，不是主 CI；先前三次主 CI 被同一输出边界测试假设拦住，现已修复并通过，原失败证据保留。
 
 接收方另报旧inspect01的实际Pi复查yaml.from_json超时，仍需分段定位，暂不能记Pi通过；此前View/7样例及84可表达向量报告不覆盖Pi或10 raw输入。接收方补充transforms共用Pi harness也出现url.decode超时，双方Pi当前均未通过，不能将问题仅归因Inspect模块。没有据此重建旧包或扩大预算。
 
