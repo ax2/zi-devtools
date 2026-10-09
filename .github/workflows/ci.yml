@@ -61,8 +61,10 @@ jobs:
         run: cargo check -p zi-character-core --profile plugin --target wasm32-wasip1 --locked
       - name: Character input scope proposal (structure only)
         run: python scripts/verify_character_proposal.py
-      - name: Draft multi-field schema and byte budgets
-        run: python scripts/verify_fields_proposal.py
+      - name: Draft multi-field v0.1.0 schema and byte budgets
+        run: python scripts/verify_fields_proposal.py --proposal-version 0.1.0
+      - name: Draft multi-field v0.1.1 query fields and byte budgets
+        run: python scripts/verify_fields_proposal.py --proposal-version 0.1.1
       - name: Real native and WASI format inspection parity
         shell: pwsh
         run: |

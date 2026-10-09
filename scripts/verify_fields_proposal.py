@@ -11,10 +11,11 @@ from pathlib import Path
 from jsonschema import Draft202012Validator, ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
-FOLDER = ROOT / 'proposals/studio-fields/v0.1.0'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path)
+parser.add_argument('--proposal-version', choices=['0.1.0', '0.1.1'], default='0.1.0')
 args = parser.parse_args()
+FOLDER = ROOT / ('proposals/studio-fields/v' + args.proposal_version)
 load = lambda path: json.loads(path.read_text(encoding='utf-8'))
 proposal = load(FOLDER / 'proposal.json')
 schema = load(FOLDER / 'request.schema.json')
@@ -24,7 +25,13 @@ assert proposal['profile'] == 'compute.fields.v1'
 assert schema['properties']['contractVersion']['const'] == proposal['contractVersion']
 assert schema['properties']['pluginId']['const'] == proposal['packageId']
 operations = {op['id']: op for op in proposal['operations']}
-assert len(operations) == 4
+expected_ids = {'devtools.compare.regex.matches', 'devtools.compare.text.diff', 'devtools.compare.json.diff.ordered', 'devtools.compare.json.diff.unordered'}
+if args.proposal_version == '0.1.1': expected_ids.add('devtools.compare.json.path')
+assert set(operations) == expected_ids and len(proposal['operations']) == len(expected_ids)
+assert proposal['proposalVersion'] == args.proposal_version
+assert proposal['contractVersion'] == {'0.1.0': '1.1.0-proposal.1', '0.1.1': '1.1.0-proposal.2'}[args.proposal_version]
+assert len(schema['oneOf']) == len(operations)
+assert {b['properties']['capabilityId']['const'] for b in schema['oneOf']} == expected_ids
 catalog_versions = {tool['id']: tool['tool_version'] for tool in load(ROOT / 'docs/tools.json')['tools']}
 assert all(op['sourceVersion'] == catalog_versions[op['sourceToolId']] for op in operations.values()), 'Proposal source tool versions are stale'
 for branch in schema['oneOf']:
@@ -54,6 +61,7 @@ def valid(raw):
     try:
         request = json.loads(raw.decode('utf-8'), object_pairs_hook=unique,
                              parse_constant=reject_constant)
+        json.dumps(request, ensure_ascii=False).encode('utf-8')
         validator.validate(request)
         if len(request['sceneId'].encode('utf-8')) > 128:
             return False
@@ -90,7 +98,7 @@ for case in load(FOLDER / 'fixtures.json')['resultCases']:
     result_rows.append(dict(id=case['id'], valid=accepted, passed=True))
 proof = dict(status=proposal['status'], cases=rows, resultCases=result_rows, invalidUtf8Rejected=True,
              sourceFiles={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in FOLDER.glob('*.json')},
-             limitations=['Schema/identity/byte checks only; no regex/diff algorithm, WASI, Host, View or Pi execution'])
+             limitations=['Schema/identity/byte checks only; no regex/diff/path algorithm, WASI, Host, View or Pi execution'])
 if args.output:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

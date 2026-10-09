@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contractVersion": {
+      "const": "1.1.0-proposal.2"
+    },
+    "pluginId": {
+      "const": "com.zicode.devtools.compare"
+    },
+    "sceneId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "capabilityId": {
+      "type": "string"
+    },
+    "commandId": {
+      "type": "null"
+    },
+    "input": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "contractVersion",
+    "pluginId",
+    "sceneId",
+    "capabilityId",
+    "commandId",
+    "input"
+  ],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "capabilityId": {
+          "const": "devtools.compare.regex.matches"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "pattern": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "required": [
+            "text",
+            "pattern"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "properties": {
+        "capabilityId": {
+          "const": "devtools.compare.text.diff"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "left": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "right": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "left",
+            "right"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "properties": {
+        "capabilityId": {
+          "const": "devtools.compare.json.diff.ordered"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "left": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "right": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "left",
+            "right"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "properties": {
+        "capabilityId": {
+          "const": "devtools.compare.json.diff.unordered"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "left": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "right": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "left",
+            "right"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "properties": {
+        "capabilityId": {
+          "const": "devtools.compare.json.path"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "query": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "required": [
+            "text",
+            "query"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}
