@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser()
 for name in ['wasm', 'parity', 'budget', 'view-proof', 'cold-proof', 'schema-proof', 'output']:
     parser.add_argument('--' + name, type=Path, required=True)
 parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
-parser.add_argument('--cold-history', type=Path, help='Preserve a previous full cold run, including measured failures')
+parser.add_argument('--cold-history', type=Path, action='append', default=[], help='Preserve previous full cold runs, including failures; repeat for each run')
 args = parser.parse_args()
 plugin_dir = ROOT / 'plugins' / args.plugin
 adapter = 'zi-inspect-wasi' if args.plugin == 'inspect' else 'zi-text-wasi'
@@ -30,7 +30,8 @@ budget = json.loads((args.budget / 'fuel-proof.json').read_text(encoding='utf-8'
 view = plugin_dir / 'views/main.html'
 view_proof = json.loads(args.view_proof.read_text(encoding='utf-8'))
 cold = json.loads(args.cold_proof.read_text(encoding='utf-8'))
-cold_history = json.loads(args.cold_history.read_text(encoding='utf-8')) if args.cold_history else None
+assert len(args.cold_history) <= 8, 'Too many history files; preserve further history in the technical archive'
+cold_history = [json.loads(path.read_text(encoding='utf-8')) for path in args.cold_history]
 schema_proof = json.loads(args.schema_proof.read_text(encoding='utf-8'))
 assert len(module) <= 2 * 1024 * 1024 and parity['wasmSha256'] == budget['wasmSha256'] == view_proof['wasmSha256'] == digest(module)
 assert parity['memoryMaxBytes'] == 64 * 1024 * 1024
@@ -42,8 +43,8 @@ assert budget['engineProvenance']['nativeEngineVersion'] == '36.0.2'
 assert all(c['passBudget'] for c in budget['cases'])
 assert view_proof['viewSha256'] == digest(view.read_bytes()) and view_proof['offlinePass']
 validate_cold(cold, parity, digest(module), len(module), budget['engineProvenance'], require_pass=args.plugin == 'inspect')
-if cold_history is not None:
-    validate_cold(cold_history, parity, digest(module), len(module), budget['engineProvenance'], require_pass=False)
+for previous in cold_history:
+    validate_cold(previous, parity, digest(module), len(module), budget['engineProvenance'], require_pass=False)
 assert schema_proof['wasmSha256'] == digest(module) and schema_proof['resultCases'] == case_count
 assert schema_proof['requestSchemaSha256'] == digest((plugin_dir / 'request.schema.json').read_bytes())
 assert schema_proof['catalogSha256'] == digest((plugin_dir / 'catalog.json').read_bytes())
@@ -100,8 +101,8 @@ write('views/main.html', view.read_bytes())
 write('fixtures/' + args.plugin + '.json', (plugin_dir / 'fixtures.json').read_bytes())
 write('verification/view-proof.json', encoded(view_proof))
 write('verification/cold-proof.json', encoded(cold))
-if cold_history is not None:
-    write('verification/cold-history.json', encoded(cold_history))
+for index, previous in enumerate(cold_history, 1):
+    write(f'verification/cold-history-{index:02}.json', encoded(previous))
 write('verification/schema-proof.json', encoded(schema_proof))
 for name in ['verify_diagnostics_fuel.py', 'bootstrap_diagnostics_engine.py', 'verify_diagnostics_cold.py']:
     write('verification/' + name, (ROOT / 'scripts' / name).read_bytes())
