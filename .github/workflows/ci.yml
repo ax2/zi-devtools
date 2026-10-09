@@ -28,6 +28,7 @@ jobs:
       - run: python scripts/sync_diagnostics_plugin.py --check
       - run: python scripts/sync_transforms_plugin.py --check
       - run: python scripts/sync_inspect_plugin.py --check
+      - run: python -m unittest discover -s scripts/tests -p test_plugin_proof.py
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --locked

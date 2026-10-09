@@ -4,12 +4,14 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
+from plugin_proof import validate_cold
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 for name in ['wasm', 'parity', 'budget', 'view-proof', 'cold-proof', 'schema-proof', 'output']:
     parser.add_argument('--' + name, type=Path, required=True)
 parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
+parser.add_argument('--cold-history', type=Path, help='Preserve a previous full cold run, including measured failures')
 args = parser.parse_args()
 plugin_dir = ROOT / 'plugins' / args.plugin
 adapter = 'zi-inspect-wasi' if args.plugin == 'inspect' else 'zi-text-wasi'
@@ -28,6 +30,7 @@ budget = json.loads((args.budget / 'fuel-proof.json').read_text(encoding='utf-8'
 view = plugin_dir / 'views/main.html'
 view_proof = json.loads(args.view_proof.read_text(encoding='utf-8'))
 cold = json.loads(args.cold_proof.read_text(encoding='utf-8'))
+cold_history = json.loads(args.cold_history.read_text(encoding='utf-8')) if args.cold_history else None
 schema_proof = json.loads(args.schema_proof.read_text(encoding='utf-8'))
 assert len(module) <= 2 * 1024 * 1024 and parity['wasmSha256'] == budget['wasmSha256'] == view_proof['wasmSha256'] == digest(module)
 assert parity['memoryMaxBytes'] == 64 * 1024 * 1024
@@ -38,12 +41,9 @@ assert budget['budget'] == dict(fuel=10000000, deadlineSeconds=5, memoryBytes=67
 assert budget['engineProvenance']['nativeEngineVersion'] == '36.0.2'
 assert all(c['passBudget'] for c in budget['cases'])
 assert view_proof['viewSha256'] == digest(view.read_bytes()) and view_proof['offlinePass']
-assert cold['wasmSha256'] == digest(module) and len(cold['rows']) == case_count and cold['remaining'] == 0
-assert cold['engine']['nativeEngineVersion'] == '36.0.2'
-# Preserve every measured cold-start failure instead of widening the deadline.
-assert all(r['closed'] for r in cold['rows'])
-if args.plugin == 'inspect':
-    assert not cold['failures'] and all(r['passed'] for r in cold['rows'])
+validate_cold(cold, parity, digest(module), len(module), budget['engineProvenance'], require_pass=args.plugin == 'inspect')
+if cold_history is not None:
+    validate_cold(cold_history, parity, digest(module), len(module), budget['engineProvenance'], require_pass=False)
 assert schema_proof['wasmSha256'] == digest(module) and schema_proof['resultCases'] == case_count
 assert schema_proof['requestSchemaSha256'] == digest((plugin_dir / 'request.schema.json').read_bytes())
 assert schema_proof['catalogSha256'] == digest((plugin_dir / 'catalog.json').read_bytes())
@@ -61,7 +61,7 @@ git = lambda *argv: subprocess.check_output(['git', *argv], cwd=ROOT).decode().s
 source = dict(revision=git('rev-parse', 'HEAD'), dirty=bool(git('status', '--porcelain')))
 catalog['source'] = source
 paths = [ROOT / p for p in ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', sync_script,
-                          'scripts/package_transforms_plugin.py', 'scripts/verify_transforms_wasi.py',
+                          'scripts/package_transforms_plugin.py', 'scripts/plugin_proof.py', 'scripts/verify_transforms_wasi.py',
                           'scripts/verify_transforms_schema.py', 'scripts/verify_diagnostics_fuel.py', 'scripts/run_text_wasi.mjs', 'src/tools.rs', 'src/tools_extra.rs']]
 folders = ['crates/zi-text-core', 'crates/' + adapter, 'plugins/' + args.plugin, 'contracts/studio-devtools/v1']
 if args.plugin == 'inspect':
@@ -100,6 +100,8 @@ write('views/main.html', view.read_bytes())
 write('fixtures/' + args.plugin + '.json', (plugin_dir / 'fixtures.json').read_bytes())
 write('verification/view-proof.json', encoded(view_proof))
 write('verification/cold-proof.json', encoded(cold))
+if cold_history is not None:
+    write('verification/cold-history.json', encoded(cold_history))
 write('verification/schema-proof.json', encoded(schema_proof))
 for name in ['verify_diagnostics_fuel.py', 'bootstrap_diagnostics_engine.py', 'verify_diagnostics_cold.py']:
     write('verification/' + name, (ROOT / 'scripts' / name).read_bytes())
@@ -139,7 +141,7 @@ for name, data in sorted(payload.items()):
 assert len(files) <= 2048 and sum(f['size'] for f in files) <= 50 * 1024 * 1024
 verification = dict(**provenance, files=files, directoryIndexSha256=digest(json.dumps(files, ensure_ascii=False, separators=(',', ':')).encode()),
                     packageSha256=None, signature='unsigned directory; no signing key or container',
-                    functionalProof=parity, fuelProof=budget, viewProof=view_proof, coldProof=cold, schemaProof=schema_proof,
+                    functionalProof=parity, fuelProof=budget, viewProof=view_proof, coldProof=cold, coldHistory=cold_history, schemaProof=schema_proof,
                     unverified=['Actual Studio SDK/installation/update/rollback/revoke/uninstall',
                                 'Production Worker isolation, output pipes, cold deadline and Pi Broker authorization',
                                 'macOS/Linux Host behavior'])
