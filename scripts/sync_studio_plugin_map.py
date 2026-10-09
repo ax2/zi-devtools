@@ -106,6 +106,13 @@ for operation, source_id, title in trace_actions:
         runtimeVerification="development_checkpoints_see_plugins_trace_README",
         viewVerification="public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
         blockingReason="开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证")]
+for row in rows:
+    if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
+        assert row["pluginStatus"] == "not_delivered"
+        row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
+        for scope in row["operationScopes"]:
+            scope["design"] = "docs/character-plugin-design.md"
+            scope["blockingReason"] = row["reason"]
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

@@ -349,10 +349,11 @@
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.0",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
+          "design": "docs/character-plugin-design.md"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
     },
     {
       "sourceToolId": "symbol-library",
@@ -370,10 +371,11 @@
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.0",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
+          "design": "docs/character-plugin-design.md"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
     },
     {
       "sourceToolId": "ascii-art",
@@ -391,10 +393,11 @@
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.0",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "blockingReason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。",
+          "design": "docs/character-plugin-design.md"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
     },
     {
       "sourceToolId": "qr",
