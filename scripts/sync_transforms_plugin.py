@@ -33,6 +33,13 @@ catalog = dict(contract='zicode.devtools-plugin/1.0.0-rc.1', packageId=manifest[
                            status='candidate', profile='compute.wasi.v1', title=a['title']) for a in actions])
 outputs = {ROOT / 'plugins/transforms/plugin.json': json.dumps(manifest, ensure_ascii=False, indent=2) + '\n',
            ROOT / 'plugins/transforms/catalog.json': json.dumps(catalog, ensure_ascii=False, indent=2) + '\n'}
+request_schema = json.loads((ROOT / 'contracts/studio-devtools/v1/request.schema.json').read_text(encoding='utf-8'))
+# The vendored example binds the old pilot ID. Specialize only that binding;
+# never alter the frozen snapshot or widen fields, input types or error enums.
+assert request_schema['properties']['pluginId'] == {'const': 'com.zicode.devtools.text'}
+request_schema['properties']['pluginId']['const'] = manifest['id']
+request_schema['$comment'] = 'Derived from frozen rc.1 pilot request schema; only pluginId.const is specialized to this manifest ID.'
+outputs[ROOT / 'plugins/transforms/request.schema.json'] = json.dumps(request_schema, ensure_ascii=False, indent=2) + '\n'
 view = ROOT / 'plugins/transforms/views/main.html'
 html = view.read_text(encoding='utf-8')
 updated, count = re.subn(r'const actions=\[.*?\], samples=', lambda _: 'const actions=' + json.dumps(actions, ensure_ascii=False) + ', samples=', html, count=1)

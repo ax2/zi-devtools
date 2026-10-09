@@ -26,6 +26,7 @@
 
 - `com.zicode.devtools.transforms`，能力前缀 `devtools.transforms.`，初始候选版本 `0.1.0`。
 - 冻结 `1.0.0-rc.1` 外层和 `input.text`。输入最多 8192 **UTF-8 字节**；请求及序列化结果各最多 48 KiB。JSON Schema 字符长度限制不能替代运行时字节校验。
+- 原契约快照的请求示例绑定旧文本试点 ID；本候选的 `request.schema.json` 仅将 `pluginId.const` 绑定为本包 ID，字段、输入类型、结果和错误枚举不变，并注明来源。原始快照及摘要保持不变；此绑定由接收方核对，不作为 Host 接受声明。
 - `sceneId` 长度 1–128。错误枚举沿用 `INVALID_INPUT`、`INPUT_TOO_LARGE`、`INVALID_ENCODING`、`UNSUPPORTED_OPERATION`、`INTERNAL_ERROR`，不自行扩展契约。
 - 输出膨胀超过预算返回已有 `INPUT_TOO_LARGE`。进制和统计报告装在文本结果中，不将 128 位整数转成不精确的 JavaScript 数值。
 - 运行预算：模块 ≤2 MiB，10,000,000 fuel、5 秒、64 MiB 内存、2 MiB guest stack。页面等待上限不是 Host 取消保证。

@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
-for name in ['wasm', 'parity', 'budget', 'view-proof', 'cold-proof', 'output']:
+for name in ['wasm', 'parity', 'budget', 'view-proof', 'cold-proof', 'schema-proof', 'output']:
     parser.add_argument('--' + name, type=Path, required=True)
 args = parser.parse_args()
 output = args.output.absolute()
@@ -22,6 +22,7 @@ budget = json.loads((args.budget / 'fuel-proof.json').read_text(encoding='utf-8'
 view = ROOT / 'plugins/transforms/views/main.html'
 view_proof = json.loads(args.view_proof.read_text(encoding='utf-8'))
 cold = json.loads(args.cold_proof.read_text(encoding='utf-8'))
+schema_proof = json.loads(args.schema_proof.read_text(encoding='utf-8'))
 assert len(module) <= 2 * 1024 * 1024 and parity['wasmSha256'] == budget['wasmSha256'] == view_proof['wasmSha256'] == digest(module)
 assert parity['memoryMaxBytes'] == 64 * 1024 * 1024
 assert len(parity['cases']) == len(budget['cases']) == 174 and not budget['failures']
@@ -33,6 +34,11 @@ assert cold['wasmSha256'] == digest(module) and len(cold['rows']) == 174 and col
 assert cold['engine']['nativeEngineVersion'] == '36.0.2'
 # Preserve every measured cold-start failure instead of widening the deadline.
 assert all(r['closed'] for r in cold['rows'])
+assert schema_proof['wasmSha256'] == digest(module) and schema_proof['resultCases'] == 174
+assert schema_proof['requestSchemaSha256'] == digest((ROOT / 'plugins/transforms/request.schema.json').read_bytes())
+assert schema_proof['catalogSha256'] == digest((ROOT / 'plugins/transforms/catalog.json').read_bytes())
+assert schema_proof['fixtureProofSha256'] == digest((args.parity / 'fuel-proof.json').read_bytes())
+assert schema_proof['contractIndexSha256'] == digest((ROOT / 'contracts/studio-devtools/v1/SHA256SUMS.json').read_bytes())
 subprocess.run(['python', str(ROOT / 'scripts/sync_transforms_plugin.py'), '--check'], cwd=ROOT, check=True)
 manifest = json.loads((ROOT / 'plugins/transforms/plugin.json').read_text(encoding='utf-8'))
 catalog = json.loads((ROOT / 'plugins/transforms/catalog.json').read_text(encoding='utf-8'))
@@ -46,7 +52,7 @@ source = dict(revision=git('rev-parse', 'HEAD'), dirty=bool(git('status', '--por
 catalog['source'] = source
 paths = [ROOT / p for p in ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', 'scripts/sync_transforms_plugin.py',
                           'scripts/package_transforms_plugin.py', 'scripts/verify_transforms_wasi.py',
-                          'scripts/verify_diagnostics_fuel.py', 'scripts/run_text_wasi.mjs', 'src/tools.rs', 'src/tools_extra.rs']]
+                          'scripts/verify_transforms_schema.py', 'scripts/verify_diagnostics_fuel.py', 'scripts/run_text_wasi.mjs', 'src/tools.rs', 'src/tools_extra.rs']]
 for folder in ['crates/zi-text-core', 'crates/zi-text-wasi', 'plugins/transforms', 'contracts/studio-devtools/v1']:
     paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
 provenance = dict(source=source, profile='compute.wasi.v1', status='unsigned provider candidate; not Host-accepted',
@@ -80,13 +86,15 @@ write('views/main.html', view.read_bytes())
 write('fixtures/transforms.json', (ROOT / 'plugins/transforms/fixtures.json').read_bytes())
 write('verification/view-proof.json', encoded(view_proof))
 write('verification/cold-proof.json', encoded(cold))
+write('verification/schema-proof.json', encoded(schema_proof))
 for name in ['verify_diagnostics_fuel.py', 'bootstrap_diagnostics_engine.py', 'verify_diagnostics_cold.py']:
     write('verification/' + name, (ROOT / 'scripts' / name).read_bytes())
 write('verification/requirements.txt', b'wasmtime==36.0.0\n')
 write('README.md', (ROOT / 'plugins/transforms/README.md').read_bytes())
 write('LICENSE', (ROOT / 'LICENSE').read_bytes())
 for p in (ROOT / 'contracts/studio-devtools/v1').glob('*.schema.json'):
-    write('schemas/' + p.name, p.read_bytes())
+    schema_path = ROOT / 'plugins/transforms/request.schema.json' if p.name == 'request.schema.json' else p
+    write('schemas/' + p.name, schema_path.read_bytes())
 metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--offline', '--locked', '--filter-platform', 'wasm32-wasip1', '--format-version', '1'], cwd=ROOT))
 packages = {p['id']: p for p in metadata['packages']}
 nodes = {n['id']: n for n in metadata['resolve']['nodes']}
@@ -117,7 +125,7 @@ for name, data in sorted(payload.items()):
 assert len(files) <= 2048 and sum(f['size'] for f in files) <= 50 * 1024 * 1024
 verification = dict(**provenance, files=files, directoryIndexSha256=digest(json.dumps(files, ensure_ascii=False, separators=(',', ':')).encode()),
                     packageSha256=None, signature='unsigned directory; no signing key or container',
-                    functionalProof=parity, fuelProof=budget, viewProof=view_proof, coldProof=cold,
+                    functionalProof=parity, fuelProof=budget, viewProof=view_proof, coldProof=cold, schemaProof=schema_proof,
                     unverified=['Actual Studio SDK/installation/update/rollback/revoke/uninstall',
                                 'Production Worker isolation, output pipes, cold deadline and Pi Broker authorization',
                                 'macOS/Linux Host behavior'])
