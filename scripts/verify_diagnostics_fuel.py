@@ -18,6 +18,7 @@ parser.add_argument('--fixtures', type=Path)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--allow-traps', action='store_true')
 parser.add_argument('--serializer-boundary', action='store_true')
+parser.add_argument('--text-results', action='store_true', help='Portable expected files contain plain text envelopes, not JSON reports')
 parser.add_argument('--engine-provenance',type=Path)
 args = parser.parse_args()
 engine_provenance=None
@@ -105,7 +106,7 @@ for index, (name, value, checks, error) in enumerate(cases):
         assert not envelope['ok'] and envelope['data'] is None and envelope['error']['code'] == error, (name, envelope)
     else:
         assert envelope['ok'] and envelope['error'] is None, (name, envelope)
-        report = {} if args.serializer_boundary else json.loads(envelope['data']['text'])
+        report = {} if args.serializer_boundary or args.text_results else json.loads(envelope['data']['text'])
         for path, wanted in checks.items():
             actual = report
             for part in path.split('/'):

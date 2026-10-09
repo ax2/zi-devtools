@@ -1,0 +1,218 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.transforms",
+  "packageVersion": "0.1.0",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "url",
+      "toolId": "devtools.transforms.url.encode",
+      "capabilityId": "devtools.transforms.url.encode",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "URL 编码"
+    },
+    {
+      "sourceToolId": "url",
+      "toolId": "devtools.transforms.url.decode",
+      "capabilityId": "devtools.transforms.url.decode",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "URL 解码"
+    },
+    {
+      "sourceToolId": "html-escape",
+      "toolId": "devtools.transforms.html.escape",
+      "capabilityId": "devtools.transforms.html.escape",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "HTML 转义"
+    },
+    {
+      "sourceToolId": "html-escape",
+      "toolId": "devtools.transforms.html.unescape",
+      "capabilityId": "devtools.transforms.html.unescape",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "HTML 还原"
+    },
+    {
+      "sourceToolId": "text-escape",
+      "toolId": "devtools.transforms.string.escape",
+      "capabilityId": "devtools.transforms.string.escape",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "JSON 字符串转义"
+    },
+    {
+      "sourceToolId": "text-escape",
+      "toolId": "devtools.transforms.string.unescape",
+      "capabilityId": "devtools.transforms.string.unescape",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "JSON 字符串还原"
+    },
+    {
+      "sourceToolId": "case-convert",
+      "toolId": "devtools.transforms.case.camel",
+      "capabilityId": "devtools.transforms.case.camel",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "camelCase"
+    },
+    {
+      "sourceToolId": "case-convert",
+      "toolId": "devtools.transforms.case.pascal",
+      "capabilityId": "devtools.transforms.case.pascal",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "PascalCase"
+    },
+    {
+      "sourceToolId": "case-convert",
+      "toolId": "devtools.transforms.case.snake",
+      "capabilityId": "devtools.transforms.case.snake",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "snake_case"
+    },
+    {
+      "sourceToolId": "case-convert",
+      "toolId": "devtools.transforms.case.kebab",
+      "capabilityId": "devtools.transforms.case.kebab",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "kebab-case"
+    },
+    {
+      "sourceToolId": "text-stats",
+      "toolId": "devtools.transforms.stats.inspect",
+      "capabilityId": "devtools.transforms.stats.inspect",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "文本统计"
+    },
+    {
+      "sourceToolId": "lines",
+      "toolId": "devtools.transforms.lines.deduplicate",
+      "capabilityId": "devtools.transforms.lines.deduplicate",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "去重"
+    },
+    {
+      "sourceToolId": "lines",
+      "toolId": "devtools.transforms.lines.ascending",
+      "capabilityId": "devtools.transforms.lines.ascending",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "升序"
+    },
+    {
+      "sourceToolId": "lines",
+      "toolId": "devtools.transforms.lines.descending",
+      "capabilityId": "devtools.transforms.lines.descending",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "降序"
+    },
+    {
+      "sourceToolId": "lines",
+      "toolId": "devtools.transforms.lines.nonempty",
+      "capabilityId": "devtools.transforms.lines.nonempty",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "去空行"
+    },
+    {
+      "sourceToolId": "lines",
+      "toolId": "devtools.transforms.lines.trim",
+      "capabilityId": "devtools.transforms.lines.trim",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "去首尾空白"
+    },
+    {
+      "sourceToolId": "number",
+      "toolId": "devtools.transforms.number.from2",
+      "capabilityId": "devtools.transforms.number.from2",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "2 进制输入"
+    },
+    {
+      "sourceToolId": "number",
+      "toolId": "devtools.transforms.number.from8",
+      "capabilityId": "devtools.transforms.number.from8",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "8 进制输入"
+    },
+    {
+      "sourceToolId": "number",
+      "toolId": "devtools.transforms.number.from10",
+      "capabilityId": "devtools.transforms.number.from10",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "10 进制输入"
+    },
+    {
+      "sourceToolId": "number",
+      "toolId": "devtools.transforms.number.from16",
+      "capabilityId": "devtools.transforms.number.from16",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "16 进制输入"
+    },
+    {
+      "sourceToolId": "hex",
+      "toolId": "devtools.transforms.hex.encode",
+      "capabilityId": "devtools.transforms.hex.encode",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "UTF-8 → Hex"
+    },
+    {
+      "sourceToolId": "hex",
+      "toolId": "devtools.transforms.hex.decode",
+      "capabilityId": "devtools.transforms.hex.decode",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "Hex → UTF-8"
+    },
+    {
+      "sourceToolId": "url-inspect",
+      "toolId": "devtools.transforms.url.inspect",
+      "capabilityId": "devtools.transforms.url.inspect",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "URL 拆解"
+    }
+  ]
+}

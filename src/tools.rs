@@ -387,66 +387,23 @@ pub fn run_tool(
 }
 
 pub fn html_escape(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
+    zi_text_core::transforms::html_escape(input)
 }
 
 pub fn html_unescape(input: &str) -> String {
-    input
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
+    zi_text_core::transforms::html_unescape(input)
 }
 
 pub fn text_escape(input: &str) -> Result<String> {
-    Ok(serde_json::to_string(input)?)
+    zi_text_core::transforms::text_escape(input)
 }
 
 pub fn text_unescape(input: &str) -> Result<String> {
-    Ok(serde_json::from_str(input.trim())?)
+    zi_text_core::transforms::text_unescape(input)
 }
 
 pub fn case_convert(input: &str, mode: &str) -> String {
-    let words = input
-        .split(|ch: char| !ch.is_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .map(|word| word.to_lowercase())
-        .collect::<Vec<_>>();
-    match mode {
-        "camel" => words
-            .iter()
-            .enumerate()
-            .map(|(index, word)| {
-                if index == 0 {
-                    word.clone()
-                } else {
-                    let mut chars = word.chars();
-                    chars
-                        .next()
-                        .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
-                        .unwrap_or_default()
-                }
-            })
-            .collect(),
-        "pascal" => words
-            .iter()
-            .map(|word| {
-                let mut chars = word.chars();
-                chars
-                    .next()
-                    .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
-                    .unwrap_or_default()
-            })
-            .collect(),
-        "kebab" => words.join("-"),
-        _ => words.join("_"),
-    }
+    zi_text_core::transforms::case_convert(input, mode)
 }
 
 pub fn color_convert(input: &str) -> Result<String> {
@@ -491,21 +448,7 @@ pub fn color_convert(input: &str) -> Result<String> {
 }
 
 pub fn text_stats(input: &str) -> Result<String> {
-    if input.len() > 1024 * 1024 {
-        return Err(anyhow!("文本最多 1 MiB"));
-    }
-    let lines = if input.is_empty() {
-        0
-    } else {
-        input.lines().count() + usize::from(input.ends_with('\n'))
-    };
-    Ok(format!(
-        "UTF-8 字节  {}\nUnicode 字符  {}\n行数  {}\n空白分隔词段  {}",
-        input.len(),
-        input.chars().count(),
-        lines,
-        input.split_whitespace().count()
-    ))
+    zi_text_core::transforms::text_stats(input)
 }
 
 pub struct ToolState {
@@ -680,46 +623,7 @@ impl QrImage {
 }
 
 pub fn convert_number(input: &str, base: u32) -> Result<String> {
-    if ![2, 8, 10, 16].contains(&base) {
-        return Err(anyhow!("只支持 2、8、10、16 进制"));
-    }
-    let trimmed = input.trim().replace('_', "");
-    let (negative, digits) = if let Some(rest) = trimmed.strip_prefix('-') {
-        (true, rest)
-    } else {
-        (false, trimmed.strip_prefix('+').unwrap_or(&trimmed))
-    };
-    let digits = match base {
-        2 => digits
-            .strip_prefix("0b")
-            .or_else(|| digits.strip_prefix("0B")),
-        8 => digits
-            .strip_prefix("0o")
-            .or_else(|| digits.strip_prefix("0O")),
-        16 => digits
-            .strip_prefix("0x")
-            .or_else(|| digits.strip_prefix("0X")),
-        _ => None,
-    }
-    .unwrap_or(digits);
-    if digits.is_empty() {
-        return Err(anyhow!("请输入要转换的整数"));
-    }
-    let magnitude = u128::from_str_radix(digits, base).context("数字与所选进制不匹配或超出范围")?;
-    let value = if negative {
-        if magnitude == (i128::MAX as u128) + 1 {
-            i128::MIN
-        } else {
-            -i128::try_from(magnitude).context("数值超出有符号 128 位范围")?
-        }
-    } else {
-        i128::try_from(magnitude).context("数值超出有符号 128 位范围")?
-    };
-    let sign = if value < 0 { "-" } else { "" };
-    let absolute = value.unsigned_abs();
-    Ok(format!(
-        "十进制  {value}\n二进制  {sign}0b{absolute:b}\n八进制  {sign}0o{absolute:o}\n十六进制  {sign}0x{absolute:X}"
-    ))
+    zi_text_core::transforms::convert_number(input, base)
 }
 
 pub fn generate_qr(input: &str) -> Result<QrImage> {
@@ -770,13 +674,11 @@ pub fn base64_decode(input: &str) -> Result<String> {
 }
 
 pub fn url_encode(input: &str) -> String {
-    urlencoding::encode(input).into_owned()
+    zi_text_core::transforms::url_encode(input)
 }
 
 pub fn url_decode(input: &str) -> Result<String> {
-    Ok(urlencoding::decode(input)
-        .context("URL 编码无效")?
-        .into_owned())
+    zi_text_core::transforms::url_decode(input)
 }
 
 pub fn sha256(input: &str) -> String {

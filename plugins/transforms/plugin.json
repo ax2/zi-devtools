@@ -1,0 +1,902 @@
+{
+  "schemaVersion": 1,
+  "id": "com.zicode.devtools.transforms",
+  "name": "ZiDevTools Transforms",
+  "displayName": "ZiDevTools 文本转换",
+  "description": "Grouped bounded text transformations; no host resources, files or network.",
+  "version": "0.1.0",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "activationEvents": [
+    "onView:devtools.transforms.main",
+    "onCapability:devtools.transforms.url.encode",
+    "onCapability:devtools.transforms.url.decode",
+    "onCapability:devtools.transforms.html.escape",
+    "onCapability:devtools.transforms.html.unescape",
+    "onCapability:devtools.transforms.string.escape",
+    "onCapability:devtools.transforms.string.unescape",
+    "onCapability:devtools.transforms.case.camel",
+    "onCapability:devtools.transforms.case.pascal",
+    "onCapability:devtools.transforms.case.snake",
+    "onCapability:devtools.transforms.case.kebab",
+    "onCapability:devtools.transforms.stats.inspect",
+    "onCapability:devtools.transforms.lines.deduplicate",
+    "onCapability:devtools.transforms.lines.ascending",
+    "onCapability:devtools.transforms.lines.descending",
+    "onCapability:devtools.transforms.lines.nonempty",
+    "onCapability:devtools.transforms.lines.trim",
+    "onCapability:devtools.transforms.number.from2",
+    "onCapability:devtools.transforms.number.from8",
+    "onCapability:devtools.transforms.number.from10",
+    "onCapability:devtools.transforms.number.from16",
+    "onCapability:devtools.transforms.hex.encode",
+    "onCapability:devtools.transforms.hex.decode",
+    "onCapability:devtools.transforms.url.inspect"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm"
+  },
+  "contributes": {
+    "activities": [
+      {
+        "id": "devtools.transforms",
+        "title": "文本转换",
+        "order": 851
+      }
+    ],
+    "views": [
+      {
+        "id": "devtools.transforms.main",
+        "activity": "devtools.transforms",
+        "location": "main",
+        "title": "文本转换",
+        "entry": "views/main.html"
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "devtools.transforms.url.encode",
+        "title": "URL 编码",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.url.decode",
+        "title": "URL 解码",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.html.escape",
+        "title": "HTML 转义",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.html.unescape",
+        "title": "HTML 还原",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.string.escape",
+        "title": "JSON 字符串转义",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.string.unescape",
+        "title": "JSON 字符串还原",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.case.camel",
+        "title": "camelCase",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.case.pascal",
+        "title": "PascalCase",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.case.snake",
+        "title": "snake_case",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.case.kebab",
+        "title": "kebab-case",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.stats.inspect",
+        "title": "文本统计",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.lines.deduplicate",
+        "title": "去重",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.lines.ascending",
+        "title": "升序",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.lines.descending",
+        "title": "降序",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.lines.nonempty",
+        "title": "去空行",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.lines.trim",
+        "title": "去首尾空白",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.number.from2",
+        "title": "2 进制输入",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.number.from8",
+        "title": "8 进制输入",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.number.from10",
+        "title": "10 进制输入",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.number.from16",
+        "title": "16 进制输入",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.hex.encode",
+        "title": "UTF-8 → Hex",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.hex.decode",
+        "title": "Hex → UTF-8",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.transforms.url.inspect",
+        "title": "URL 拆解",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "piTools": [
+      {
+        "name": "devtools_transforms_url_encode",
+        "title": "URL 编码",
+        "description": "Run bounded local URL 编码 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.url.encode",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_url_decode",
+        "title": "URL 解码",
+        "description": "Run bounded local URL 解码 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.url.decode",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_html_escape",
+        "title": "HTML 转义",
+        "description": "Run bounded local HTML 转义 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.html.escape",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_html_unescape",
+        "title": "HTML 还原",
+        "description": "Run bounded local HTML 还原 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.html.unescape",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_string_escape",
+        "title": "JSON 字符串转义",
+        "description": "Run bounded local JSON 字符串转义 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.string.escape",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_string_unescape",
+        "title": "JSON 字符串还原",
+        "description": "Run bounded local JSON 字符串还原 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.string.unescape",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_case_camel",
+        "title": "camelCase",
+        "description": "Run bounded local camelCase on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.case.camel",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_case_pascal",
+        "title": "PascalCase",
+        "description": "Run bounded local PascalCase on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.case.pascal",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_case_snake",
+        "title": "snake_case",
+        "description": "Run bounded local snake_case on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.case.snake",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_case_kebab",
+        "title": "kebab-case",
+        "description": "Run bounded local kebab-case on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.case.kebab",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_stats_inspect",
+        "title": "文本统计",
+        "description": "Run bounded local 文本统计 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.stats.inspect",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_lines_deduplicate",
+        "title": "去重",
+        "description": "Run bounded local 去重 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.lines.deduplicate",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_lines_ascending",
+        "title": "升序",
+        "description": "Run bounded local 升序 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.lines.ascending",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_lines_descending",
+        "title": "降序",
+        "description": "Run bounded local 降序 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.lines.descending",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_lines_nonempty",
+        "title": "去空行",
+        "description": "Run bounded local 去空行 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.lines.nonempty",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_lines_trim",
+        "title": "去首尾空白",
+        "description": "Run bounded local 去首尾空白 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.lines.trim",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_number_from2",
+        "title": "2 进制输入",
+        "description": "Run bounded local 2 进制输入 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.number.from2",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_number_from8",
+        "title": "8 进制输入",
+        "description": "Run bounded local 8 进制输入 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.number.from8",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_number_from10",
+        "title": "10 进制输入",
+        "description": "Run bounded local 10 进制输入 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.number.from10",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_number_from16",
+        "title": "16 进制输入",
+        "description": "Run bounded local 16 进制输入 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.number.from16",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_hex_encode",
+        "title": "UTF-8 → Hex",
+        "description": "Run bounded local UTF-8 → Hex on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.hex.encode",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_hex_decode",
+        "title": "Hex → UTF-8",
+        "description": "Run bounded local Hex → UTF-8 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.hex.decode",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_transforms_url_inspect",
+        "title": "URL 拆解",
+        "description": "Run bounded local URL 拆解 on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
+        "capability": "devtools.transforms.url.inspect",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "name": "pi.tools.register",
+        "reason": "显式授权后允许当前场景的 AI 使用文本工具"
+      }
+    ]
+  }
+}

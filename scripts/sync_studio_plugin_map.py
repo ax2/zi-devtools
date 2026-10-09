@@ -33,6 +33,13 @@ pilot = {
     "base64": ["devtools.text.base64.encode", "devtools.text.base64.decode"],
     "sha256": ["devtools.text.sha256"],
 }
+transform_source = (ROOT / "crates/zi-text-core/src/transforms.rs").read_text(encoding="utf-8")
+transform_actions = {}
+for operation, source, title in re.findall(
+    r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"\s*,\s*title:\s*"([^"]+)"', transform_source):
+    transform_actions.setdefault(source, []).append((operation, title))
+assert sum(map(len, transform_actions.values())) == 23 and len(transform_actions) == 9
+candidate_ids = set(pilot) | set(report_scopes) | set(transform_actions)
 ids = {tool["id"] for tool in catalog["tools"]}
 assert compute <= ids
 rows = []
@@ -47,8 +54,8 @@ for tool in catalog["tools"]:
         category = "await_host"
         reason = "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
     rows.append(dict(sourceToolId=tool["id"], title=tool["name"], sourceVersion=tool["tool_version"],
-                     sourceStatus=tool["status"], migration=category, pluginStatus="candidate" if tool["id"] in pilot or tool["id"] in report_scopes else "not_delivered",
-                     candidateCapabilities=pilot.get(tool["id"], []) + (["devtools.diagnostics."+report_actions[tool["id"]]] if tool["id"] in report_scopes else []),
+                     sourceStatus=tool["status"], migration=category, pluginStatus="candidate" if tool["id"] in candidate_ids else "not_delivered",
+                     candidateCapabilities=pilot.get(tool["id"], []) + (["devtools.diagnostics."+report_actions[tool["id"]]] if tool["id"] in report_scopes else []) + ["devtools.transforms." + op for op, _ in transform_actions.get(tool["id"], [])],
                      pilotCapabilities=pilot.get(tool["id"], []),
                      operationScopes=([dict(operationId=report_actions[tool["id"]], scopeKind="completed_imported_report_subset", scope=report_scopes[tool["id"]],
                          sourceVersion=tool["tool_version"], pluginStatus="candidate",
@@ -56,7 +63,16 @@ for tool in catalog["tools"]:
                          runtimeVerification="native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
                          viewVerification="public_sdk_fixture_actual_wasi_11_actions_two_viewports",
                          blockingReason="unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收")]
-                         if tool["id"] in report_scopes else [dict(scopeKind="declared_standalone_scope",
+                         if tool["id"] in report_scopes else [dict(operationId=op, title=title,
+                             scopeKind="complete_transform_operation_within_plugin_budget", scope=tool["scope"],
+                             sourceVersion=tool["tool_version"], pluginStatus="candidate",
+                             core="zi-text-core/0.1.0", adapter="zi-text-wasi/0.1.0",
+                             packageId="com.zicode.devtools.transforms", packageVersion="0.1.0",
+                             limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
+                             runtimeVerification="174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+                             viewVerification="public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+                             blockingReason="unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收")
+                             for op, title in transform_actions[tool["id"]]] if tool["id"] in transform_actions else [dict(scopeKind="declared_standalone_scope",
                              scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
                              pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
                              blockingReason=reason)]), reason=reason))

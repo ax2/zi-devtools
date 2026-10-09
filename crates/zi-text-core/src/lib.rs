@@ -1,4 +1,6 @@
 //! Pure text algorithms and the bounded Studio compute contract. No host access.
+pub mod transforms;
+
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{
     Deserialize, Serialize,
@@ -108,18 +110,51 @@ pub fn execute_request(bytes: &[u8]) -> ResultEnvelope {
     let Ok(request) = serde_json::from_slice::<Request>(bytes) else {
         return ResultEnvelope::failure("INVALID_INPUT", "请求结构无效");
     };
-    if request.plugin_id != "com.zicode.devtools.text" || request.scene_id.is_empty() {
+    if !["com.zicode.devtools.text", "com.zicode.devtools.transforms"]
+        .contains(&request.plugin_id.as_str())
+        || request.scene_id.is_empty()
+        || (request.plugin_id == "com.zicode.devtools.transforms" && request.scene_id.len() > 128)
+    {
         return ResultEnvelope::failure("INVALID_INPUT", "插件或场景标识无效");
     }
     if request.input.text.len() > TEXT_LIMIT {
         return ResultEnvelope::failure("INPUT_TOO_LARGE", "文本超过 8192 UTF-8 字节");
     }
     match (&request.capability_id.0, &request.command_id.0) {
-        (Some(cap), None) if !cap.is_empty() => execute(cap, &request.input.text),
+        (Some(cap), None) if !cap.is_empty() => {
+            if request.plugin_id == "com.zicode.devtools.transforms" {
+                execute_transforms(cap, &request.input.text)
+            } else {
+                execute(cap, &request.input.text)
+            }
+        }
         (None, Some(command)) if !command.is_empty() => {
             ResultEnvelope::failure("UNSUPPORTED_OPERATION", "未注册后台命令")
         }
         _ => ResultEnvelope::failure("INVALID_INPUT", "必须指定唯一处理器"),
+    }
+}
+
+pub fn execute_transforms(capability: &str, input: &str) -> ResultEnvelope {
+    if input.len() > TEXT_LIMIT {
+        return ResultEnvelope::failure("INPUT_TOO_LARGE", "文本超过 8192 UTF-8 字节");
+    }
+    let Some(id) = capability.strip_prefix("devtools.transforms.") else {
+        return ResultEnvelope::failure("UNSUPPORTED_OPERATION", "未注册该工具能力");
+    };
+    if !transforms::ACTIONS.iter().any(|a| a.id == id) {
+        return ResultEnvelope::failure("UNSUPPORTED_OPERATION", "未注册该工具能力");
+    }
+    match transforms::run(id, input) {
+        Ok(text) => ResultEnvelope::success(text),
+        Err(_) => ResultEnvelope::failure(
+            if ["hex.decode", "url.decode"].contains(&id) {
+                "INVALID_ENCODING"
+            } else {
+                "INVALID_INPUT"
+            },
+            "输入无法按该操作处理",
+        ),
     }
 }
 
@@ -354,6 +389,56 @@ mod tests {
         assert!(output.len() < REQUEST_LIMIT);
         assert_eq!(
             serde_json::from_slice::<Value>(&output).unwrap()["error"]["code"],
+            "INPUT_TOO_LARGE"
+        );
+    }
+}
+
+#[cfg(test)]
+mod transform_contract_tests {
+    use super::*;
+    fn request(plugin: &str, cap: &str, text: &str) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({"pluginId":plugin,"sceneId":"coding","capabilityId":cap,"commandId":null,"input":{"text":text}})).unwrap()
+    }
+    #[test]
+    fn package_namespaces_cannot_invoke_each_others_capabilities() {
+        assert_eq!(
+            execute_request(&request(
+                "com.zicode.devtools.transforms",
+                "devtools.text.sha256",
+                "abc"
+            ))
+            .error
+            .unwrap()
+            .code,
+            "UNSUPPORTED_OPERATION"
+        );
+        assert_eq!(
+            execute_request(&request(
+                "com.zicode.devtools.text",
+                "devtools.transforms.url.encode",
+                "abc"
+            ))
+            .error
+            .unwrap()
+            .code,
+            "UNSUPPORTED_OPERATION"
+        );
+    }
+    #[test]
+    fn expansion_stays_inside_frozen_error_enums() {
+        let output = serialize_result(&execute_transforms(
+            "devtools.transforms.html.escape",
+            &"\"".repeat(8192),
+        ));
+        let result: Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(result["error"]["code"], "INPUT_TOO_LARGE");
+        assert!(output.len() <= REQUEST_LIMIT);
+        assert_eq!(
+            execute_transforms("devtools.transforms.hex.encode", &"a".repeat(8193))
+                .error
+                .unwrap()
+                .code,
             "INPUT_TOO_LARGE"
         );
     }

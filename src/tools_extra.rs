@@ -1,6 +1,5 @@
 use anyhow::{Result, anyhow, bail};
-use serde_json::json;
-use std::{collections::HashSet, net::Ipv4Addr};
+use std::net::Ipv4Addr;
 
 pub const TEXT_LIMIT: usize = 1024 * 1024;
 
@@ -24,58 +23,19 @@ pub fn json_to_yaml(input: &str) -> Result<String> {
 }
 
 pub fn hex_encode(input: &str) -> Result<String> {
-    bounded(input)?;
-    Ok(input
-        .as_bytes()
-        .iter()
-        .map(|v| format!("{v:02X}"))
-        .collect::<Vec<_>>()
-        .join(" "))
+    zi_text_core::transforms::hex_encode(input)
 }
 
 pub fn hex_decode(input: &str) -> Result<String> {
-    bounded(input)?;
-    let value: String = input.chars().filter(|c| !c.is_ascii_whitespace()).collect();
-    if !value.is_ascii() || !value.bytes().all(|c| c.is_ascii_hexdigit()) || value.len() % 2 != 0 {
-        bail!("请输入成对的十六进制字符，可用空格或换行分隔，例如 E4 BD A0");
-    }
-    let bytes = (0..value.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&value[i..i + 2], 16))
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    String::from_utf8(bytes)
-        .map_err(|_| anyhow!("字节不是有效的 UTF-8 文本；不会替换或丢弃无效字节"))
+    zi_text_core::transforms::hex_decode(input)
 }
 
 pub fn process_lines(input: &str, action: &str) -> Result<String> {
-    bounded(input)?;
-    let mut lines = input.lines().map(str::to_owned).collect::<Vec<_>>();
-    match action {
-        "去重" => {
-            let mut seen = HashSet::new();
-            lines.retain(|line| seen.insert(line.clone()));
-        }
-        "升序" => lines.sort(),
-        "降序" => lines.sort_by(|a, b| b.cmp(a)),
-        "去空行" => lines.retain(|line| !line.trim().is_empty()),
-        "去首尾空白" => lines
-            .iter_mut()
-            .for_each(|line| *line = line.trim().to_owned()),
-        _ => bail!("未知行处理操作"),
-    }
-    Ok(lines.join("\n"))
+    zi_text_core::transforms::process_lines(input, action)
 }
 
 pub fn inspect_url(input: &str) -> Result<String> {
-    bounded(input)?;
-    let url = reqwest::Url::parse(input.trim())
-        .map_err(|e| anyhow!("URL 无效：{e}；请包含 https:// 等协议"))?;
-    Ok(serde_json::to_string_pretty(&json!({
-        "scheme":url.scheme(),"host":url.host_str(),"port":url.port_or_known_default(),
-        "path":url.path(),"fragment":url.fragment(),
-        "credentials_present": !url.username().is_empty() || url.password().is_some(),
-        "query":url.query_pairs().map(|(k,v)| json!({"key":k,"value":v})).collect::<Vec<_>>()
-    }))?)
+    zi_text_core::transforms::inspect_url(input)
 }
 
 pub fn inspect_cidr(input: &str) -> Result<String> {

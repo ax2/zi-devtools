@@ -69,17 +69,50 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.url.encode",
+        "devtools.transforms.url.decode"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "url.encode",
+          "title": "URL 编码",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "URL 参数百分号编码与还原",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "url.decode",
+          "title": "URL 解码",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "URL 参数百分号编码与还原",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -199,17 +232,90 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.number.from2",
+        "devtools.transforms.number.from8",
+        "devtools.transforms.number.from10",
+        "devtools.transforms.number.from16"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "number.from2",
+          "title": "2 进制输入",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "二、八、十、十六进制互转",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "number.from8",
+          "title": "8 进制输入",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "number.from10",
+          "title": "10 进制输入",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "number.from16",
+          "title": "16 进制输入",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -325,17 +431,30 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.stats.inspect"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "stats.inspect",
+          "title": "文本统计",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "字符、字节、行数与词段统计",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -346,17 +465,50 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.html.escape",
+        "devtools.transforms.html.unescape"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "html.escape",
+          "title": "HTML 转义",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "HTML 特殊字符转义与还原",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "html.unescape",
+          "title": "HTML 还原",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "HTML 特殊字符转义与还原",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -367,17 +519,50 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.string.escape",
+        "devtools.transforms.string.unescape"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "string.escape",
+          "title": "JSON 字符串转义",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "JSON 字符串转义与还原",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "string.unescape",
+          "title": "JSON 字符串还原",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "JSON 字符串转义与还原",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -388,17 +573,90 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.case.camel",
+        "devtools.transforms.case.pascal",
+        "devtools.transforms.case.snake",
+        "devtools.transforms.case.kebab"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "case.camel",
+          "title": "camelCase",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "camel、Pascal、snake 与 kebab 命名",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "case.pascal",
+          "title": "PascalCase",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "case.snake",
+          "title": "snake_case",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "case.kebab",
+          "title": "kebab-case",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -430,17 +688,50 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.hex.encode",
+        "devtools.transforms.hex.decode"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "hex.encode",
+          "title": "UTF-8 → Hex",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "UTF-8 文本与十六进制字节互转",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "hex.decode",
+          "title": "Hex → UTF-8",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "UTF-8 文本与十六进制字节互转",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -451,17 +742,110 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.lines.deduplicate",
+        "devtools.transforms.lines.ascending",
+        "devtools.transforms.lines.descending",
+        "devtools.transforms.lines.nonempty",
+        "devtools.transforms.lines.trim"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "lines.deduplicate",
+          "title": "去重",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "稳定去重、排序、去空行与空白处理",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.ascending",
+          "title": "升序",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.descending",
+          "title": "降序",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.nonempty",
+          "title": "去空行",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.trim",
+          "title": "去首尾空白",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -472,17 +856,30 @@
       "sourceVersion": "1.0.2",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.url.inspect"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "url.inspect",
+          "title": "URL 拆解",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
           "scope": "解析协议、主机、路径和重复查询参数",
-          "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
-          "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "pluginStatus": "candidate",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-text-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
+          "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"

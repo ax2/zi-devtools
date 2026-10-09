@@ -386,3 +386,5 @@ Stage 21 新增：结果互传已接入文本工具、数据导出、HTTP 完整
 诊断插件0.1.1候选：11项导入报告共享算法，独立Wasmtime燃料与字节边界验证；候选及完整迁移状态见plugins/diagnostics/README.md与docs/studio-plugin-migration.json，不代表Studio Host验收。
 
 诊断插件0.1.2使用独立plugin全链接构建，降低模块冷编译体积；保留candidate02及原始边界fixtures。独立官方Wasmtime36.0.2测量不替代Studio完整Windows进程启动、Host/Pi/profile验收。
+
+2026-10-09 本地开发保持 `0.82.0-dev.105`：新增[文本转换分组插件候选](plugins/transforms/README.md)，9 个工具的 23 个既有操作共用 Rust 核心，并提供单入口分类、搜索、各操作草稿保留和结果复用。174 个独立预期用例通过真实 native/WASI 一致性及独立 Wasmtime 36.0.2 预算验证；原有文本插件 36 个用例保持一致。完整工作区测试 818 项通过、0 失败、34 跳过；页面验证使用注入公共 SDK 的真实 WASI fixture，不代表生产 Studio Host/Pi/安装生命周期验收。[逐工具迁移状态](docs/studio-plugin-migration.json)仍保留全部 154 项和未完成范围，没有把候选标为已接入。
