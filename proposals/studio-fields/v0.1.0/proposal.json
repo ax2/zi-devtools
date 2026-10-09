@@ -82,7 +82,7 @@
     {
       "id": "devtools.compare.json.diff.ordered",
       "sourceToolId": "json-diff",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "title": "JSON 差异（按下标）",
       "inputSchema": {
         "type": "object",
@@ -114,7 +114,7 @@
     {
       "id": "devtools.compare.json.diff.unordered",
       "sourceToolId": "json-diff",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "title": "JSON 差异（忽略数组顺序）",
       "inputSchema": {
         "type": "object",

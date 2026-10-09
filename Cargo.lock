@@ -5621,6 +5621,7 @@ dependencies = [
  "zi-character-core",
  "zi-diagnostics-core",
  "zi-inspect-core",
+ "zi-json-core",
  "zi-text-core",
  "zi-trace-core",
  "zip",
@@ -5665,6 +5666,14 @@ dependencies = [
  "serde_json",
  "zi-inspect-core",
  "zi-text-core",
+]
+
+[[package]]
+name = "zi-json-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
 ]
 
 [[package]]

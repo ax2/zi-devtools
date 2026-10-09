@@ -1115,7 +1115,7 @@
     {
       "sourceToolId": "json-path",
       "title": "JSON 路径查询",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -1126,9 +1126,12 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "JSONPath 子集：字段、数组索引、通配符与 JSON 结果导出；不含过滤器、递归和切片",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.2",
+          "sourceVersion": "1.0.3",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "blockingReason": "完整共享核心开发验证中；需具名多字段协议及实际WASI/Host验收，不把库编译当作插件交付。",
+          "core": "zi-json-core/0.1.0",
+          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter",
+          "design": "docs/json-plugin-design.md"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -1136,7 +1139,7 @@
     {
       "sourceToolId": "json-diff",
       "title": "结构化 JSON 对比",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -1147,9 +1150,12 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "结构化 JSON 差异与 JSON Pointer 路径；数组按索引或无序多重集比较；不含忽略路径",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.2",
+          "sourceVersion": "1.0.3",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "blockingReason": "完整共享核心开发验证中；需具名多字段协议及实际WASI/Host验收，不把库编译当作插件交付。",
+          "core": "zi-json-core/0.1.0",
+          "coreStatus": "standalone_shared_core_under_verification_no_wasi_adapter",
+          "design": "docs/json-plugin-design.md"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"

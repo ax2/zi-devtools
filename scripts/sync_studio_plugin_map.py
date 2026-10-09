@@ -112,6 +112,13 @@ for operation, source_id, title in trace_actions:
         viewVerification="public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
         blockingReason="unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收")]
 for row in rows:
+    if row["sourceToolId"] in {"json-path", "json-diff"}:
+        assert row["pluginStatus"] == "not_delivered"
+        for scope in row["operationScopes"]:
+            scope["core"] = "zi-json-core/0.1.0"
+            scope["coreStatus"] = "standalone_shared_core_under_verification_no_wasi_adapter"
+            scope["design"] = "docs/json-plugin-design.md"
+            scope["blockingReason"] = "完整共享核心开发验证中；需具名多字段协议及实际WASI/Host验收，不把库编译当作插件交付。"
     if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
         assert row["pluginStatus"] == "not_delivered"
         row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"

@@ -33,6 +33,15 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: JSON core native64 and WASI32 portability (fixed fixture only)
+        shell: pwsh
+        run: |
+          cargo build -p zi-json-core --example portability --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p zi-json-core --example portability --profile plugin --target wasm32-wasip1 --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_json_core_portability.py --output "$env:RUNNER_TEMP/json-core-portability.json"
+          exit $LASTEXITCODE
       - name: Real native and WASI text contract parity
         shell: pwsh
         run: |

@@ -25,6 +25,8 @@ assert schema['properties']['contractVersion']['const'] == proposal['contractVer
 assert schema['properties']['pluginId']['const'] == proposal['packageId']
 operations = {op['id']: op for op in proposal['operations']}
 assert len(operations) == 4
+catalog_versions = {tool['id']: tool['tool_version'] for tool in load(ROOT / 'docs/tools.json')['tools']}
+assert all(op['sourceVersion'] == catalog_versions[op['sourceToolId']] for op in operations.values()), 'Proposal source tool versions are stale'
 for branch in schema['oneOf']:
     op = operations[branch['properties']['capabilityId']['const']]
     assert branch['properties']['input'] == op['inputSchema']
