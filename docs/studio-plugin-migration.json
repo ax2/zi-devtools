@@ -2965,7 +2965,7 @@
     {
       "sourceToolId": "java-trace",
       "title": "Java 异常链",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -2973,12 +2973,23 @@
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "java.trace",
+          "title": "Java 异常链",
+          "scopeKind": "complete_trace_operation_in_development",
           "scope": "离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧",
-          "sourceStatus": "implemented",
-          "sourceVersion": "1.0.2",
+          "sourceVersion": "1.0.3",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "core": "zi-trace-core/0.1.0",
+          "adapter": "zi-trace-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.trace",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "development_checkpoints_see_plugins_trace_README",
+          "viewVerification": "public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
+          "blockingReason": "开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
@@ -2986,7 +2997,7 @@
     {
       "sourceToolId": "django-trace",
       "title": "Django / Python 堆栈",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "not_delivered",
@@ -2994,12 +3005,23 @@
       "pilotCapabilities": [],
       "operationScopes": [
         {
-          "scopeKind": "declared_standalone_scope",
+          "operationId": "django.trace",
+          "title": "Django / Python 堆栈",
+          "scopeKind": "complete_trace_operation_in_development",
           "scope": "离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目",
-          "sourceStatus": "implemented",
-          "sourceVersion": "1.0.2",
+          "sourceVersion": "1.0.3",
           "pluginStatus": "not_delivered",
-          "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+          "core": "zi-trace-core/0.1.0",
+          "adapter": "zi-trace-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.trace",
+          "packageVersion": "0.1.0",
+          "limits": {
+            "inputUtf8Bytes": 8192,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "development_checkpoints_see_plugins_trace_README",
+          "viewVerification": "public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
+          "blockingReason": "开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"

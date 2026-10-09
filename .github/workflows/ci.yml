@@ -28,6 +28,7 @@ jobs:
       - run: python scripts/sync_diagnostics_plugin.py --check
       - run: python scripts/sync_transforms_plugin.py --check
       - run: python scripts/sync_inspect_plugin.py --check
+      - run: python scripts/sync_trace_plugin.py --check
       - run: python -m unittest discover -s scripts/tests -p test_plugin_proof.py
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
@@ -59,6 +60,17 @@ jobs:
           python scripts/verify_transforms_wasi.py --plugin inspect --wasm target/wasm32-wasip1/plugin/zi-inspect-wasi.wasm --native target/debug/zi-inspect-wasi.exe --output-dir "$env:RUNNER_TEMP/inspect-parity"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/verify_transforms_schema.py --plugin inspect --fixtures "$env:RUNNER_TEMP/inspect-parity" --output "$env:RUNNER_TEMP/inspect-schema-proof.json"
+          exit $LASTEXITCODE
+      - name: Real native and WASI complete trace parity
+        shell: pwsh
+        run: |
+          cargo build -p zi-trace-wasi --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p zi-trace-wasi --locked --profile plugin --target wasm32-wasip1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_transforms_wasi.py --plugin trace --wasm target/wasm32-wasip1/plugin/zi-trace-wasi.wasm --native target/debug/zi-trace-wasi.exe --output-dir "$env:RUNNER_TEMP/trace-parity"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_transforms_schema.py --plugin trace --fixtures "$env:RUNNER_TEMP/trace-parity" --output "$env:RUNNER_TEMP/trace-schema-proof.json"
           exit $LASTEXITCODE
       - name: Real native and WASI diagnostics proposal parity
         shell: pwsh

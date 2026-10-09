@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "com.zicode.devtools.trace",
+  "name": "ZiDevTools Trace",
+  "displayName": "ZiDevTools 堆栈分析",
+  "description": "Pasted Java and Python trace analysis; development build, not Host acceptance.",
+  "version": "0.1.0",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "activationEvents": [
+    "onView:devtools.trace.main",
+    "onCapability:devtools.trace.java.trace",
+    "onCapability:devtools.trace.django.trace"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm"
+  },
+  "contributes": {
+    "activities": [
+      {
+        "id": "devtools.trace",
+        "title": "堆栈分析",
+        "order": 853
+      }
+    ],
+    "views": [
+      {
+        "id": "devtools.trace.main",
+        "activity": "devtools.trace",
+        "location": "main",
+        "title": "堆栈分析",
+        "entry": "views/main.html"
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "devtools.trace.java.trace",
+        "title": "Java 异常链",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "devtools.trace.django.trace",
+        "title": "Django / Python 堆栈",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "piTools": [
+      {
+        "name": "devtools_trace_java_trace",
+        "title": "Java 异常链",
+        "description": "Analyze pasted trace locally, at most 8192 UTF-8 bytes. Paths remain text; no file/process/network access. Clues are not confirmed causes.",
+        "capabilityId": "devtools.trace.java.trace",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "devtools_trace_django_trace",
+        "title": "Django / Python 堆栈",
+        "description": "Analyze pasted trace locally, at most 8192 UTF-8 bytes. Paths remain text; no file/process/network access. Clues are not confirmed causes.",
+        "capabilityId": "devtools.trace.django.trace",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "name": "pi.tools.register",
+        "reason": "显式授权后允许当前场景的 AI 使用文本工具"
+      }
+    ]
+  }
+}

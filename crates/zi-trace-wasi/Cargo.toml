@@ -1,0 +1,10 @@
+[package]
+name = "zi-trace-wasi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+zi-trace-core = { path = "../zi-trace-core" }
+zi-text-core = { path = "../zi-text-core" }

@@ -5613,6 +5613,7 @@ dependencies = [
  "zi-diagnostics-core",
  "zi-inspect-core",
  "zi-text-core",
+ "zi-trace-core",
  "zip",
 ]
 
@@ -5675,6 +5676,25 @@ name = "zi-text-wasi"
 version = "0.1.0"
 dependencies = [
  "zi-text-core",
+]
+
+[[package]]
+name = "zi-trace-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "regex",
+ "regex-syntax",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-trace-wasi"
+version = "0.1.0"
+dependencies = [
+ "zi-text-core",
+ "zi-trace-core",
 ]
 
 [[package]]

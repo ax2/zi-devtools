@@ -1,0 +1,29 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.trace",
+  "packageVersion": "0.1.0",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "java-trace",
+      "toolId": "devtools.trace.java.trace",
+      "capabilityId": "devtools.trace.java.trace",
+      "version": "1.0.3",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "Java 异常链"
+    },
+    {
+      "sourceToolId": "django-trace",
+      "toolId": "devtools.trace.django.trace",
+      "capabilityId": "devtools.trace.django.trace",
+      "version": "1.0.3",
+      "status": "candidate",
+      "profile": "compute.wasi.v1",
+      "title": "Django / Python 堆栈"
+    }
+  ]
+}

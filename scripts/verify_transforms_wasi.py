@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--wasm', type=Path, required=True)
 parser.add_argument('--native', type=Path, required=True)
 parser.add_argument('--output-dir', type=Path, required=True)
-parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
+parser.add_argument('--plugin', choices=['transforms', 'inspect', 'trace'], default='transforms')
 args = parser.parse_args()
 module = args.wasm.read_bytes()
 assert module[:8] == b'\0asm\x01\0\0\0' and len(module) <= 2 * 1024 * 1024

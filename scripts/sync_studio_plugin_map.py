@@ -91,6 +91,21 @@ for tool in catalog["tools"]:
                              scope=tool["scope"], sourceStatus=tool["status"], sourceVersion=tool["tool_version"],
                              pluginStatus="candidate" if tool["id"] in pilot else "not_delivered",
                              blockingReason=reason)]), reason=reason))
+trace_source = (ROOT / "crates/zi-trace-core/src/lib.rs").read_text(encoding="utf-8")
+trace_actions = re.findall(r'Action\s*\{\s*id:\s*"([^"]+)"\s*,\s*source_tool_id:\s*"([^"]+)"\s*,\s*title:\s*"([^"]+)"', trace_source)
+assert len(trace_actions) == 2
+for operation, source_id, title in trace_actions:
+    row = next(row for row in rows if row["sourceToolId"] == source_id)
+    assert row["pluginStatus"] == "not_delivered"
+    row["operationScopes"] = [dict(operationId=operation, title=title,
+        scopeKind="complete_trace_operation_in_development", scope=next(t["scope"] for t in catalog["tools"] if t["id"] == source_id),
+        sourceVersion=row["sourceVersion"], pluginStatus="not_delivered",
+        core="zi-trace-core/0.1.0", adapter="zi-trace-wasi/0.1.0",
+        packageId="com.zicode.devtools.trace", packageVersion="0.1.0",
+        limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
+        runtimeVerification="development_checkpoints_see_plugins_trace_README",
+        viewVerification="public_sdk_fixture_actual_wasi_development_checkpoint_not_Host_acceptance",
+        blockingReason="开发中，尚未冻结或交付；最终模块预算/完整冷启动及Host安装权限生命周期Pi待验证")]
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

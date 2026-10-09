@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--fixtures', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--plugin', choices=['transforms', 'inspect'], default='transforms')
+parser.add_argument('--plugin', choices=['transforms', 'inspect', 'trace'], default='transforms')
 args = parser.parse_args()
 snapshot = ROOT / 'contracts/studio-devtools/v1'
 plugin = ROOT / 'plugins' / args.plugin
