@@ -1,5 +1,23 @@
 # Studio 插件提供方交接
 
+## 当前增量：2026-10-09 文本转换分组候选
+
+提供方算法源码 `66a83bf797a87e13532f49b0d61e4569dbcf28a6`，请求 schema 绑定修订 `255c967f0d45892bcd1f509f10fe3d19798907ab`。本地桌面版保持 `0.82.0-dev.105`，不因每轮开发递增版本或创建正式 Release。新增 `com.zicode.devtools.transforms/0.1.0`，与原文本和诊断候选并存，不覆盖旧目录。
+
+- 候选目录：`E:\zi-devtools\release\transforms-0.1.0-candidate-02`，798 件文件、3,920,494 字节；外部同名 `-verification.json`。无签名目录，`packageSha256=null`，不是安装容器。
+- 模块：549,303 字节，SHA-256 `de8c6e2429c0abd282c4e339951e8fcece4c7ddb5e393983a9de7f3bb66f15bb`；目录索引 SHA-256 `53474d18d37accfc9a5747979bb737ec023a9da34b6bf8644c3bbfb8d21c6de4`。
+- 9 个独立版工具的 23 个全部既有转换操作，在输入/输出预算内迁移：URL、HTML、JSON 字符串、命名转换、统计、行处理、四进制、Hex、URL 拆解。逐操作范围与语义见 [候选说明](../plugins/transforms/README.md)，不能将此覆盖推广到整个 154 项目录。
+- candidate01 的随包请求 schema 遗留旧试点插件 ID，已记录为被替代候选并保留原目录。candidate02 的请求 schema 只特化 `pluginId.const`，原冻结快照保持原摘要。真实 Draft202012Validator 验证 23 项目录、174 个结果和 67 个成功请求/输入通过；所有 798 文件摘要/大小核对一致。模块与 View 字节和 candidate01 完全相同，原始算法/界面测试仍对应同一摘要；无需因本次元数据修订重复冷编译模块。
+- 注册表生成清单、catalog、View 和 23 个 Pi 声明；`sync_transforms_plugin.py --check` 校验同步。使用一个活动入口，按组搜索，保留各操作草稿/结果、标记旧结果、忽略迟到响应，支持显式结果复用。
+- 174 个独立预期向量通过真实 native/Node-WASI 逐字节一致；旧文本插件 36 个用例保持一致。174 项独立官方 C-API Wasmtime 36.0.2 预算全部通过，最大 fuel 8,966,602、执行 4 ms、内存 2,621,440 字节。174 项全新独立进程冷启动全部通过，最慢 3,704.001 ms，剩余验证进程为 0。无预算扩张。
+- View 使用公共 SDK 注入和实际模块完成 23 操作、1180 浅色/390 深色、搜索、超限、错误/旧结果保留、清空、复用、选中复制、光标保持和离线验证；4 张渲染截图已检查。这不是实际 Studio 桥接、权限、场景、Pi 或安装生命周期验收。
+- 外层及错误枚举保持冻结 rc.1；`input.text` 最多 8192 UTF-8 字节，完整请求/序列化结果最多 48 KiB。模块 ≤2 MiB、10M fuel/5秒/64MiB/2MiB stack。场景 ID 在新候选中限定 1–128 字节；原文本包行为不变。
+- `fixtures/parity/`、`fixtures/budget/` 含逐条原始请求、预期结果和 SHA-256。独立预算重放使用附带 `verification/verify_diagnostics_fuel.py --text-results`（该开关保持完整字节比较，只跳过诊断报告 JSON 的二次解析），并绑定模块和官方引擎摘要；冷启动可用附带 `verify_diagnostics_cold.py`。独立验证工具不是产品运行依赖。
+- 独立桌面验证：完整 28 组工作区测试 818 通过、0 失败、34 原有跳过；fmt 和全特性严格 clippy 通过；复用原 release 目标目录优化构建 10m54s。新 `target/release/ZiDevTools.exe` 的隔离服务启停通过、健康响应正确、退出码0且端口释放。没有新增阶段完整运行目录、安装包、ZIP、tag 或正式 Release；本轮没有把 SDK fixture 当作原生 GUI 验收。
+- 当前 [完整映射](studio-plugin-migration.json)包含 154 工具：41 纯计算候选、50 等 Host 接口、63 独立版未完成；重叠整合仍为 0，`acceptedCapabilities=0`。9 工具各操作已记为提供方 candidate；生产 Worker 冷启动/管道隔离、安装/更新/回滚/撤权/卸载和 Pi 授权需接收方实际验证。
+
+后续优先继续 YAML/JSON、IPv4 CIDR、JWT 检视、Unicode 的既有纯计算操作；双输入 JSON/文本差异、查询参数及数据工作台需要逐操作列出参数与完整范围后确定有界协议。图片/文件/桌面/服务能力保持明确 Host 接口需求，不以独立 EXE、共享数据库或本地 HTTP 绕过。以下为历史记录，数量和状态以本节及生成映射为准。
+
 2026-10-07：接收到 Studio 会话的插件交付契约和优先接续要求。流程结果检查器检查点已完成；本轮已推进五项文本能力实际候选与完整目录迁移映射。
 
 契约：`zicode.devtools-plugin/1.0.0-rc.1`。已一次性复制并逐项核对10件文件，连同索引共11件，位于 `contracts/studio-devtools/v1/`。索引SHA-256：`dd0688c009fa2d0600ab2d5af038a19efb5e1e26910619c1aede84aa668873f9`。此后构建/CI只使用本仓库快照，不读取Studio仓库，不引入跨仓path依赖、EXE启动或共享可变用户数据库。
