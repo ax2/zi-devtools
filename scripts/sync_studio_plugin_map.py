@@ -114,13 +114,13 @@ for operation, source_id, title in trace_actions:
 for row in rows:
     if row["sourceToolId"] == "diff":
         assert row["pluginStatus"] == "not_delivered"
-        row["reason"] = "完整文本差异核心及显式时钟协议实验适配已实现，246项功能/字段/时钟检查通过；原240例预算239通过/1合法大输入耗尽燃料，冷启动、View与Host协商待验收，插件未交付。"
+        row["reason"] = "完整文本差异核心与显式时钟协议实验适配已实现；248项功能/字段/时钟检查及243例原预算回放通过，保留完整输入范围；独立冷启动、View与Host协商待验收，插件未交付。"
         for scope in row["operationScopes"]:
             scope["core"] = "zi-diff-core/0.1.0"
             scope["coreStatus"] = "native_core_verified_node_wasi_clock_and_full_input_limits_diagnostic_pass_Host_unnegotiated"
             scope["experimentalAdapter"] = "zi-compare-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.3_not_Host_negotiated"
-            scope["adapterVerification"] = "246_unique_functional_schema_clock_controls_pass_240_budget_239_pass_1_fuel_fail_full_range_unproven"
+            scope["adapterVerification"] = "248_unique_functional_schema_clock_controls_pass_243_original_budget_pass_cold_View_Host_unproven"
             scope["proposal"] = "proposals/studio-fields/v0.1.2/README.md"
             scope["design"] = "docs/text-diff-plugin-design.md"
             scope["blockingReason"] = row["reason"]

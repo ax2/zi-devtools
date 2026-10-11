@@ -59,4 +59,13 @@ report += ''.join('-' + line + '\n' for line in left.split('\n')[:-1])
 report += ''.join('+' + line + '\n' for line in right.split('\n')[:-1])
 assert len(success(report)) <= 49152
 cases.append(('text-near-final-envelope-budget', request(left, right), success(report)))
+for count, expected in [
+    (1530, failure('INPUT_TOO_LARGE', '结果超过 48 KiB')),
+    (1531, failure('INPUT_TOO_LARGE', '请求超过 48 KiB')),
+]:
+    left = ''.join(chr(128 + i) + '\x01\x02\n' for i in range(count))
+    right = ''.join(chr(128 + i) + '\x03\x04\n' for i in range(count))
+    body = request(left, right)
+    assert (len(body) <= 49152) == (count == 1530)
+    cases.append((f'text-escaped-request-edge-{count}', body, expected))
 assert len({case[0] for case in cases}) == len(cases), 'Duplicate functional case ID'

@@ -1,7 +1,28 @@
 use super::*;
 
+#[test]
+fn escaped_report_budget_matches_actual_json_serializer() {
+    let controls: String = (0..=127).map(char::from).collect();
+    for (before, after) in [
+        ("".to_owned(), controls.clone()),
+        (controls, "中🙂\u{2028}\u{2029}\\\"/\n".to_owned()),
+        ("same".to_owned(), "same".to_owned()),
+    ] {
+        let expected = legacy(&before, &after).unwrap();
+        let escaped = serde_json::to_vec(&expected).unwrap().len() - 2;
+        assert_eq!(
+            compare_text_budgets_observed(&before, &after, None, Some(escaped), |_| {}).unwrap(),
+            expected
+        );
+        assert_eq!(
+            compare_text_budgets_observed(&before, &after, None, Some(escaped - 1), |_| {}),
+            Err(CompareError::ReportTooLarge)
+        );
+    }
+}
+
 // The original desktop implementation is retained independently as the oracle.
-fn legacy(before: &str, after: &str) -> Result<String, CompareError> {
+pub(super) fn legacy(before: &str, after: &str) -> Result<String, CompareError> {
     if before.len() > 128 * 1024
         || after.len() > 128 * 1024
         || before.lines().count() > 5_000

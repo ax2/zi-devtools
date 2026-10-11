@@ -8,3 +8,6 @@ rust-version = "1.88"
 [dependencies]
 # Keep std enabled: the existing comparison deadline requires Instant.
 similar = "3.2.0"
+
+[dev-dependencies]
+serde_json = "1.0"

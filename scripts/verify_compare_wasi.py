@@ -14,6 +14,14 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--native', type=Path, default=ROOT / 'target/debug/zi-compare-wasi.exe')
 parser.add_argument('--wasm', type=Path, default=ROOT / 'target/wasm32-wasip1/plugin/zi-compare-wasi.wasm')
 args = parser.parse_args()
+imports = json.loads(subprocess.run(
+    ['node', '-e', "const fs=require('node:fs');"
+     "const m=new WebAssembly.Module(fs.readFileSync(process.argv[1]));"
+     "console.log(JSON.stringify(WebAssembly.Module.imports(m)));", str(args.wasm)],
+    capture_output=True, check=True, timeout=20).stdout)
+assert imports and all(item['module'] == 'wasi_snapshot_preview1' for item in imports), \
+    'Production module must not import diagnostic observers or custom Host APIs'
+assert any(item['name'] == 'clock_time_get' for item in imports), 'Monotonic clock import missing'
 validator = Draft202012Validator(json.loads(
     (ROOT / 'proposals/studio-fields/v0.1.2/result.schema.json').read_text(encoding='utf-8')))
 
@@ -61,6 +69,7 @@ for name in ['query', 'ordered', 'unordered', next(case[0] for case in cases if 
     proof_rows.append(dict(id=name + '-without-clock', wasi=denied, passed=denied['passed']))
 
 proof = dict(diagnosticOnly=True, rows=proof_rows, failures=[r['id'] for r in proof_rows if not r['passed']],
+             productionImports=imports,
              wasmBytes=args.wasm.stat().st_size,
              wasmSha256=hashlib.sha256(args.wasm.read_bytes()).hexdigest(),
              nativeSha256=hashlib.sha256(args.native.read_bytes()).hexdigest(),

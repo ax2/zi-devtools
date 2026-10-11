@@ -50,7 +50,7 @@
     {
       "id": "devtools.compare.text.diff",
       "sourceToolId": "diff",
-      "sourceVersion": "1.0.1",
+      "sourceVersion": "1.0.2",
       "title": "文本差异",
       "inputSchema": {
         "type": "object",
@@ -178,8 +178,8 @@
   ],
   "unverified": [
     "Host protocol negotiation and Worker reconstruction",
-    "Shared Rust extraction and actual WASI implementation",
-    "CPU/memory budget and real result size",
+    "Complete legal-input CPU/memory behavior beyond fixed vectors",
+    "Independent fresh-process cold-start matrix",
     "Real native/Host/View/Pi lifecycle and field relay"
   ],
   "supersedesProposal": "../v0.1.0/proposal.json",
@@ -191,5 +191,14 @@
       "purpose": "original_500ms_algorithm_deadline",
       "preflightFailureCode": "RUNTIME_UNAVAILABLE"
     }
+  },
+  "providerVerification": {
+    "scope": "Independent adapters and fixed vectors only; not Host acceptance",
+    "functionalVectors": 248,
+    "originalBudgetVectors": 243,
+    "productionWasmSha256": "d86a6136ad7c929a99a3f1cc9aaabb8311f34ab65b694ad35534d128dd7494ff",
+    "productionWasmBytes": 1577318,
+    "productionWasiOnlyImports": true,
+    "hostAccepted": false
   }
 }

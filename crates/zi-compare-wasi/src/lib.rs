@@ -6,15 +6,29 @@ use serde_json::value::RawValue;
 pub const CONTRACT_VERSION: &str = "1.1.0-proposal.3";
 pub const REQUEST_LIMIT: usize = 48 * 1024;
 
+/// Diagnostic boundaries; production uses a no-op observer.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+#[repr(u32)]
+pub enum Phase {
+    RequestParsed,
+    TextParsed,
+    TextCompared,
+    ResultSerialized,
+    TextDiffComputed,
+    TextReportFormatted,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Request {
+struct Request<'a> {
     contract_version: String,
     plugin_id: String,
     scene_id: String,
     capability_id: String,
     command_id: (),
-    input: Box<RawValue>,
+    #[serde(borrow)]
+    input: &'a RawValue,
 }
 
 #[derive(Deserialize)]
@@ -71,16 +85,17 @@ fn clock_available() -> bool {
     }
 }
 
-fn handle(bytes: &[u8]) -> Envelope {
+fn handle(bytes: &[u8], observe: &mut impl FnMut(Phase)) -> Envelope {
     if bytes.len() > REQUEST_LIMIT {
         return failure("INPUT_TOO_LARGE", "请求超过 48 KiB");
     }
     if std::str::from_utf8(bytes).is_err() {
         return failure("INVALID_ENCODING", "请求不是有效 UTF-8");
     }
-    let Ok(mut request) = serde_json::from_slice::<Request>(bytes) else {
+    let Ok(mut request) = serde_json::from_slice::<Request<'_>>(bytes) else {
         return failure("INVALID_INPUT", "请求结构无效");
     };
+    observe(Phase::RequestParsed);
     if request.contract_version != CONTRACT_VERSION
         || request.plugin_id != "com.zicode.devtools.compare"
         || request.scene_id.is_empty()
@@ -92,13 +107,38 @@ fn handle(bytes: &[u8]) -> Envelope {
         let Ok(input) = serde_json::from_str::<TextInput>(request.input.get()) else {
             return failure("INVALID_INPUT", "差异输入结构无效");
         };
+        observe(Phase::TextParsed);
         if input.left.len() > 8192 || input.right.len() > 8192 {
             return failure("INPUT_TOO_LARGE", "差异字段超过 UTF-8 字节限制");
         }
         if !clock_available() {
             return failure("RUNTIME_UNAVAILABLE", "运行环境未提供单调时钟");
         }
-        return match zi_diff_core::compare_text(&input.left, &input.right, Some(REQUEST_LIMIT)) {
+        let empty = Envelope {
+            contract_version: CONTRACT_VERSION.to_owned(),
+            ok: true,
+            data: Some(Text {
+                text: String::new(),
+            }),
+            error: None,
+        };
+        let overhead = serde_json::to_vec(&empty)
+            .expect("empty result serializes")
+            .len();
+        let result = zi_diff_core::compare_text_budgets_observed(
+            &input.left,
+            &input.right,
+            Some(REQUEST_LIMIT),
+            Some(REQUEST_LIMIT.saturating_sub(overhead)),
+            |phase| {
+                observe(match phase {
+                    zi_diff_core::ComparePhase::DiffComputed => Phase::TextDiffComputed,
+                    zi_diff_core::ComparePhase::ReportFormatted => Phase::TextReportFormatted,
+                })
+            },
+        );
+        observe(Phase::TextCompared);
+        return match result {
             Ok(text) => Envelope {
                 contract_version: CONTRACT_VERSION.to_owned(),
                 ok: true,
@@ -127,7 +167,14 @@ fn handle(bytes: &[u8]) -> Envelope {
 
 /// Bound the final escaped JSON envelope as well as the report itself.
 pub fn execute_request(bytes: &[u8]) -> Vec<u8> {
-    let output = serde_json::to_vec(&handle(bytes)).expect("result JSON serializes");
+    execute_request_observed(bytes, |_| {})
+}
+
+/// Instrumented entry for a separate diagnostic binary, never Host negotiation.
+#[doc(hidden)]
+pub fn execute_request_observed(bytes: &[u8], mut observe: impl FnMut(Phase)) -> Vec<u8> {
+    let output = serde_json::to_vec(&handle(bytes, &mut observe)).expect("result JSON serializes");
+    observe(Phase::ResultSerialized);
     if output.len() <= REQUEST_LIMIT {
         output
     } else {
