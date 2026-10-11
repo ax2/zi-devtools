@@ -5707,6 +5707,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-msi-actions"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "uuid",
+ "windows-sys 0.59.0",
+ "zi-shell-core",
+]
+
+[[package]]
 name = "zi-regex-core"
 version = "0.1.0"
 dependencies = [

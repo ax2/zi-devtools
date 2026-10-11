@@ -69,6 +69,21 @@ pub fn msi_default_config_path() -> Result<PathBuf> {
     }
 }
 
+/// Target metadata from the package before InstallFiles; not file verification.
+pub fn msi_candidate(directory: &Path, version: &str, digest: &str) -> Result<Installation> {
+    ensure!(directory.is_absolute(), "MSI目标目录必须为绝对路径");
+    crate::msi::numeric_version(version)?;
+    let mut record = Installation::new(
+        Identity::Msi,
+        canonical_location(&directory.join("ZiDevTools.exe"), true)?,
+        msi_default_config_path()?,
+        version.into(),
+    );
+    record.executable_sha256 = Some(digest.into());
+    record.validate()?;
+    Ok(record)
+}
+
 fn canonical_config_for(path: &Path, allowed_default: Option<&Path>) -> Result<PathBuf> {
     match std::fs::symlink_metadata(path) {
         Ok(_) => canonical_file(path),

@@ -549,8 +549,11 @@ pub(in crate::explorer::lifecycle::store) fn cross_account_journal_probe() -> St
 struct ActualFiles(PathBuf);
 impl ActualFiles {
     fn new() -> Self {
-        let root =
-            std::env::temp_dir().join(format!("zi-msi-files-proof-{}", uuid::Uuid::new_v4()));
+        // A thread impersonating another user must not inherit the process's
+        // TEMP environment (which may be inaccessible to that user).
+        let root = crate::explorer::audit::native::effective_profile_dir()
+            .unwrap()
+            .join(format!("zi-msi-files-proof-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&root).unwrap();
         std::fs::write(root.join("app.exe"), b"MZoriginal synthetic file").unwrap();
         std::fs::write(

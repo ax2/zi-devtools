@@ -1,0 +1,18 @@
+[package]
+name = "zi-msi-actions"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "Headless candidate Windows Installer menu actions"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow = "1.0"
+uuid = { version = "1.18", features = ["v4"] }
+zi-shell-core = { path = "../zi-shell-core" }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_ApplicationInstallationAndServicing"] }

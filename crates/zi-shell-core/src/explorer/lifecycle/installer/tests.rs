@@ -105,6 +105,21 @@ fn native_default_config_uses_the_effective_profile_layout() {
 }
 
 #[test]
+fn package_candidate_is_bounded_metadata_and_not_proof_of_installed_files() {
+    let files = Files::new();
+    let target = files.0.join("not-installed");
+    let candidate = msi_candidate(&target, "9.8.7", &"a".repeat(64)).unwrap();
+    assert_eq!(candidate.identity, Identity::Msi);
+    assert_eq!(candidate.executable.file_name().unwrap(), "ZiDevTools.exe");
+    assert!(!target.exists());
+    assert!(VerifiedFile::verify(&candidate).is_err());
+    assert!(msi_candidate(Path::new("relative"), "9.8.7", &"a".repeat(64)).is_err());
+    assert!(msi_candidate(&target, "9.8.7-dev.1", &"a".repeat(64)).is_err());
+    assert!(msi_candidate(&target, "9.8.7", "not-a-digest").is_err());
+    assert!(!target.exists());
+}
+
+#[test]
 fn controlled_preview_is_rejected_before_file_or_registry_application() {
     let files = Files::new();
     let record = VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml"))

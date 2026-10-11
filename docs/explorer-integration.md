@@ -157,3 +157,15 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 这不是发布者签名或完整PE验证；配置没有内容锁，用户仍可以编辑配置。原先只做领域模型测试的低层Eligible机制继续存在于核心内部测试，不能用来绕过公开恢复入口的实际文件核验。需要实际安装器核验包身份、选项、执行模式和CustomActionData，尚未接入DLL或WiX动作。
 
 本机合成文件及隔离注册测试覆盖新文件未安装/旧文件未恢复的拒绝、实际文件就绪后的执行/恢复、缺失自定义配置拒绝、原生默认配置检查不创建用户文件。不同账户CI门槛新增有效用户默认位置不同于进程用户、一次性用户默认配置确实缺失时仍能执行/恢复的验证；以本提交CI结果为准。仍未证明真实msiexec文件恢复次序、进程强杀、Explorer窗口与完整安装生命周期。
+
+## 独立安装器动作候选0.14.0
+
+`zi-msi-actions`为独立Rust DLL，只依赖无GUI核心及已有Windows API库，不启动桌面EXE。准备入口核验MSI家族、产品标识、当前用户作用域、执行模式、0/1菜单选项和回滚可用性。默认关闭；已有MSI登记时未指定选项继承开启，显式0可移除登记；升级中的旧包依据UPGRADINGPRODUCTCODE跳过，不能移除新包入口。新程序目标摘要取自包的私有构建元数据，仅为预期值，执行仍重新核验实际文件。
+
+准备动作在文件变化前保存意图，执行和回滚的CustomActionData只传规范UUID。执行、回滚入口分别要求真实deferred/rollback模式，错误会保留状态并返回安装失败；DLL自己的消息仅记录固定阶段，不输出属性值、用户配置、SID或凭据。CI仅上传去除系统用户标识等敏感字段后的Installer日志副本，原系统日志留在一次性runner。DLL没有提前调用complete的commit入口：Installer的commit动作失败仍可能触发回滚，不能将“进入commit动作”当成已不可逆成功。
+
+正式`packaging/windows.wxs`暂未挂候选动作。一次性CI从正式模板生成独立候选包，使用不会运行的合成MZ文件，并真实调用Windows Installer安装/升级/修复/卸载API；成功API返回后才由受控观察器完成日志。矩阵包括默认关闭、回滚关闭拒绝、开启/继承修复、旧包升级跳过、执行前及实际执行后失败恢复、显式关闭/开启，以及便携/MSI两种移除顺序。便携部分复用真实核心的确认式维护后端，但不是GUI确认或Shell调用验收。只有CI结果及日志能证明实际安装行为；本机仅编译候选MSI和读取最终动作序列。
+
+候选包明确核对InstallInitialize < Prepare < Rollback < RemoveExistingProducts < InstallFiles < Execute < InstallFinalize。加入InstallExecute显式执行脚本，再注入晚期失败，避免把尚未运行的deferred动作误当成已经写入菜单。已修正跨用户文件夹具沿用进程TEMP导致的拒绝访问，夹具改在有效用户profile中创建独立UUID目录并逐项清理；新提交跨用户CI仍需重验。
+
+自动收尾及正式WiX接入、进程强杀/日志丢失/权限故障、真实产品可执行文件与Explorer窗口、多选/目录/窗口复用/现代菜单仍未完成。受控观察器的API返回证据不能被当成已交付给普通MSI用户的自动最终化机制。

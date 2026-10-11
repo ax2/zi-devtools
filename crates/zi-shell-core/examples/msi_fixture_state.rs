@@ -1,0 +1,61 @@
+//! Disposable CI observer. Finalization is AFTER MsiInstallProduct returns zero.
+#[cfg(windows)]
+fn main() -> anyhow::Result<()> {
+    use zi_shell_core::{
+        explorer::lifecycle::{Identity, installer, store},
+        msi,
+    };
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    let value = match args.as_slice() {
+        [] => serde_json::to_value(store::load()?)?,
+        [flag] if flag == "--products" => serde_json::to_value(msi::registered_products()?)?,
+        [flag, path] if flag == "--package" => {
+            serde_json::to_value(msi::inspect(std::path::Path::new(path))?)?
+        }
+        [flag, id] if flag == "--finish" || flag == "--forget" => {
+            anyhow::ensure!(
+                std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
+                    && std::env::var("CI").as_deref() == Ok("true")
+                    && std::env::var("RUNNER_ENVIRONMENT").as_deref() == Ok("github-hosted"),
+                "Fixture mutation requires a disposable CI runner"
+            );
+            if flag == "--finish" {
+                store::recovery::complete(id)?;
+            } else {
+                store::recovery::forget(id)?;
+            }
+            serde_json::to_value(store::load()?)?
+        }
+        [flag, config] if flag == "--portable" || flag == "--remove-portable" => {
+            anyhow::ensure!(
+                std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
+                    && std::env::var("CI").as_deref() == Ok("true")
+                    && std::env::var("RUNNER_ENVIRONMENT").as_deref() == Ok("github-hosted"),
+                "Fixture mutation requires a disposable CI runner"
+            );
+            let request = if flag == "--portable" {
+                installer::Request::Install
+            } else {
+                let executable = std::fs::canonicalize(std::env::current_exe()?)?;
+                let ledger = store::load()?;
+                let own = ledger
+                    .entries()
+                    .iter()
+                    .find(|e| {
+                        matches!(e.installation.identity, Identity::Portable(_))
+                            && e.installation.executable == executable
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("Fixture portable record absent"))?;
+                installer::Request::Remove(own.installation.identity.clone())
+            };
+            let config = std::path::Path::new(config);
+            installer::apply(installer::preview(config, request, "9.8.7")?, config)?;
+            serde_json::to_value(store::load()?)?
+        }
+        _ => anyhow::bail!("Unsupported fixture arguments"),
+    };
+    println!("{}", serde_json::to_string(&value)?);
+    Ok(())
+}
+#[cfg(not(windows))]
+fn main() {}
