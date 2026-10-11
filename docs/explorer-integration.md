@@ -207,3 +207,7 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 **正式WiX尚未接入；多包事务安全尚未证明。** 单包InstallFinalize不是外层安装链已提交的证据。Microsoft的[MsiEndTransaction](https://learn.microsoft.com/en-us/windows/win32/api/msi/nf-msi-msiendtransaction)明确允许外层事务回滚所有参与安装；[MsiEmbeddedChainer](https://learn.microsoft.com/en-us/windows/win32/msi/msiembeddedchainer-table)也要求链拥有者结束事务。因此新增独立托管runner上的MsiBeginTransaction→实际包安装→MsiEndTransaction(ROLLBACK)探针，核对文件、产品、菜单、登记和占用均恢复，并保留结束前日志状态。不得通过清理或补登记掩盖失败；普通矩阵成功也不能替代该门槛。在结果与方案明确前，禁止把候选凭据用于正式多包生命周期。
 
 仍未完成：凭据前中断、Prepared/Applied恢复、真正强杀、完整Explorer窗口/多选/现代菜单，以及正式安装包生命周期接入。
+
+### 0.18.0实际CI结果（a022813）
+
+CI38135316384的standalone任务成功，七组普通矩阵包含receipt-only安装/卸载后新进程确认恢复。outer-rollback任务失败：真实安装返回0、MsiEndTransaction(ROLLBACK)返回0，但restored=false，外层结束前日志已Completed、pending为空。故单包后置最终化确实过早消费Undo，不能作为正式生命周期方案。该失败是产品候选缺陷，不能通过移除测试、只测普通安装或强制清理菜单来关闭。下一步需要保留外层可回滚证据并重新定义实际拥有者完成契约，或实现经证据验证的事务感知机制；不能虚构MSI属性或用服务空闲推断既往成功。正式WiX仍未接入，实际失败证据存长期档案ci-38135316384。

@@ -99,6 +99,17 @@ def read_tree(path):
     return result
 
 
+def sanitize_log(log):
+    raw = log.read_bytes()
+    encoding = 'utf-16' if raw.startswith((b'\xff\xfe', b'\xfe\xff')) else 'mbcs'
+    text = raw.decode(encoding, errors='replace')
+    text = re.sub(r'S-1-(?:\d+-)*\d+', '[redacted-user-identifier]', text)
+    text = re.sub(r'(?im)^(.*Property\([A-Z]\):\s+[^=]*(?:password|token|cookie|secret|credential)[^=]*=).*$',
+                  r'\1 [redacted]', text)
+    log.with_suffix('.safe.log').write_text(text, encoding='utf-8')
+    return text
+
+
 def main():
     if not __debug__:
         raise RuntimeError('Assertions required')
@@ -269,14 +280,8 @@ def main():
             msi_api.MsiEnableLogW(0, None, 0)
         if not log.is_file():
             raise RuntimeError(f'Installer returned {result}; expected diagnostic log absent')
-        raw = log.read_bytes()
-        encoding = 'utf-16' if raw.startswith((b'\xff\xfe', b'\xfe\xff')) else 'mbcs'
-        text = raw.decode(encoding, errors='replace')
-        text = re.sub(r'S-1-(?:\d+-)*\d+', '[redacted-user-identifier]', text)
-        text = re.sub(r'(?im)^(.*Property\([A-Z]\):\s+[^=]*(?:password|token|cookie|secret|credential)[^=]*=).*$',
-                      r'\1 [redacted]', text)
         # Only this sanitized copy is uploaded; raw Installer logs stay ephemeral.
-        log.with_suffix('.safe.log').write_text(text, encoding='utf-8')
+        text = sanitize_log(log)
         for relative in read_tree(RECOVERY_ROOT):
             if relative:
                 value = relative.removeprefix('\\')
@@ -331,13 +336,21 @@ def main():
                 during = observe()
                 during_journal = observe('--journal')
             finally:
-                rollback_result = end(0)  # MSITRANSACTIONSTATE_ROLLBACK
-                msi_api.MsiCloseHandle(handle)
-                kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-                kernel.CloseHandle.argtypes = [ctypes.c_void_p]
-                kernel.CloseHandle.restype = ctypes.c_int
-                if event.value:
-                    assert kernel.CloseHandle(event)
+                rollback_log = folder / 'outer-rollback.log'
+                log_result = msi_api.MsiEnableLogW(0x3FFF, str(rollback_log), 2)
+                try:
+                    # End the transaction even if diagnostics could not start.
+                    rollback_result = end(0)  # MSITRANSACTIONSTATE_ROLLBACK
+                finally:
+                    msi_api.MsiEnableLogW(0, None, 0)
+                    msi_api.MsiCloseHandle(handle)
+                    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+                    kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+                    kernel.CloseHandle.restype = ctypes.c_int
+                    if event.value:
+                        assert kernel.CloseHandle(event)
+                assert log_result == 0
+                sanitize_log(rollback_log)
             after = observe()
             after_menus = [read_tree(p) for p in MENU_ROOTS]
             # Ledger cursors may advance on a correct rollback; compare actual
@@ -353,6 +366,12 @@ def main():
                 installResult=result, rollbackResult=rollback_result,
                 journalBeforeOuterEnd=during_journal,
                 pendingBeforeOuterEnd=during.get('pending_msi'),
+                journalAfterOuterEnd=observe('--journal'),
+                remainingRegistrations=len(after['entries']),
+                remainingMenus=[bool(tree) for tree in after_menus],
+                remainingFiles=(target / 'ZiDevTools.exe').exists(),
+                remainingProducts=observe('--products'),
+                pendingAfterOuterEnd=after.get('pending_msi'),
                 restored=restored, productionInstallerWired=False), indent=2) + '\n')
             assert result == 0 and rollback_result == 0 and restored, \
                 'Outer rollback did not restore the menu lifecycle; production wiring remains blocked'
