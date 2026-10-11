@@ -6,6 +6,7 @@ on:
       - 'crates/zi-msi-actions/**'
       - 'crates/zi-shell-core/**'
       - 'scripts/explorer_msi_actions_smoke.py'
+      - 'scripts/explorer_production_msi_smoke.py'
       - 'packaging/windows.wxs'
       - 'packaging/explorer.wxi'
       - '.github/workflows/explorer-msi-actions.yml'
@@ -16,6 +17,7 @@ on:
       - 'crates/zi-msi-actions/**'
       - 'crates/zi-shell-core/**'
       - 'scripts/explorer_msi_actions_smoke.py'
+      - 'scripts/explorer_production_msi_smoke.py'
       - 'packaging/windows.wxs'
       - 'packaging/explorer.wxi'
       - '.github/workflows/explorer-msi-actions.yml'
@@ -31,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [standalone, outer-rollback, outer-commit, real-payload]
+        mode: [standalone, outer-rollback, outer-commit, real-payload, production-upgrade]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,8 +54,22 @@ jobs:
       - run: cargo build -p zi-msi-actions --locked
       - run: cargo build -p zi-shell-core --example msi_fixture_state --locked
       - name: Build actual desktop payload for installed execution
-        if: matrix.mode == 'real-payload'
+        if: matrix.mode == 'real-payload' || matrix.mode == 'production-upgrade'
         run: cargo build --locked
+      - name: Stage actual payload and retrieve pinned public upgrade baseline
+        if: matrix.mode == 'production-upgrade'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # This disposable runner uses actual debug payloads to exercise the
+          # unmodified release-path template; no development-machine copies.
+          New-Item -ItemType Directory -Path target/release -Force | Out-Null
+          Copy-Item target/debug/ZiDevTools.exe,target/debug/ZiDevToolsMcp.exe,target/debug/zi_msi_actions.dll -Destination target/release
+          $baseline = Join-Path $env:RUNNER_TEMP 'zi-public-v0.81.0'
+          gh release download v0.81.0 --repo $env:GITHUB_REPOSITORY --dir $baseline
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "ZI_PUBLIC_MSI_BASELINE=$baseline" >> $env:GITHUB_ENV
       - name: Candidate lifecycle verification
         shell: pwsh
         run: |
@@ -63,6 +79,8 @@ jobs:
             python scripts/explorer_msi_actions_smoke.py --outer-commit-probe
           } elseif ('${{ matrix.mode }}' -eq 'real-payload') {
             python scripts/explorer_msi_actions_smoke.py --real-payload
+          } elseif ('${{ matrix.mode }}' -eq 'production-upgrade') {
+            python scripts/explorer_production_msi_smoke.py --baseline-dir $env:ZI_PUBLIC_MSI_BASELINE
           } else {
             python scripts/explorer_msi_actions_smoke.py
           }
@@ -75,4 +93,6 @@ jobs:
           path: |
             ${{ runner.temp }}/zi-msi-menu-*/*.safe.log
             ${{ runner.temp }}/zi-msi-menu-*/proof.json
+            ${{ runner.temp }}/zi-msi-production-*/*.safe.log
+            ${{ runner.temp }}/zi-msi-production-*/proof.json
           retention-days: 7

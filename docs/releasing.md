@@ -71,3 +71,5 @@ Stage 63 的 MCP stdio 调试台持久工具规则、调用前复核与撤销已
 菜单接入候选：正式包现在构建并嵌入zi-msi-actions DLL，构建时计算真实桌面EXE SHA-256。packaging/explorer.wxi与托管故障矩阵共享动作声明；本地编译不意味着安装验收。默认关闭；静默安装传ZIMENU=1开启、ZIMENU=0关闭，修复/升级未指定时继承。可见选择UI、旧正式发行版升级与完整Explorer验收仍待验证，不得凭候选结果直接发布。DLL缺失时package拒绝继续。
 
 发版门禁：必须同一提交的standalone/outer-rollback/outer-commit/real-payload四作业全部成功，才继续构建并发布。若版本或文档提交没有触发路径过滤，应先手动运行Explorer MSI action candidates到该提交；其他提交的绿灯不能代替当前提交。此检查不自动发布、不递增版本。
+
+公开旧发行升级验收现作为第五路production-upgrade：固定v0.81.0，严格检查完整四资产SHA256清单后，在一次性托管runner用未改写正式模板执行升级、启停菜单、修复和卸载。发版门禁要求同一提交五路成功；此前四路门禁为历史记录。旧清单不带签名，仅证明下载完整性，不能当作发布者认证。

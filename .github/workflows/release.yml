@@ -45,7 +45,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect installer acceptance runs' }
           $runs = @($runsJson | ConvertFrom-Json)
           $accepted = $false
-          $required = @('windows (standalone)', 'windows (outer-rollback)', 'windows (outer-commit)', 'windows (real-payload)')
+          $required = @('windows (standalone)', 'windows (outer-rollback)', 'windows (outer-commit)', 'windows (real-payload)', 'windows (production-upgrade)')
           foreach ($run in $runs) {
             if ($run.headSha -ne $env:GITHUB_SHA) { continue }
             $resultJson = gh run view $run.databaseId --repo $env:GITHUB_REPOSITORY --json headSha,status,conclusion,jobs
@@ -58,7 +58,7 @@ jobs:
             })
             if ($missing.Count -eq 0) { $accepted = $true; break }
           }
-          if (-not $accepted) { throw 'Run Explorer MSI action candidates on this exact commit; all four installation jobs must pass before release.' }
+          if (-not $accepted) { throw 'Run Explorer MSI action candidates on this exact commit; all five installation jobs must pass before release.' }
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
           $global:LASTEXITCODE = 0
       - run: cargo build --release --locked
