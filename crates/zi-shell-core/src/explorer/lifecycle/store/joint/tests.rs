@@ -6,6 +6,152 @@ struct Fixture {
     classes_root: String,
 }
 static FIXTURE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+fn msi_undo_preserves_later_portable_selection_and_migrates_native_legacy_ledger() {
+    use super::super::super::msi_operation;
+    let fixture = Fixture::new();
+    let p = record(Identity::portable());
+    let first = preview_at(
+        put(
+            &Ledger::default(),
+            p.clone(),
+            None,
+            std::slice::from_ref(&p),
+        ),
+        &fixture.scope,
+    )
+    .unwrap();
+    apply_at(&first, &fixture.scope, true).unwrap();
+    // Write an authentic old schema fixture without changing its existing menu.
+    let mut legacy = fixture.ledger();
+    legacy.schema_version = 1;
+    legacy.msi_cursor = None;
+    legacy.activation_cursor = None;
+    let tx = Transaction::begin().unwrap();
+    write(&fixture.scope.ledger, &legacy, &tx).unwrap();
+    tx.commit().unwrap();
+    assert_eq!(fixture.ledger(), legacy);
+    let m = record(Identity::Msi);
+    let op = msi_operation::install(
+        &legacy,
+        m.clone(),
+        true,
+        &Eligible(vec![p.clone(), m.clone()]),
+    )
+    .unwrap();
+    let forward = preview_at(op.plan().clone(), &fixture.scope).unwrap();
+    apply_at(&forward, &fixture.scope, false).unwrap();
+    assert_eq!(fixture.ledger(), legacy);
+    assert_eq!(fixture.menu(), first.after);
+    apply_at(&forward, &fixture.scope, true).unwrap();
+    assert_eq!(fixture.ledger().schema_version, 2);
+    let added = record(Identity::portable());
+    let later = preview_at(
+        put(
+            &fixture.ledger(),
+            added.clone(),
+            None,
+            &[p.clone(), m, added.clone()],
+        ),
+        &fixture.scope,
+    )
+    .unwrap();
+    apply_at(&later, &fixture.scope, true).unwrap();
+    let before = fixture.ledger();
+    let undo = msi_operation::Undo::from_bytes(&op.undo().to_bytes().unwrap()).unwrap();
+    let backward = preview_at(
+        undo.rollback(&before, &Eligible(vec![p.clone(), added.clone()]))
+            .unwrap(),
+        &fixture.scope,
+    )
+    .unwrap();
+    apply_at(&backward, &fixture.scope, false).unwrap();
+    assert_eq!(fixture.ledger(), before);
+    assert_eq!(fixture.menu(), later.after);
+    apply_at(&backward, &fixture.scope, true).unwrap();
+    assert_eq!(fixture.ledger().active(), Some(&added));
+    assert_eq!(fixture.ledger().entries().len(), 2);
+    assert!(
+        fixture
+            .ledger()
+            .entries()
+            .iter()
+            .any(|e| e.installation == p)
+    );
+    assert_eq!(fixture.menu(), backward.after);
+    assert!(
+        undo.rollback(&fixture.ledger(), &Eligible(vec![added]))
+            .is_err()
+    );
+    fixture.clear();
+    assert!(fixture.menu().keys.is_empty());
+    assert_eq!(fixture.ledger(), Ledger::default());
+}
+
+#[test]
+fn native_msi_upgrade_and_uninstall_inverse_commit_and_rollback_both_hives() {
+    use super::super::super::msi_operation;
+    for uninstall in [false, true] {
+        let fixture = Fixture::new();
+        let p = record(Identity::portable());
+        let old = record(Identity::Msi);
+        let portable = put(
+            &Ledger::default(),
+            p.clone(),
+            None,
+            std::slice::from_ref(&p),
+        );
+        let portable = preview_at(portable, &fixture.scope).unwrap();
+        apply_at(&portable, &fixture.scope, true).unwrap();
+        let base = put(
+            &fixture.ledger(),
+            old.clone(),
+            None,
+            &[p.clone(), old.clone()],
+        );
+        let initial = preview_at(base, &fixture.scope).unwrap();
+        apply_at(&initial, &fixture.scope, true).unwrap();
+        let op = if uninstall {
+            msi_operation::remove(
+                &fixture.ledger(),
+                Some(&old.generation),
+                &Eligible(vec![p.clone()]),
+            )
+            .unwrap()
+            .unwrap()
+        } else {
+            let next = record(Identity::Msi);
+            msi_operation::install(
+                &fixture.ledger(),
+                next.clone(),
+                false,
+                &Eligible(vec![p.clone(), next]),
+            )
+            .unwrap()
+        };
+        let forward = preview_at(op.plan().clone(), &fixture.scope).unwrap();
+        apply_at(&forward, &fixture.scope, true).unwrap();
+        let current = fixture.ledger();
+        let backward = preview_at(
+            op.undo()
+                .rollback(&current, &Eligible(vec![p, old.clone()]))
+                .unwrap(),
+            &fixture.scope,
+        )
+        .unwrap();
+        apply_at(&backward, &fixture.scope, false).unwrap();
+        assert_eq!(fixture.ledger(), current);
+        assert_eq!(fixture.menu(), forward.after);
+        apply_at(&backward, &fixture.scope, true).unwrap();
+        assert_eq!(fixture.ledger().active(), Some(&old));
+        assert_eq!(fixture.menu(), initial.after);
+        assert!(fixture.ledger().revision() > current.revision());
+        fixture.clear();
+        assert!(fixture.menu().keys.is_empty());
+        assert_eq!(fixture.ledger(), Ledger::default());
+    }
+}
 impl Fixture {
     fn new() -> Self {
         let id = uuid::Uuid::new_v4();

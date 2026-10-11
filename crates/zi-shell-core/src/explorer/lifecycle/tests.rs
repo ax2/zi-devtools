@@ -249,7 +249,7 @@ fn strict_ledger_rejects_foreign_schema_duplicates_bad_paths_and_overflow() {
     );
     let json = serde_json::to_value(prepared.result()).unwrap();
     for (field, value) in [
-        ("schema_version", serde_json::json!(2)),
+        ("schema_version", serde_json::json!(3)),
         ("owner", serde_json::json!("foreign")),
         ("revision", serde_json::json!(0)),
     ] {

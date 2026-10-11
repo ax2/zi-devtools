@@ -5,6 +5,8 @@ use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
+pub mod msi_operation;
+
 #[cfg(windows)]
 pub mod installer;
 #[cfg(windows)]
@@ -115,16 +117,22 @@ pub struct Ledger {
     owner: String,
     revision: u64,
     active: Option<Identity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    msi_cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    activation_cursor: Option<String>,
     // A list permits strict duplicate identity rejection during decoding.
     entries: Vec<Entry>,
 }
 impl Default for Ledger {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             owner: OWNER.into(),
             revision: 0,
             active: None,
+            msi_cursor: None,
+            activation_cursor: None,
             entries: Vec::new(),
         }
     }
@@ -143,7 +151,18 @@ impl Ledger {
             .map(|entry| &entry.installation)
     }
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.schema_version == 1, "安装记录协议不受支持");
+        ensure!(matches!(self.schema_version, 1 | 2), "安装记录协议不受支持");
+        ensure!(
+            self.schema_version != 1
+                || (self.msi_cursor.is_none() && self.activation_cursor.is_none()),
+            "旧安装协议不能携带操作游标"
+        );
+        for cursor in [&self.msi_cursor, &self.activation_cursor]
+            .into_iter()
+            .flatten()
+        {
+            Identity::Portable(cursor.clone()).validate()?;
+        }
         ensure!(self.owner == OWNER, "安装记录不属于本程序");
         ensure!(self.entries.len() <= MAX_INSTALLATIONS, "安装记录数量超限");
         let mut identities = BTreeMap::new();
@@ -167,6 +186,16 @@ impl Ledger {
         }
         if let Some(active) = &self.active {
             ensure!(identities.contains_key(active), "活动安装记录不存在");
+        }
+        if self.schema_version == 2 {
+            ensure!(
+                self.active.is_none() || self.activation_cursor.is_some(),
+                "活动入口缺少操作游标"
+            );
+            ensure!(
+                !identities.contains_key(&Identity::Msi) || self.msi_cursor.is_some(),
+                "MSI记录缺少操作游标"
+            );
         }
         Ok(())
     }
@@ -238,6 +267,11 @@ pub(in crate::explorer) fn menu_plan(installation: &Installation) -> Result<supe
 
 pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<Prepared> {
     before.validate()?;
+    let changes_msi = match &change {
+        Change::Put { installation, .. } => installation.identity == Identity::Msi,
+        Change::Remove { identity, .. } => *identity == Identity::Msi,
+        Change::Activate(_) => false,
+    };
     let explicitly_selected = match &change {
         Change::Put {
             installation,
@@ -247,7 +281,9 @@ pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<P
         Change::Activate(identity) => Some(identity.clone()),
         _ => None,
     };
+    let selects_entry = explicitly_selected.is_some();
     let mut after = before.clone();
+    after.schema_version = 2;
     after.revision = before
         .revision
         .checked_add(1)
@@ -337,6 +373,21 @@ pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<P
             .filter(|entry| eligible.0.contains(&entry.installation))
             .max_by_key(|entry| entry.updated_at_revision)
             .map(|entry| entry.installation.identity.clone());
+    }
+    if changes_msi
+        || (after.msi_cursor.is_none()
+            && after
+                .entries
+                .iter()
+                .any(|e| e.installation.identity == Identity::Msi))
+    {
+        after.msi_cursor = Some(uuid::Uuid::new_v4().to_string());
+    }
+    if selects_entry
+        || before.active != after.active
+        || (after.active.is_some() && after.activation_cursor.is_none())
+    {
+        after.activation_cursor = Some(uuid::Uuid::new_v4().to_string());
     }
     after.validate()?;
     Ok(Prepared {
