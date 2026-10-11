@@ -108,7 +108,86 @@ def snapshot(hwnd, path, user):
         user.ReleaseDC(hwnd, screen)
 
 
-def click(operation, choice, initial, screenshot, cancel=False, expect_options=True):
+def keyboard_action(hwnd, children, choice, initial, screenshot, cancel, user):
+    """Real input on the owned foreground dialog; never substitutes BM_CLICK."""
+    assert os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'
+    class Keyboard(ctypes.Structure):
+        _fields_ = [('vk', w.WORD), ('scan', w.WORD), ('flags', w.DWORD),
+                    ('time', w.DWORD), ('extra', ctypes.c_size_t)]
+    class Mouse(ctypes.Structure):
+        _fields_ = [('x', w.LONG), ('y', w.LONG), ('data', w.DWORD),
+                    ('flags', w.DWORD), ('time', w.DWORD), ('extra', ctypes.c_size_t)]
+    class Hardware(ctypes.Structure):
+        _fields_ = [('message', w.DWORD), ('low', w.WORD), ('high', w.WORD)]
+    class Payload(ctypes.Union):
+        _fields_ = [('keyboard', Keyboard), ('mouse', Mouse), ('hardware', Hardware)]
+    class Input(ctypes.Structure):
+        _fields_ = [('kind', w.DWORD), ('payload', Payload)]
+    class Gui(ctypes.Structure):
+        _fields_ = [('size', w.DWORD), ('flags', w.DWORD),
+                    ('active', w.HWND), ('focus', w.HWND), ('capture', w.HWND),
+                    ('menu', w.HWND), ('move', w.HWND), ('caret', w.HWND), ('rect', w.RECT)]
+    for name, params, result in [
+        ('SetForegroundWindow', [w.HWND], w.BOOL),
+        ('GetForegroundWindow', [], w.HWND),
+        ('GetGUIThreadInfo', [w.DWORD, ctypes.POINTER(Gui)], w.BOOL),
+        ('SendInput', [w.UINT, ctypes.POINTER(Input), ctypes.c_int], w.UINT)]:
+        getattr(user, name).argtypes = params
+        getattr(user, name).restype = result
+    pid = w.DWORD()
+    thread = user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    assert pid.value == os.getpid() and thread, 'Keyboard target is not owned'
+    user.SetForegroundWindow(hwnd)
+    def focus():
+        assert user.GetForegroundWindow() == hwnd, 'Keyboard dialog lost foreground'
+        gui = Gui(size=ctypes.sizeof(Gui))
+        assert user.GetGUIThreadInfo(thread, ctypes.byref(gui)), 'Cannot inspect dialog focus'
+        assert gui.active == hwnd, 'Wrong active keyboard dialog'
+        return gui.focus
+    deadline = time.monotonic() + 5
+    while user.GetForegroundWindow() != hwnd:
+        assert time.monotonic() < deadline, 'Owned dialog cannot acquire foreground'
+        time.sleep(.05)
+    assert focus() == children[LABELS[initial]], 'Initial focus is not the selected option'
+    trace = []
+    def key(vk, label, shift=False):
+        focus()  # Fail closed before every input batch, including completion.
+        events = []
+        if shift:
+            events.append(Input(kind=1, payload=Payload(keyboard=Keyboard(vk=0x10))))
+        events.extend([Input(kind=1, payload=Payload(keyboard=Keyboard(vk=vk))),
+                       Input(kind=1, payload=Payload(keyboard=Keyboard(vk=vk, flags=2)))])
+        if shift:
+            events.append(Input(kind=1, payload=Payload(keyboard=Keyboard(vk=0x10, flags=2))))
+        batch = (Input * len(events))(*events)
+        assert user.SendInput(len(batch), batch, ctypes.sizeof(Input)) == len(batch), 'Keyboard input rejected'
+        trace.append(label)
+        time.sleep(.15)
+    selected = initial
+    if choice is not None:
+        order = ['inherit', 'on', 'off']
+        distance = order.index(choice) - order.index(initial)
+        for _ in range(abs(distance)):
+            key(0x28 if distance > 0 else 0x26, 'Down' if distance > 0 else 'Up')
+        selected = choice
+        assert focus() == children[LABELS[selected]], 'Arrow navigation focus mismatch'
+    assert all(user.SendMessageW(children[label], 0xF0, 0, 0) == int(name == selected)
+               for name, label in LABELS.items()), 'Arrow navigation selection mismatch'
+    key(0x09, 'Tab')
+    assert focus() == children['开始安装'], 'Tab did not reach Continue'
+    key(0x09, 'Tab')
+    assert focus() == children['取消'], 'Tab did not reach Cancel'
+    key(0x09, 'Shift+Tab', shift=True)
+    assert focus() == children['开始安装'], 'Shift+Tab did not return to Continue'
+    key(0x09, 'Shift+Tab', shift=True)
+    assert focus() == children[LABELS[selected]], 'Shift+Tab did not return to selected option'
+    snapshot(hwnd, screenshot, user)
+    key(0x1B if cancel else 0x0D, 'Escape' if cancel else 'Enter')
+    return dict(initial=initial, selected=selected, keys=trace, foregroundOwned=True,
+                focusAndSelectionVerified=True, sendInput=True, buttonClickUsed=False)
+
+
+def click(operation, choice, initial, screenshot, cancel=False, expect_options=True, keyboard_trace=None):
     assert os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('CI') == 'true'
     assert os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'
     user = ctypes.WinDLL('user32', use_last_error=True)
@@ -185,6 +264,11 @@ def click(operation, choice, initial, screenshot, cancel=False, expect_options=T
         assert not invalid_controls, 'Unexpected native option control'
         assert len(children) == 5, 'Native option controls missing'
         assert user.SendMessageW(children[LABELS[initial]], 0xF0, 0, 0) == 1, 'Wrong default option'
+        if keyboard_trace is not None:
+            trace = keyboard_action(hwnd, children, choice, initial, screenshot, cancel, user)
+            result = finish()
+            keyboard_trace.append(trace)
+            return result
         if choice is not None:
             user.SendMessageW(children[LABELS[choice]], 0xF5, 0, 0)
             assert user.SendMessageW(children[LABELS[choice]], 0xF0, 0, 0) == 1

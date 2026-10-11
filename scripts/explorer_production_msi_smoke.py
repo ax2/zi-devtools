@@ -136,20 +136,21 @@ def main():
                      productsAfter=[], menusAfter=False, desktopGuiVerified=False, explorerUiVerified=False)
         (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
         if args.ui_probe:
+            keyboard_trace = []
             journal = observe('--journal')
             api.MsiSetInternalUI(5, None)
-            click(lambda: invoke('ui-cancel', package, code, expected=1602), None, 'inherit', folder / 'ui-cancel.png', cancel=True)
+            click(lambda: invoke('ui-cancel', package, code, expected=1602), None, 'inherit', folder / 'ui-cancel.png', cancel=True, keyboard_trace=keyboard_trace)
             assert observe('--journal') == journal and not observe('--products')
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
             assert all(not (target / name).exists() for name in payloads)
-            click(lambda: invoke('ui-first-inherit', package, code), None, 'inherit', folder / 'ui-inherit-first.png')
+            click(lambda: invoke('ui-first-inherit', package, code), None, 'inherit', folder / 'ui-inherit-first.png', keyboard_trace=keyboard_trace)
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
             repair = 'REINSTALL=ALL REINSTALLMODE=amus'
-            click(lambda: invoke('ui-enable', package, code, repair + ' ZIMENU=0', 5), 'on', 'off', folder / 'ui-enable.png')
+            click(lambda: invoke('ui-enable', package, code, repair + ' ZIMENU=0', 5), 'on', 'off', folder / 'ui-enable.png', keyboard_trace=keyboard_trace)
             assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
             click(lambda: invoke('ui-inherit-enabled', package, code, repair, 5), None, 'inherit', folder / 'ui-inherit-enabled.png')
             assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
-            click(lambda: invoke('ui-disable', package, code, repair + ' ZIMENU=1', 5), 'off', 'on', folder / 'ui-disable.png')
+            click(lambda: invoke('ui-disable', package, code, repair + ' ZIMENU=1', 5), 'off', 'on', folder / 'ui-disable.png', keyboard_trace=keyboard_trace)
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
             click(lambda: invoke('ui-enable-before-uninstall', package, code, repair, 5), 'on', 'inherit', folder / 'ui-enable-before-uninstall.png')
             assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
@@ -169,7 +170,8 @@ def main():
                          commandLinePreselection=True, chosenToggleOverrides=True,
                          nativeUiScreenshots=6, fullUiUninstallSkipsMenuOptions=True,
                          fullUiUninstallRemovesEnabledMenu=True, installedShellMenu=native_menu,
-                         keyboardAndScalingVerified=False)
+                         keyboardNavigation=keyboard_trace, keyboardNavigationVerified=len(keyboard_trace) == 4,
+                         keyboardAndScalingVerified=False, scalingVerified=False)
         (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
         print('PASS: public v0.81.0 upgrade through unmodified production template; repair/toggle/uninstall verified')
     finally:
