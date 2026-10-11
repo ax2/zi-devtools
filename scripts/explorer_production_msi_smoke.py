@@ -15,6 +15,7 @@ import tomllib
 
 from explorer_msi_actions_smoke import MENU_ROOTS, LEDGER_ROOT, RECOVERY_ROOT, read_tree, action_sequence, sanitize_log
 from verify_release import verify
+from installer_ui_probe import verify_tables, click
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true')
     parser.add_argument('--baseline-dir', type=Path)
+    parser.add_argument('--ui-probe', action='store_true')
     args = parser.parse_args()
     build = ROOT / 'target'
     observer = build / 'debug/examples/msi_fixture_state.exe'
@@ -60,6 +62,7 @@ def main():
     proof = dict(productionTemplateUnmodified=True, appVersionUnchanged=True, msiFixtureVersion=version,
                  desktopSha256=digest, actionOrder={name: order[name] for name in required},
                  installationPerformed=False, legacyReleaseUpgradeVerified=False)
+    proof['menuUiTables'] = verify_tables(package)
     (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
     if args.compile_only:
         print(f'PASS: unmodified production template compiled; no installation; evidence {folder}')
@@ -79,7 +82,7 @@ def main():
     api.MsiSetInternalUI(2, None)
     sequence = 0
 
-    def invoke(label, msi, product, options='', state=None):
+    def invoke(label, msi, product, options='', state=None, expected=0):
         nonlocal sequence
         sequence += 1
         log = folder / f'{sequence:02}-{label}.log'
@@ -94,7 +97,7 @@ def main():
             api.MsiEnableLogW(0, None, 0)
         assert log.is_file(), f'Missing diagnostic log: {result}'
         text = sanitize_log(log)
-        assert result == 0, f'{label} failed: {result}'
+        assert result == expected, f'{label} returned {result}, expected {expected}'
         assert observe().get('pending_msi') is None, 'Successful native installation retained pending menu state'
         return text
 
@@ -132,8 +135,35 @@ def main():
                      explicitEnableDisable=True, inheritedRepair=True, userDataPreserved=True,
                      productsAfter=[], menusAfter=False, desktopGuiVerified=False, explorerUiVerified=False)
         (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
+        if args.ui_probe:
+            journal = observe('--journal')
+            api.MsiSetInternalUI(5, None)
+            click(lambda: invoke('ui-cancel', package, code, expected=1602), None, 'inherit', folder / 'ui-cancel.png', cancel=True)
+            assert observe('--journal') == journal and not observe('--products')
+            assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
+            assert all(not (target / name).exists() for name in payloads)
+            click(lambda: invoke('ui-first-inherit', package, code), None, 'inherit', folder / 'ui-inherit-first.png')
+            assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
+            repair = 'REINSTALL=ALL REINSTALLMODE=amus'
+            click(lambda: invoke('ui-enable', package, code, repair + ' ZIMENU=0', 5), 'on', 'off', folder / 'ui-enable.png')
+            assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
+            click(lambda: invoke('ui-inherit-enabled', package, code, repair, 5), None, 'inherit', folder / 'ui-inherit-enabled.png')
+            assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
+            click(lambda: invoke('ui-disable', package, code, repair + ' ZIMENU=1', 5), 'off', 'on', folder / 'ui-disable.png')
+            assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
+            # Uninstall is silent here. Its authored UI skip condition is read
+            # from the real table above; no full-UI uninstall claim is made.
+            api.MsiSetInternalUI(2, None)
+            invoke('ui-cleanup-uninstall', package, code, state=2)
+            assert not observe('--products') and marker.read_bytes() == b'not installer owned'
+            proof.update(nativeMenuUiClicks=True, cancelBeforeInstallation=True,
+                         firstInheritOff=True, enabledRepairInherits=True,
+                         commandLinePreselection=True, chosenToggleOverrides=True,
+                         nativeUiScreenshots=5, keyboardAndScalingVerified=False)
+        (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
         print('PASS: public v0.81.0 upgrade through unmodified production template; repair/toggle/uninstall verified')
     finally:
+        api.MsiSetInternalUI(2, None)
         # Only this isolated runner's two strictly inspected products may be removed.
         for installed in observe('--products'):
             assert installed['product_code'] in [code, old_code], 'Unexpected product; refuse cleanup'

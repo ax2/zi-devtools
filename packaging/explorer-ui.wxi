@@ -1,0 +1,36 @@
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Property Id="ZIMENUCHOICE" Value="inherit" />
+  <Property Id="DefaultUIFont" Value="ZiNormal" />
+  <SetProperty Id="ZIMENUCHOICE" Action="ZiMenuUiChooseOn" Value="on" Before="ZiMenuOptions" Sequence="ui" Condition="ZIMENU = &quot;1&quot;" />
+  <SetProperty Id="ZIMENUCHOICE" Action="ZiMenuUiChooseOff" Value="off" Before="ZiMenuOptions" Sequence="ui" Condition="ZIMENU = &quot;0&quot;" />
+  <UI>
+    <TextStyle Id="ZiNormal" FaceName="Segoe UI" Size="9" />
+    <TextStyle Id="ZiHeading" FaceName="Segoe UI" Size="14" Bold="yes" />
+    <Dialog Id="ZiMenuOptions" Width="400" Height="230" Title="Zi DevTools 安装选项" NoMinimize="yes">
+      <Control Id="Heading" Type="Text" X="20" Y="16" Width="360" Height="24" Text="{\ZiHeading}让本地工具随手可用" TabSkip="yes" />
+      <Control Id="Description" Type="Text" X="20" Y="48" Width="360" Height="28" Text="选择资源管理器右键菜单的设置。只影响当前用户，程序和工具始终可以独立使用。" TabSkip="yes" />
+      <Control Id="Choice" Type="RadioButtonGroup" X="20" Y="87" Width="360" Height="70" Property="ZIMENUCHOICE">
+        <RadioButtonGroup Property="ZIMENUCHOICE">
+          <RadioButton Value="inherit" X="0" Y="0" Width="355" Height="18" Text="保留当前设置（首次安装不启用）" />
+          <RadioButton Value="on" X="0" Y="24" Width="355" Height="18" Text="启用右键菜单" />
+          <RadioButton Value="off" X="0" Y="48" Width="355" Height="18" Text="关闭此安装的右键菜单" />
+        </RadioButtonGroup>
+      </Control>
+      <Control Id="Note" Type="Text" X="20" Y="164" Width="360" Height="23" Text="关闭后，如仍有已登记的便携版，将继续使用便携版入口。" TabSkip="yes" />
+      <Control Id="Separator" Type="Line" X="0" Y="197" Width="400" Height="1" />
+      <Control Id="Continue" Type="PushButton" X="220" Y="205" Width="84" Height="18" Text="开始安装" Default="yes">
+        <Publish Property="ZIMENU" Value="1" Condition="ZIMENUCHOICE = &quot;on&quot;" />
+        <Publish Property="ZIMENU" Value="0" Condition="ZIMENUCHOICE = &quot;off&quot;" />
+        <Publish Property="ZIMENU" Condition="ZIMENUCHOICE = &quot;inherit&quot;" />
+        <Publish Event="EndDialog" Value="Return" />
+      </Control>
+      <Control Id="Cancel" Type="PushButton" X="314" Y="205" Width="66" Height="18" Text="取消" Cancel="yes">
+        <Publish Event="EndDialog" Value="Exit" />
+      </Control>
+    </Dialog>
+  </UI>
+  <InstallUISequence>
+    <!-- Invalid public arguments must reach the strict Rust rejection unchanged. -->
+    <Show Dialog="ZiMenuOptions" Before="ExecuteAction" Condition="UILevel &gt;= 5 AND NOT (REMOVE = &quot;ALL&quot;) AND (NOT ZIMENU OR ZIMENU = &quot;0&quot; OR ZIMENU = &quot;1&quot;)" />
+  </InstallUISequence>
+</Include>

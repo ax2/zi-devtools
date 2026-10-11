@@ -275,3 +275,10 @@ f2e9d8e对应CI38139234524四路全部成功。真实当前payload来自当前�
 其余四路为普通事务、真实当前载荷安装后服务执行、外层整体回滚和明确拥有者提交收尾；proof与脱敏日志已归档。真实载荷11组、普通10组；外层回滚无文件/产品/菜单/登记或pending残留。外层候选proof的productionInstallerWired=false描述该候选包，正式模板安装由第五作业单独证明。
 
 仍未完成可见安装选项、公开旧版升级失败回滚、真实Explorer窗口、多选、目录、窗口复用及现代菜单。[下一阶段安装选项设计](explorer-installer-ui.md)明确保持/开启/关闭、静默继承、取消、非法参数及实际UI点击验收，状态为待实现。
+
+## 原生菜单选项候选0.23.0
+正式模板新增explorer-ui.wxi。三种选项经Publish映射ZIMENU（inherit清除覆盖、on=1、off=0），合法显式参数预选，非法显式参数不弹选项页以保留后端拒绝。只在完整安装UI出现，静默/基本/卸载不显示。底层菜单动作和Rust实现不变。
+
+实际正式MSI编译后读取Property、RadioButton、ControlEvent和InstallUISequence，检查默认、三选项、确认事件顺序、取消Exit和显示条件，本机仅编译通过。托管production-upgrade额外执行实际原生窗口点击：首次取消、首次默认继承关闭、显式参数预选后改变选择、启用后继承修复、关闭，保存五张PNG。使用当前测试进程所属原生窗口与精确标题/按钮匹配，受托管环境硬门禁保护。本机不运行安装UI。键盘、缩放、完整UI卸载仍未测试，不冒称完成。
+
+UI表校验结果在compile-tables-v2.log及其target/zi-msi-production-4qclvusv/proof.json。真实点击与截图待提交CI；截图保存后还必须查看才能声明可见界面验收。Python语法检查及工具目录生成/校验通过；不为嵌入目录文案重复root release构建。

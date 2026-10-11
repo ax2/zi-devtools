@@ -4,6 +4,7 @@
     <SummaryInformation Description="Zi DevTools Windows x64 installer" />
     <MajorUpgrade Schedule="afterInstallExecute" DowngradeErrorMessage="A newer version of Zi DevTools is already installed." />
     <?include explorer.wxi ?>
+    <?include explorer-ui.wxi ?>
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" />
     <MediaTemplate EmbedCab="yes" />
     <StandardDirectory Id="LocalAppDataFolder">
