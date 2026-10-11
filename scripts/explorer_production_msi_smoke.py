@@ -153,6 +153,13 @@ def main():
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
             click(lambda: invoke('ui-enable-before-uninstall', package, code, repair, 5), 'on', 'inherit', folder / 'ui-enable-before-uninstall.png')
             assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
+            fixture = folder / '真实文件 %1 & 空格.json'
+            fixture.write_text('{"fixture":true}', encoding='utf-8')
+            native_menu = json.loads(subprocess.check_output([
+                str(build / 'debug/examples/explorer_installed_menu.exe'), str(fixture), str(target / 'ZiDevTools.exe')], timeout=30))
+            assert native_menu['installedMsiMenuResolved'] and native_menu['nativeCommandCount'] == native_menu['receiverCount'] + 1
+            assert native_menu['receiverCount'] >= 11 and not native_menu['commandInvocationPerformed']
+            assert not native_menu['associationWrites'] and not native_menu['explorerWindowVerified']
             click(lambda: invoke('ui-full-uninstall', package, code, state=2), None, None, None, expect_options=False)
             assert not observe('--products') and marker.read_bytes() == b'not installer owned'
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
@@ -161,7 +168,8 @@ def main():
                          firstInheritOff=True, enabledRepairInherits=True,
                          commandLinePreselection=True, chosenToggleOverrides=True,
                          nativeUiScreenshots=6, fullUiUninstallSkipsMenuOptions=True,
-                         fullUiUninstallRemovesEnabledMenu=True, keyboardAndScalingVerified=False)
+                         fullUiUninstallRemovesEnabledMenu=True, installedShellMenu=native_menu,
+                         keyboardAndScalingVerified=False)
         (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
         print('PASS: public v0.81.0 upgrade through unmodified production template; repair/toggle/uninstall verified')
     finally:

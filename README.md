@@ -443,4 +443,4 @@ HTTP请求调试1.0.1：localhost与回环IPv4/IPv6直接连接，避免环境�
 
 ### 安装器菜单选项（候选0.23.0）
 
-完整安装界面现提供“保留当前设置 / 启用 / 关闭”三选项，默认继承。公开旧版升级和五次原生UI点击已在[五路CI](https://github.com/ax2/zi-devtools/actions/runs/38140649205)通过，取消不执行安装，截图已检查。静默参数继续支持，应用dev版本不变、未发布。键盘、缩放、完整UI卸载和真实Explorer仍需验收，详见[验证范围](docs/explorer-integration.md)。
+完整安装界面现提供“保留当前设置 / 启用 / 关闭”三选项，默认继承。公开旧版升级和五次原生UI点击已在[五路CI](https://github.com/ax2/zi-devtools/actions/runs/38140649205)通过，取消不执行安装，截图已检查。静默参数继续支持，应用dev版本不变、未发布。完整UI卸载已验证；键盘、缩放和真实Explorer仍需验收，详见[验证范围](docs/explorer-integration.md)。

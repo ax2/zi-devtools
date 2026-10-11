@@ -8,6 +8,7 @@ on:
       - 'scripts/explorer_msi_actions_smoke.py'
       - 'scripts/explorer_production_msi_smoke.py'
       - 'scripts/installer_ui_probe.py'
+      - 'examples/explorer_installed_menu.rs'
       - 'packaging/windows.wxs'
       - 'packaging/explorer.wxi'
       - 'packaging/explorer-ui.wxi'
@@ -21,6 +22,7 @@ on:
       - 'scripts/explorer_msi_actions_smoke.py'
       - 'scripts/explorer_production_msi_smoke.py'
       - 'scripts/installer_ui_probe.py'
+      - 'examples/explorer_installed_menu.rs'
       - 'packaging/windows.wxs'
       - 'packaging/explorer.wxi'
       - 'packaging/explorer-ui.wxi'
@@ -60,6 +62,9 @@ jobs:
       - name: Build actual desktop payload for installed execution
         if: matrix.mode == 'real-payload' || matrix.mode == 'production-upgrade'
         run: cargo build --locked
+      - name: Build read-only installed Shell menu discovery probe
+        if: matrix.mode == 'production-upgrade'
+        run: cargo build --example explorer_installed_menu --locked
       - name: Stage actual payload and retrieve pinned public upgrade baseline
         if: matrix.mode == 'production-upgrade'
         shell: pwsh
