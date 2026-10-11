@@ -1,9 +1,9 @@
-//! Classic-menu plans and explicit read-only registry audits. No registration writes.
+//! Classic-menu plans, inspections and user-confirmed current-user maintenance.
 pub mod audit;
 pub mod lifecycle;
 use anyhow::{Context, Result, ensure};
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{commands::file_actions::Target, tool_shortcuts::quote};
 const ROOTS: [&str; 2] = [
@@ -26,6 +26,8 @@ pub struct Plan {
     pub preview_only: bool,
     pub scope: &'static str,
     pub shell_max_files: usize,
+    pub executable: PathBuf,
+    pub config: PathBuf,
     pub values: Vec<Value>,
     pub limitations: [&'static str; 3],
 }
@@ -43,8 +45,10 @@ fn template_path(path: &Path) -> Result<String> {
 }
 
 pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
-    let exe = template_path(exe)?;
-    let config = template_path(config)?;
+    let executable = std::path::absolute(exe)?;
+    let configuration = std::path::absolute(config)?;
+    let exe = template_path(&executable)?;
+    let config = template_path(&configuration)?;
     let parent = ROOTS[0];
     let actions = ROOTS[1];
     let mut values = Vec::new();
@@ -88,16 +92,25 @@ pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
             ),
         );
     }
+    ensure!(
+        values
+            .iter()
+            .filter(|value| value.key.ends_with("\\command"))
+            .all(|value| value.value.encode_utf16().count() < 32767),
+        "完整菜单命令超过Windows命令行上限，未执行安装"
+    );
     Ok(Plan {
         schema_version: 1,
         preview_only: true,
         scope: "HKEY_CURRENT_USER",
         shell_max_files: 1,
+        executable,
+        config: configuration,
         values,
         limitations: [
-            "只预览单选文件的经典菜单；不读取或写入注册表，不生成可直接导入的.reg文件",
+            "此JSON仅是单选经典菜单候选布局，生成计划不读取或写入注册表；维护流程需另行预览确认",
             "尚无Explorer实际可见性、多选整组传输、目录接收或Windows11现代菜单验收",
-            "EXE/MSI安装所有权、共存、升级、修复、卸载和回滚仍待实现",
+            "MSI自动维护、Windows Installer回滚及真实Explorer显示/调用仍需独立验收",
         ],
     })
 }
@@ -146,5 +159,10 @@ mod tests {
             assert!(plan(&dir.join(bad), &dir.join("config.yml")).is_err());
             assert!(plan(&dir.join("ZiDevTools.exe"), &dir.join(bad)).is_err());
         }
+        let long = dir.join("a".repeat(18000));
+        assert!(
+            plan(&long, &long).is_err(),
+            "two individually bounded paths must not form an oversized Windows command line"
+        );
     }
 }

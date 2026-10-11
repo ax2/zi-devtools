@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 464] = [
+const NAMES: [&str; 466] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -474,6 +474,8 @@ const NAMES: [&str; 464] = [
     "workflow-library-light",
     "explorer-plan-dark",
     "explorer-plan-light",
+    "explorer-confirm-dark",
+    "explorer-confirm-light",
 ];
 
 struct Capture {
@@ -4194,7 +4196,9 @@ impl eframe::App for Capture {
             || self
                 .auto_minimize_smoke_at
                 .is_some_and(|at| at.elapsed() >= Duration::from_secs(1));
-        if self.frames >= 18 && !self.pending && scroll_settled {
+        let explorer_settled =
+            !(464..=465).contains(&self.scene) || self.app.preview_explorer_maintenance_finished();
+        if self.frames >= 18 && !self.pending && scroll_settled && explorer_settled {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
             self.pending = true;
         }

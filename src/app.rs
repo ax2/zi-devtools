@@ -319,6 +319,10 @@ pub struct DevToolsApp {
 }
 
 impl DevToolsApp {
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub fn preview_explorer_maintenance_finished(&self) -> bool {
+        self.explorer_audit.fixture_finished()
+    }
     #[cfg(feature = "ui-preview")]
     pub fn preview_screenshot_overlay_prepare(&mut self, ctx: &egui::Context, index: usize) {
         self.preview_scene(
@@ -1239,6 +1243,12 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            464..=465 => {
+                self.page = Page::Settings;
+                ctx.data_mut(|data| data.insert_temp(egui::Id::new("preview-explorer-only"), true));
+                self.explorer_audit
+                    .fixture_maintenance(self.manager.config_snapshot().path.clone());
+            }
             462..=463 => {
                 self.page = Page::Settings;
                 let plan = crate::explorer::plan(

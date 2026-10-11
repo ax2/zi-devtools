@@ -2,20 +2,21 @@
 use anyhow::{Result, ensure};
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{MENU_PROTOCOL, OWNER, Plan, ROOTS};
+use super::{OWNER, Plan, ROOTS};
 #[cfg(windows)]
-mod native;
+pub(super) mod native;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct Snapshot {
-    keys: BTreeSet<String>,
-    values: BTreeMap<(String, String), (u32, Vec<u8>)>,
+pub(super) struct Snapshot {
+    pub(super) keys: BTreeSet<String>,
+    pub(super) values: BTreeMap<(String, String), (u32, Vec<u8>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
     Missing,
     Matches,
+    OtherInstallation,
     Changed,
     Conflict,
     Unsupported,
@@ -34,6 +35,7 @@ impl Report {
         match self.state {
             State::Missing => "当前用户下未发现这两处候选入口",
             State::Matches => "注册内容与当前候选计划一致",
+            State::OtherInstallation => "入口与另一份已登记程序或配置一致",
             State::Changed => "属于本程序的标记存在，但内容缺失或有变化",
             State::Conflict => "发现所有权或未知内容冲突，请保留现状",
             State::Unsupported => "发现本程序的其他菜单协议版本",
@@ -52,7 +54,7 @@ fn string_bytes(value: &str) -> Vec<u8> {
         .collect()
 }
 
-fn expected(plan: &Plan, roots: &[&str]) -> Result<Snapshot> {
+pub(super) fn expected(plan: &Plan, roots: &[&str]) -> Result<Snapshot> {
     ensure!(
         plan.scope == "HKEY_CURRENT_USER",
         "检查只支持当前用户候选计划"
@@ -129,8 +131,12 @@ fn classify(actual: &Snapshot, wanted: &Snapshot, roots: &[&str]) -> Report {
                 report.state = State::Conflict;
                 return report;
             }
-            if actual.values.get(&(root, "zicodemenuprotocol".into()))
-                != Some(&(1, string_bytes(MENU_PROTOCOL)))
+            if actual
+                .values
+                .get(&(root.clone(), "zicodemenuprotocol".into()))
+                != wanted
+                    .values
+                    .get(&(root.clone(), "zicodemenuprotocol".into()))
             {
                 unsupported = true;
             }
@@ -162,14 +168,35 @@ pub fn inspect(plan: &Plan) -> Result<Report> {
     let wanted = expected(plan, &ROOTS)?;
     #[cfg(windows)]
     {
+        let ledger = super::lifecycle::store::load()?;
+        let active = ledger.active();
+        let wanted = if let Some(active) = active {
+            expected(&super::lifecycle::menu_plan(active)?, &ROOTS)?
+        } else {
+            wanted
+        };
         let current = consistent(native::read(&ROOTS)?, native::read(&ROOTS)?)?;
-        Ok(classify(&current, &wanted, &ROOTS))
+        let mut report = classify(&current, &wanted, &ROOTS);
+        if report.state == State::Matches
+            && active.is_some_and(|active| {
+                !same_path(&active.executable, &plan.executable)
+                    || !same_path(&active.config, &plan.config)
+            })
+        {
+            report.state = State::OtherInstallation;
+        }
+        Ok(report)
     }
     #[cfg(not(windows))]
     {
         let _ = wanted;
         anyhow::bail!("注册状态检查仅支持Windows")
     }
+}
+#[cfg(windows)]
+fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    std::fs::canonicalize(left).unwrap_or_else(|_| left.into())
+        == std::fs::canonicalize(right).unwrap_or_else(|_| right.into())
 }
 
 #[cfg(test)]

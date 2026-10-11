@@ -1,4 +1,5 @@
-//! Current-user ledger storage. No Shell menu writes and no MSI integration yet.
+//! Current-user ledger storage and joint Shell-menu transactions in `joint`.
+//! MSI installer integration is pending; legacy ledger-only commits reject menu records.
 //! KTM commits the registry update atomically; errors drop/rollback the transaction.
 use super::*;
 use std::ptr;
@@ -79,7 +80,10 @@ impl Drop for Transaction {
 }
 
 fn open(path: &str, tx: &Transaction, create: bool) -> Result<Option<Key>> {
-    let mut parent = HKEY_CURRENT_USER;
+    open_at(HKEY_CURRENT_USER, path, tx, create)
+}
+fn open_at(base: HKEY, path: &str, tx: &Transaction, create: bool) -> Result<Option<Key>> {
+    let mut parent = base;
     let mut held = None;
     let parts: Vec<_> = path.split('\\').collect();
     for (index, part) in parts.iter().enumerate() {
@@ -223,14 +227,22 @@ fn read(root: &str, tx: &Transaction) -> Result<Ledger> {
 fn save(root: &str, prepared: &Prepared, commit: bool) -> Result<()> {
     prepared.before.validate()?;
     prepared.after.validate()?;
-    let bytes: Vec<_> = wide(&serde_json::to_string(&prepared.after)?)
+    let tx = Transaction::begin()?;
+    prepared.require_current(&read(root, &tx)?)?;
+    write(root, &prepared.after, &tx)?;
+    if commit {
+        tx.commit()?;
+    }
+    Ok(())
+}
+fn write(root: &str, ledger: &Ledger, tx: &Transaction) -> Result<()> {
+    ledger.validate()?;
+    let bytes: Vec<_> = wide(&serde_json::to_string(ledger)?)
         .into_iter()
         .flat_map(u16::to_le_bytes)
         .collect();
     ensure!(bytes.len() <= MAX_BYTES, "安装记录超出存储上限");
-    let tx = Transaction::begin()?;
-    prepared.require_current(&read(root, &tx)?)?;
-    let key = open(root, &tx, true)?.ok_or_else(|| anyhow::anyhow!("无法创建安装记录"))?;
+    let key = open(root, tx, true)?.ok_or_else(|| anyhow::anyhow!("无法创建安装记录"))?;
     success(unsafe {
         RegSetValueExW(
             key.0,
@@ -242,11 +254,8 @@ fn save(root: &str, prepared: &Prepared, commit: bool) -> Result<()> {
         )
     })?;
     // Verify through the same transaction before allowing a commit.
-    ensure!(read(root, &tx)? == prepared.after, "事务内复核失败");
+    ensure!(&read(root, tx)? == ledger, "事务内复核失败");
     drop(key);
-    if commit {
-        tx.commit()?;
-    }
     Ok(())
 }
 
@@ -260,8 +269,19 @@ pub fn load() -> Result<Ledger> {
 /// user approval by the future UI/installer; there is no automatic caller today.
 /// This commits the ledger only, not a menu or a Windows Installer transaction.
 pub fn commit(prepared: &Prepared) -> Result<()> {
+    ensure!(
+        !prepared
+            .before
+            .entries
+            .iter()
+            .chain(&prepared.after.entries)
+            .any(|entry| entry.installation.executable_sha256.is_some()),
+        "菜单记录必须通过账本与菜单联合事务维护"
+    );
     save(ROOT, prepared, true)
 }
+
+pub(in crate::explorer) mod joint;
 
 #[cfg(test)]
 mod tests;

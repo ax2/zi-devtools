@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
 #[cfg(windows)]
+pub mod installer;
+#[cfg(windows)]
 pub mod store;
 
 pub const MSI_UPGRADE_CODE: &str = "61AF00B6-E92A-4519-A0A3-382347FA4051";
@@ -48,6 +50,8 @@ pub struct Installation {
     pub executable: PathBuf,
     pub config: PathBuf,
     pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executable_sha256: Option<String>,
 }
 impl Installation {
     pub fn new(identity: Identity, executable: PathBuf, config: PathBuf, version: String) -> Self {
@@ -57,10 +61,20 @@ impl Installation {
             executable,
             config,
             version,
+            executable_sha256: None,
         }
     }
     fn validate(&self) -> Result<()> {
         self.identity.validate()?;
+        if let Some(digest) = &self.executable_sha256 {
+            ensure!(
+                digest.len() == 64
+                    && digest
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+                "程序摘要无效"
+            );
+        }
         Identity::Portable(self.generation.clone()).validate()?;
         ensure!(
             self.executable.is_absolute() && self.config.is_absolute(),
@@ -189,6 +203,37 @@ impl Prepared {
         ensure!(current == &self.before, "安装记录已变化，请重新预览后操作");
         Ok(())
     }
+}
+
+pub(in crate::explorer) fn menu_plan(installation: &Installation) -> Result<super::Plan> {
+    installation.validate()?;
+    let digest = installation
+        .executable_sha256
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("安装记录缺少程序摘要，需先核验此程序"))?;
+    let mut result = super::plan(&installation.executable, &installation.config)?;
+    for value in &mut result.values {
+        if value.name == "ZiCodeMenuProtocol" {
+            value.value = "2".into();
+        }
+    }
+    for root in super::ROOTS {
+        for (name, value) in [
+            (
+                "ZiCodeActiveInstall",
+                serde_json::to_string(&installation.identity)?,
+            ),
+            ("ZiCodeInstallGeneration", installation.generation.clone()),
+            ("ZiCodeBinarySha256", digest.clone()),
+        ] {
+            result.values.push(super::Value {
+                key: root.into(),
+                name: name.into(),
+                value,
+            });
+        }
+    }
+    Ok(result)
 }
 
 pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<Prepared> {

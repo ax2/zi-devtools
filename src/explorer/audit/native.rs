@@ -3,7 +3,7 @@ use std::ptr;
 use windows_sys::Win32::{
     Foundation::{
         ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, ERROR_PATH_NOT_FOUND,
-        ERROR_SUCCESS,
+        ERROR_SUCCESS, HANDLE,
     },
     System::Registry::*,
 };
@@ -13,7 +13,7 @@ const MAX_KEYS: usize = 128;
 const MAX_VALUES: usize = 1024;
 const MAX_BYTES: usize = 1024 * 1024;
 
-struct Key(HKEY);
+pub(in crate::explorer) struct Key(pub(in crate::explorer) HKEY);
 impl Drop for Key {
     fn drop(&mut self) {
         unsafe {
@@ -37,19 +37,34 @@ fn success(status: u32) -> Result<()> {
 }
 
 fn open(base: HKEY, path: &str) -> Result<Option<Key>> {
+    open_tx(base, path, None)
+}
+fn open_tx(base: HKEY, path: &str, transaction: Option<HANDLE>) -> Result<Option<Key>> {
     let mut parent = base;
     let mut held = None;
     for part in path.split('\\') {
         ensure!(!part.is_empty() && !part.contains('\0'), "注册路径无效");
         let mut handle = ptr::null_mut();
         let status = unsafe {
-            RegOpenKeyExW(
-                parent,
-                wide(part).as_ptr(),
-                REG_OPTION_OPEN_LINK,
-                KEY_READ,
-                &mut handle,
-            )
+            if let Some(transaction) = transaction {
+                RegOpenKeyTransactedW(
+                    parent,
+                    wide(part).as_ptr(),
+                    REG_OPTION_OPEN_LINK,
+                    KEY_READ,
+                    &mut handle,
+                    transaction,
+                    ptr::null(),
+                )
+            } else {
+                RegOpenKeyExW(
+                    parent,
+                    wide(part).as_ptr(),
+                    REG_OPTION_OPEN_LINK,
+                    KEY_READ,
+                    &mut handle,
+                )
+            }
         };
         if matches!(status, ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND) {
             return Ok(None);
@@ -83,6 +98,7 @@ fn scan(
     depth: usize,
     result: &mut Snapshot,
     bytes: &mut usize,
+    transaction: Option<HANDLE>,
 ) -> Result<()> {
     ensure!(
         depth <= 8 && result.keys.len() < MAX_KEYS,
@@ -162,14 +178,30 @@ fn scan(
         ensure!(length as usize <= name.len(), "注册键名称超出范围");
         let name = String::from_utf16(&name[..length as usize])
             .map_err(|_| anyhow::anyhow!("注册键名称编码无效"))?;
-        let child =
-            open(key.0, &name)?.ok_or_else(|| anyhow::anyhow!("注册内容正在变化，请重试"))?;
-        scan(&child, &format!("{path}\\{name}"), depth + 1, result, bytes)?;
+        let child = open_tx(key.0, &name, transaction)?
+            .ok_or_else(|| anyhow::anyhow!("注册内容正在变化，请重试"))?;
+        scan(
+            &child,
+            &format!("{path}\\{name}"),
+            depth + 1,
+            result,
+            bytes,
+            transaction,
+        )?;
     }
     Ok(())
 }
 
 pub(super) fn read(roots: &[&str]) -> Result<Snapshot> {
+    read_tx(roots, None)
+}
+pub(in crate::explorer) fn classes() -> Result<Key> {
+    identity::classes()
+}
+pub(in crate::explorer) fn read_tx(
+    roots: &[&str],
+    transaction: Option<HANDLE>,
+) -> Result<Snapshot> {
     let mut result = Snapshot::default();
     let mut bytes = 0;
     // Windows makes HKCU\Software\Classes a link to the current user's
@@ -185,15 +217,16 @@ pub(super) fn read(roots: &[&str]) -> Result<Snapshot> {
     };
     for root in roots {
         let key = if let Some(relative) = root.strip_prefix(r"Software\Classes\") {
-            open(
+            open_tx(
                 classes.as_ref().expect("classes anchor initialized").0,
                 relative,
+                transaction,
             )?
         } else {
-            open(HKEY_CURRENT_USER, root)?
+            open_tx(HKEY_CURRENT_USER, root, transaction)?
         };
         if let Some(key) = key {
-            scan(&key, root, 0, &mut result, &mut bytes)?;
+            scan(&key, root, 0, &mut result, &mut bytes, transaction)?;
         }
     }
     Ok(result)

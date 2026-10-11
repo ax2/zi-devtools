@@ -3,17 +3,29 @@ use crate::explorer::{Plan, audit::Report};
 use anyhow::Context;
 use sha2::{Digest, Sha256};
 use std::sync::mpsc;
+#[cfg(windows)]
+mod maintenance;
 
 type AuditResult = ([u8; 32], Result<Report, String>);
 #[derive(Default)]
 pub(super) struct Audit {
     receiver: Option<mpsc::Receiver<AuditResult>>,
     result: Option<AuditResult>,
+    #[cfg(windows)]
+    maintenance: maintenance::Maintenance,
 }
 fn fingerprint(plan: &Plan) -> [u8; 32] {
     Sha256::digest(serde_json::to_vec(plan).expect("plan serialization")).into()
 }
 impl Audit {
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub(super) fn fixture_maintenance(&mut self, config: std::path::PathBuf) {
+        self.maintenance.fixture(config);
+    }
+    #[cfg(all(windows, feature = "ui-preview"))]
+    pub(super) fn fixture_finished(&self) -> bool {
+        self.maintenance.fixture_finished()
+    }
     pub(super) fn start(&mut self, plan: &Plan) {
         if self.receiver.is_some() {
             return;
@@ -29,6 +41,17 @@ impl Audit {
         });
     }
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, plan: Option<&Plan>) {
+        #[cfg(windows)]
+        if let Some(plan) = plan {
+            let controlled = ctx.data(|data| {
+                data.get_temp::<bool>(egui::Id::new("preview-explorer-only"))
+                    .unwrap_or(false)
+            });
+            if self.maintenance.ui(ui, ctx, &plan.config, controlled) {
+                self.result = None;
+                self.receiver = None;
+            }
+        }
         if let Some(receiver) = &self.receiver {
             match receiver.try_recv() {
                 Ok(result) => {
@@ -80,7 +103,7 @@ impl Audit {
                 }
             }
         } else if !busy {
-            ui.small("尚未检查。只读取本产品候选入口，不创建、修复或移除任何键。");
+            ui.small("尚未检查。此检查只读取本产品候选入口，不创建、修复或移除任何键。");
         }
         ui.add_space(8.0);
     }
@@ -105,8 +128,8 @@ impl DevToolsApp {
         }
         egui::Frame::new().fill(self.colors.card).corner_radius(12.0).inner_margin(18.0).show(ui, |ui| {
             ui.strong("资源管理器右键入口");
-            ui.label("开发中 · 先查看统一入口和可接收的文件动作");
-            ui.small("可主动检查当前用户入口，并预览单选经典菜单计划；不改动系统。完整多选、目录、窗口转发及安装维护仍待完成。");
+            ui.label("开发中 · 手动登记与维护单文件经典菜单");
+            ui.small("预览并确认后更新当前用户入口；不需要管理员权限。完整多选、目录、窗口转发、MSI自动维护和现代菜单仍待完成。");
             self.explorer_audit.ui(ui, ctx, plan.as_ref().ok());
             egui::CollapsingHeader::new("查看候选菜单与注册明细").default_open(expanded).show(ui, |ui| {
                 match &plan {
