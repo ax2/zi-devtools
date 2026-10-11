@@ -12,6 +12,7 @@ name = "ZiDevTools"
 path = "src/main.rs"
 
 [dependencies]
+zi-shell-core = { path = "crates/zi-shell-core" }
 zi-diff-core = { path = "crates/zi-diff-core" }
 zi-regex-core = { path = "crates/zi-regex-core" }
 zi-json-core = { path = "crates/zi-json-core" }
@@ -65,11 +66,11 @@ scraper = "0.21"
 rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
 
 [features]
-ui-preview = []
+ui-preview = ["zi-shell-core/ui-preview"]
 
 [workspace]
 exclude = ["vendor/regex-automata"]
-members = ["crates/zi-compare-wasi", "crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
+members = ["crates/zi-shell-core", "crates/zi-compare-wasi", "crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
 default-members = ["."]
 resolver = "3"
 

@@ -101,3 +101,9 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 ## 安装归属修正0.7.0
 便携登记/迁移预览查询实际Windows Installer产品及主组件归属，安装器目录即使缺少InstallLocation也不能创建便携UUID。已有便携记录的激活、移除后的候选接管及最终应用复核使用相同检查；归属查询失败不当作便携版通过。MSI身份的移除/迁移在后端先行拒绝，和界面禁用一致。当前不自动把历史误登记改成MSI记录，也不因发现问题删除入口。
 实际MSI事务CI夹具增加对首装、失败回滚及成功升级的相同检查，同时验证独立便携目录可用；开发机不安装或升级测试MSI。该只读查询与KTM提交不构成Windows Installer联合事务，完整安装选项、升级/修复/卸载和回滚菜单恢复仍待实现。
+
+## 无界面共享核心0.8.0
+
+菜单计划、Windows参数引用、文件动作定义、安装模型、状态读取、KTM账本/菜单联合事务和只读MSI身份查询移入`crates/zi-shell-core`。桌面原有explorer/文件动作/安装器检查入口保留兼容导出，安装执行仍在原更新适配层，核心不启动桌面程序或安装器。程序版本通过桌面适配显式传入，不使用核心自己的0.1.0版本；原测试随实现迁移，产品安装包UpgradeCode和工具目录一致性检查保留桌面侧。
+
+核心依赖限于现有anyhow/serde/JSON/semver/SHA-256/UUID及Windows系统API，不引入GUI、工具、网络或数据库。现有ui-preview配置仅传播受控票据功能，不加载UI。后续DLL仍需独立实现安装用户模拟、明确选项、执行/回滚配对及实际MSI故障矩阵；提取与现有KTM验证不能替代Windows Installer事务验收。

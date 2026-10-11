@@ -29,7 +29,6 @@ pub(super) fn put(
 
 #[test]
 fn two_install_orders_and_uninstall_orders_preserve_the_other_owner() {
-    assert!(include_str!("../../../packaging/windows.wxs").contains(MSI_UPGRADE_CODE));
     for msi_first in [false, true] {
         for remove_first_installed in [false, true] {
             let portable = sample(Identity::portable());

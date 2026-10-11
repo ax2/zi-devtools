@@ -5633,6 +5633,7 @@ dependencies = [
  "zi-inspect-core",
  "zi-json-core",
  "zi-regex-core",
+ "zi-shell-core",
  "zi-text-core",
  "zi-trace-core",
  "zip",
@@ -5712,6 +5713,19 @@ dependencies = [
  "anyhow",
  "regex",
  "regex-syntax",
+]
+
+[[package]]
+name = "zi-shell-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "uuid",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

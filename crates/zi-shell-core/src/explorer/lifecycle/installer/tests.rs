@@ -7,7 +7,7 @@ fn manual_msi_removal_and_relocation_refused_before_registry_access() {
         Request::Relocate(Identity::Msi),
     ] {
         assert!(
-            preview(Path::new("missing-config.yml"), request)
+            preview(Path::new("missing-config.yml"), request, "9.8.7")
                 .err()
                 .unwrap()
                 .to_string()
@@ -64,7 +64,8 @@ fn fresh_file_hash_and_write_delete_lock_protect_commit_identity() {
     let files = Files::new();
     let verified =
         VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml")).unwrap();
-    let record = verified.record(Identity::portable());
+    let record = verified.record(Identity::portable(), "9.8.7");
+    assert_eq!(record.version, "9.8.7");
     assert!(std::fs::write(&record.executable, b"MZchanged").is_err());
     assert!(std::fs::remove_file(&record.executable).is_err());
     let check = VerifiedFile::verify(&record).unwrap();
@@ -81,7 +82,7 @@ fn controlled_preview_is_rejected_before_file_or_registry_application() {
     let files = Files::new();
     let record = VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml"))
         .unwrap()
-        .record(Identity::portable());
+        .record(Identity::portable(), "9.8.7");
     let config = files.0.join("config.yml");
     let ledger = prepare(
         &Ledger::default(),
