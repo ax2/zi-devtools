@@ -440,3 +440,7 @@ HTTP请求调试1.0.1：localhost与回环IPv4/IPv6直接连接，避免环境�
 ### 资源管理器菜单安装验证（候选0.22.0）
 
 当前菜单共享声明已接入正式WiX模板；[五路原生CI](https://github.com/ax2/zi-devtools/actions/runs/38139776984)通过，覆盖真实当前EXE安装与服务运行、事务提交/回滚、公开v0.81.0正常升级、菜单启用/关闭/继承修复及卸载，用户数据保留。仍开发中，未发布新版本；可见安装选择和完整Explorer交互待实现。详见[验证范围](docs/explorer-integration.md)与[安装选项设计](docs/explorer-installer-ui.md)。
+
+### 安装器菜单选项（候选0.23.0）
+
+完整安装界面现提供“保留当前设置 / 启用 / 关闭”三选项，默认继承。公开旧版升级和五次原生UI点击已在[五路CI](https://github.com/ax2/zi-devtools/actions/runs/38140649205)通过，取消不执行安装，截图已检查。静默参数继续支持，应用dev版本不变、未发布。键盘、缩放、完整UI卸载和真实Explorer仍需验收，详见[验证范围](docs/explorer-integration.md)。
