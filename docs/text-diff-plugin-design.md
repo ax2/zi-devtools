@@ -1,7 +1,7 @@
 # 文本差异共享核心与插件迁移
 
-状态：已提取 `zi-diff-core/0.1.0` 并接入桌面入口，插件操作尚未实现。现有 `text.diff` 继续明确返回
-`UNSUPPORTED_OPERATION`；本文件不更改冻结契约、请求版本或安装候选。
+状态：已提取 `zi-diff-core/0.1.0` 并接入桌面入口。旧proposal.2模块的 `text.diff` 继续返回
+`UNSUPPORTED_OPERATION`；新增[proposal.3时钟实验](../proposals/studio-fields/v0.1.2/README.md)已接入完整文本差异，但原预算240例239通过/1耗尽燃料，尚未交付插件。本文件不更改冻结契约或安装候选。
 
 ## 当前行为及必须保留的边界
 
@@ -32,7 +32,7 @@ Host 所需声明方式应通过新的、明确版本化的提案确定，不擅
 
 独立 `clock_probe` example、`run_diff_clock_probe.mjs` 与 `verify_diff_clock.py` 已实际构建/执行，Node v26.10.0 的5项诊断通过。探针分别检查单调时钟推进、主动过期后的输入重建、36组正常比较与精确报告预算，以及完整128KiB/5000行范围、超界输入和48KiB报告拒绝；在 `compare` 模式没有直接 `Instant` 调用的情况下观测到核心546次单调时钟读取，主动过期模式4次读取，不把仅创建Instant算作算法检查。负向模式让实际 `clock_time_get` 返回 Preview1 `ERRNO_NOSYS=52`，Rust实际panic并以非零状态退出；并非测试器抛异常，也没有静默关闭截止策略。
 
-诊断模块248438字节，SHA-256 `784a10ab36a01ab2806d5283045b9adacab3dcf6e9587d54f20df66dadbbc8e2`。证据标记 `diagnosticOnly=true`，记录Node版本和程序、模块、验证器哈希。Host必须在调用前明确协商并确保提供单调时钟；不支持时应在Host/适配层拒绝该操作，不能依赖Rust panic作为产品错误处理。目前没有该协商或完整适配器，因此仍不交付text.diff。独立Node诊断不证明fuel、冷启动或生产Host接受。
+诊断模块248438字节，SHA-256 `784a10ab36a01ab2806d5283045b9adacab3dcf6e9587d54f20df66dadbbc8e2`。证据标记 `diagnosticOnly=true`，记录Node版本和程序、模块、验证器哈希。Host必须在调用前明确协商并确保提供单调时钟；不支持时应在Host/适配层拒绝该操作，不能依赖Rust panic作为产品错误处理。后续独立proposal.3适配器已经实现实际时钟预检和结构化RUNTIME_UNAVAILABLE，但仍无生产Host协商、完整预算或安装验收，因此尚不交付。独立Node诊断不证明fuel、冷启动或生产Host接受。
 
 10M fuel、5 秒进程期限、64 MiB 内存、2 MiB 栈和 500ms 算法截止是不同约束。
 不能用 fuel 代替单调时间，也不能为通过矩阵而放宽现有预算。

@@ -86,6 +86,17 @@ jobs:
         run: python scripts/verify_fields_proposal.py --proposal-version 0.1.0
       - name: Draft multi-field v0.1.1 query fields and byte budgets
         run: python scripts/verify_fields_proposal.py --proposal-version 0.1.1
+      - name: Draft multi-field v0.1.2 clock requirements and errors
+        run: python scripts/verify_fields_proposal.py --proposal-version 0.1.2
+      - name: Experimental proposal.3 five-operation parity and clock handling
+        shell: pwsh
+        run: |
+          cargo build -p zi-compare-wasi --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p zi-compare-wasi --profile plugin --target wasm32-wasip1 --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_compare_wasi.py --output "$env:RUNNER_TEMP/compare-functional.json"
+          exit $LASTEXITCODE
       - name: Real native and WASI format inspection parity
         shell: pwsh
         run: |

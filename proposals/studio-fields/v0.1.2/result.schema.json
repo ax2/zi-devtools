@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "compute.fields.clock.v1 proposed result; not Host-supported",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "const": "1.1.0-proposal.3"
+        },
+        "ok": {
+          "const": true
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "error": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "ok",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "const": "1.1.0-proposal.3"
+        },
+        "ok": {
+          "const": false
+        },
+        "data": {
+          "type": "null"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "INVALID_INPUT",
+                "INPUT_TOO_LARGE",
+                "INVALID_ENCODING",
+                "UNSUPPORTED_OPERATION",
+                "INTERNAL_ERROR",
+                "RUNTIME_UNAVAILABLE"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "contractVersion",
+        "ok",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$comment": "Provider clock proposal only; frozen snapshots and proposal.2 adapter unchanged."
+}

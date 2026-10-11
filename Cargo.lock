@@ -5565,6 +5565,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-compare-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wasi",
+ "zi-diff-core",
+ "zi-fields-wasi",
+]
+
+[[package]]
 name = "zi-devtools"
 version = "0.82.0-dev.105"
 dependencies = [

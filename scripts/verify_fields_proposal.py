@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator, ValidationError
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path)
-parser.add_argument('--proposal-version', choices=['0.1.0', '0.1.1'], default='0.1.0')
+parser.add_argument('--proposal-version', choices=['0.1.0', '0.1.1', '0.1.2'], default='0.1.0')
 args = parser.parse_args()
 FOLDER = ROOT / ('proposals/studio-fields/v' + args.proposal_version)
 load = lambda path: json.loads(path.read_text(encoding='utf-8'))
@@ -21,15 +21,20 @@ proposal = load(FOLDER / 'proposal.json')
 schema = load(FOLDER / 'request.schema.json')
 assert proposal['status'] == 'provider_proposal_not_frozen_not_Host_supported'
 assert proposal['contractVersion'] != '1.0.0-rc.1'
-assert proposal['profile'] == 'compute.fields.v1'
+assert proposal['profile'] == ('compute.fields.clock.v1' if args.proposal_version == '0.1.2' else 'compute.fields.v1')
+if args.proposal_version == '0.1.2':
+    assert proposal['runtimeRequirements'] == {'devtools.compare.text.diff': {
+        'wasiImport': 'wasi_snapshot_preview1.clock_time_get', 'clockId': 1,
+        'availability': 'stable_for_entire_invocation', 'purpose': 'original_500ms_algorithm_deadline',
+        'preflightFailureCode': 'RUNTIME_UNAVAILABLE'}}
 assert schema['properties']['contractVersion']['const'] == proposal['contractVersion']
 assert schema['properties']['pluginId']['const'] == proposal['packageId']
 operations = {op['id']: op for op in proposal['operations']}
 expected_ids = {'devtools.compare.regex.matches', 'devtools.compare.text.diff', 'devtools.compare.json.diff.ordered', 'devtools.compare.json.diff.unordered'}
-if args.proposal_version == '0.1.1': expected_ids.add('devtools.compare.json.path')
+if args.proposal_version != '0.1.0': expected_ids.add('devtools.compare.json.path')
 assert set(operations) == expected_ids and len(proposal['operations']) == len(expected_ids)
 assert proposal['proposalVersion'] == args.proposal_version
-assert proposal['contractVersion'] == {'0.1.0': '1.1.0-proposal.1', '0.1.1': '1.1.0-proposal.2'}[args.proposal_version]
+assert proposal['contractVersion'] == {'0.1.0': '1.1.0-proposal.1', '0.1.1': '1.1.0-proposal.2', '0.1.2': '1.1.0-proposal.3'}[args.proposal_version]
 assert len(schema['oneOf']) == len(operations)
 assert {b['properties']['capabilityId']['const'] for b in schema['oneOf']} == expected_ids
 catalog_versions = {tool['id']: tool['tool_version'] for tool in load(ROOT / 'docs/tools.json')['tools']}
@@ -86,6 +91,8 @@ reverted['title'] = 'compute.wasi.v1 tool result'
 for branch in reverted['oneOf']:
     assert branch['properties']['contractVersion']['const'] == proposal['contractVersion']
     branch['properties']['contractVersion']['const'] = '1.0.0-rc.1'
+if args.proposal_version == '0.1.2':
+    reverted['oneOf'][1]['properties']['error']['properties']['code']['enum'].remove('RUNTIME_UNAVAILABLE')
 assert reverted == load(ROOT / 'contracts/studio-devtools/v1/result.schema.json')
 Draft202012Validator.check_schema(result_schema)
 result_validator = Draft202012Validator(result_schema)
