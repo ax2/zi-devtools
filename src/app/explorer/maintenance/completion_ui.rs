@@ -33,6 +33,7 @@ impl Maintenance {
                 Ok(Work::Completed {
                     ledger,
                     id,
+                    status: Status::Completed,
                     refreshed: recovery::list().map_err(|error| error.to_string()),
                 })
             });

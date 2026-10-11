@@ -8,6 +8,7 @@ pub fn mark_commit_ready(id: &str) -> Result<()> {
     ready_at(&Scope::production(), id, true)
 }
 pub(super) fn ready_at(scope: &Scope, id: &str, commit: bool) -> Result<()> {
+    let _guard = serialization::Guard::acquire(scope)?;
     let tx = Transaction::begin()?;
     let mut record = read_record(scope, id, &tx)?;
     let current = read(&scope.menu.ledger, &tx)?;
@@ -36,6 +37,7 @@ pub fn mark_committed(id: &str) -> Result<()> {
     mark_at(&Scope::production(), id, true)
 }
 pub(super) fn mark_at(scope: &Scope, id: &str, commit: bool) -> Result<()> {
+    let _guard = serialization::Guard::acquire(scope)?;
     let tx = Transaction::begin()?;
     let mut record = read_record(scope, id, &tx)?;
     let current = read(&scope.menu.ledger, &tx)?;
@@ -105,6 +107,7 @@ pub fn apply(ticket: Ticket) -> Result<Ledger> {
 }
 pub(super) fn apply_at(ticket: Ticket, scope: &Scope, commit: bool) -> Result<Ledger> {
     ensure!(!ticket.preview_only, "受控恢复预览禁止应用");
+    let _guard = serialization::Guard::acquire(scope)?;
     let tx = Transaction::begin()?;
     tx.user.require_identity(&ticket.user)?;
     let mut record = read_record(scope, &ticket.id, &tx)?;

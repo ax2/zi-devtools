@@ -138,7 +138,8 @@ def main():
     compile_orders = {}
     for label, version, fault in [('old', '0.1.0', None), ('before', '0.2.0', 'before'),
                                    ('after', '0.2.0', 'after'), ('new', '0.2.0', None),
-                                   ('receipt', '0.3.0', None), ('commitfail', '0.2.0', 'commit')]:
+                                   ('receipt', '0.3.0', None), ('commitfail', '0.2.0', 'commit'),
+                                   ('preparefail', '0.2.0', 'prepared')]:
         payload = folder / label
         payload.mkdir()
         # Synthetic MZ payloads satisfy the product's documented basic check;
@@ -204,7 +205,7 @@ def main():
                               Execute='commit', Return='check', Impersonate='yes')
             else:
                 ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure', Error='Intentional menu rollback fixture')
-            position = ({'Sequence': '1520'} if fault == 'before' else
+            position = ({'Sequence': '1520'} if fault in ['before', 'prepared'] else
                         {'After': 'ZiMenuCommitReady'} if fault == 'commit' else {'Before': 'InstallFinalize'})
             ET.SubElement(sequence, NS + 'Custom', Action='MenuFixtureFailure', Condition='NOT REMOVE', **position)
         source = folder / (label + '.wxs')
@@ -222,7 +223,7 @@ def main():
             required.append('ZiMenuFinalize')
         positions = [order[name] for name in required]
         assert all(a < b for a, b in zip(positions, positions[1:])), dict(zip(required, positions))
-        if fault == 'before':
+        if fault in ['before', 'prepared']:
             assert order['ZiMenuRollback'] < order['MenuFixtureFailure'] < order['InstallFiles']
         if fault == 'after':
             assert order['ZiMenuExecute'] < order['InstallExecute'] < order['RemoveExistingProducts'] < order['MenuFixtureFailure'] < order['InstallFinalize']
@@ -234,7 +235,7 @@ def main():
     (folder / 'compile-proof.json').write_text(json.dumps(dict(sequences=compile_orders,
         dllSha256=hashlib.sha256(actions.read_bytes()).hexdigest()), indent=2) + '\n')
     if args.compile_only:
-        print('PASS: six candidate DLL fixtures compiled, no installation performed')
+        print('PASS: seven candidate DLL fixtures compiled, no installation performed')
         return
 
     native = ctypes.WinDLL(str(actions))
@@ -427,6 +428,17 @@ def main():
         repaired = installed('old')
         assert repaired['generation'] != before['generation']
         proofs.append('enabled first install and inherited repair use DLL and real files')
+        menus = [read_tree(p) for p in MENU_ROOTS]
+        result, log = invoke('preparefail')
+        assert result == 1603 and 'ZiMenu: prepared' in log and 'ZiMenu: applied' not in log
+        prepared = [r for r in observe('--journal') if r['status'] == 'Prepared']
+        assert len(prepared) == 1 and installed('old') == repaired
+        # No execution script ran. Cancel only the unexecuted menu record;
+        # never claim that this action rolls back Installer-owned files.
+        observe('--cancel-prepared', prepared[0]['id'])
+        assert any(r == dict(id=prepared[0]['id'], status='Canceled') for r in observe('--journal'))
+        assert installed('old') == repaired and [read_tree(p) for p in MENU_ROOTS] == menus
+        proofs.append('immediate preparation failure leaves a Prepared record; explicit cancellation preserves old files, menus and registrations')
         for label in ['before', 'after', 'commitfail']:
             menus = [read_tree(p) for p in MENU_ROOTS]
             result, log = invoke(label)

@@ -2,8 +2,10 @@
 //! Callers must verify actual files and Eligible records immediately before use.
 use super::super::msi_operation::{self, Undo};
 use super::*;
+pub mod cancellation;
 pub mod completion;
 mod security;
+mod serialization;
 const JOURNAL: &str = r"Software\ZiCode\ZiDevTools\ExplorerRecovery";
 const MAX_RECORDS: usize = 32;
 const MAX_RECORD_BYTES: usize = 512 * 1024;
@@ -77,6 +79,7 @@ pub enum Status {
     Committed,
     Reverted,
     Completed,
+    Canceled,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Operation {
@@ -124,6 +127,7 @@ enum State {
     Committed { undo: Box<Undo> },
     Reverted,
     Completed,
+    Canceled,
 }
 impl State {
     fn status(&self) -> Status {
@@ -134,6 +138,7 @@ impl State {
             Self::Committed { .. } => Status::Committed,
             Self::Reverted => Status::Reverted,
             Self::Completed => Status::Completed,
+            Self::Canceled => Status::Canceled,
         }
     }
 }
@@ -375,6 +380,7 @@ pub fn prepare(id: &str, intent: Intent) -> Result<()> {
     prepare_at(&Scope::production(), id, intent)
 }
 fn prepare_at(scope: &Scope, id: &str, intent: Intent) -> Result<()> {
+    let _guard = serialization::Guard::acquire(scope)?;
     validate_id(id)?;
     intent.validate()?;
     let tx = Transaction::begin()?;
@@ -403,6 +409,7 @@ pub fn rollback_verified(id: &str) -> Result<Ledger> {
     transition_verified(&Scope::production(), id, Action::Rollback)
 }
 fn transition_verified(scope: &Scope, id: &str, action: Action) -> Result<Ledger> {
+    let _guard = serialization::Guard::acquire(scope)?;
     let tx = Transaction::begin()?;
     let record = read_record(scope, id, &tx)?;
     let current = read(&scope.menu.ledger, &tx)?;
@@ -476,6 +483,7 @@ fn transition(
     action: Action,
     commit: bool,
 ) -> Result<Ledger> {
+    let _guard = serialization::Guard::acquire(scope)?;
     let tx = Transaction::begin()?;
     let after = transition_in(scope, id, eligible, action, &tx)?;
     if commit {
@@ -547,7 +555,8 @@ fn transition_in(
             record.state = State::Completed;
             Some(plan)
         }
-        (Action::Rollback, State::Reverted) | (Action::Complete, State::Completed) => {
+        (Action::Rollback, State::Reverted | State::Canceled)
+        | (Action::Complete, State::Completed) => {
             return Ok(current);
         }
         _ => anyhow::bail!("恢复日志状态不允许此操作"),
@@ -568,10 +577,14 @@ pub fn forget(id: &str) -> Result<()> {
     forget_at(&Scope::production(), id)
 }
 fn forget_at(scope: &Scope, id: &str) -> Result<()> {
+    let _guard = serialization::Guard::acquire(scope)?;
     let tx = Transaction::begin()?;
     let record = read_record(scope, id, &tx)?;
     ensure!(
-        matches!(record.state, State::Reverted | State::Completed),
+        matches!(
+            record.state,
+            State::Reverted | State::Completed | State::Canceled
+        ),
         "未完成记录不能清理"
     );
     let (root, _) = root(scope, &tx, false)?.ok_or_else(|| anyhow::anyhow!("恢复日志根缺失"))?;

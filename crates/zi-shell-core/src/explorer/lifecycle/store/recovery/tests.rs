@@ -855,3 +855,120 @@ fn verified_install_rejects_a_missing_custom_config_without_changing_registry() 
     assert!(fixture.menu.menu().keys.is_empty());
     assert!(!files.0.join("config.yml").exists());
 }
+
+#[test]
+fn prepared_cancellation_is_explicit_optimistic_and_changes_only_its_journal_record() {
+    let fixture = Fixture::new();
+    let m = record(Identity::Msi);
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&m, None)).unwrap();
+    let ticket = cancellation::preview_at(&fixture.scope, &id).unwrap();
+    let mut foreign = ticket.clone();
+    foreign.user = crate::explorer::audit::native::UserIdentity("other-user".into());
+    assert!(cancellation::apply_at(foreign, &fixture.scope, true).is_err());
+    let portable = record(Identity::portable());
+    fixture.commit(put(
+        &fixture.menu.ledger(),
+        portable.clone(),
+        None,
+        std::slice::from_ref(&portable),
+    ));
+    assert!(cancellation::apply_at(ticket, &fixture.scope, true).is_err());
+    let ledger = fixture.menu.ledger();
+    let menus = fixture.menu.menu();
+    let ticket = cancellation::preview_at(&fixture.scope, &id).unwrap();
+    cancellation::apply_at(ticket.clone(), &fixture.scope, false).unwrap();
+    assert_eq!(fixture.state(&id), Status::Prepared);
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menus);
+    assert_eq!(
+        cancellation::apply_at(ticket.clone(), &fixture.scope, true).unwrap(),
+        ledger
+    );
+    assert_eq!(fixture.state(&id), Status::Canceled);
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menus);
+    assert!(cancellation::apply_at(ticket, &fixture.scope, true).is_err());
+    assert!(cancellation::preview_at(&fixture.scope, &id).is_err());
+    assert!(fixture.change(&id, Action::Execute, vec![m], true).is_err());
+    assert!(fixture.change(&id, Action::Complete, vec![], true).is_err());
+    // A late Installer rollback is harmless; it cannot revive canceled intent.
+    assert_eq!(
+        fixture.change(&id, Action::Rollback, vec![], true).unwrap(),
+        ledger
+    );
+    forget_at(&fixture.scope, &id).unwrap();
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menus);
+}
+
+#[test]
+fn applied_or_commit_ready_menu_intents_cannot_be_canceled_as_unexecuted() {
+    let fixture = Fixture::new();
+    let m = record(Identity::Msi);
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&m, None)).unwrap();
+    let ticket = cancellation::preview_at(&fixture.scope, &id).unwrap();
+    fixture.change(&id, Action::Execute, vec![m], true).unwrap();
+    assert!(cancellation::preview_at(&fixture.scope, &id).is_err());
+    assert!(cancellation::apply_at(ticket.clone(), &fixture.scope, true).is_err());
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
+    assert!(cancellation::preview_at(&fixture.scope, &id).is_err());
+    completion::mark_at(&fixture.scope, &id, true).unwrap();
+    assert!(cancellation::preview_at(&fixture.scope, &id).is_err());
+    assert!(cancellation::apply_at(ticket, &fixture.scope, true).is_err());
+}
+
+#[test]
+fn concurrent_install_execution_and_prepared_cancellation_have_one_winner() {
+    use std::sync::{Arc, Barrier};
+    let fixture = Fixture::new();
+    let m = record(Identity::Msi);
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&m, None)).unwrap();
+    let ticket = cancellation::preview_at(&fixture.scope, &id).unwrap();
+    let barrier = Arc::new(Barrier::new(2));
+    let workers: Vec<_> = (0..2)
+        .map(|index| {
+            let barrier = barrier.clone();
+            let scope = Scope {
+                menu: fixture.scope.menu.clone(),
+                journal: fixture.scope.journal.clone(),
+            };
+            let ticket = ticket.clone();
+            let id = id.clone();
+            let m = m.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                if index == 0 {
+                    cancellation::apply_at(ticket, &scope, true).is_ok()
+                } else {
+                    transition(&scope, &id, &Eligible(vec![m]), Action::Execute, true).is_ok()
+                }
+            })
+        })
+        .collect();
+    let wins = workers
+        .into_iter()
+        .map(|w| w.join().unwrap())
+        .filter(|won| *won)
+        .count();
+    assert_eq!(wins, 1);
+    match fixture.state(&id) {
+        Status::Canceled => {
+            assert!(fixture.menu.ledger().entries().is_empty());
+            assert!(fixture.menu.menu().keys.is_empty());
+        }
+        Status::Applied => {
+            assert_eq!(fixture.menu.ledger().entries().len(), 1);
+            assert!(!fixture.menu.menu().keys.is_empty());
+        }
+        status => panic!("unexpected race state: {status:?}"),
+    }
+}
+
+#[cfg(feature = "ui-preview")]
+#[test]
+fn synthetic_cancellation_ticket_never_touches_real_registry() {
+    assert!(cancellation::apply(cancellation::fixture_preview()).is_err());
+}
