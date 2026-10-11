@@ -1,6 +1,6 @@
 # 资源管理器统一入口：实现约束与验收
 
-更新：2026-10-11。状态：文件接收1.2.0、确认式经典菜单维护0.4.0。设置页可预览并确认手动登记、修复、切换、迁移和移除；`explorer-menu`仍为开发中，实际Explorer显示/调用、MSI自动维护与完整多选尚未验收。
+更新：2026-10-11。状态：文件接收1.2.0、经典菜单维护与Shell调用修正0.5.0。设置页可预览并确认手动登记、修复、切换、迁移和移除；`explorer-menu`仍为开发中，实际Explorer窗口显示/导入、MSI自动维护与完整多选尚未验收。
 
 ## 已有基础及缺口
 
@@ -81,3 +81,11 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 账本与两处固定Classes菜单树在同一KTM事务中重新读取、对照预览、写入和复核，再共同提交。菜单协议2记录活动安装身份、代次及文件摘要；只修复确认属于当前记录的缺失项，所有权标记缺失、未知内容、注册链接或预览后变化均拒绝覆盖。旧的纯账本提交API拒绝带菜单摘要的记录，避免绕过联合提交。成功后通知Shell刷新；状态检查可区分入口属于另一份已登记程序/配置。应用后清除旧检查结果及等待中的旧回复。
 
 隔离Tests/ExplorerJoint-UUID夹具覆盖两个注册hive的共同提交与回滚、两种登记/移除顺序、更新回滚、陈旧预览、未知值保留和缺失命令修复；不会登记真实文件右键入口。受控截图的确认按钮禁用，后端也拒绝应用；截图前后核对三处产品注册根未变化。上述证据不替代真实Explorer调用及MSI安装、升级、卸载和失败回滚验收。
+
+## 原生Shell调用修正0.5.0
+
+真实Shell调用发现规范文件系统路径的`\\?\`前缀用于可执行命令时返回拒绝访问。现在安装记录仍保存规范路径用于身份/摘要核验，只有菜单命令和图标模板转换为普通驱动器或UNC路径；无法转换的扩展设备路径在预览阶段拒绝。已有登记可通过“预览安装 / 修复此程序”确认修复命令。UNC转换有单元覆盖，未验证真实网络共享或超长路径的Shell执行。
+
+`explorer_shell_probe`通过实际IShellItem/IContextMenu构建级联、发送子菜单初始化消息，并逐项InvokeCommand启动独立接收进程；复用产品Plan生成器。普通与规范路径输入各12项调用均核对完整argv，覆盖中文、空格、符号、字面`%1`和类似参数的文件名。夹具只登记随机独立文件类型/ProgID/动作树，不登记产品`*`入口；结束后复核删除关联项，移除合成输入和参数回执。CI运行同一探针并保存非敏感证明。
+
+运行：先用`scripts/dev.ps1 build --example explorer_shell_probe --features ui-preview --locked`构建，再将独立空的本地记录目录作为参数传给`target/debug/examples/explorer_shell_probe.exe`；第二次加`--extended-paths`覆盖安装记录的规范路径。记录目录拒绝重解析点。该证据证明Shell COM宿主解析和实际进程参数传递，不证明Explorer窗口渲染、真实应用导入确认、多选、现代菜单或MSI生命周期。参考：[BindToHandler](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishellitem-bindtohandler)、[InvokeCommand](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-icontextmenu-invokecommand)、[菜单消息初始化](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-icontextmenu2-handlemenumsg)。

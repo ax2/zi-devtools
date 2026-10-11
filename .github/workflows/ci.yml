@@ -34,6 +34,23 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Native Shell cascade and literal command invocation (isolated association)
+        shell: pwsh
+        run: |
+          cargo build --example explorer_shell_probe --features ui-preview --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $probeDir = Join-Path $env:RUNNER_TEMP 'zi-shell-probe'
+          New-Item -ItemType Directory -Path $probeDir -Force | Out-Null
+          & ./target/debug/examples/explorer_shell_probe.exe $probeDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./target/debug/examples/explorer_shell_probe.exe $probeDir --extended-paths
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-shell-probe
+          path: ${{ runner.temp }}/zi-shell-probe/shell-proof*.json
+          if-no-files-found: ignore
       - name: JSON core native64 and WASI32 portability (fixed fixture only)
         shell: pwsh
         run: |

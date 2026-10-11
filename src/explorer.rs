@@ -35,6 +35,26 @@ pub struct Plan {
 fn template_path(path: &Path) -> Result<String> {
     let path = std::path::absolute(path)?;
     let value = path.to_str().context("菜单模板路径不是有效Unicode")?;
+    // Canonical filesystem paths may carry \\?\, which ShellExecute rejects.
+    // Preserve canonical identity in Plan; only the Shell command uses Win32 syntax.
+    #[cfg(windows)]
+    let shell_path = if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else if let Some(drive) = value.strip_prefix(r"\\?\") {
+        let bytes = drive.as_bytes();
+        ensure!(
+            bytes.len() >= 3
+                && bytes[0].is_ascii_alphabetic()
+                && bytes[1] == b':'
+                && bytes[2] == b'\\',
+            "此扩展设备路径不能可靠地用于Shell命令，未执行安装"
+        );
+        drive.to_owned()
+    } else {
+        value.to_owned()
+    };
+    #[cfg(windows)]
+    let value = shell_path.as_str();
     ensure!(
         !value
             .chars()
@@ -118,6 +138,33 @@ pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn canonical_file_identity_uses_shell_compatible_command_paths() {
+        let exe = Path::new(r"\\?\C:\资料 folder\ZiDevTools.exe");
+        let config = Path::new(r"\\?\UNC\server\share\服务.yml");
+        let plan = plan(exe, config).unwrap();
+        assert_eq!(plan.executable, exe);
+        assert_eq!(plan.config, config);
+        let command = &plan
+            .values
+            .iter()
+            .find(|v| v.key.ends_with(r"\choose\command"))
+            .unwrap()
+            .value;
+        assert!(
+            command.starts_with(
+                r#""C:\资料 folder\ZiDevTools.exe" --config "\\server\share\服务.yml""#
+            )
+        );
+        assert!(!command.contains(r"\\?\"));
+        assert!(
+            template_path(Path::new(
+                r"\\?\Volume{00000000-0000-0000-0000-000000000000}\ZiDevTools.exe"
+            ))
+            .is_err()
+        );
+    }
     #[test]
     fn plans_only_current_user_single_file_receivers_and_literal_process_commands() {
         let dir = std::env::current_dir().unwrap().join("资料 folder");

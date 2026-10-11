@@ -229,3 +229,7 @@ required-features = ["ui-preview"]
 [[example]]
 name = 'image_memory_ui'
 required-features = ['ui-preview']
+
+[[example]]
+name = "explorer_shell_probe"
+required-features = ["ui-preview"]
