@@ -1,5 +1,6 @@
 //! Classic-menu plans and explicit read-only registry audits. No registration writes.
 pub mod audit;
+pub mod lifecycle;
 use anyhow::{Context, Result, ensure};
 use serde::Serialize;
 use std::path::Path;

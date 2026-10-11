@@ -63,3 +63,11 @@
 Windows读取方式依据[RegOpenKeyExW](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regopenkeyexw)与[RegEnumValueW](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regenumvaluew)。当前原生测试只在独立Tests/ExplorerAudit-UUID命名空间创建合成数据并验证读取前后一致、超限失败和完整移除；不创建真实Shell菜单。真实菜单显示/调用、系统安装身份、EXE/MSI事务和完整多选仍待实现。
 
 实际Windows将HKCU/Software/Classes映射到当前用户的独立Classes hive。检查器从进程令牌确认用户，直接只读打开HKEY_USERS下该用户的SID_Classes，绕过系统别名而不跟随任意注册链接；其下产品路径仍逐段拒绝REG_LINK，不读混合机器数据的HKCR，也不记录SID。另有实际用户Classes锚点只读测试。映射依据：[Microsoft registry shared keys](https://learn.microsoft.com/en-us/windows/win32/winprog64/shared-registry-keys)。
+
+## 安装账本事务基础0.3.0
+
+`explorer/lifecycle.rs`提供独立于UI和安装包的安装记录及迁移规划。便携安装使用持久UUID，MSI使用固定UpgradeCode家族身份；每次更新生成新代次UUID，即使应用版本未变。更新/移除必须匹配当前代次，提交必须匹配完整旧账本。修订号递增，最后一份移除后仍保留空账本修订号，防止旧预览重放。活动安装从调用方本次核验过的完整记录中选择，主动切换到未核验目标直接拒绝；移除活动安装时优先选剩余最新可用记录，没有可用记录则无活动项。模型不自己确认文件存在、真实性或菜单可调用；接入层必须核验当前文件，不能用历史可用性缓存充当证据。
+
+Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations，单个State值包含严格协议/所有权JSON，最多32项，UTF-16注册值最多256 KiB。逐段拒绝注册链接，发现未知值/子键、外部所有权、协议、编码或资源超限即拒绝；不清理未知内容。当前使用本机KTM注册事务，在同一事务内读取完整旧状态、写入并复核，再提交；失败回滚，不降级成部分写入。提交未确认时要求重新检查。依据[RegCreateKeyTransactedW](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regcreatekeytransactedw)，事务提交/回滚后须重新打开事务句柄，当前每次操作使用独立事务。
+
+真实原生测试只在Tests/ExplorerLedger-UUID命名空间写入合成安装记录，覆盖两种安装和卸载顺序、首次安装及更新回滚、陈旧预览、并发单赢家和未知值保留，并核实移除测试目录。未连接真实账本的UI自动调用，不写生产账本或Shell菜单。账本事务不是Windows Installer事务，也尚未与共享菜单原子提交；MSI安装选项、文件核验、身份持久化、用户确认及菜单共存/升级/卸载仍按前述门槛待完成。

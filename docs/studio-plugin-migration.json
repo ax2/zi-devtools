@@ -3748,7 +3748,7 @@
     {
       "sourceToolId": "explorer-menu",
       "title": "资源管理器统一右键入口",
-      "sourceVersion": "0.2.0",
+      "sourceVersion": "0.3.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -3757,9 +3757,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "文件/文件夹/空白处统一 Zi DevTools 菜单，按文件类型与多选限制显示适用操作；工具先预览再执行。当前用户安装、更新、修复及卸载；支持 EXE 主动注册和 MSI 安装选项，核验路径转义、单实例转发及 Windows 11 新旧菜单兼容。开发版设置页已有只读单选经典菜单注册计划预览，复用11个文件接收器；可主动后台只读检查固定本产品入口，不写入注册表，不安装菜单，完整多选、目录和EXE/MSI生命周期仍待完成；双快照检查区分缺失/一致/变化/冲突/其他协议，拒绝注册链接、范围/资源超限及读取失败；当前程序或配置改变后结果失效，状态一致不等于Explorer验收",
+          "scope": "文件/文件夹/空白处统一 Zi DevTools 菜单，按文件类型与多选限制显示适用操作；工具先预览再执行。当前用户安装、更新、修复及卸载；支持 EXE 主动注册和 MSI 安装选项，核验路径转义、单实例转发及 Windows 11 新旧菜单兼容。开发版设置页已有只读单选经典菜单注册计划预览，复用11个文件接收器；可主动后台只读检查固定本产品入口，不写入注册表，不安装菜单，完整多选、目录和EXE/MSI生命周期仍待完成；双快照检查区分缺失/一致/变化/冲突/其他协议，拒绝注册链接、范围/资源超限及读取失败；当前程序或配置改变后结果失效，状态一致不等于Explorer验收；新增便携UUID/MSI固定家族安装身份、独立更新代次及修订号、可用安装切换与256 KiB有界当前用户账本事务API。真实KTM隔离夹具覆盖提交/回滚/陈旧请求/并发冲突和两种安装卸载顺序；存储尚未接入UI、菜单写入或MSI事务，不能视为已安装菜单",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.2.0",
+          "sourceVersion": "0.3.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }
