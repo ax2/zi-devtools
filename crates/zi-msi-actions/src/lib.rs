@@ -180,6 +180,29 @@ fn rollback(session: u32) -> Result<()> {
     report(session, "ZiMenu: reverted");
     Ok(())
 }
+fn finalize(session: u32) -> Result<()> {
+    // This immediate action is sequenced AFTER InstallFinalize, never as a
+    // commit action: a commit action can still be followed by MSI rollback.
+    ensure!(
+        !mode(session, MSIRUNMODE_SCHEDULED)
+            && !mode(session, MSIRUNMODE_ROLLBACK)
+            && !mode(session, MSIRUNMODE_COMMIT),
+        "收尾动作模式错误"
+    );
+    ensure!(
+        property(session, "UpgradeCode")?.eq_ignore_ascii_case(zi_shell_core::msi::UPGRADE_CODE)
+            && property(session, "ALLUSERS")?.is_empty(),
+        "收尾安装器家族或作用域不符"
+    );
+    let id = property(session, "ZiMenuExecute")?;
+    if id.is_empty() {
+        return Ok(());
+    }
+    valid_id(&id)?;
+    recovery::complete(&id)?;
+    report(session, "ZiMenu: completed after InstallFinalize");
+    Ok(())
+}
 #[unsafe(no_mangle)]
 pub extern "system" fn ZiMenuPrepare(session: u32) -> u32 {
     boundary(session, prepare)
@@ -192,13 +215,17 @@ pub extern "system" fn ZiMenuExecute(session: u32) -> u32 {
 pub extern "system" fn ZiMenuRollback(session: u32) -> u32 {
     boundary(session, rollback)
 }
+#[unsafe(no_mangle)]
+pub extern "system" fn ZiMenuFinalize(session: u32) -> u32 {
+    boundary(session, finalize)
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn invalid_session_is_rejected_by_all_exports() {
-        for action in [ZiMenuPrepare, ZiMenuExecute, ZiMenuRollback] {
+        for action in [ZiMenuPrepare, ZiMenuExecute, ZiMenuRollback, ZiMenuFinalize] {
             assert_eq!(action(0), FAILURE);
         }
     }

@@ -169,3 +169,13 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 候选包明确核对InstallInitialize < Prepare < Rollback < RemoveExistingProducts < InstallFiles < Execute < InstallFinalize。加入InstallExecute显式执行脚本，再注入晚期失败，避免把尚未运行的deferred动作误当成已经写入菜单。已修正跨用户文件夹具沿用进程TEMP导致的拒绝访问，夹具改在有效用户profile中创建独立UUID目录并逐项清理；新提交跨用户CI仍需重验。
 
 自动收尾及正式WiX接入、进程强杀/日志丢失/权限故障、真实产品可执行文件与Explorer窗口、多选/目录/窗口复用/现代菜单仍未完成。受控观察器的API返回证据不能被当成已交付给普通MSI用户的自动最终化机制。
+
+## 事务结束后自动收尾候选0.15.0
+
+候选新增ZiMenuFinalize immediate动作，明确排在InstallFinalize之后。它读取准备时保存的规范UUID并调用complete；拒绝deferred/rollback/commit模式及错误家族/作用域。按Microsoft InstallFinalize文档，该标准动作结束事务，因此此处才消费Undo并释放待操作。不是commit custom action。最终化动作Return=ignore：如果收尾本身失败，已提交安装文件不能假装回滚，保留Applied及待操作并写固定失败消息，仍需后续显式恢复；进程强杀和最终化失败恢复UI尚未完成。
+
+一次性候选矩阵已取消所有成功路径的观察器--finish调用，成功原生API返回后只读检查无pending；有applied消息时必须有completed after InstallFinalize消息。读取最终MSI动作表要求InstallFinalize < ZiMenuFinalize；仍不在开发机安装。真实安装结果以该提交CI为准，正式WiX尚未接入。此前0.14.0使用观察器收尾仅为历史夹具行为。跨用户CI 38132013579已通过。
+
+官方依据：https://learn.microsoft.com/en-us/windows/win32/msi/installfinalize-action
+
+候选升级时序另按RemoveExistingProducts官方限制改为afterInstallExecute：afterInstallInitialize位置禁止任何前置脚本生成动作（真实CI曾报2613），所以不能在该位置前面排rollback CA。候选最终顺序为InstallInitialize < Prepare < Rollback < InstallFiles < Execute < InstallExecute < RemoveExistingProducts < InstallFinalize < MenuFinalize；稳定组件GUID不变，失败时父事务文件恢复必须先于菜单回滚核验，由实际失败矩阵证明。正式模板时序仍未改。官方依据：https://learn.microsoft.com/en-us/windows/win32/msi/removeexistingproducts-action

@@ -1,7 +1,7 @@
 """Candidate DLL inside real MSI transactions on a disposable Windows runner.
 
-Production WXS is unchanged. Success is finalized by the observer only AFTER
-the native install API returns zero; this does not claim automatic completion.
+Production WXS is unchanged. The candidate finalizes its journal automatically
+after InstallFinalize; the observer reads evidence and never completes success.
 """
 import argparse
 import ctypes
@@ -134,21 +134,32 @@ def main():
         tree = ET.parse(ROOT / 'packaging/windows.wxs')
         package = tree.getroot().find(NS + 'Package')
         package.set('Version', version)
+        # Rollback CA itself generates script, so REP cannot follow it in the
+        # afterInstallInitialize slot (MSI error 2613). Install replacement files
+        # first with stable component GUIDs, then remove old clients inside the
+        # same transaction. File rollback precedes our early rollback callback.
+        package.find(NS + 'MajorUpgrade').set('Schedule', 'afterInstallExecute')
         for file in package.iter(NS + 'File'):
             file.set('Source', str(payload / Path(file.get('Source')).name)
                      if file.get('Id') in ['ZiDevToolsExe', 'ZiDevToolsMcpExe'] else str(ROOT / 'LICENSE'))
         ET.SubElement(package, NS + 'Property', Id='ZIMENU', Secure='yes')
         ET.SubElement(package, NS + 'Property', Id='ZiMenuBinarySha256', Value=hashlib.sha256(content).hexdigest())
         ET.SubElement(package, NS + 'Binary', Id='ZiMenuActions', SourceFile=str(actions))
-        for name, execution in [('Prepare', 'immediate'), ('Rollback', 'rollback'), ('Execute', 'deferred')]:
+        for name, execution in [('Prepare', 'immediate'), ('Rollback', 'rollback'),
+                                ('Execute', 'deferred'), ('Finalize', 'immediate')]:
             ET.SubElement(package, NS + 'CustomAction', Id='ZiMenu' + name,
                           BinaryRef='ZiMenuActions', DllEntry='ZiMenu' + name,
-                          Execute=execution, Return='check', Impersonate='yes')
+                          Execute=execution, Return='ignore' if name == 'Finalize' else 'check', Impersonate='yes')
         sequence = ET.SubElement(package, NS + 'InstallExecuteSequence')
-        # Chain before the generated upgrade action; inspect the final MSI order.
+        # Queue menu rollback before file writes so reverse execution restores
+        # files before verifying the old executable and restoring its menu.
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', Before='ZiMenuRollback', Condition='1')
-        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuRollback', Before='RemoveExistingProducts', Condition='ZiMenuRollback')
+        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuRollback', After='InstallInitialize', Condition='ZiMenuRollback')
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuExecute', After='InstallFiles', Condition='ZiMenuExecute')
+        # InstallFinalize ends the MSI transaction. Failure here must leave the
+        # Applied journal recoverable, never falsely request rollback of files
+        # that have already been committed. No observer-assisted success path.
+        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuFinalize', After='InstallFinalize', Condition='ZiMenuExecute')
         # Explicitly flush the deferred script before the late Type-19 failure;
         # without this action a pre-Finalize error would precede file/menu writes.
         ET.SubElement(sequence, NS + 'InstallExecute', Sequence='6500')
@@ -165,13 +176,14 @@ def main():
         assert metadata['version'] == version and metadata['transactional_upgrade']
         order = action_sequence(msi)
         required = ['InstallInitialize', 'ZiMenuPrepare', 'ZiMenuRollback',
-                    'RemoveExistingProducts', 'InstallFiles', 'ZiMenuExecute', 'InstallFinalize']
+                    'InstallFiles', 'ZiMenuExecute', 'InstallExecute', 'RemoveExistingProducts',
+                    'InstallFinalize', 'ZiMenuFinalize']
         positions = [order[name] for name in required]
         assert all(a < b for a, b in zip(positions, positions[1:])), dict(zip(required, positions))
         if fault == 'before':
             assert order['ZiMenuRollback'] < order['MenuFixtureFailure'] < order['InstallFiles']
         if fault == 'after':
-            assert order['ZiMenuExecute'] < order['InstallExecute'] < order['MenuFixtureFailure'] < order['InstallFinalize']
+            assert order['ZiMenuExecute'] < order['InstallExecute'] < order['RemoveExistingProducts'] < order['MenuFixtureFailure'] < order['InstallFinalize']
         compile_orders[label] = dict(zip(required, positions))
         packages[label] = (msi, metadata, content)
     assert len({value[1]['desktop_component'] for value in packages.values()}) == 1
@@ -182,7 +194,7 @@ def main():
         return
 
     native = ctypes.WinDLL(str(actions))
-    for name in ['ZiMenuPrepare', 'ZiMenuExecute', 'ZiMenuRollback']:
+    for name in ['ZiMenuPrepare', 'ZiMenuExecute', 'ZiMenuRollback', 'ZiMenuFinalize']:
         entry = getattr(native, name)
         entry.argtypes = [ctypes.c_uint]
         entry.restype = ctypes.c_uint
@@ -247,10 +259,9 @@ def main():
                 assert str(uuid.UUID(value)) == value
                 known_ids.add(value)
         if result == 0 and not cleanup:
-            pending = observe().get('pending_msi')
-            if pending:
-                # The caller now has actual API-return evidence, unlike a commit CA.
-                observe('--finish', pending)
+            assert not observe().get('pending_msi'), 'Successful MSI must finalize without observer assistance'
+            if 'ZiMenu: applied' in text:
+                assert 'ZiMenu: completed after InstallFinalize' in text
         return result, text
 
     def installed(label):
@@ -320,7 +331,7 @@ def main():
             observe('--forget', operation_id)
         assert read_tree(RECOVERY_ROOT) == {'': {}}
         (folder / 'proof.json').write_text(json.dumps(dict(passed=proofs, productionInstallerWired=False,
-            automaticCompletion=False, scope='real candidate DLL/MSI; observer finalizes after native API success'), indent=2) + '\n')
+            automaticCompletion=True, scope='real candidate DLL/MSI; immediate finalizer after InstallFinalize, no observer completion'), indent=2) + '\n')
         print('PASS: candidate DLL MSI transactions; completion still controlled by fixture observer')
     finally:
         for label in packages:
