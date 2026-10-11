@@ -143,6 +143,7 @@ def main():
             file.set('Source', str(payload / Path(file.get('Source')).name)
                      if file.get('Id') in ['ZiDevToolsExe', 'ZiDevToolsMcpExe'] else str(ROOT / 'LICENSE'))
         ET.SubElement(package, NS + 'Property', Id='ZIMENU', Secure='yes')
+        ET.SubElement(package, NS + 'Property', Id='ZIFIXTURE_DISABLE_ROLLBACK', Secure='yes')
         ET.SubElement(package, NS + 'Property', Id='ZiMenuBinarySha256', Value=hashlib.sha256(content).hexdigest())
         ET.SubElement(package, NS + 'Binary', Id='ZiMenuActions', SourceFile=str(actions))
         for name, execution in [('Prepare', 'immediate'), ('Rollback', 'rollback'),
@@ -151,6 +152,11 @@ def main():
                           BinaryRef='ZiMenuActions', DllEntry='ZiMenu' + name,
                           Execute=execution, Return='ignore' if name == 'Finalize' else 'check', Impersonate='yes')
         sequence = ET.SubElement(package, NS + 'InstallExecuteSequence')
+        # RollbackDisabled is an engine-owned private property, not a public
+        # command-line switch. Exercise the actual standard action, per package;
+        # never change a machine/user Installer policy on the runner.
+        ET.SubElement(sequence, NS + 'DisableRollback', Before='InstallInitialize',
+                      Condition='ZIFIXTURE_DISABLE_ROLLBACK = "1"')
         # Queue menu rollback before file writes so reverse execution restores
         # files before verifying the old executable and restoring its menu.
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', Before='ZiMenuRollback', Condition='1')
@@ -285,7 +291,8 @@ def main():
         assert observe()['entries'] == [] and not any(read_tree(p) for p in MENU_ROOTS)
         assert invoke('old', uninstall=True)[0] == 0
         proofs.append('disabled first install and uninstall leave menus absent')
-        assert invoke('old', 'ZIMENU=1 RollbackDisabled=1')[0] == 1603
+        result, log = invoke('old', 'ZIMENU=1 ZIFIXTURE_DISABLE_ROLLBACK=1')
+        assert result == 1603 and 'RollbackDisabled' in log and 'ZiMenu: prepared' not in log
         assert observe()['entries'] == [] and not any(read_tree(p) for p in MENU_ROOTS)
         observe('--portable', portable_config)
         portable_active()
