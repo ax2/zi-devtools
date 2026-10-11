@@ -151,15 +151,17 @@ def main():
             assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
             click(lambda: invoke('ui-disable', package, code, repair + ' ZIMENU=1', 5), 'off', 'on', folder / 'ui-disable.png')
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
-            # Uninstall is silent here. Its authored UI skip condition is read
-            # from the real table above; no full-UI uninstall claim is made.
-            api.MsiSetInternalUI(2, None)
-            invoke('ui-cleanup-uninstall', package, code, state=2)
+            click(lambda: invoke('ui-enable-before-uninstall', package, code, repair, 5), 'on', 'inherit', folder / 'ui-enable-before-uninstall.png')
+            assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)
+            click(lambda: invoke('ui-full-uninstall', package, code, state=2), None, None, None, expect_options=False)
             assert not observe('--products') and marker.read_bytes() == b'not installer owned'
+            assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)
+            assert all(not (target / name).exists() for name in payloads)
             proof.update(nativeMenuUiClicks=True, cancelBeforeInstallation=True,
                          firstInheritOff=True, enabledRepairInherits=True,
                          commandLinePreselection=True, chosenToggleOverrides=True,
-                         nativeUiScreenshots=5, keyboardAndScalingVerified=False)
+                         nativeUiScreenshots=6, fullUiUninstallSkipsMenuOptions=True,
+                         fullUiUninstallRemovesEnabledMenu=True, keyboardAndScalingVerified=False)
         (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
         print('PASS: public v0.81.0 upgrade through unmodified production template; repair/toggle/uninstall verified')
     finally:

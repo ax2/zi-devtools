@@ -108,7 +108,7 @@ def snapshot(hwnd, path, user):
         user.ReleaseDC(hwnd, screen)
 
 
-def click(operation, choice, initial, screenshot, cancel=False):
+def click(operation, choice, initial, screenshot, cancel=False, expect_options=True):
     assert os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('CI') == 'true'
     assert os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'
     user = ctypes.WinDLL('user32', use_last_error=True)
@@ -136,9 +136,16 @@ def click(operation, choice, initial, screenshot, cancel=False):
             outcome.append((False, error))
     worker = threading.Thread(target=work, daemon=True)
     worker.start()
+    def finish():
+        worker.join(timeout=240)
+        assert not worker.is_alive(), 'Native option operation timeout'
+        assert len(outcome) == 1
+        if not outcome[0][0]:
+            raise outcome[0][1]
+        return outcome[0][1]
     hwnd = None
     try:
-        deadline = time.monotonic() + 40
+        deadline = time.monotonic() + (40 if expect_options else 240)
         while not hwnd:
             matches = []
             @callback
@@ -151,8 +158,12 @@ def click(operation, choice, initial, screenshot, cancel=False):
             assert user.EnumWindows(find, 0)
             assert len(matches) <= 1
             hwnd = matches[0] if matches else None
+            if not expect_options:
+                assert hwnd is None, 'Uninstall unexpectedly displayed menu options'
+                if not worker.is_alive():
+                    return finish()
             if not hwnd:
-                assert worker.is_alive(), 'Native installation returned before option window'
+                assert not expect_options or worker.is_alive(), 'Native installation returned before option window'
                 assert time.monotonic() < deadline, 'Native option window timeout'
                 time.sleep(.1)
         time.sleep(.3)
@@ -181,12 +192,7 @@ def click(operation, choice, initial, screenshot, cancel=False):
         # Post instead of synchronous Send: an MSI handler can enter its nested
         # install loop before returning, and the parent must retain its timeout.
         assert user.PostMessageW(children['取消' if cancel else '开始安装'], 0xF5, 0, 0)
-        worker.join(timeout=240)
-        assert not worker.is_alive(), 'Native option operation timeout'
-        assert len(outcome) == 1
-        if not outcome[0][0]:
-            raise outcome[0][1]
-        return outcome[0][1]
+        return finish()
     finally:
         if worker.is_alive() and hwnd:
             user.PostMessageW(hwnd, 0x10, 0, 0)

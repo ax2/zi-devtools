@@ -28,3 +28,6 @@ UI内部属性与实际ZIMENU分开。启用映射为1，关闭映射为0，保�
 4. 静默五路矩阵保持通过，特别是公开v0.81.0升级、继承修复及两种安装移除顺序。
 
 WiX原生控件事件与序列依据：[Publish](https://docs.firegiant.com/wix/schema/wxs/publish/)、[Show](https://docs.firegiant.com/wix/schema/wxs/show/)、[SetProperty](https://docs.firegiant.com/wix/schema/wxs/setproperty/)。属性事件顺序与显示条件需以最终MSI和实际点击结果复核。
+
+## 完整UI卸载补充候选
+新增第六次原生点击，先恢复启用状态，再以FULL模式执行卸载。窗口探针在原生调用结束前持续观察本测试进程的菜单选项窗口，出现则拒绝；调用完成后核对菜单、账本项、产品和两程序文件均清理，用户标记保留。只有对应CI成功才将“完整UI卸载未验证”移出限制列表，目前仍为候选。版本仍0.23.0，不因验证代码变化递增应用或工具版本。
