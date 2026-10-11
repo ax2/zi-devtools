@@ -972,3 +972,173 @@ fn concurrent_install_execution_and_prepared_cancellation_have_one_winner() {
 fn synthetic_cancellation_ticket_never_touches_real_registry() {
     assert!(cancellation::apply(cancellation::fixture_preview()).is_err());
 }
+
+fn fixture_owner_a(undo: &Undo, _: &Intent) -> Result<Vec<u8>> {
+    if let Some(previous) = undo.previous_installation() {
+        assert!(
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&previous.executable)
+                .is_err()
+        );
+    }
+    Ok(b"isolated-owner-A".to_vec())
+}
+fn fixture_owner_b(_: &Undo, _: &Intent) -> Result<Vec<u8>> {
+    Ok(b"isolated-owner-B".to_vec())
+}
+
+#[test]
+fn menu_restoration_requires_old_files_and_binds_user_journal_ledger_and_installer_owner() {
+    let fixture = Fixture::new();
+    let files = ActualFiles::new();
+    let old = files.installation(b"MZoriginal synthetic file");
+    fixture.commit(put(
+        &Ledger::default(),
+        old.clone(),
+        None,
+        std::slice::from_ref(&old),
+    ));
+    let next = files.installation(b"MZnew synthetic file");
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(
+        &fixture.scope,
+        &id,
+        install_intent(&next, Some(old.generation.clone())),
+    )
+    .unwrap();
+    assert!(restoration::preview_at(&fixture.scope, &id, fixture_owner_a).is_err());
+    std::fs::write(files.0.join("app.exe"), b"MZnew synthetic file").unwrap();
+    transition_verified(&fixture.scope, &id, Action::Execute).unwrap();
+    assert!(restoration::preview_at(&fixture.scope, &id, fixture_owner_a).is_err());
+    std::fs::write(files.0.join("app.exe"), b"MZoriginal synthetic file").unwrap();
+    // A matching synthetic file is not an installed MSI product. Only this
+    // test's ownership adapter is substituted; file and registry checks are real.
+    assert!(restoration::preview_at(&fixture.scope, &id, restoration::ownership).is_err());
+    let ticket = restoration::preview_at(&fixture.scope, &id, fixture_owner_a).unwrap();
+    let applied = fixture.menu.ledger();
+    let menus = fixture.menu.menu();
+    let mut foreign = ticket.clone();
+    foreign.user = crate::explorer::audit::native::UserIdentity("other-user".into());
+    assert!(restoration::apply_at(foreign, &fixture.scope, true, fixture_owner_a).is_err());
+    assert!(restoration::apply_at(ticket.clone(), &fixture.scope, true, fixture_owner_b).is_err());
+    std::fs::write(files.0.join("app.exe"), b"MZnew synthetic file").unwrap();
+    assert!(restoration::apply_at(ticket.clone(), &fixture.scope, true, fixture_owner_a).is_err());
+    std::fs::write(files.0.join("app.exe"), b"MZoriginal synthetic file").unwrap();
+    assert_eq!(fixture.menu.ledger(), applied);
+    assert_eq!(fixture.menu.menu(), menus);
+    let portable_files = ActualFiles::new();
+    let mut portable = portable_files.installation(b"MZoriginal synthetic file");
+    portable.identity = Identity::portable();
+    fixture.commit(put(
+        &fixture.menu.ledger(),
+        portable.clone(),
+        None,
+        std::slice::from_ref(&portable),
+    ));
+    assert!(restoration::apply_at(ticket, &fixture.scope, true, fixture_owner_a).is_err());
+    let current = fixture.menu.ledger();
+    let menus = fixture.menu.menu();
+    let ticket = restoration::preview_at(&fixture.scope, &id, fixture_owner_a).unwrap();
+    restoration::apply_at(ticket.clone(), &fixture.scope, false, fixture_owner_a).unwrap();
+    assert_eq!(fixture.menu.ledger(), current);
+    assert_eq!(fixture.menu.menu(), menus);
+    assert_eq!(fixture.state(&id), Status::Applied);
+    let restored =
+        restoration::apply_at(ticket.clone(), &fixture.scope, true, fixture_owner_a).unwrap();
+    assert_eq!(restored.active(), Some(&portable));
+    assert!(restored.entries().iter().any(|e| e.installation == old));
+    assert!(restored.pending_msi_operation().is_none());
+    assert_eq!(fixture.state(&id), Status::Reverted);
+    assert_eq!(fixture.menu.menu(), menus);
+    assert_eq!(
+        std::fs::read(files.0.join("app.exe")).unwrap(),
+        b"MZoriginal synthetic file"
+    );
+    assert!(restoration::apply_at(ticket, &fixture.scope, true, fixture_owner_a).is_err());
+    assert_eq!(
+        transition_verified(&fixture.scope, &id, Action::Rollback).unwrap(),
+        restored
+    );
+}
+
+#[test]
+fn first_install_menu_restoration_requires_file_absence_and_rejects_a_later_commit() {
+    let fixture = Fixture::new();
+    let files = ActualFiles::new();
+    let m = files.installation(b"MZoriginal synthetic file");
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&m, None)).unwrap();
+    transition_verified(&fixture.scope, &id, Action::Execute).unwrap();
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
+    assert!(restoration::preview_at(&fixture.scope, &id, fixture_owner_a).is_err());
+    std::fs::remove_file(files.0.join("app.exe")).unwrap();
+    let ticket = restoration::preview_at(&fixture.scope, &id, fixture_owner_a).unwrap();
+    completion::mark_at(&fixture.scope, &id, true).unwrap();
+    assert!(restoration::apply_at(ticket, &fixture.scope, true, fixture_owner_a).is_err());
+    assert!(restoration::preview_at(&fixture.scope, &id, fixture_owner_a).is_err());
+}
+
+#[cfg(feature = "ui-preview")]
+#[test]
+fn synthetic_restoration_ticket_cannot_write_real_registry() {
+    assert!(restoration::apply(restoration::fixture_preview().unwrap()).is_err());
+}
+
+#[test]
+fn menu_restoration_and_installer_completion_race_have_one_winner() {
+    use std::sync::{Arc, Barrier};
+    let fixture = Fixture::new();
+    let files = ActualFiles::new();
+    let old = files.installation(b"MZoriginal synthetic file");
+    fixture.commit(put(
+        &Ledger::default(),
+        old.clone(),
+        None,
+        std::slice::from_ref(&old),
+    ));
+    // Repair can retain identical file bytes/version while changing generation.
+    let next = files.installation(b"MZoriginal synthetic file");
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(
+        &fixture.scope,
+        &id,
+        install_intent(&next, Some(old.generation)),
+    )
+    .unwrap();
+    transition_verified(&fixture.scope, &id, Action::Execute).unwrap();
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
+    let ticket = restoration::preview_at(&fixture.scope, &id, fixture_owner_a).unwrap();
+    let barrier = Arc::new(Barrier::new(2));
+    let workers: Vec<_> = (0..2)
+        .map(|index| {
+            let barrier = barrier.clone();
+            let scope = Scope {
+                menu: fixture.scope.menu.clone(),
+                journal: fixture.scope.journal.clone(),
+            };
+            let ticket = ticket.clone();
+            let id = id.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                if index == 0 {
+                    restoration::apply_at(ticket, &scope, true, fixture_owner_a).is_ok()
+                } else {
+                    completion::mark_at(&scope, &id, true).is_ok()
+                }
+            })
+        })
+        .collect();
+    assert_eq!(
+        workers
+            .into_iter()
+            .map(|w| w.join().unwrap())
+            .filter(|won| *won)
+            .count(),
+        1
+    );
+    assert!(matches!(
+        fixture.state(&id),
+        Status::Committed | Status::Reverted
+    ));
+}

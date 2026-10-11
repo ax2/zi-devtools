@@ -4,6 +4,7 @@ use super::super::msi_operation::{self, Undo};
 use super::*;
 pub mod cancellation;
 pub mod completion;
+pub mod restoration;
 mod security;
 mod serialization;
 const JOURNAL: &str = r"Software\ZiCode\ZiDevTools\ExplorerRecovery";

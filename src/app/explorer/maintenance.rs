@@ -7,6 +7,7 @@ use eframe::egui;
 use std::{path::Path, sync::mpsc, time::Duration};
 mod cancellation_ui;
 mod completion_ui;
+mod restoration_ui;
 use store::recovery::{self, Operation, Status, Summary};
 
 fn path_text(path: &Path) -> String {
@@ -32,6 +33,7 @@ enum Work {
     Journal(Vec<Summary>),
     CompletionPreview(Box<recovery::completion::Ticket>),
     CancellationPreview(Box<recovery::cancellation::Ticket>),
+    RestorationPreview(Box<recovery::restoration::Ticket>),
     Completed {
         ledger: Ledger,
         id: String,
@@ -54,6 +56,7 @@ pub(super) struct Maintenance {
     forget: Option<Summary>,
     completion: Option<Box<recovery::completion::Ticket>>,
     cancellation: Option<Box<recovery::cancellation::Ticket>>,
+    restoration: Option<Box<recovery::restoration::Ticket>>,
 }
 impl Maintenance {
     fn run(&mut self, job: impl FnOnce() -> anyhow::Result<Work> + Send + 'static) {
@@ -64,6 +67,7 @@ impl Maintenance {
         self.forget = None;
         self.completion = None;
         self.cancellation = None;
+        self.restoration = None;
         self.agreed = false;
         self.message = None;
         let (sender, receiver) = mpsc::channel();
@@ -90,6 +94,10 @@ impl Maintenance {
                         self.ledger = Some(ticket.current().clone());
                         self.cancellation = Some(ticket);
                     }
+                    Ok(Work::RestorationPreview(ticket)) => {
+                        self.ledger = Some(ticket.current().clone());
+                        self.restoration = Some(ticket);
+                    }
                     Ok(Work::Completed {
                         ledger,
                         id,
@@ -111,6 +119,8 @@ impl Maintenance {
                                     true,
                                     if status == Status::Canceled {
                                         "未执行的菜单维护已取消，安装文件、菜单与程序登记保留。"
+                                    } else if status == Status::Reverted {
+                                        "菜单登记已恢复；安装文件与产品登记未改动。"
                                     } else {
                                         "维护已结束，当前菜单与程序登记保留。"
                                     }
@@ -347,6 +357,7 @@ impl Maintenance {
         self.journal_ui(ui, controlled);
         self.completion_ui(ui, controlled);
         self.cancellation_ui(ui, controlled);
+        self.restoration_ui(ui, controlled);
         ui.add_space(8.0);
         changed
     }
@@ -364,6 +375,7 @@ impl Maintenance {
         let mut selected = None;
         let mut complete = None;
         let mut cancel_prepared = None;
+        let mut restore = None;
         if let Some(records) = &self.journal {
             egui::CollapsingHeader::new(format!("安装维护记录 · {} 条", records.len()))
                 .default_open(true).show(ui, |ui| {
@@ -379,7 +391,7 @@ impl Maintenance {
                                         Status::Applied => "已应用 / 待结束",
                                         Status::CommitReady => "提交动作已执行 / 待安装器确认",
                                         Status::Committed => "安装已结束 / 待收尾",
-                                        Status::Reverted => "已回滚",
+                                        Status::Reverted => "菜单维护已恢复",
                                         Status::Completed => "已完成",
                                         Status::Canceled => "已取消 / 未执行菜单",
                                     });
@@ -395,6 +407,9 @@ impl Maintenance {
                                     }
                                     if record.status == Status::Prepared && ui.add_enabled(!busy && !controlled, egui::Button::new("预览取消菜单维护")).clicked() {
                                         cancel_prepared = Some(record.operation_id.clone());
+                                    }
+                                    if matches!(record.status, Status::Applied | Status::CommitReady) && ui.add_enabled(!busy && !controlled, egui::Button::new("预览恢复菜单")).clicked() {
+                                        restore = Some(record.operation_id.clone());
                                     }
                                 });
                                 ui.add(egui::Label::new(egui::RichText::new(&record.operation_id).small().monospace()).wrap());
@@ -412,6 +427,7 @@ impl Maintenance {
             self.forget = Some(record);
             self.completion = None;
             self.cancellation = None;
+            self.restoration = None;
         }
         if let Some(id) = complete {
             self.run(move || {
@@ -423,6 +439,12 @@ impl Maintenance {
             self.run(move || {
                 recovery::cancellation::preview(&id)
                     .map(|ticket| Work::CancellationPreview(Box::new(ticket)))
+            });
+        }
+        if let Some(id) = restore {
+            self.run(move || {
+                recovery::restoration::preview(&id)
+                    .map(|ticket| Work::RestorationPreview(Box::new(ticket)))
             });
         }
         let mut confirmed = false;
@@ -464,7 +486,12 @@ impl Maintenance {
         let journal = std::env::args().any(|arg| arg == "--journal-cleanup");
         let completion = std::env::args().any(|arg| arg == "--journal-recovery");
         let cancellation = std::env::args().any(|arg| arg == "--journal-cancel");
+        let restoration = std::env::args().any(|arg| arg == "--journal-restore");
         self.run(move || {
+            if restoration {
+                return recovery::restoration::fixture_preview()
+                    .map(|ticket| Work::RestorationPreview(Box::new(ticket)));
+            }
             if cancellation {
                 return Ok(Work::CancellationPreview(Box::new(
                     recovery::cancellation::fixture_preview(),
@@ -517,6 +544,15 @@ impl Maintenance {
             self.journal = Some(vec![Summary {
                 operation_id: "374d06dc-5c86-4dbf-97fb-3985d8f37f19".into(),
                 status: Status::Prepared,
+                operation: Operation::Install {
+                    version: "0.82.0".into(),
+                },
+            }]);
+        }
+        if restoration {
+            self.journal = Some(vec![Summary {
+                operation_id: "374d06dc-5c86-4dbf-97fb-3985d8f37f19".into(),
+                status: Status::Applied,
                 operation: Operation::Install {
                     version: "0.82.0".into(),
                 },

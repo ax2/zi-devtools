@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
         [flag, path] if flag == "--package" => {
             serde_json::to_value(msi::inspect(std::path::Path::new(path))?)?
         }
-        [flag, id] if flag == "--resume" || flag == "--forget" || flag == "--owner-commit" || flag == "--cancel-prepared" => {
+        [flag, id] if flag == "--resume" || flag == "--forget" || flag == "--owner-commit" || flag == "--cancel-prepared" || flag == "--restore-menu" => {
             anyhow::ensure!(
                 std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
                     && std::env::var("CI").as_deref() == Ok("true")
@@ -28,6 +28,8 @@ fn main() -> anyhow::Result<()> {
                 store::recovery::completion::mark_committed(id)?;
             } else if flag == "--cancel-prepared" {
                 store::recovery::cancellation::apply(store::recovery::cancellation::preview(id)?)?;
+            } else if flag == "--restore-menu" {
+                store::recovery::restoration::apply(store::recovery::restoration::preview(id)?)?;
             } else {
                 store::recovery::forget(id)?;
             }

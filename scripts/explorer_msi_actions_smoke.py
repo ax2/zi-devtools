@@ -139,7 +139,7 @@ def main():
     for label, version, fault in [('old', '0.1.0', None), ('before', '0.2.0', 'before'),
                                    ('after', '0.2.0', 'after'), ('new', '0.2.0', None),
                                    ('receipt', '0.3.0', None), ('commitfail', '0.2.0', 'commit'),
-                                   ('preparefail', '0.2.0', 'prepared')]:
+                                   ('preparefail', '0.2.0', 'prepared'), ('restore', '0.2.0', 'restore')]:
         payload = folder / label
         payload.mkdir()
         # Synthetic MZ payloads satisfy the product's documented basic check;
@@ -177,8 +177,13 @@ def main():
                       Condition='ZIFIXTURE_DISABLE_ROLLBACK = "1"')
         # Queue menu rollback before file writes so reverse execution restores
         # files before verifying the old executable and restoring its menu.
-        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', Before='ZiMenuRollback', Condition='1')
-        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuRollback', After='InstallInitialize', Condition='ZiMenuRollback')
+        if label == 'restore':
+            # Model a missing menu callback, not an actual process kill. Native
+            # Installer still rolls back its files and product registration.
+            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', After='InstallInitialize', Condition='1')
+        else:
+            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', Before='ZiMenuRollback', Condition='1')
+            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuRollback', After='InstallInitialize', Condition='ZiMenuRollback')
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuExecute', After='InstallFiles', Condition='ZiMenuExecute')
         # CommitReady preserves Undo; it is NOT proof of irreversible success.
         # An outer transaction defers it until the owner ends the entire chain.
@@ -219,13 +224,16 @@ def main():
         required = ['InstallInitialize', 'ZiMenuPrepare', 'ZiMenuRollback',
                     'InstallFiles', 'ZiMenuExecute', 'ZiMenuCommitReady', 'InstallExecute', 'RemoveExistingProducts',
                     'InstallFinalize', 'ZiMenuCommitReceipt']
+        if label == 'restore':
+            required.remove('ZiMenuRollback')
+            assert 'ZiMenuRollback' not in order
         if label != 'receipt':
             required.append('ZiMenuFinalize')
         positions = [order[name] for name in required]
         assert all(a < b for a, b in zip(positions, positions[1:])), dict(zip(required, positions))
         if fault in ['before', 'prepared']:
             assert order['ZiMenuRollback'] < order['MenuFixtureFailure'] < order['InstallFiles']
-        if fault == 'after':
+        if fault in ['after', 'restore']:
             assert order['ZiMenuExecute'] < order['InstallExecute'] < order['RemoveExistingProducts'] < order['MenuFixtureFailure'] < order['InstallFinalize']
         if fault == 'commit':
             assert order['ZiMenuCommitReady'] < order['MenuFixtureFailure'] < order['InstallExecute']
@@ -235,7 +243,7 @@ def main():
     (folder / 'compile-proof.json').write_text(json.dumps(dict(sequences=compile_orders,
         dllSha256=hashlib.sha256(actions.read_bytes()).hexdigest()), indent=2) + '\n')
     if args.compile_only:
-        print('PASS: seven candidate DLL fixtures compiled, no installation performed')
+        print('PASS: eight candidate DLL fixtures compiled, no installation performed')
         return
 
     native = ctypes.WinDLL(str(actions))
@@ -439,6 +447,17 @@ def main():
         assert any(r == dict(id=prepared[0]['id'], status='Canceled') for r in observe('--journal'))
         assert installed('old') == repaired and [read_tree(p) for p in MENU_ROOTS] == menus
         proofs.append('immediate preparation failure leaves a Prepared record; explicit cancellation preserves old files, menus and registrations')
+        result, log = invoke('restore')
+        assert result == 1603 and 'ZiMenu: applied' in log and 'ZiMenu: reverted' not in log
+        pending = observe()['pending_msi']
+        assert any(r == dict(id=pending, status='Applied') for r in observe('--journal'))
+        assert (target / 'ZiDevTools.exe').read_bytes() == packages['old'][2]
+        products = observe('--products')
+        assert len(products) == 1 and products[0]['product_code'] == packages['old'][1]['product_code']
+        observe('--restore-menu', pending)
+        assert installed('old') == repaired and [read_tree(p) for p in MENU_ROOTS] == menus
+        assert any(r == dict(id=pending, status='Reverted') for r in observe('--journal'))
+        proofs.append('missing menu rollback callback recovers through verified desktop restoration after actual old files and MSI ownership return')
         for label in ['before', 'after', 'commitfail']:
             menus = [read_tree(p) for p in MENU_ROOTS]
             result, log = invoke(label)
