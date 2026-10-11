@@ -1,18 +1,25 @@
-//! Read-only classic-menu registration plans. No registry access or execution.
+//! Classic-menu plans and explicit read-only registry audits. No registration writes.
+pub mod audit;
 use anyhow::{Context, Result, ensure};
 use serde::Serialize;
 use std::path::Path;
 
 use crate::{commands::file_actions::Target, tool_shortcuts::quote};
+const ROOTS: [&str; 2] = [
+    r"Software\Classes\*\shell\ZiCode.DevTools",
+    r"Software\Classes\ZiCode.DevTools.FileActions",
+];
+const OWNER: &str = "com.zicode.devtools";
+const MENU_PROTOCOL: &str = "1";
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Value {
     pub key: String,
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Plan {
     pub schema_version: u32,
     pub preview_only: bool,
@@ -29,7 +36,7 @@ fn template_path(path: &Path) -> Result<String> {
         !value
             .chars()
             .any(|c| c.is_control() || matches!(c, '"' | '%')),
-        "菜单模板路径含引号、控制字符或百分号，不能可靠地用于Shell占位符模板；尚未安装任何入口"
+        "菜单模板路径含引号、控制字符或百分号，不能可靠地用于Shell占位符模板；未执行任何安装操作"
     );
     Ok(quote(value))
 }
@@ -37,8 +44,8 @@ fn template_path(path: &Path) -> Result<String> {
 pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
     let exe = template_path(exe)?;
     let config = template_path(config)?;
-    let parent = r"Software\Classes\*\shell\ZiCode.DevTools";
-    let actions = r"Software\Classes\ZiCode.DevTools.FileActions";
+    let parent = ROOTS[0];
+    let actions = ROOTS[1];
     let mut values = Vec::new();
     let mut add = |key: &str, name: &str, value: String| {
         values.push(Value {
@@ -56,8 +63,8 @@ pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
     );
     // Ownership markers are a proposed layout, not evidence of an installed owner.
     for key in [parent, actions] {
-        add(key, "ZiCodeOwner", "com.zicode.devtools".into());
-        add(key, "ZiCodeMenuProtocol", "1".into());
+        add(key, "ZiCodeOwner", OWNER.into());
+        add(key, "ZiCodeMenuProtocol", MENU_PROTOCOL.into());
     }
     let generic = format!(r"{actions}\shell\choose");
     add(&generic, "MUIVerb", "选择工具处理…".into());

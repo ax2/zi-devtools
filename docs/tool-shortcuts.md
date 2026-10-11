@@ -34,4 +34,4 @@ ZiDevTools.exe --tool django-sql
 
 文件入口1.2.0可在`--open-files`之前增加`--file-action`精确预选接收器，例如`ZiDevTools.exe --file-action import:json --open-files "C:\data\a.json"`。共享动作：`import:csv`、`import:tsv`、`import:json-data`、`import:json`、`import:java-trace`、`import:django-trace`、`import:java-threads`、`import:java-gc`、`import:django-sql`、`import:celery`、`import:files`。除文件校验允许1–64文件外，其余每次一个UTF-8文件、最多2 MiB；这些限制与导入页及注册预览共用。必须同时提供文件列表，不可重复动作选项。预选仍不读取内容或自动诊断，用户可改选工具后确认。
 
-设置页“资源管理器右键入口”可展开候选菜单及复制JSON明细。该页不查询或写入注册表，不生成可导入的.reg文件；当前计划只对文件单选、经典菜单有效，不能当成完整多选、安装生命周期或Windows11现代菜单已交付。模板中程序/配置路径含百分号、引号或控制字符时拒绝生成；此限制只适用于Shell占位符模板，普通文件启动参数保持原有路径范围。
+设置页“资源管理器右键入口”可展开候选菜单及复制JSON明细。注册计划仅生成明细；“检查当前入口状态”按钮可主动后台只读检查固定本产品入口，均不写入注册表，不生成可导入的.reg文件；当前计划只对文件单选、经典菜单有效，不能当成完整多选、安装生命周期或Windows11现代菜单已交付。模板中程序/配置路径含百分号、引号或控制字符时拒绝生成；此限制只适用于Shell占位符模板，普通文件启动参数保持原有路径范围。

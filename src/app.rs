@@ -204,6 +204,7 @@ pub struct DevToolsApp {
     quick_position: Option<egui::Pos2>,
     quick_size: egui::Vec2,
     intake: crate::intake::State,
+    explorer_audit: explorer::Audit,
     tasks: crate::tasks::Center,
     handoff: Option<handoff::Transfer>,
     tray: Option<TrayController>,
@@ -1240,6 +1241,12 @@ impl DevToolsApp {
         match scene {
             462..=463 => {
                 self.page = Page::Settings;
+                let plan = crate::explorer::plan(
+                    &std::env::current_exe().unwrap(),
+                    &self.manager.config_snapshot().path,
+                )
+                .unwrap();
+                self.explorer_audit.start(&plan);
                 ctx.data_mut(|data| data.insert_temp(egui::Id::new("preview-explorer-only"), true));
                 let path = fixture.with_file_name("订单数据.csv");
                 for target in crate::intake::Target::ALL {
@@ -2486,7 +2493,7 @@ impl DevToolsApp {
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,
-            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_context: false, quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), tasks: Default::default(), handoff: None,
+            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_context: false, quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), explorer_audit: Default::default(), tasks: Default::default(), handoff: None,
             manager,
             tray,
             page: Page::Home,

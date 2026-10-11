@@ -1,6 +1,6 @@
 # 资源管理器统一入口：实现约束与验收
 
-更新：2026-10-11。状态：设计与文件接收基础，尚未安装右键菜单。`explorer-menu`继续规划状态；不能将下述设计或文件入口1.1.0当成完整交付。
+更新：2026-10-11。状态：文件接收1.2.0、候选菜单与只读状态检查0.2.0，尚未安装右键菜单。`explorer-menu`仍为开发中；不能将这些基础能力当成完整交付。
 
 ## 已有基础及缺口
 
@@ -53,3 +53,13 @@
 ## 开发版提供方基础0.1.0
 
 11种接收动作已集中到`commands/file_actions.rs`，导入页/读取校验/外部`--file-action`和注册预览共用；`intake::Target`保持兼容导出。设置页只生成当前用户注册计划和JSON复制，顶层Zi DevTools、选择工具及11个精确接收动作；每个候选Shell动作显式Single，原文件校验64条CLI能力不冒充Shell多选。无注册查询或写入、无安装/修复/卸载/回滚。Windows CommandLineToArgvW对生成命令逐条拆分后交给真实CLI解析函数，验证中文/空格/符号路径和目标动作，不等同实际Shell展开/调用验收。
+
+## 当前用户状态检查0.2.0
+
+设置页可主动后台读取固定两处候选入口；不存在、一致、部分/内容变化、所有权或未知项冲突、其他协议分别显示。未知内容保留，不自动接管或修复。报告只有计数及状态，不保存、复制或日志记录现有注册原值。检查绑定候选计划指纹，程序或已加载配置改变后旧结果标过期。
+
+仅KEY_READ逐段以REG_OPTION_OPEN_LINK打开，发现REG_LINK立即拒绝；不跟随注册链接。每次快照限制128键、1024值、递归深度8、每值128 KiB、数据合计1 MiB，错误/超限不截断为成功。连续两次快照不一致则拒绝结论；这不是事务快照，安装前仍需互斥及再次复核，不能把一致报告当成授权写入。
+
+Windows读取方式依据[RegOpenKeyExW](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regopenkeyexw)与[RegEnumValueW](https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regenumvaluew)。当前原生测试只在独立Tests/ExplorerAudit-UUID命名空间创建合成数据并验证读取前后一致、超限失败和完整移除；不创建真实Shell菜单。真实菜单显示/调用、系统安装身份、EXE/MSI事务和完整多选仍待实现。
+
+实际Windows将HKCU/Software/Classes映射到当前用户的独立Classes hive。检查器从进程令牌确认用户，直接只读打开HKEY_USERS下该用户的SID_Classes，绕过系统别名而不跟随任意注册链接；其下产品路径仍逐段拒绝REG_LINK，不读混合机器数据的HKCR，也不记录SID。另有实际用户Classes锚点只读测试。映射依据：[Microsoft registry shared keys](https://learn.microsoft.com/en-us/windows/win32/winprog64/shared-registry-keys)。
