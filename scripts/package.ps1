@@ -10,9 +10,11 @@ if (-not $outputPath.StartsWith($projectRoot + [IO.Path]::DirectorySeparatorChar
 $version = (Get-Content Cargo.toml | Select-String '^version = "([^"]+)"').Matches.Groups[1].Value
 if (!(Test-Path target/release/ZiDevTools.exe)) { throw 'Build release first' }
 if (!(Test-Path target/release/ZiDevToolsMcp.exe)) { throw 'Build MCP server first' }
+if (!(Test-Path target/release/zi_msi_actions.dll)) { throw 'Build release zi-msi-actions first' }
+$appExeSha256 = (Get-FileHash -LiteralPath target/release/ZiDevTools.exe -Algorithm SHA256).Hash.ToLowerInvariant()
 $compiler = if ($env:ZIDEVTOOLS_WIX) { $env:ZIDEVTOOLS_WIX } else { 'wix' }
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
-& $compiler build packaging/windows.wxs -arch x64 -d "AppVersion=$version" -o (Join-Path $outputPath "ZiDevTools-$version-windows-x64.msi")
+& $compiler build packaging/windows.wxs -arch x64 -d "AppVersion=$version" -d "AppExeSha256=$appExeSha256" -d "MenuActionsDll=target/release/zi_msi_actions.dll" -o (Join-Path $outputPath "ZiDevTools-$version-windows-x64.msi")
 if ($LASTEXITCODE -ne 0) { throw 'MSI compilation failed' }
 Copy-Item target/release/ZiDevTools.exe (Join-Path $outputPath "ZiDevTools-$version-windows-x64.exe")
 Copy-Item target/release/ZiDevToolsMcp.exe (Join-Path $outputPath "ZiDevToolsMcp-$version-windows-x64.exe")

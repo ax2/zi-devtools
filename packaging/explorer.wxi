@@ -1,0 +1,23 @@
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- Shared by the shipping package and disposable lifecycle candidates. -->
+  <Property Id="ZIMENU" Secure="yes" />
+  <Property Id="ZiMenuBinarySha256" Value="$(var.AppExeSha256)" />
+  <Binary Id="ZiMenuActions" SourceFile="$(var.MenuActionsDll)" />
+  <CustomAction Id="ZiMenuPrepare" BinaryRef="ZiMenuActions" DllEntry="ZiMenuPrepare" Execute="immediate" Return="check" Impersonate="yes" />
+  <CustomAction Id="ZiMenuRollback" BinaryRef="ZiMenuActions" DllEntry="ZiMenuRollback" Execute="rollback" Return="check" Impersonate="yes" />
+  <CustomAction Id="ZiMenuExecute" BinaryRef="ZiMenuActions" DllEntry="ZiMenuExecute" Execute="deferred" Return="check" Impersonate="yes" />
+  <CustomAction Id="ZiMenuCommitReady" BinaryRef="ZiMenuActions" DllEntry="ZiMenuCommitReady" Execute="commit" Return="check" Impersonate="yes" />
+  <CustomAction Id="ZiMenuCommitReceipt" BinaryRef="ZiMenuActions" DllEntry="ZiMenuCommitReceipt" Execute="immediate" Return="ignore" Impersonate="yes" />
+  <CustomAction Id="ZiMenuFinalize" BinaryRef="ZiMenuActions" DllEntry="ZiMenuFinalize" Execute="immediate" Return="ignore" Impersonate="yes" />
+  <InstallExecuteSequence>
+    <!-- Queue Undo before file writes: native file rollback precedes menu Undo. -->
+    <Custom Action="ZiMenuPrepare" Before="ZiMenuRollback" Condition="1" />
+    <Custom Action="ZiMenuRollback" After="InstallInitialize" Condition="ZiMenuRollback" />
+    <Custom Action="ZiMenuExecute" After="InstallFiles" Condition="ZiMenuExecute" />
+    <!-- Ready retains Undo; it is not an irreversible outer-commit receipt. -->
+    <Custom Action="ZiMenuCommitReady" After="ZiMenuExecute" Condition="ZiMenuCommitReady" />
+    <InstallExecute Sequence="6500" />
+    <Custom Action="ZiMenuCommitReceipt" After="InstallFinalize" Condition="ZiMenuExecute" />
+    <Custom Action="ZiMenuFinalize" After="ZiMenuCommitReceipt" Condition="ZiMenuExecute" />
+  </InstallExecuteSequence>
+</Include>

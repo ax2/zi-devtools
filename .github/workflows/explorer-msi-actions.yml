@@ -7,6 +7,7 @@ on:
       - 'crates/zi-shell-core/**'
       - 'scripts/explorer_msi_actions_smoke.py'
       - 'packaging/windows.wxs'
+      - 'packaging/explorer.wxi'
       - '.github/workflows/explorer-msi-actions.yml'
       - 'Cargo.lock'
       - 'Cargo.toml'
@@ -15,6 +16,8 @@ on:
       - 'crates/zi-msi-actions/**'
       - 'crates/zi-shell-core/**'
       - 'scripts/explorer_msi_actions_smoke.py'
+      - 'packaging/windows.wxs'
+      - 'packaging/explorer.wxi'
       - '.github/workflows/explorer-msi-actions.yml'
       - 'Cargo.lock'
       - 'Cargo.toml'
@@ -28,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [standalone, outer-rollback, outer-commit]
+        mode: [standalone, outer-rollback, outer-commit, real-payload]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,6 +51,9 @@ jobs:
           "ZIDEVTOOLS_WIX=$toolDir/wix.exe" >> $env:GITHUB_ENV
       - run: cargo build -p zi-msi-actions --locked
       - run: cargo build -p zi-shell-core --example msi_fixture_state --locked
+      - name: Build actual desktop payload for installed execution
+        if: matrix.mode == 'real-payload'
+        run: cargo build --locked
       - name: Candidate lifecycle verification
         shell: pwsh
         run: |
@@ -55,6 +61,8 @@ jobs:
             python scripts/explorer_msi_actions_smoke.py --outer-transaction-probe
           } elseif ('${{ matrix.mode }}' -eq 'outer-commit') {
             python scripts/explorer_msi_actions_smoke.py --outer-commit-probe
+          } elseif ('${{ matrix.mode }}' -eq 'real-payload') {
+            python scripts/explorer_msi_actions_smoke.py --real-payload
           } else {
             python scripts/explorer_msi_actions_smoke.py
           }

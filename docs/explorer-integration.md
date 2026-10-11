@@ -255,3 +255,8 @@ Applied/CommitReady可以预览并明确确认“恢复上次菜单登记”，�
 [CI38138569331](https://github.com/ax2/zi-devtools/actions/runs/38138569331)的standalone、outer-rollback和outer-commit均成功。普通矩阵十组证明新增回调缺失场景：省略菜单rollback排程，真实晚期失败后Windows Installer恢复旧文件与旧产品登记，菜单日志仍Applied；新进程经桌面同一恢复preview/apply核验真实组件归属，恢复旧菜单及旧代次。外层回滚恢复全部状态；外层提交仍须真实API结束后的拥有者确认。
 
 本地核心67 passed/1 ignored，严格检查和格式检查通过，深浅主题受控确认UI已查看。测试夹具使用合成MZ而非真实产品可执行文件；回调省略不能代替强杀进程验证。正式WiX未接入，完整Explorer场景仍待完成。嵌入目录暂保留2f4accc测试时的快照，实际CI证据补充在本节及长期档案，不为文案重复构建。
+
+## 共享正式模板候选0.22.0
+正式模板现在include packaging/explorer.wxi，故障矩阵展开相同动作声明，只在明确故障点删除回调。脚本传入真实EXE摘要和release DLL路径，发版先显式构建DLL。默认关闭，静默ZIMENU=1/0和修复继承语义不变；可见安装选择UI、旧正式发行升级与完整Explorer交互仍未交付。
+
+本机八份共享声明故障候选编译通过；正式模板使用实际release桌面/MCP和DLL编译通过（仅临时MSI版本覆盖为0.82.0，应用仍0.82.0-dev.105；不安装或发布）。新增托管real-payload矩阵，用合成旧载荷和真实当前EXE进行事务测试，并在正常升级后运行安装位置的EXE启动/停止服务、核对两EXE字节。不能称旧正式发行版升级或GUI/Explorer验收。待该提交的四路托管CI结果确认。

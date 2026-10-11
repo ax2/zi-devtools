@@ -1,6 +1,6 @@
 """Candidate DLL inside real MSI transactions on a disposable Windows runner.
 
-Production WXS is unchanged. Ordinary candidates finalize automatically;
+Production and candidates share the menu action include. Ordinary candidates finalize automatically;
 the receipt-only candidate exercises the explicit desktop recovery backend.
 The separate outer-transaction probe must prove rollback before production wiring.
 """
@@ -10,9 +10,12 @@ import hashlib
 import json
 import os
 import re
+import socket
 from pathlib import Path
 import subprocess
 import tempfile
+import time
+import urllib.request
 import uuid
 import winreg
 import xml.etree.ElementTree as ET
@@ -117,7 +120,9 @@ def main():
     parser.add_argument('--compile-only', action='store_true')
     parser.add_argument('--outer-transaction-probe', action='store_true')
     parser.add_argument('--outer-commit-probe', action='store_true')
+    parser.add_argument('--real-payload', action='store_true')
     args = parser.parse_args()
+    assert not (args.real_payload and (args.outer_transaction_probe or args.outer_commit_probe))
     build = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
     probe = build / 'debug/examples/msi_fixture_state.exe'
     actions = build / 'debug/zi_msi_actions.dll'
@@ -144,9 +149,13 @@ def main():
         payload.mkdir()
         # Synthetic MZ payloads satisfy the product's documented basic check;
         # never execute them or claim full PE/Shell/UI acceptance.
-        content = b'MZ' + (b'old' if label == 'old' else b'new') * 64
+        content = ((build / 'debug/ZiDevTools.exe').read_bytes()
+                   if args.real_payload and label != 'old'
+                   else b'MZ' + (b'old' if label == 'old' else b'new') * 64)
         for name in ['ZiDevTools.exe', 'ZiDevToolsMcp.exe']:
-            (payload / name).write_bytes(content)
+            data = ((build / 'debug' / name).read_bytes()
+                    if args.real_payload and label != 'old' else content)
+            (payload / name).write_bytes(data)
         tree = ET.parse(ROOT / 'packaging/windows.wxs')
         package = tree.getroot().find(NS + 'Package')
         package.set('Version', version)
@@ -154,22 +163,22 @@ def main():
         # afterInstallInitialize slot (MSI error 2613). Install replacement files
         # first with stable component GUIDs, then remove old clients inside the
         # same transaction. File rollback precedes our early rollback callback.
-        package.find(NS + 'MajorUpgrade').set('Schedule', 'afterInstallExecute')
+        assert package.find(NS + 'MajorUpgrade').get('Schedule') == 'afterInstallExecute'
         for file in package.iter(NS + 'File'):
             file.set('Source', str(payload / Path(file.get('Source')).name)
                      if file.get('Id') in ['ZiDevToolsExe', 'ZiDevToolsMcpExe'] else str(ROOT / 'LICENSE'))
-        ET.SubElement(package, NS + 'Property', Id='ZIMENU', Secure='yes')
+        # ET deliberately omits processing instructions. Expand the exact
+        # production include, then modify only explicit fault-injection points.
+        shared = ET.parse(ROOT / 'packaging/explorer.wxi').getroot()
+        for child in shared:
+            package.append(child)
+        package.find(NS + "Property[@Id='ZiMenuBinarySha256']").set('Value', hashlib.sha256(content).hexdigest())
+        package.find(NS + "Binary[@Id='ZiMenuActions']").set('SourceFile', str(actions))
         ET.SubElement(package, NS + 'Property', Id='ZIFIXTURE_DISABLE_ROLLBACK', Secure='yes')
-        ET.SubElement(package, NS + 'Property', Id='ZiMenuBinarySha256', Value=hashlib.sha256(content).hexdigest())
-        ET.SubElement(package, NS + 'Binary', Id='ZiMenuActions', SourceFile=str(actions))
-        for name, execution in [('Prepare', 'immediate'), ('Rollback', 'rollback'), ('CommitReady', 'commit'),
-                                ('Execute', 'deferred'), ('CommitReceipt', 'immediate'), ('Finalize', 'immediate')]:
-            if label == 'receipt' and name == 'Finalize':
-                continue  # Simulate interruption after durable receipt, before completion.
-            ET.SubElement(package, NS + 'CustomAction', Id='ZiMenu' + name,
-                          BinaryRef='ZiMenuActions', DllEntry='ZiMenu' + name,
-                          Execute=execution, Return='ignore' if name in ['CommitReceipt', 'Finalize'] else 'check', Impersonate='yes')
-        sequence = ET.SubElement(package, NS + 'InstallExecuteSequence')
+        sequence = package.find(NS + 'InstallExecuteSequence')
+        if label == 'receipt':
+            package.remove(package.find(NS + "CustomAction[@Id='ZiMenuFinalize']"))
+            sequence.remove(sequence.find(NS + "Custom[@Action='ZiMenuFinalize']"))
         # RollbackDisabled is an engine-owned private property, not a public
         # command-line switch. Exercise the actual standard action, per package;
         # never change a machine/user Installer policy on the runner.
@@ -180,21 +189,10 @@ def main():
         if label == 'restore':
             # Model a missing menu callback, not an actual process kill. Native
             # Installer still rolls back its files and product registration.
-            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', After='InstallInitialize', Condition='1')
-        else:
-            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', Before='ZiMenuRollback', Condition='1')
-            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuRollback', After='InstallInitialize', Condition='ZiMenuRollback')
-        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuExecute', After='InstallFiles', Condition='ZiMenuExecute')
-        # CommitReady preserves Undo; it is NOT proof of irreversible success.
-        # An outer transaction defers it until the owner ends the entire chain.
-        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuCommitReady', After='ZiMenuExecute', Condition='ZiMenuCommitReady')
-        # Post-Finalize completion requires CommitReady to have run already.
-        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuCommitReceipt', After='InstallFinalize', Condition='ZiMenuExecute')
-        if label != 'receipt':
-            ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuFinalize', After='ZiMenuCommitReceipt', Condition='ZiMenuExecute')
-        # Explicitly flush the deferred script before the late Type-19 failure;
-        # without this action a pre-Finalize error would precede file/menu writes.
-        ET.SubElement(sequence, NS + 'InstallExecute', Sequence='6500')
+            sequence.remove(sequence.find(NS + "Custom[@Action='ZiMenuRollback']"))
+            prepare = sequence.find(NS + "Custom[@Action='ZiMenuPrepare']")
+            del prepare.attrib['Before']
+            prepare.set('After', 'InstallInitialize')
         if fault:
             if fault == 'before':
                 # Fail in the real execution script before file writes. An
@@ -473,6 +471,39 @@ def main():
             proofs.append(label + ' failure restores old file, menu generation and record')
         assert invoke('new')[0] == 0
         installed('new')
+        if args.real_payload:
+            # Execute the installed product, not a build-tree substitute.
+            assert (target / 'ZiDevToolsMcp.exe').read_bytes() == (build / 'debug/ZiDevToolsMcp.exe').read_bytes()
+            with socket.socket() as reserve:
+                reserve.bind(('127.0.0.1', 0))
+                port = reserve.getsockname()[1]
+            exe = target / 'ZiDevTools.exe'
+            config = folder / 'disposable-service.yml'
+            with (folder / 'installed-service.safe.log').open('wb') as output:
+                process = subprocess.Popen([str(exe), '--fixture-server', str(port), '--config', str(config), '--no-restore'],
+                                           stdout=output, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
+                try:
+                    client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                    deadline = time.monotonic() + 20
+                    while True:
+                        assert process.poll() is None, 'Installed fixture exited before startup'
+                        try:
+                            with client.open(f'http://127.0.0.1:{port}/health', timeout=1) as response:
+                                assert json.load(response) == {'status': 'ok', 'source': 'zi-devtools-fixture'}
+                            break
+                        except OSError:
+                            assert time.monotonic() < deadline, 'Installed fixture startup timeout'
+                            time.sleep(.1)
+                    subprocess.run([str(exe), '--fixture-shutdown', str(port), '--config', str(config), '--no-restore'],
+                                   check=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+                    assert process.wait(timeout=10) == 0
+                    with socket.socket() as released:
+                        released.bind(('127.0.0.1', port))
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=10)
+            proofs.append('installed real desktop EXE starts and stops disposable service; both installed EXEs match build hashes')
         assert invoke('new', 'ZIMENU=0 REINSTALL=ALL REINSTALLMODE=amus', repair=True)[0] == 0
         portable_active()
         assert invoke('new', 'ZIMENU=1 REINSTALL=ALL REINSTALLMODE=amus', repair=True)[0] == 0
@@ -508,7 +539,8 @@ def main():
         for operation_id in known_ids:
             observe('--forget', operation_id)
         assert read_tree(RECOVERY_ROOT) == {'': {}}
-        (folder / 'proof.json').write_text(json.dumps(dict(passed=proofs, productionInstallerWired=False,
+        (folder / 'proof.json').write_text(json.dumps(dict(passed=proofs, productionTemplateWired=True,
+            realCurrentPayload=args.real_payload, legacyReleaseUpgradeVerified=False,
             automaticCompletion=True, receiptRecovery=True,
             scope='ordinary candidates auto-complete; receipt-only candidate resumes via guarded desktop backend after native API return'), indent=2) + '\n')
         print('PASS: candidate DLL MSI transactions with automatic post-InstallFinalize completion')

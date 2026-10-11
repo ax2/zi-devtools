@@ -42,6 +42,7 @@ jobs:
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
           $global:LASTEXITCODE = 0
       - run: cargo build --release --locked
+      - run: cargo build -p zi-msi-actions --release --locked
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
