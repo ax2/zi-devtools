@@ -1,6 +1,6 @@
 # 安装器菜单选项：候选0.23.0
 
-状态：原生选项页已实现，d32b8a6对应CI38140649205的production-upgrade作业通过五次实际原生点击、取消无安装副作用和公开旧版升级。五张549×345原生窗口截图已逐张查看，文字和控件可读、无明显截断。同一提交五路现全部成功；ba87fb8的CI38141305431另通过完整UI卸载且不显示选项页，已启用菜单清理正确；键盘、缩放和真实Explorer未验收。
+状态：原生选项页已实现，d32b8a6对应CI38140649205的production-upgrade作业通过五次实际原生点击、取消无安装副作用和公开旧版升级。五张549×345原生窗口截图已逐张查看，文字和控件可读、无明显截断。同一提交五路现全部成功；ba87fb8的CI38141305431另通过完整UI卸载且不显示选项页，已启用菜单清理正确；057e0b7的CI38143119357五路全部成功，补齐四个真实键盘场景及焦点截图检查。缩放、其他键盘路径和真实Explorer未验收。
 
 ## 用户流程
 
@@ -34,3 +34,9 @@ WiX原生控件事件与序列依据：[Publish](https://docs.firegiant.com/wix/
 
 ## ba87fb8完整UI卸载实际结果
 CI38141305431五路全部成功，production-upgrade proof确认fullUiUninstallSkipsMenuOptions及fullUiUninstallRemovesEnabledMenu为true，userDataPreserved为true。第六张ui-enable-before-uninstall.png已实际查看，控件/文字可读。完整UI模式不展示菜单选项并正常移除已启用菜单、产品/账本项/两EXE，用户文件保留。键盘、缩放、Explorer窗口及公开旧版升级失败回滚仍未验收。
+
+## 057e0b7键盘操作实际结果
+
+[CI38143119357](https://github.com/ax2/zi-devtools/actions/runs/38143119357)的production-upgrade作业通过四个真实键盘场景：Esc取消、首次继承后Enter、预选关闭后上键启用、预选启用后下键关闭。每次初始焦点均在已选单选项；Tab依次到开始/取消，Shift+Tab返回开始/已选项。读取全部三项原生选中状态并核对实际安装结果，不用按钮点击替代键盘操作；取消返回1602且文件、菜单、账本及日志保持不变。
+
+只在托管Windows、当前测试进程所属前台窗口发送SendInput；失去前台或焦点不符会失败。proof保存四段键序列与focusAndSelectionVerified/sendInput=true、buttonClickUsed=false。四张对应截图已查看，单选项焦点虚线清楚、文字和按钮可读，无明显截断。保留其他两次原生鼠标按钮操作、实际安装Shell解析及完整UI卸载验证；缩放、其他键盘路径、真实Explorer窗口和公开旧版失败回滚仍未验收。此轮只补验证，应用和工具版本不变。

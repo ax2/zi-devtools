@@ -300,3 +300,7 @@ UI表校验结果在compile-tables-v2.log及其target/zi-msi-production-4qclvusv
 [CI38142590035的production-upgrade作业](https://github.com/ax2/zi-devtools/actions/runs/38142590035)通过。公开v0.81.0升级和实际原生选项操作后，Windows Shell COM为真实JSON文件解析出唯一Zi DevTools入口及12个命令（选择工具和11个接收器）。文件名包含中文、空格、字面%1与&。先核对实际MSI归属、活动安装和程序摘要，保持文件锁，结束后账本未变化；未注册夹具文件关联、未调用命令、未验证Explorer窗口。随后完整UI卸载正常移除已启用菜单、产品和程序文件，保留用户文件。proof已归档。
 
 前一提交792583d的CI38142144538在此新增步骤返回0x80070057，其余四路通过；失败结果保留。探针遗漏既有Shell探针对文件系统扩展路径的转换，72457c5只在Shell解析边界转换普通Win32路径，并重新规范化核对与原文件一致，实际复跑通过。本次不扩大UNC/超长路径或实际导入验收范围，不递增工具/应用版本。
+
+## 原生安装选项的键盘验证（057e0b7）
+
+[CI38143119357](https://github.com/ax2/zi-devtools/actions/runs/38143119357)的production-upgrade通过四次真实SendInput操作，覆盖方向键切换、Tab/Shift+Tab焦点顺序、从单选项Enter确认及Esc取消。前台窗口、初始/移动焦点和全部单选状态均逐步核对，实际安装结果与取消无副作用检查通过；四张对应截图已查看，焦点虚线可见、控件文字可读。完整UI卸载和实际安装菜单解析继续通过。详见[键盘场景与限制](explorer-installer-ui.md)。不将此结果扩大为缩放、所有辅助技术或Explorer窗口验收。
