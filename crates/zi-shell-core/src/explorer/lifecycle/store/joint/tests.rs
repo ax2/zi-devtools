@@ -4,6 +4,7 @@ use super::*;
 pub(in crate::explorer::lifecycle::store) struct Fixture {
     pub(in crate::explorer::lifecycle::store) scope: Scope,
     classes_root: String,
+    alias_root: String,
 }
 static FIXTURE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -387,13 +388,15 @@ impl Fixture {
         let id = uuid::Uuid::new_v4();
         let ledger = format!(r"Software\ZiCode\ZiDevTools\Tests\ExplorerJoint-{id}");
         let classes_root = format!(r"ZiCode.DevTools.Tests\ExplorerJoint-{id}");
+        let alias_root = format!("ZiCode.DevTools.Tests.ExplorerJointActions-{id}");
         let menus = [
             format!(r"Software\Classes\{classes_root}\parent"),
-            format!(r"Software\Classes\{classes_root}\actions"),
+            format!(r"Software\Classes\{alias_root}"),
         ];
         let result = Self {
             scope: Scope { ledger, menus },
             classes_root,
+            alias_root,
         };
         // Isolate test operations below pre-existing UUID parents. Concurrent
         // tests must not race to create their shared test container in KTM.
@@ -422,10 +425,15 @@ impl Fixture {
             self.classes_root
                 .starts_with(r"ZiCode.DevTools.Tests\ExplorerJoint-")
         );
+        assert!(
+            self.alias_root
+                .starts_with("ZiCode.DevTools.Tests.ExplorerJointActions-")
+        );
         unsafe {
             if let Ok(user) = audit::native::UserContext::capture() {
                 RegDeleteTreeW(user.user.0, wide(&self.scope.ledger).as_ptr());
                 RegDeleteTreeW(user.classes.0, wide(&self.classes_root).as_ptr());
+                RegDeleteTreeW(user.classes.0, wide(&self.alias_root).as_ptr());
             }
         }
     }

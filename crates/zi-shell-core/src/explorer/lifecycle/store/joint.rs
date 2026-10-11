@@ -186,14 +186,30 @@ pub(super) fn apply_in(prepared: &MenuPrepared, scope: &Scope, tx: &Transaction)
     removed.sort_by_key(|path| std::cmp::Reverse(path.matches('\\').count()));
     for path in removed {
         let path = relative(path)?;
-        let (parent, leaf) = path
-            .rsplit_once('\\')
-            .ok_or_else(|| anyhow::anyhow!("菜单删除范围无效"))?;
-        let parent = open_at(classes.0, parent, tx, false)?
-            .ok_or_else(|| anyhow::anyhow!("菜单父项已消失"))?;
+        let (parent, leaf) = path.rsplit_once('\\').unwrap_or(("", &path));
+        // The FileActions alias is a direct child of the effective user's
+        // Classes root. Keep that captured root handle borrowed; it must never
+        // be closed or treated as an owned subkey. All paths above were checked
+        // against this operation's exact owned menu image.
+        let parent = if parent.is_empty() {
+            None
+        } else {
+            Some(
+                open_at(classes.0, parent, tx, false)?
+                    .ok_or_else(|| anyhow::anyhow!("菜单父项已消失"))?,
+            )
+        };
+        let parent_handle = parent.as_ref().map_or(classes.0, |key| key.0);
         // Nonrecursive deletion refuses unexpected children; never RegDeleteTree.
         success(unsafe {
-            RegDeleteKeyTransactedW(parent.0, wide(leaf).as_ptr(), 0, 0, tx.handle, ptr::null())
+            RegDeleteKeyTransactedW(
+                parent_handle,
+                wide(leaf).as_ptr(),
+                0,
+                0,
+                tx.handle,
+                ptr::null(),
+            )
         })?;
     }
     write(&scope.ledger, &prepared.ledger.after, tx)?;

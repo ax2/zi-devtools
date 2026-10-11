@@ -179,3 +179,11 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 官方依据：https://learn.microsoft.com/en-us/windows/win32/msi/installfinalize-action
 
 候选升级时序另按RemoveExistingProducts官方限制改为afterInstallExecute：afterInstallInitialize位置禁止任何前置脚本生成动作（真实CI曾报2613），所以不能在该位置前面排rollback CA。候选最终顺序为InstallInitialize < Prepare < Rollback < InstallFiles < Execute < InstallExecute < RemoveExistingProducts < InstallFinalize < MenuFinalize；稳定组件GUID不变，失败时父事务文件恢复必须先于菜单回滚核验，由实际失败矩阵证明。正式模板时序仍未改。官方依据：https://learn.microsoft.com/en-us/windows/win32/msi/removeexistingproducts-action
+
+## 最后安装移除的Classes根修正0.16.0
+
+真实候选CI38133007491已经通过禁用回滚拒绝、首次启用自动收尾、继承修复、脚本内执行前失败、实际Applied后失败（文件/代次/菜单恢复）、正常升级、显式关闭/开启和MSI卸载后便携接管；最后移除便携版失败，核心报“菜单删除范围无效”。此前测试alias放在UUID目录内，没有覆盖生产FileActions直接位于Classes下的形状。
+
+删除时相对路径可能只有一个键名；此时借用整次事务已绑定有效用户的Classes句柄作为父句柄，仍逐键非递归RegDeleteKeyTransacted，未知值/子键及所有权验证继续生效，绝不删除Classes根本身。隔离夹具的alias改成独立同层UUID测试键，精确清理自己的两个范围；既有两种安装/移除顺序及未提交事务验证现在覆盖真实层级。
+
+另有未完成故障边界：即时失败/强杀在执行脚本之前可能留下Prepared记录，后置收尾失败可能留下Applied；终态日志累积达32条需要处理。面向用户的恢复/终态清理与这些故障的证据仍待实现，正式WiX未接入。不能把修改故障注入阶段当成解决所有中断问题。
