@@ -217,7 +217,9 @@ def main():
         nonlocal counter
         counter += 1
         log = folder / f'{counter:02d}-{label}.log'
-        assert msi_api.MsiEnableLogW(0xFFFF, str(log), 0) == 0
+        # Exclude INSTALLLOGMODE_LOGONLYONERROR (0x4000): successful operations
+        # also need evidence. Flush each line before collecting the closed log.
+        assert msi_api.MsiEnableLogW(0x3FFF, str(log), 2) == 0
         code = packages[label][1]['product_code']
         common = 'REBOOT=ReallySuppress MSIRESTARTMANAGERCONTROL=Disable '
         try:
@@ -229,7 +231,11 @@ def main():
                     common + f'INSTALLFOLDER="{target}" ' + options)
         finally:
             msi_api.MsiEnableLogW(0, None, 0)
-        text = log.read_text(encoding='utf-16', errors='replace')
+        if not log.is_file():
+            raise RuntimeError(f'Installer returned {result}; expected diagnostic log absent')
+        raw = log.read_bytes()
+        encoding = 'utf-16' if raw.startswith((b'\xff\xfe', b'\xfe\xff')) else 'mbcs'
+        text = raw.decode(encoding, errors='replace')
         text = re.sub(r'S-1-(?:\d+-)*\d+', '[redacted-user-identifier]', text)
         text = re.sub(r'(?im)^(.*Property\([A-Z]\):\s+[^=]*(?:password|token|cookie|secret|credential)[^=]*=).*$',
                       r'\1 [redacted]', text)
