@@ -1,6 +1,32 @@
 use super::super::tests::{put, sample};
 use super::*;
 
+#[test]
+fn legacy_ledger_only_api_refuses_empty_pending_msi_completion_before_registry_access() {
+    let mut m = super::super::tests::sample(Identity::Msi);
+    m.executable_sha256 = Some("a".repeat(64));
+    let install = msi_operation::install(
+        &Ledger::default(),
+        m.clone(),
+        true,
+        &Eligible(vec![m.clone()]),
+    )
+    .unwrap();
+    let completed = install.undo().complete(install.plan().result()).unwrap();
+    let remove = msi_operation::remove(completed.result(), Some(&m.generation), &Eligible(vec![]))
+        .unwrap()
+        .unwrap();
+    let finish = remove.undo().complete(remove.plan().result()).unwrap();
+    assert!(finish.before.entries().is_empty() && finish.after.entries().is_empty());
+    assert!(
+        commit(&finish)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("待恢复MSI操作必须通过联合事务维护")
+    );
+}
+
 struct Fixture(String);
 impl Fixture {
     fn new() -> Self {

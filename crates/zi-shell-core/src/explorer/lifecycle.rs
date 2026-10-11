@@ -121,18 +121,21 @@ pub struct Ledger {
     msi_cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     activation_cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_msi: Option<String>,
     // A list permits strict duplicate identity rejection during decoding.
     entries: Vec<Entry>,
 }
 impl Default for Ledger {
     fn default() -> Self {
         Self {
-            schema_version: 2,
+            schema_version: 3,
             owner: OWNER.into(),
             revision: 0,
             active: None,
             msi_cursor: None,
             activation_cursor: None,
+            pending_msi: None,
             entries: Vec::new(),
         }
     }
@@ -144,6 +147,9 @@ impl Ledger {
     pub fn entries(&self) -> &[Entry] {
         &self.entries
     }
+    pub fn pending_msi_operation(&self) -> Option<&str> {
+        self.pending_msi.as_deref()
+    }
     pub fn active(&self) -> Option<&Installation> {
         self.entries
             .iter()
@@ -151,7 +157,16 @@ impl Ledger {
             .map(|entry| &entry.installation)
     }
     pub fn validate(&self) -> Result<()> {
-        ensure!(matches!(self.schema_version, 1 | 2), "安装记录协议不受支持");
+        ensure!(matches!(self.schema_version, 1..=3), "安装记录协议不受支持");
+        ensure!(
+            self.schema_version == 3 || self.pending_msi.is_none(),
+            "旧安装协议不能携带待恢复操作"
+        );
+        if let Some(id) = &self.pending_msi {
+            Identity::Portable(id.clone()).validate()?;
+            ensure!(self.msi_cursor.is_some(), "待恢复操作缺少MSI游标");
+            ensure!(self.revision > 0, "待恢复操作缺少有效修订号");
+        }
         ensure!(
             self.schema_version != 1
                 || (self.msi_cursor.is_none() && self.activation_cursor.is_none()),
@@ -187,7 +202,7 @@ impl Ledger {
         if let Some(active) = &self.active {
             ensure!(identities.contains_key(active), "活动安装记录不存在");
         }
-        if self.schema_version == 2 {
+        if self.schema_version >= 2 {
             ensure!(
                 self.active.is_none() || self.activation_cursor.is_some(),
                 "活动入口缺少操作游标"
@@ -197,6 +212,12 @@ impl Ledger {
                 "MSI记录缺少操作游标"
             );
         }
+        let reserved =
+            usize::from(self.pending_msi.is_some() && !identities.contains_key(&Identity::Msi));
+        ensure!(
+            self.entries.len() + reserved <= MAX_INSTALLATIONS,
+            "需保留MSI回滚位置，请先完成或恢复待处理安装操作"
+        );
         Ok(())
     }
 }
@@ -272,6 +293,10 @@ pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<P
         Change::Remove { identity, .. } => *identity == Identity::Msi,
         Change::Activate(_) => false,
     };
+    ensure!(
+        !changes_msi || before.pending_msi.is_none(),
+        "存在待完成或恢复的MSI操作，拒绝替换其安装记录"
+    );
     let explicitly_selected = match &change {
         Change::Put {
             installation,
@@ -283,7 +308,7 @@ pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<P
     };
     let selects_entry = explicitly_selected.is_some();
     let mut after = before.clone();
-    after.schema_version = 2;
+    after.schema_version = 3;
     after.revision = before
         .revision
         .checked_add(1)

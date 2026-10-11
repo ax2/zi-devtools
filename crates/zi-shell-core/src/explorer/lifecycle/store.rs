@@ -273,6 +273,10 @@ pub fn load() -> Result<Ledger> {
 /// This commits the ledger only, not a menu or a Windows Installer transaction.
 pub fn commit(prepared: &Prepared) -> Result<()> {
     ensure!(
+        prepared.before.pending_msi.is_none() && prepared.after.pending_msi.is_none(),
+        "待恢复MSI操作必须通过联合事务维护"
+    );
+    ensure!(
         !prepared
             .before
             .entries

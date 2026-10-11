@@ -6,6 +6,9 @@ fn record(identity: Identity) -> Installation {
     value.executable_sha256 = Some("a".repeat(64));
     value
 }
+fn completed(op: &Operation) -> Ledger {
+    op.undo().complete(op.plan().result()).unwrap().after
+}
 fn portable(
     before: &Ledger,
     value: &Installation,
@@ -49,7 +52,7 @@ fn install_upgrade_and_uninstall_undo_restore_only_msi_and_increment_revision() 
             .is_err()
     );
 
-    let old = install.plan().result().clone();
+    let old = completed(&install);
     let mut new = record(Identity::Msi);
     new.version = "9.8.7".into();
     let upgrade = super::install(&old, new.clone(), false, &Eligible(vec![new])).unwrap();
@@ -58,7 +61,7 @@ fn install_upgrade_and_uninstall_undo_restore_only_msi_and_increment_revision() 
         .rollback(upgrade.plan().result(), &Eligible(vec![first.clone()]))
         .unwrap();
     assert_eq!(restored.result().active(), Some(&first));
-    assert_eq!(restored.result().revision(), 3);
+    assert_eq!(restored.result().revision(), old.revision() + 2);
     assert!(
         upgrade
             .undo()
@@ -160,10 +163,7 @@ fn reselecting_same_fallback_is_user_intent_and_not_overridden_by_uninstall_undo
     let p = record(Identity::portable());
     let m = record(Identity::Msi);
     let base = portable(&Ledger::default(), &p, true, vec![p.clone()]);
-    let base = install(&base, m.clone(), true, &Eligible(vec![m.clone()]))
-        .unwrap()
-        .plan
-        .after;
+    let base = completed(&install(&base, m.clone(), true, &Eligible(vec![m.clone()])).unwrap());
     let op = remove(&base, Some(&m.generation), &Eligible(vec![p.clone()]))
         .unwrap()
         .unwrap();
@@ -189,28 +189,28 @@ fn reselecting_same_fallback_is_user_intent_and_not_overridden_by_uninstall_undo
 #[test]
 fn removed_none_state_does_not_authorize_old_undo_after_another_install_remove_cycle() {
     let m = record(Identity::Msi);
-    let base = install(
-        &Ledger::default(),
-        m.clone(),
-        true,
-        &Eligible(vec![m.clone()]),
-    )
-    .unwrap()
-    .plan
-    .after;
+    let base = completed(
+        &install(
+            &Ledger::default(),
+            m.clone(),
+            true,
+            &Eligible(vec![m.clone()]),
+        )
+        .unwrap(),
+    );
     let old = remove(&base, Some(&m.generation), &Eligible(vec![]))
         .unwrap()
         .unwrap();
     let next = record(Identity::Msi);
     let replacement = install(
-        old.plan().result(),
+        &completed(&old),
         next.clone(),
         true,
         &Eligible(vec![next.clone()]),
     )
     .unwrap();
     let removed = remove(
-        replacement.plan().result(),
+        &completed(&replacement),
         Some(&next.generation),
         &Eligible(vec![]),
     )
@@ -252,7 +252,7 @@ fn legacy_schema_reads_and_migrates_but_invalid_cursors_and_protocols_refuse() {
     let old: Ledger = serde_json::from_value(value.clone()).unwrap();
     old.validate().unwrap();
     let migrated = prepare(&old, Change::Activate(Identity::Msi), &Eligible(vec![m])).unwrap();
-    assert_eq!(migrated.result().schema_version, 2);
+    assert_eq!(migrated.result().schema_version, 3);
     assert!(
         migrated.result().msi_cursor.is_some() && migrated.result().activation_cursor.is_some()
     );
@@ -261,7 +261,7 @@ fn legacy_schema_reads_and_migrates_but_invalid_cursors_and_protocols_refuse() {
             "msi_cursor",
             serde_json::json!(uuid::Uuid::new_v4().to_string()),
         ),
-        ("schema_version", serde_json::json!(3)),
+        ("schema_version", serde_json::json!(4)),
     ] {
         let mut bad = value.clone();
         bad[field] = invalid;
@@ -286,7 +286,7 @@ fn undo_rejects_unknown_fields_oversize_invalid_id_and_wrong_family() {
     let raw = op.undo().to_bytes().unwrap();
     for (field, invalid) in [
         ("unknown", serde_json::json!(true)),
-        ("schema_version", serde_json::json!(2)),
+        ("schema_version", serde_json::json!(3)),
         ("operation_id", serde_json::json!("bad")),
         ("applied_msi_cursor", serde_json::json!("")),
         ("applied_revision", serde_json::json!(0)),
@@ -311,32 +311,64 @@ fn undo_rejects_unknown_fields_oversize_invalid_id_and_wrong_family() {
 }
 
 #[test]
-fn capacity_or_revision_exhaustion_refuses_undo_without_changing_current_records() {
+fn reservation_preserves_full_capacity_for_undo_and_complete_consumes_its_receipt() {
     let m = record(Identity::Msi);
-    let base = install(
-        &Ledger::default(),
-        m.clone(),
-        true,
-        &Eligible(vec![m.clone()]),
-    )
-    .unwrap()
-    .plan
-    .after;
+    let base = completed(
+        &install(
+            &Ledger::default(),
+            m.clone(),
+            true,
+            &Eligible(vec![m.clone()]),
+        )
+        .unwrap(),
+    );
     let op = remove(&base, Some(&m.generation), &Eligible(vec![]))
         .unwrap()
         .unwrap();
     let mut current = op.plan().result().clone();
-    for _ in 0..MAX_INSTALLATIONS {
+    for _ in 0..MAX_INSTALLATIONS - 1 {
         let p = record(Identity::portable());
         current = portable(&current, &p, true, vec![p.clone()]);
     }
     let snapshot = current.clone();
+    let extra = record(Identity::portable());
     assert!(
-        op.undo()
-            .rollback(&current, &Eligible(vec![m.clone()]))
-            .is_err()
+        prepare(
+            &current,
+            Change::Put {
+                installation: extra.clone(),
+                expected_generation: None,
+                activate: false
+            },
+            &Eligible(vec![])
+        )
+        .is_err()
     );
     assert_eq!(current, snapshot);
+    assert_eq!(
+        current.pending_msi_operation(),
+        Some(op.undo().operation_id())
+    );
+    assert!(install(&current, record(Identity::Msi), false, &Eligible(vec![])).is_err());
+    assert!(remove(&current, None, &Eligible(vec![])).is_err());
+    let restored = op
+        .undo()
+        .rollback(&current, &Eligible(vec![m.clone()]))
+        .unwrap();
+    assert_eq!(restored.result().entries().len(), MAX_INSTALLATIONS);
+    assert!(restored.result().pending_msi_operation().is_none());
+    let finished = op.undo().complete(&current).unwrap();
+    assert!(finished.result().pending_msi_operation().is_none());
+    assert_eq!(finished.result().active(), current.active());
+    assert_eq!(finished.result().entries(), current.entries());
+    assert!(
+        op.undo()
+            .rollback(finished.result(), &Eligible(vec![m.clone()]))
+            .is_err()
+    );
+    assert!(op.undo().complete(finished.result()).is_err());
+    let filled = portable(finished.result(), &extra, true, vec![extra.clone()]);
+    assert_eq!(filled.entries().len(), MAX_INSTALLATIONS);
     let next = install(&base, record(Identity::Msi), false, &Eligible(vec![])).unwrap();
     let mut exhausted = next.plan().result().clone();
     exhausted.revision = u64::MAX;
@@ -348,4 +380,84 @@ fn capacity_or_revision_exhaustion_refuses_undo_without_changing_current_records
             .to_string()
             .contains("修订号耗尽")
     );
+}
+
+#[test]
+fn old_receipts_migrate_without_claiming_a_new_pending_operation() {
+    let m = record(Identity::Msi);
+    let op = install(
+        &Ledger::default(),
+        m.clone(),
+        true,
+        &Eligible(vec![m.clone()]),
+    )
+    .unwrap();
+    let mut value = serde_json::to_value(op.undo()).unwrap();
+    value["schema_version"] = 1.into();
+    let legacy = Undo::from_bytes(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(
+        legacy
+            .rollback(op.plan().result(), &Eligible(vec![]))
+            .is_err()
+    );
+    let mut old = op.plan().result().clone();
+    old.schema_version = 2;
+    old.pending_msi = None;
+    old.validate().unwrap();
+    assert!(legacy.complete(&old).is_err());
+    let restored = legacy.rollback(&old, &Eligible(vec![])).unwrap();
+    assert_eq!(restored.result().schema_version, 3);
+    assert!(restored.result().entries().is_empty());
+    assert!(restored.result().pending_msi_operation().is_none());
+    for version in [1, 2] {
+        let mut bad = op.plan().result().clone();
+        bad.schema_version = version;
+        assert!(bad.validate().is_err());
+    }
+    let mut wrong = op.plan().result().clone();
+    wrong.pending_msi = Some(uuid::Uuid::new_v4().to_string());
+    wrong.validate().unwrap();
+    assert!(op.undo().complete(&wrong).is_err());
+    assert!(op.undo().rollback(&wrong, &Eligible(vec![])).is_err());
+    for id in ["", "not-uuid", "00000000-0000-0000-0000-000000000000"] {
+        let mut bad = op.plan().result().clone();
+        bad.pending_msi = Some(id.into());
+        assert!(bad.validate().is_err());
+    }
+    let mut bad = op.plan().result().clone();
+    bad.msi_cursor = None;
+    assert!(bad.validate().is_err());
+    let mut bad = op.plan().result().clone();
+    bad.revision = 0;
+    assert!(bad.validate().is_err());
+}
+
+#[test]
+fn old_uninstall_without_reservation_still_refuses_overflow_instead_of_deleting_portables() {
+    let m = record(Identity::Msi);
+    let base = completed(
+        &install(
+            &Ledger::default(),
+            m.clone(),
+            true,
+            &Eligible(vec![m.clone()]),
+        )
+        .unwrap(),
+    );
+    let op = remove(&base, Some(&m.generation), &Eligible(vec![]))
+        .unwrap()
+        .unwrap();
+    let mut value = serde_json::to_value(op.undo()).unwrap();
+    value["schema_version"] = 1.into();
+    let old = Undo::from_bytes(&serde_json::to_vec(&value).unwrap()).unwrap();
+    let mut current = op.plan().result().clone();
+    current.schema_version = 2;
+    current.pending_msi = None;
+    for _ in 0..MAX_INSTALLATIONS {
+        let p = record(Identity::portable());
+        current = portable(&current, &p, true, vec![p.clone()]);
+    }
+    let before = current.clone();
+    assert!(old.rollback(&current, &Eligible(vec![m])).is_err());
+    assert_eq!(current, before);
 }

@@ -130,7 +130,11 @@ impl Maintenance {
             );
         }
         if let Some(ledger) = &self.ledger {
-            if ledger.entries().is_empty() {
+            if ledger.pending_msi_operation().is_some() {
+                ui.colored_label(ui.visuals().warn_fg_color,
+                    "安装维护尚未结束，已保留恢复位置。请回到安装程序完成或回滚；已登记的工具仍可使用。");
+            }
+            if ledger.entries().is_empty() && ledger.pending_msi_operation().is_none() {
                 ui.small("尚无安装登记。预览后确认，可为此程序添加经典菜单入口。");
             }
             let mut request = None;
@@ -260,7 +264,18 @@ impl Maintenance {
     }
     #[cfg(feature = "ui-preview")]
     pub(super) fn fixture(&mut self, config: std::path::PathBuf) {
+        let pending = std::env::args().any(|arg| arg == "--pending-msi");
         self.run(move || {
+            if pending {
+                // Synthetic read-only capture state; never a recovery receipt.
+                let mut value = serde_json::to_value(Ledger::default())?;
+                value["pending_msi"] = uuid::Uuid::new_v4().to_string().into();
+                value["msi_cursor"] = uuid::Uuid::new_v4().to_string().into();
+                value["revision"] = 1.into();
+                let ledger: Ledger = serde_json::from_value(value)?;
+                ledger.validate()?;
+                return Ok(Work::Loaded(ledger));
+            }
             installer::fixture_preview(&config).map(|ticket| Work::Preview(Box::new(ticket)))
         });
     }

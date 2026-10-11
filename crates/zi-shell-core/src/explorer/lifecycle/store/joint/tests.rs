@@ -8,6 +8,142 @@ struct Fixture {
 static FIXTURE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[test]
+fn native_full_ledger_uninstall_reserves_undo_capacity_and_finalizes_atomically() {
+    use super::super::super::msi_operation;
+    for restore in [false, true] {
+        let fixture = Fixture::new();
+        let commit = |plan| {
+            let preview = preview_at(plan, &fixture.scope).unwrap();
+            apply_at(&preview, &fixture.scope, true).unwrap();
+        };
+        let m = record(Identity::Msi);
+        let first = msi_operation::install(
+            &Ledger::default(),
+            m.clone(),
+            true,
+            &Eligible(vec![m.clone()]),
+        )
+        .unwrap();
+        commit(first.plan().clone());
+        commit(first.undo().complete(&fixture.ledger()).unwrap());
+        for _ in 0..super::super::super::MAX_INSTALLATIONS - 1 {
+            let p = record(Identity::portable());
+            commit(put(
+                &fixture.ledger(),
+                p.clone(),
+                None,
+                std::slice::from_ref(&p),
+            ));
+        }
+        commit(
+            prepare(
+                &fixture.ledger(),
+                Change::Activate(Identity::Msi),
+                &Eligible(vec![m.clone()]),
+            )
+            .unwrap(),
+        );
+        let eligible = |ledger: &Ledger| {
+            Eligible(
+                ledger
+                    .entries()
+                    .iter()
+                    .map(|e| e.installation.clone())
+                    .collect(),
+            )
+        };
+        let op = msi_operation::remove(
+            &fixture.ledger(),
+            Some(&m.generation),
+            &eligible(&fixture.ledger()),
+        )
+        .unwrap()
+        .unwrap();
+        commit(op.plan().clone());
+        let current = fixture.ledger();
+        let menu = fixture.menu();
+        assert_eq!(current.entries().len(), 31);
+        assert_eq!(
+            current.pending_msi_operation(),
+            Some(op.undo().operation_id())
+        );
+        let extra = record(Identity::portable());
+        assert!(
+            prepare(
+                &current,
+                Change::Put {
+                    installation: extra.clone(),
+                    expected_generation: None,
+                    activate: false
+                },
+                &eligible(&current)
+            )
+            .is_err()
+        );
+        assert_eq!(fixture.ledger(), current);
+        assert_eq!(fixture.menu(), menu);
+        let old = current.entries()[0].installation.clone();
+        let mut updated = old.clone();
+        updated.generation = uuid::Uuid::new_v4().to_string();
+        let mut available = eligible(&current);
+        available.0.retain(|p| p.identity != old.identity);
+        available.0.push(updated.clone());
+        commit(
+            prepare(
+                &current,
+                Change::Put {
+                    installation: updated.clone(),
+                    expected_generation: Some(old.generation),
+                    activate: true,
+                },
+                &available,
+            )
+            .unwrap(),
+        );
+        let current = fixture.ledger();
+        let menu = fixture.menu();
+        let mut available = eligible(&current);
+        available.0.push(m.clone());
+        let plan = if restore {
+            op.undo().rollback(&current, &available).unwrap()
+        } else {
+            op.undo().complete(&current).unwrap()
+        };
+        let final_preview = preview_at(plan, &fixture.scope).unwrap();
+        apply_at(&final_preview, &fixture.scope, false).unwrap();
+        assert_eq!(fixture.ledger(), current);
+        assert_eq!(fixture.menu(), menu);
+        apply_at(&final_preview, &fixture.scope, true).unwrap();
+        let final_ledger = fixture.ledger();
+        assert!(final_ledger.pending_msi_operation().is_none());
+        assert_eq!(final_ledger.active(), Some(&updated));
+        assert_eq!(final_ledger.entries().len(), if restore { 32 } else { 31 });
+        let portable_entries: Vec<_> = final_ledger
+            .entries()
+            .iter()
+            .filter(|e| e.installation.identity != Identity::Msi)
+            .cloned()
+            .collect();
+        assert_eq!(portable_entries, current.entries());
+        assert_eq!(fixture.menu(), final_preview.after);
+        assert!(op.undo().rollback(&final_ledger, &available).is_err());
+        assert!(op.undo().complete(&final_ledger).is_err());
+        if !restore {
+            commit(put(
+                &final_ledger,
+                extra.clone(),
+                None,
+                std::slice::from_ref(&extra),
+            ));
+            assert_eq!(fixture.ledger().entries().len(), 32);
+        }
+        fixture.clear();
+        assert_eq!(fixture.ledger(), Ledger::default());
+        assert!(fixture.menu().keys.is_empty());
+    }
+}
+
+#[test]
 #[ignore = "requires an explicitly created disposable CI user with a loaded profile"]
 fn cross_account_joint_transaction_does_not_use_cached_process_hkcu() {
     let (scope, prepared) = audit::native::with_ci_user(|| {
@@ -130,7 +266,7 @@ fn msi_undo_preserves_later_portable_selection_and_migrates_native_legacy_ledger
     assert_eq!(fixture.ledger(), legacy);
     assert_eq!(fixture.menu(), first.after);
     apply_at(&forward, &fixture.scope, true).unwrap();
-    assert_eq!(fixture.ledger().schema_version, 2);
+    assert_eq!(fixture.ledger().schema_version, 3);
     let added = record(Identity::portable());
     let later = preview_at(
         put(

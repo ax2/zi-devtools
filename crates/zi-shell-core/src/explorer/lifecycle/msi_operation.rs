@@ -32,10 +32,13 @@ impl Operation {
     pub fn undo(&self) -> &Undo {
         &self.undo
     }
-    fn new(plan: Prepared) -> Result<Self> {
+    fn new(mut plan: Prepared) -> Result<Self> {
+        let operation_id = uuid::Uuid::new_v4().to_string();
+        plan.after.pending_msi = Some(operation_id.clone());
+        plan.after.validate()?;
         let undo = Undo {
-            schema_version: 1,
-            operation_id: uuid::Uuid::new_v4().to_string(),
+            schema_version: 2,
+            operation_id,
             before: msi(&plan.before).cloned(),
             after: msi(&plan.after).cloned(),
             previous_active: plan.before.active.clone(),
@@ -79,6 +82,7 @@ pub fn remove(
     eligible: &Eligible,
 ) -> Result<Option<Operation>> {
     before.validate()?;
+    ensure!(before.pending_msi.is_none(), "存在待完成或恢复的MSI操作");
     let current = msi(before);
     ensure!(
         current.map(|record| record.generation.as_str()) == expected_generation,
@@ -111,9 +115,12 @@ pub struct Undo {
     applied_activation_cursor: Option<String>,
 }
 impl Undo {
+    pub fn operation_id(&self) -> &str {
+        &self.operation_id
+    }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.schema_version == 1 && self.applied_revision > 0,
+            matches!(self.schema_version, 1 | 2) && self.applied_revision > 0,
             "MSI逆操作协议无效"
         );
         for id in [&self.operation_id, &self.applied_msi_cursor]
@@ -152,18 +159,47 @@ impl Undo {
         result.validate()?;
         Ok(result)
     }
-    /// Restore only this MSI operation. Never replace a complete historical ledger.
-    pub fn rollback(&self, current: &Ledger, eligible: &Eligible) -> Result<Prepared> {
+    fn require_applied(&self, current: &Ledger) -> Result<()> {
         self.validate()?;
         current.validate()?;
         ensure!(
-            current.schema_version == 2
+            current.schema_version >= 2
+                && match self.schema_version {
+                    1 => current.pending_msi.is_none(),
+                    2 => current.pending_msi.as_deref() == Some(self.operation_id.as_str()),
+                    _ => false,
+                }
                 && current.revision >= self.applied_revision
                 && current.msi_cursor.as_ref() == Some(&self.applied_msi_cursor)
                 && msi(current) == self.after.as_ref(),
             "MSI操作已过期、未执行或已恢复，拒绝旧逆操作"
         );
+        Ok(())
+    }
+    /// Called only after successful Installer commit; release the recovery slot.
+    /// The caller must atomically finalize its protected journal with this plan.
+    pub fn complete(&self, current: &Ledger) -> Result<Prepared> {
+        ensure!(self.schema_version == 2, "旧逆操作不支持完成回执");
+        self.require_applied(current)?;
         let mut after = current.clone();
+        after.revision = current
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("安装修订号耗尽"))?;
+        after.pending_msi = None;
+        after.msi_cursor = Some(uuid::Uuid::new_v4().to_string());
+        after.validate()?;
+        Ok(Prepared {
+            before: current.clone(),
+            after,
+        })
+    }
+    /// Restore only this MSI operation. Never replace a complete historical ledger.
+    pub fn rollback(&self, current: &Ledger, eligible: &Eligible) -> Result<Prepared> {
+        self.require_applied(current)?;
+        let mut after = current.clone();
+        after.schema_version = 3;
+        after.pending_msi = None;
         after.revision = current
             .revision
             .checked_add(1)
