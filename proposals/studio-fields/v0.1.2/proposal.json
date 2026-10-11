@@ -179,7 +179,6 @@
   "unverified": [
     "Host protocol negotiation and Worker reconstruction",
     "Complete legal-input CPU/memory behavior beyond fixed vectors",
-    "Independent fresh-process cold-start matrix",
     "Real native/Host/View/Pi lifecycle and field relay"
   ],
   "supersedesProposal": "../v0.1.0/proposal.json",
@@ -199,6 +198,16 @@
     "productionWasmSha256": "d86a6136ad7c929a99a3f1cc9aaabb8311f34ab65b694ad35534d128dd7494ff",
     "productionWasmBytes": 1577318,
     "productionWasiOnlyImports": true,
-    "hostAccepted": false
+    "hostAccepted": false,
+    "independentColdVectors": 243,
+    "expandedParityVectors": 15,
+    "expandedBudgetFailures": [
+      "disjoint-lf-511",
+      "disjoint-crlf-511",
+      "disjoint-cr-511",
+      "shared-middle-1000",
+      "alternating",
+      "repeated-prefix"
+    ]
   }
 }

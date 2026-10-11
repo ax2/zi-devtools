@@ -1071,17 +1071,17 @@
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.2",
           "pluginStatus": "not_delivered",
-          "blockingReason": "完整文本差异核心与显式时钟协议实验适配已实现；248项功能/字段/时钟检查及243例原预算回放通过，保留完整输入范围；独立冷启动、View与Host协商待验收，插件未交付。",
+          "blockingReason": "完整文本差异核心及显式时钟适配已实现；248项功能、243例原预算及独立冷启动通过；扩展15例输出一致但6例耗尽fuel，完整合法输入性能、View与Host协商待验收，插件未交付。",
           "core": "zi-diff-core/0.1.0",
           "coreStatus": "native_core_verified_node_wasi_clock_and_full_input_limits_diagnostic_pass_Host_unnegotiated",
           "experimentalAdapter": "zi-compare-wasi/0.1.0",
           "adapterContract": "1.1.0-proposal.3_not_Host_negotiated",
-          "adapterVerification": "248_unique_functional_schema_clock_controls_pass_243_original_budget_pass_cold_View_Host_unproven",
+          "adapterVerification": "248_functional_pass_243_original_budget_and_cold_pass_15_extended_parity_6_fuel_fail_View_Host_unproven",
           "proposal": "proposals/studio-fields/v0.1.2/README.md",
           "design": "docs/text-diff-plugin-design.md"
         }
       ],
-      "reason": "完整文本差异核心与显式时钟协议实验适配已实现；248项功能/字段/时钟检查及243例原预算回放通过，保留完整输入范围；独立冷启动、View与Host协商待验收，插件未交付。"
+      "reason": "完整文本差异核心及显式时钟适配已实现；248项功能、243例原预算及独立冷启动通过；扩展15例输出一致但6例耗尽fuel，完整合法输入性能、View与Host协商待验收，插件未交付。"
     },
     {
       "sourceToolId": "network",
