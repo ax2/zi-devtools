@@ -3905,20 +3905,25 @@
       "status": "implemented",
       "category": "工作台",
       "priority": "—",
-      "scope": "主窗口/快捷面板拖放或填写路径，选择 CSV/TSV/JSON、Java/Python/线程/GC/SQL/Celery 或文件校验；UTF-8 文本限 2 MiB、最多 64 文件，不自动执行或上传",
+      "scope": "主窗口/快捷面板拖放或填写路径，选择 CSV/TSV/JSON、Java/Python/线程/GC/SQL/Celery 或文件校验；UTF-8 文本限 2 MiB、最多 64 文件，不自动执行或上传；--open-files末尾参数接收1–64条字面路径，打开同一确认页，不自动读内容/导入/执行/恢复服务；独立窗口，单实例转发与Explorer安装生命周期未实现",
       "discovery": {
         "label": "文件拖放入口",
-        "summary": "拖放或填写路径 · 选择工具导入",
+        "summary": "拖放、路径或外部启动 · 选择工具确认导入",
         "category": "文件与系统",
         "keywords": "导入 文件 CSV JSON 日志 drop import",
         "aliases": []
       },
-      "tool_version": "1.0.0",
+      "tool_version": "1.1.0",
       "version_history": [
         {
           "version": "1.0.0",
           "date": "2026-10-05",
           "changes": "首次建立独立工具版本基线；当前范围见 scope，不追溯历史版本。"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-10-11",
+          "changes": "增加--open-files外部启动参数，复用拖放确认入口，路径按调用者工作目录解析；末尾路径不作为选项执行，数量/空值/无效字符/动作冲突校验，不自动恢复服务。"
         }
       ]
     },

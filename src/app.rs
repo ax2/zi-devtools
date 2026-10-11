@@ -1838,10 +1838,12 @@ impl DevToolsApp {
                     Some(handoff::Transfer::new("JSON".into(), &self.tool_state.output).unwrap());
             }
             64 | 65 => {
-                self.page = Page::Intake;
-                self.intake
-                    .accept(vec![fixture.with_file_name("订单数据.csv")]);
-                self.intake.target = crate::intake::Target::Csv;
+                let path = fixture.with_file_name("订单数据.csv");
+                self.open_startup_files(vec![path.clone()]);
+                assert_eq!(self.intake.paths, vec![path]);
+                assert_eq!(self.intake.target, crate::intake::Target::Csv);
+                assert!(!self.intake.busy());
+                assert!(!self.launcher_open && !self.quick_open);
             }
             60..=63 => {
                 self.visit("json");
@@ -3023,6 +3025,15 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_date_check(&mut self, phase: u8) {
         self.calculator.preview_date_check(phase);
+    }
+
+    /// Queue external paths in the same confirmation screen used by drag and drop.
+    /// This does not read contents, execute a tool, or restore services.
+    pub fn open_startup_files(&mut self, paths: Vec<PathBuf>) {
+        self.intake.accept(paths);
+        self.quick_open = false;
+        self.launcher_open = false;
+        self.navigate(Page::Intake, None);
     }
 
     pub fn open_startup_tool(&mut self, id: &str) {

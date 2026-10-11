@@ -308,10 +308,7 @@ impl DevToolsApp {
                 .collect()
         });
         if !paths.is_empty() {
-            self.intake.accept(paths);
-            self.quick_open = false;
-            self.launcher_open = false;
-            self.navigate(Page::Intake, None);
+            self.open_startup_files(paths);
             restore_main_window(self.window_handle, ctx);
         }
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {

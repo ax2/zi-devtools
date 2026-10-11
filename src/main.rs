@@ -107,6 +107,9 @@ fn main() -> Result<()> {
             if let Some(id) = arguments.tool {
                 app.open_startup_tool(&id);
             }
+            if !arguments.open_files.is_empty() {
+                app.open_startup_files(arguments.open_files);
+            }
             Ok(Box::new(app))
         }),
     )
@@ -115,6 +118,7 @@ fn main() -> Result<()> {
 
 struct Arguments {
     tool: Option<String>,
+    open_files: Vec<std::path::PathBuf>,
     config_path: std::path::PathBuf,
     restore_services: bool,
     fixture_port: Option<u16>,
@@ -129,6 +133,7 @@ fn parse_args() -> Result<Arguments> {
 
 fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Result<Arguments> {
     let mut tool = None;
+    let mut open_files = Vec::new();
     let mut config_path = default_config_path();
     let mut restore_services = true;
     let mut fixture_port = None;
@@ -138,6 +143,21 @@ fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Resul
     let mut args = input.into_iter();
     while let Some(arg) = args.next() {
         match arg.to_str().context("参数不是有效 Unicode")? {
+            "--open-files" => {
+                // Terminal argument: everything after it is a path, never another option.
+                for value in args.by_ref().take(65) {
+                    anyhow::ensure!(
+                        !value.is_empty() && !value.as_encoded_bytes().contains(&0),
+                        "文件路径为空或包含无效字符"
+                    );
+                    open_files.push(std::path::absolute(std::path::PathBuf::from(value))?);
+                }
+                anyhow::ensure!(
+                    (1..=64).contains(&open_files.len()),
+                    "--open-files requires 1–64 file paths"
+                );
+                break;
+            }
             "--tool" => {
                 let id = args
                     .next()
@@ -186,9 +206,19 @@ fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Resul
             _ => {}
         }
     }
+    anyhow::ensure!(
+        open_files.is_empty()
+            || (tool.is_none()
+                && fixture_port.is_none()
+                && fixture_shutdown_port.is_none()
+                && import_config.is_none()
+                && !force_import),
+        "--open-files cannot be combined with tool, fixture or config-import actions"
+    );
     Ok(Arguments {
-        restore_services: restore_services && tool.is_none(),
+        restore_services: restore_services && tool.is_none() && open_files.is_empty(),
         tool,
+        open_files,
         config_path,
         fixture_port,
         fixture_shutdown_port,
@@ -202,6 +232,44 @@ use std::sync::Arc;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn external_files_are_literal_bounded_and_do_not_restore_services() {
+        let parse = |args: &[&str]| parse_args_from(args.iter().map(std::ffi::OsString::from));
+        let parsed = parse(&[
+            "--config",
+            "local.yml",
+            "--open-files",
+            "资料 folder.csv",
+            "--tool",
+            "json",
+        ])
+        .unwrap();
+        assert!(!parsed.restore_services);
+        assert!(parsed.tool.is_none());
+        assert_eq!(parsed.open_files.len(), 3);
+        assert_eq!(
+            parsed.open_files[0],
+            std::path::absolute("资料 folder.csv").unwrap()
+        );
+        assert_eq!(parsed.open_files[1], std::path::absolute("--tool").unwrap());
+        for args in [
+            vec!["--open-files"],
+            vec!["--open-files", ""],
+            vec!["--open-files", "bad\0path"],
+            vec!["--tool", "json", "--open-files", "a.json"],
+            vec!["--fixture-server", "12345", "--open-files", "a.json"],
+            vec!["--fixture-shutdown", "12345", "--open-files", "a.json"],
+            vec!["--import-config", "config.yml", "--open-files", "a.json"],
+            vec!["--force-import", "--open-files", "a.json"],
+        ] {
+            assert!(parse(&args).is_err(), "{args:?}");
+        }
+        let mut many = vec!["--open-files"];
+        many.extend(std::iter::repeat_n("not-required-to-exist.txt", 64));
+        assert_eq!(parse(&many).unwrap().open_files.len(), 64);
+        many.push("extra.txt");
+        assert!(parse(&many).is_err());
+    }
     #[test]
     fn tool_launch_is_explicit_and_does_not_restore_services() {
         let parse = |args: &[&str]| parse_args_from(args.iter().map(std::ffi::OsString::from));
