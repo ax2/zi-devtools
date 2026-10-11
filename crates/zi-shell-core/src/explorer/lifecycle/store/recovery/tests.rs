@@ -64,6 +64,70 @@ fn install_intent(m: &Installation, expected_generation: Option<String>) -> Inte
 }
 
 #[test]
+fn journal_listing_is_read_only_bounded_metadata_and_validates_every_record() {
+    let fixture = Fixture::new();
+    assert!(list_at(&fixture.scope).unwrap().is_empty());
+    assert!(
+        root(&fixture.scope, &Transaction::begin().unwrap(), false)
+            .unwrap()
+            .is_none()
+    );
+    let m = record(Identity::Msi);
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&m, None)).unwrap();
+    let expected = |status| {
+        vec![Summary {
+            operation_id: id.clone(),
+            status,
+            operation: Operation::Install {
+                version: m.version.clone(),
+            },
+        }]
+    };
+    assert_eq!(list_at(&fixture.scope).unwrap(), expected(Status::Prepared));
+    assert!(forget_at(&fixture.scope, &id).is_err());
+    fixture
+        .change(&id, Action::Execute, vec![m.clone()], true)
+        .unwrap();
+    let ledger = fixture.menu.ledger();
+    let menu = fixture.menu.menu();
+    assert_eq!(list_at(&fixture.scope).unwrap(), expected(Status::Applied));
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menu);
+    assert!(forget_at(&fixture.scope, &id).is_err());
+    fixture.change(&id, Action::Complete, vec![], true).unwrap();
+    assert_eq!(
+        list_at(&fixture.scope).unwrap(),
+        expected(Status::Completed)
+    );
+    let ledger = fixture.menu.ledger();
+    let menu = fixture.menu.menu();
+    forget_at(&fixture.scope, &id).unwrap();
+    assert!(list_at(&fixture.scope).unwrap().is_empty());
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menu);
+    // Unknown root content must fail the whole read, never hide broken records.
+    let tx = Transaction::begin().unwrap();
+    let (key, _) = root(&fixture.scope, &tx, false).unwrap().unwrap();
+    success(unsafe {
+        RegSetValueExW(
+            key.0,
+            wide("Unknown").as_ptr(),
+            0,
+            REG_BINARY,
+            [1u8].as_ptr(),
+            1,
+        )
+    })
+    .unwrap();
+    drop(key);
+    tx.commit().unwrap();
+    assert!(list_at(&fixture.scope).is_err());
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menu);
+}
+
+#[test]
 fn protected_journal_install_and_restore_are_jointly_atomic_and_callbacks_are_idempotent() {
     let fixture = Fixture::new();
     let m = record(Identity::Msi);

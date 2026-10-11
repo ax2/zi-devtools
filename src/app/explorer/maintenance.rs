@@ -5,6 +5,7 @@ use crate::explorer::lifecycle::{
 };
 use eframe::egui;
 use std::{path::Path, sync::mpsc, time::Duration};
+use store::recovery::{self, Operation, Status, Summary};
 
 fn path_text(path: &Path) -> String {
     let text = path.display().to_string();
@@ -26,6 +27,11 @@ enum Work {
     Loaded(Ledger),
     Preview(Box<Ticket>),
     Applied(Ledger),
+    Journal(Vec<Summary>),
+    Forgotten {
+        id: String,
+        refreshed: Result<Vec<Summary>, String>,
+    },
 }
 #[derive(Default)]
 pub(super) struct Maintenance {
@@ -34,6 +40,8 @@ pub(super) struct Maintenance {
     ticket: Option<Box<Ticket>>,
     agreed: bool,
     message: Option<(bool, String)>,
+    journal: Option<Vec<Summary>>,
+    forget: Option<Summary>,
 }
 impl Maintenance {
     fn run(&mut self, job: impl FnOnce() -> anyhow::Result<Work> + Send + 'static) {
@@ -41,6 +49,7 @@ impl Maintenance {
             return;
         }
         self.ticket = None;
+        self.forget = None;
         self.agreed = false;
         self.message = None;
         let (sender, receiver) = mpsc::channel();
@@ -58,6 +67,24 @@ impl Maintenance {
                 self.receiver = None;
                 match result {
                     Ok(Work::Loaded(ledger)) => self.ledger = Some(ledger),
+                    Ok(Work::Journal(records)) => self.journal = Some(records),
+                    Ok(Work::Forgotten { id, refreshed }) => {
+                        if let Some(records) = &mut self.journal {
+                            records.retain(|record| record.operation_id != id);
+                        }
+                        self.message = Some(match refreshed {
+                            Ok(records) => {
+                                self.journal = Some(records);
+                                (true, "这条已结束的维护记录已清理。".into())
+                            }
+                            Err(error) => (
+                                false,
+                                format!(
+                                    "记录已清理，但刷新失败：{error}；其他显示内容可能已过期。"
+                                ),
+                            ),
+                        });
+                    }
                     Ok(Work::Preview(ticket)) => {
                         self.ledger = Some(ticket.current().clone());
                         self.ticket = Some(ticket);
@@ -259,14 +286,98 @@ impl Maintenance {
             let config = config.to_path_buf();
             self.run(move || installer::apply(ticket, &config).map(Work::Applied));
         }
+        self.journal_ui(ui, controlled);
         ui.add_space(8.0);
         changed
+    }
+    fn journal_ui(&mut self, ui: &mut egui::Ui, controlled: bool) {
+        let busy = self.receiver.is_some();
+        if ui
+            .add_enabled(
+                !busy && !controlled,
+                egui::Button::new("查看 / 刷新安装维护记录"),
+            )
+            .clicked()
+        {
+            self.run(|| recovery::list().map(Work::Journal));
+        }
+        let mut selected = None;
+        if let Some(records) = &self.journal {
+            egui::CollapsingHeader::new(format!("安装维护记录 · {} 条", records.len()))
+                .default_open(true).show(ui, |ui| {
+                    ui.small("最多保留32条。查看不运行安装程序；仅已结束的历史允许逐条清理，未结束记录保留用于恢复。");
+                    if records.is_empty() { ui.label("没有维护记录。"); }
+                    egui::ScrollArea::vertical().id_salt("explorer-journal").max_height(220.0).show(ui, |ui| {
+                        for record in records {
+                            ui.push_id(&record.operation_id, |ui| {
+                                let terminal = matches!(record.status, Status::Completed | Status::Reverted);
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.strong(match record.status {
+                                        Status::Prepared => "已准备 / 待应用",
+                                        Status::Applied => "已应用 / 待结束",
+                                        Status::Reverted => "已回滚",
+                                        Status::Completed => "已完成",
+                                    });
+                                    ui.label(match &record.operation {
+                                        Operation::Install { version } => format!("安装 / 更新 v{version}"),
+                                        Operation::Remove => "移除菜单登记".into(),
+                                    });
+                                    if terminal && ui.add_enabled(!busy && !controlled, egui::Button::new("清理这条历史")).clicked() {
+                                        selected = Some(record.clone());
+                                    }
+                                });
+                                ui.add(egui::Label::new(egui::RichText::new(&record.operation_id).small().monospace()).wrap());
+                                if !terminal { ui.small("请先完成或回滚安装。此页暂不能恢复中断的安装，也不会将记录标为完成。"); }
+                                ui.add_space(6.0);
+                            });
+                        }
+                    });
+                });
+        }
+        if let Some(record) = selected {
+            self.ticket = None;
+            self.agreed = false;
+            self.forget = Some(record);
+        }
+        let mut confirmed = false;
+        let mut canceled = false;
+        if let Some(record) = &self.forget {
+            ui.group(|ui| {
+                ui.strong("清理已结束的维护记录");
+                ui.add(egui::Label::new(&record.operation_id).wrap());
+                ui.label("只删除这条历史，不改安装登记、菜单、程序或用户文件。清理后无法再查看这条历史。");
+                ui.checkbox(&mut self.agreed, "同意清理这条已结束的记录");
+                ui.horizontal(|ui| {
+                    confirmed = ui.add_enabled(self.agreed && !busy && !controlled, egui::Button::new("确认清理记录")).clicked();
+                    canceled = ui.add_enabled(!busy, egui::Button::new("取消清理")).clicked();
+                });
+            });
+        }
+        if canceled {
+            self.forget = None;
+            self.agreed = false;
+        }
+        if confirmed {
+            let id = self
+                .forget
+                .take()
+                .expect("confirmed journal record")
+                .operation_id;
+            self.run(move || {
+                recovery::forget(&id)?;
+                Ok(Work::Forgotten {
+                    id,
+                    refreshed: recovery::list().map_err(|error| error.to_string()),
+                })
+            });
+        }
     }
     #[cfg(feature = "ui-preview")]
     pub(super) fn fixture(&mut self, config: std::path::PathBuf) {
         let pending = std::env::args().any(|arg| arg == "--pending-msi");
+        let journal = std::env::args().any(|arg| arg == "--journal-cleanup");
         self.run(move || {
-            if pending {
+            if pending || journal {
                 // Synthetic read-only capture state; never a recovery receipt.
                 let mut value = serde_json::to_value(Ledger::default())?;
                 value["pending_msi"] = uuid::Uuid::new_v4().to_string().into();
@@ -278,9 +389,82 @@ impl Maintenance {
             }
             installer::fixture_preview(&config).map(|ticket| Work::Preview(Box::new(ticket)))
         });
+        if journal {
+            let completed = Summary {
+                operation_id: "51d0102f-8b51-40e5-97d3-556062d4b9f6".into(),
+                status: Status::Completed,
+                operation: Operation::Install {
+                    version: "0.82.0".into(),
+                },
+            };
+            self.journal = Some(vec![
+                completed.clone(),
+                Summary {
+                    operation_id: "374d06dc-5c86-4dbf-97fb-3985d8f37f19".into(),
+                    status: Status::Applied,
+                    operation: Operation::Remove,
+                },
+            ]);
+            self.forget = Some(completed);
+        }
     }
     #[cfg(feature = "ui-preview")]
     pub(super) fn fixture_finished(&self) -> bool {
         self.receiver.is_none()
+    }
+}
+
+#[cfg(test)]
+mod journal_tests {
+    use super::*;
+
+    #[test]
+    fn committed_cleanup_with_refresh_failure_keeps_other_records_and_reports_partial_success() {
+        let completed = Summary {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            status: Status::Completed,
+            operation: Operation::Remove,
+        };
+        let pending = Summary {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            status: Status::Applied,
+            operation: Operation::Remove,
+        };
+        let mut state = Maintenance {
+            journal: Some(vec![completed.clone(), pending.clone()]),
+            ..Default::default()
+        };
+        let (sender, receiver) = mpsc::channel();
+        sender
+            .send(Ok(Work::Forgotten {
+                id: completed.operation_id,
+                refreshed: Err("读取失败".into()),
+            }))
+            .unwrap();
+        state.receiver = Some(receiver);
+        assert!(!state.poll());
+        assert_eq!(state.journal, Some(vec![pending]));
+        let (success, message) = state.message.unwrap();
+        assert!(!success);
+        assert!(message.contains("记录已清理") && message.contains("刷新失败"));
+    }
+
+    #[test]
+    fn rejected_cleanup_retains_visible_records() {
+        let pending = Summary {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            status: Status::Applied,
+            operation: Operation::Remove,
+        };
+        let mut state = Maintenance {
+            journal: Some(vec![pending.clone()]),
+            ..Default::default()
+        };
+        let (sender, receiver) = mpsc::channel();
+        sender.send(Err("未完成记录不能清理".into())).unwrap();
+        state.receiver = Some(receiver);
+        assert!(!state.poll());
+        assert_eq!(state.journal, Some(vec![pending]));
+        assert_eq!(state.message, Some((false, "未完成记录不能清理".into())));
     }
 }

@@ -75,6 +75,43 @@ pub enum Status {
     Reverted,
     Completed,
 }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Operation {
+    Install { version: String },
+    Remove,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Summary {
+    pub operation_id: String,
+    pub status: Status,
+    pub operation: Operation,
+}
+/// Bounded, validated metadata only. Reading never creates a journal root.
+pub fn list() -> Result<Vec<Summary>> {
+    list_at(&Scope::production())
+}
+fn list_at(scope: &Scope) -> Result<Vec<Summary>> {
+    let tx = Transaction::begin()?;
+    let Some((_, ids)) = root(scope, &tx, false)? else {
+        return Ok(Vec::new());
+    };
+    let mut summaries = Vec::with_capacity(ids.len());
+    for id in ids {
+        let record = read_record(scope, &id, &tx)?;
+        summaries.push(Summary {
+            operation_id: id,
+            status: record.state.status(),
+            operation: match record.intent {
+                Intent::Install { installation, .. } => Operation::Install {
+                    version: installation.version,
+                },
+                Intent::Remove { .. } => Operation::Remove,
+            },
+        });
+    }
+    summaries.sort_by(|a, b| a.operation_id.cmp(&b.operation_id));
+    Ok(summaries)
+}
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "phase", rename_all = "kebab-case", deny_unknown_fields)]
 enum State {
