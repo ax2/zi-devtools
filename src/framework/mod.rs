@@ -343,6 +343,15 @@ impl State {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_imported_draft(&self, tool: Tool, expected: &str) {
+        assert_eq!(self.selected, tool);
+        let draft = &self.drafts[&tool];
+        assert_eq!(draft.input, expected);
+        assert!(draft.output.is_empty() && draft.summary.is_empty());
+        assert!(!self.is_running());
+    }
+
+    #[cfg(feature = "ui-preview")]
     pub fn preview_received_log(&self, tool: Tool, marker: &str) {
         assert_eq!(self.selected, tool);
         let draft = &self.drafts[&tool];

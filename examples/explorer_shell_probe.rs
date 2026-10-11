@@ -1,6 +1,21 @@
 //! Real Windows Shell COM resolution and invocation, with disposable associations.
 //! This does not automate or certify the Explorer window or the product installer.
 #[cfg(windows)]
+#[path = "explorer_shell_probe/ui.rs"]
+mod application_ui;
+
+#[cfg(windows)]
+fn fixture_text(target: Option<zi_devtools::intake::Target>) -> &'static str {
+    use zi_devtools::intake::Target;
+    match target {
+        Some(Target::JsonData) => "[{\"name\":\"fixture\",\"count\":3}]",
+        Some(Target::Json) => "{\"fixture\":true}",
+        Some(Target::Csv) => "name,count\nfixture,3\n",
+        Some(Target::Tsv) => "name\tcount\nfixture\t3\n",
+        _ => "synthetic tutorial fixture; no diagnostic automatically executed",
+    }
+}
+#[cfg(windows)]
 mod native {
     use anyhow::{Context, Result, ensure};
     use std::{
@@ -223,6 +238,10 @@ mod native {
         );
         let mut invoked = Vec::new();
         for (label, action) in expected {
+            fs::write(
+                file,
+                super::fixture_text(action.and_then(Target::from_action_id)),
+            )?;
             let id = actions
                 .iter()
                 .find(|(text, _)| text == &label)
@@ -244,7 +263,7 @@ mod native {
                     .InvokeCommand(&info)
                     .with_context(|| format!("IContextMenu::InvokeCommand: {label}"))?;
             }
-            let deadline = Instant::now() + Duration::from_secs(10);
+            let deadline = Instant::now() + Duration::from_secs(60);
             while !receipt.exists() && Instant::now() < deadline {
                 std::thread::sleep(Duration::from_millis(25));
             }
@@ -264,6 +283,11 @@ mod native {
                 actual == wanted,
                 "Shell argument expansion differed for {label}"
             );
+            ensure!(
+                fs::read(file)?
+                    == super::fixture_text(action.and_then(Target::from_action_id)).as_bytes(),
+                "application changed the selected source file"
+            );
             invoked.push(label);
         }
         Ok(invoked)
@@ -271,22 +295,46 @@ mod native {
     pub fn run() -> Result<()> {
         let args: Vec<_> = std::env::args().skip(1).collect();
         if args.first().is_some_and(|a| a == "--config") {
-            // Receiver is this test executable, never the user's desktop process.
-            let path = Path::new(args.get(1).context("missing fixture receipt")?);
+            let parsed =
+                zi_devtools::launch::parse_args_from(args.iter().map(std::ffi::OsString::from))?;
             ensure!(
-                path.file_name().is_some_and(|n| n == "shell-receipt.json"),
-                "not a fixture receipt"
+                !parsed.restore_services && parsed.open_files.len() == 1 && parsed.tool.is_none(),
+                "Shell launch did not pass the product parser"
             );
+            // Receiver is this test executable, never the user's desktop process.
+            let config = &parsed.config_path;
+            ensure!(
+                config
+                    .file_name()
+                    .is_some_and(|n| n == "shell-services.yml"),
+                "not a fixture config"
+            );
+            let path = config.with_file_name("shell-receipt.json");
+            let control = config.with_file_name("shell-ui-control.json");
+            if control.exists() {
+                let light: bool = serde_json::from_slice(&fs::read(control)?)?;
+                super::application_ui::run(parsed, light)?;
+            }
             let pending = path.with_extension("pending");
             fs::write(&pending, serde_json::to_vec(&args)?)?;
-            fs::rename(pending, path)?;
+            fs::rename(pending, &path)?;
             return Ok(());
         }
         ensure!(
-            args.len() == 1 || (args.len() == 2 && args[1] == "--extended-paths"),
-            "usage: explorer_shell_probe ARCHIVE_DIRECTORY [--extended-paths]"
+            !args.is_empty()
+                && args.iter().skip(1).all(|a| matches!(
+                    a.as_str(),
+                    "--extended-paths" | "--application-ui" | "--light"
+                )),
+            "usage: explorer_shell_probe ARCHIVE_DIRECTORY [--extended-paths] [--application-ui] [--light]"
         );
-        let extended = args.len() == 2;
+        let extended = args.iter().any(|a| a == "--extended-paths");
+        let application_ui = args.iter().any(|a| a == "--application-ui");
+        let light = args.iter().any(|a| a == "--light");
+        ensure!(
+            !light || application_ui,
+            "--light requires --application-ui"
+        );
         let absolute = std::path::absolute(&args[0])?;
         for ancestor in absolute.ancestors() {
             use std::os::windows::fs::MetadataExt;
@@ -316,6 +364,22 @@ mod native {
         let progid = format!("ZiCode.DevTools.ShellProbe-{id}");
         let actions = format!("{progid}.Actions");
         let receipt = folder.join("shell-receipt.json");
+        let config = folder.join("shell-services.yml");
+        let control = folder.join("shell-ui-control.json");
+        ensure!(
+            !config.exists() && !control.exists(),
+            "fixture config already exists"
+        );
+        fs::write(
+            &config,
+            format!(
+                "state_dir: '{}'\nservices: {{}}\n",
+                folder.join("shell-state").display()
+            ),
+        )?;
+        if application_ui {
+            fs::write(&control, serde_json::to_vec(&light)?)?;
+        }
         ensure!(
             !receipt.exists() && !receipt.with_extension("pending").exists(),
             "fixture receipt already exists"
@@ -341,9 +405,9 @@ mod native {
             std::env::current_exe()?
         };
         let command_config = if extended {
-            fs::canonicalize(&folder)?.join("shell-receipt.json")
+            fs::canonicalize(&folder)?.join("shell-services.yml")
         } else {
-            receipt.clone()
+            config.clone()
         };
         let plan = zi_devtools::explorer::plan(&executable, &command_config)?;
         for value in plan.values {
@@ -373,14 +437,18 @@ mod native {
         }
         // Independently expect ordinary Win32 config syntax, even when the plan
         // input carried the extended filesystem prefix used by installation records.
-        let result = probe(&file, &receipt, &receipt);
+        let result = probe(&file, &receipt, &config);
         associations.cleanup()?;
         fs::remove_file(&file)?;
         if receipt.exists() {
             fs::remove_file(&receipt)?;
         }
+        fs::remove_file(&config)?;
+        if control.exists() {
+            fs::remove_file(&control)?;
+        }
         let invoked = result?;
-        let proof = serde_json::json!({"scope":"actual Windows Shell COM; isolated association; not Explorer-window acceptance", "extendedCommandPaths":extended,"invoked":invoked,"count":invoked.len(),"registryCleanupVerified":true,"syntheticFileRemoved":true,"productMenuRegistered":false});
+        let proof = serde_json::json!({"scope":"actual Windows Shell COM; isolated association; not Explorer-window acceptance", "productParserAccepted":true,"applicationUiConfirmed":application_ui,"light":light,"extendedCommandPaths":extended,"invoked":invoked,"count":invoked.len(),"registryCleanupVerified":true,"syntheticFileRemoved":true,"productMenuRegistered":false});
         fs::write(
             folder.join(if extended {
                 "shell-proof-extended.json"

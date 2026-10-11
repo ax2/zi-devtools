@@ -2,6 +2,8 @@ mod commands;
 mod explorer;
 mod file_materials;
 mod handoff;
+#[cfg(feature = "ui-preview")]
+mod launch_preview;
 mod launcher;
 mod navigation;
 mod registry;
@@ -3064,6 +3066,31 @@ impl DevToolsApp {
         self.quick_open = false;
         self.launcher_open = false;
         self.navigate(Page::Intake, None);
+    }
+
+    /// Apply a parsed desktop launch through the same navigation and intake routes.
+    /// Helper/config-import commands belong to main and cannot enter this UI route.
+    pub fn open_startup_arguments(
+        &mut self,
+        arguments: &crate::launch::Arguments,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            arguments.fixture_port.is_none()
+                && arguments.fixture_shutdown_port.is_none()
+                && arguments.import_config.is_none(),
+            "非界面启动请求不能进入工具导入页"
+        );
+        if let Some(id) = &arguments.tool {
+            self.open_startup_tool(id);
+        }
+        if !arguments.open_files.is_empty() {
+            if let Some(target) = arguments.file_action {
+                self.open_startup_file_action(arguments.open_files.clone(), target)?;
+            } else {
+                self.open_startup_files(arguments.open_files.clone());
+            }
+        }
+        Ok(())
     }
 
     pub fn open_startup_file_action(

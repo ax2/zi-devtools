@@ -187,13 +187,14 @@ impl State {
             } else {
                 "替换目标草稿并打开"
             };
-            if ui
+            let confirm = ui
                 .add_enabled(
                     !self.paths.is_empty(),
                     egui::Button::new(label).min_size(egui::vec2(230.0, 36.0)),
-                )
-                .clicked()
-            {
+                );
+            #[cfg(feature = "ui-preview")]
+            ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new("intake-confirm"), confirm.rect));
+            if confirm.clicked() {
                 let paths = self.paths.clone();
                 let target = self.target;
                 let (tx, rx) = mpsc::channel();

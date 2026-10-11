@@ -1,6 +1,6 @@
 # 资源管理器统一入口：实现约束与验收
 
-更新：2026-10-11。状态：文件接收1.2.0、经典菜单维护与Shell调用修正0.5.0。设置页可预览并确认手动登记、修复、切换、迁移和移除；`explorer-menu`仍为开发中，实际Explorer窗口显示/导入、MSI自动维护与完整多选尚未验收。
+更新：2026-10-11。状态：文件接收1.3.0、Shell到应用确认链0.6.0。设置页可预览并确认手动登记、修复、切换、迁移和移除；`explorer-menu`仍为开发中，实际Explorer窗口显示/点击、MSI自动维护与完整多选尚未验收。
 
 ## 已有基础及缺口
 
@@ -89,3 +89,11 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 `explorer_shell_probe`通过实际IShellItem/IContextMenu构建级联、发送子菜单初始化消息，并逐项InvokeCommand启动独立接收进程；复用产品Plan生成器。普通与规范路径输入各12项调用均核对完整argv，覆盖中文、空格、符号、字面`%1`和类似参数的文件名。夹具只登记随机独立文件类型/ProgID/动作树，不登记产品`*`入口；结束后复核删除关联项，移除合成输入和参数回执。CI运行同一探针并保存非敏感证明。
 
 运行：先用`scripts/dev.ps1 build --example explorer_shell_probe --features ui-preview --locked`构建，再将独立空的本地记录目录作为参数传给`target/debug/examples/explorer_shell_probe.exe`；第二次加`--extended-paths`覆盖安装记录的规范路径。记录目录拒绝重解析点。该证据证明Shell COM宿主解析和实际进程参数传递，不证明Explorer窗口渲染、真实应用导入确认、多选、现代菜单或MSI生命周期。参考：[BindToHandler](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishellitem-bindtohandler)、[InvokeCommand](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-icontextmenu-invokecommand)、[菜单消息初始化](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-icontextmenu2-handlemenumsg)。
+
+## Shell到应用导入确认链0.6.0
+
+正式程序与原生Shell探针共用`launch::parse_args_from`；原CLI的字面路径、64文件边界、互斥请求及11个动作测试迁移到共享模块。正式程序和界面夹具共用`DevToolsApp::open_startup_arguments`，不在测试程序里重写启动接收逻辑。服务夹具与配置导入动作仍由main处理，不进入工具UI。
+
+探针加`--application-ui`后，实际Shell每次启动带真实DevToolsApp的独立夹具进程。配置和状态限定到指定记录目录；确认前对合成源文件持有独占锁，检查待导入路径/目标、未启动读取任务且已有工具/数据草稿不变。随后从实际渲染取得确认按钮位置，注入点击，等待正式异步读取与应用接收路由，再检查每个目标的输入/新数据实例或校验列表；诊断没有自动执行，源文件内容保持。只有界面断言、两张实际帧缓冲截图及正常退出完成后才写参数回执，Shell宿主再核对完整argv。
+
+本地暗色普通路径和亮色规范路径各覆盖12项，保存24份动作证明与48张确认前后截图。第二轮可用`--application-ui --light --extended-paths`；默认CI仍运行无窗口的真实Shell＋正式解析器两轮，界面验收单独记录，不宣称CI完成GL/桌面渲染。隔离文件类型与产品菜单安装保持独立；这证明Shell COM到正式应用接收/确认链，不证明Explorer窗口里的菜单显示或人工点击，也不完成MSI、多选、目录、窗口转发和现代菜单门槛。
