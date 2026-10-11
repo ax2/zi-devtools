@@ -170,7 +170,16 @@ def main():
         # without this action a pre-Finalize error would precede file/menu writes.
         ET.SubElement(sequence, NS + 'InstallExecute', Sequence='6500')
         if fault:
-            ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure', Error='Intentional menu rollback fixture')
+            if fault == 'before':
+                # Fail in the real execution script before file writes. An
+                # immediate Type-19 error here aborts script construction before
+                # the engine has registered rollback callbacks at all. Empty
+                # CustomActionData makes the strict production DLL reject safely.
+                ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure',
+                              BinaryRef='ZiMenuActions', DllEntry='ZiMenuExecute',
+                              Execute='deferred', Return='check', Impersonate='yes')
+            else:
+                ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure', Error='Intentional menu rollback fixture')
             position = {'Sequence': '1520'} if fault == 'before' else {'Before': 'InstallFinalize'}
             ET.SubElement(sequence, NS + 'Custom', Action='MenuFixtureFailure', Condition='NOT REMOVE', **position)
         source = folder / (label + '.wxs')
