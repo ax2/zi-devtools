@@ -168,7 +168,9 @@ def click(operation, choice, initial, screenshot, cancel=False):
                     invalid_controls.append(label)
                 children[label] = child
             return True
-        assert user.EnumChildWindows(hwnd, collect, 0)
+        # Win32 explicitly leaves this function's return value unused. Validate
+        # the enumerated controls instead of treating its BOOL as success.
+        user.EnumChildWindows(hwnd, collect, 0)
         assert not invalid_controls, 'Unexpected native option control'
         assert len(children) == 5, 'Native option controls missing'
         assert user.SendMessageW(children[LABELS[initial]], 0xF0, 0, 0) == 1, 'Wrong default option'
