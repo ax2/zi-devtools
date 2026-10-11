@@ -221,3 +221,9 @@ ZiMenuCommitReady在执行序列中排在ZiMenuExecute之后，使用严格UUID 
 依据：[Microsoft多包动作次序](https://devblogs.microsoft.com/setup/installation-sequence-restrictions-for-multi-package-transactions/)说明commit动作延期到最后；[Commit Custom Actions](https://learn.microsoft.com/en-us/windows/win32/msi/commit-custom-actions)明确commit动作失败仍可触发回滚。因此Ready既不是Committed，也不释放回滚证据。
 
 CI独立执行三路：普通完整矩阵（新增Ready之后另一个commit动作失败，要求旧文件/产品/菜单恢复）；真实外层rollback（要求单包返回时Applied/pending保留、外层结束后恢复）；真实外层commit（要求单包不提前完成、结束后Ready不能桌面恢复、拥有者成功API返回后才能确认结束，最终正常卸载）。本机仅编译六候选包。实现意图不能替代这三路实际结果；正式WiX仍未接入，真实强杀和无凭据恢复仍待完成。
+
+### 0.19.0真实CI结果
+
+b23e30f的CI38136016485三路全部成功。普通八组矩阵包括commitfail后旧文件/菜单/登记恢复；外层rollback结束前Applied/pending保留，结束后Reverted、无登记/菜单/产品/安装文件且释放pending；外层commit结束前不提前完成，结束后Ready拒绝桌面收尾，真实拥有者在成功API返回后标记并确认完成，后续正常卸载。结果来自三个独立一次性托管runner，没有本机安装或修补状态来伪造通过。
+
+这证明候选方案通过这些实际场景，仍不能替代正式WiX/EXE安装集成、第三方事务拥有者产品级回调、真正强杀、Prepared/Applied恢复及原Explorer验收。历史0.18.0失败证据保留。
