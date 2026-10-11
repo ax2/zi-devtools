@@ -50,7 +50,7 @@
     {
       "id": "devtools.compare.text.diff",
       "sourceToolId": "diff",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "title": "文本差异",
       "inputSchema": {
         "type": "object",

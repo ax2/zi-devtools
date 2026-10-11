@@ -12,6 +12,7 @@ name = "ZiDevTools"
 path = "src/main.rs"
 
 [dependencies]
+zi-diff-core = { path = "crates/zi-diff-core" }
 zi-regex-core = { path = "crates/zi-regex-core" }
 zi-json-core = { path = "crates/zi-json-core" }
 zi-character-core = { path = "crates/zi-character-core" }
@@ -68,7 +69,7 @@ ui-preview = []
 
 [workspace]
 exclude = ["vendor/regex-automata"]
-members = ["crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
+members = ["crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
 default-members = ["."]
 resolver = "3"
 

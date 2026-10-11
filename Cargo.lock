@@ -5618,6 +5618,7 @@ dependencies = [
  "zeroize",
  "zi-character-core",
  "zi-diagnostics-core",
+ "zi-diff-core",
  "zi-inspect-core",
  "zi-json-core",
  "zi-regex-core",
@@ -5644,6 +5645,13 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-diagnostics-core",
+]
+
+[[package]]
+name = "zi-diff-core"
+version = "0.1.0"
+dependencies = [
+ "similar",
 ]
 
 [[package]]

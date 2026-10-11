@@ -1,0 +1,10 @@
+[package]
+name = "zi-diff-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+# Keep std enabled: the existing comparison deadline requires Instant.
+similar = "3.2.0"

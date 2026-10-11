@@ -12,7 +12,6 @@ use reqwest::{
     header::{HeaderName, HeaderValue},
 };
 use serde::{Deserialize, Serialize};
-use similar::TextDiff;
 
 pub const HTTP_METHODS: [&str; 5] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
@@ -316,23 +315,7 @@ pub fn execute_http(spec: &HttpRequestSpec) -> Result<String> {
 }
 
 pub fn compare_text(before: &str, after: &str) -> Result<String> {
-    if before.len() > 128 * 1024
-        || after.len() > 128 * 1024
-        || before.lines().count() > 5_000
-        || after.lines().count() > 5_000
-    {
-        return Err(anyhow!("每份文本最多 128 KiB、5000 行"));
-    }
-    if before == after {
-        return Ok("两份文本完全相同".to_owned());
-    }
-    Ok(TextDiff::configure()
-        .timeout(Duration::from_millis(500))
-        .diff_lines(before, after)
-        .unified_diff()
-        .context_radius(3)
-        .header("原文", "修改后")
-        .to_string())
+    zi_diff_core::compare_text(before, after, None).map_err(Into::into)
 }
 
 #[cfg(test)]

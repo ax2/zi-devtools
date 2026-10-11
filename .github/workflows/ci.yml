@@ -69,6 +69,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/verify_regex_program_limits.py --output "$env:RUNNER_TEMP/regex-program-limits.json"
           exit $LASTEXITCODE
+      - name: Text diff native and WASI clock diagnostic (not Host acceptance)
+        shell: pwsh
+        run: |
+          cargo build -p zi-diff-core --example clock_probe --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p zi-diff-core --example clock_probe --profile plugin --target wasm32-wasip1 --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_diff_clock.py --output "$env:RUNNER_TEMP/diff-clock-diagnostic.json"
+          exit $LASTEXITCODE
       - name: Character core WASI target compilation
         run: cargo check -p zi-character-core --profile plugin --target wasm32-wasip1 --locked
       - name: Character input scope proposal (structure only)

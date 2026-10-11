@@ -112,28 +112,36 @@ for operation, source_id, title in trace_actions:
         viewVerification="public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
         blockingReason="unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收")]
 for row in rows:
+    if row["sourceToolId"] == "diff":
+        assert row["pluginStatus"] == "not_delivered"
+        row["reason"] = "完整文本差异核心已共享，独立Node/WASI时钟及边界诊断通过；仍需Host时钟协商、完整适配和预算验收，插件操作未交付。"
+        for scope in row["operationScopes"]:
+            scope["core"] = "zi-diff-core/0.1.0"
+            scope["coreStatus"] = "native_core_verified_node_wasi_clock_and_full_input_limits_diagnostic_pass_Host_unnegotiated"
+            scope["design"] = "docs/text-diff-plugin-design.md"
+            scope["blockingReason"] = row["reason"]
     if row["sourceToolId"] in {"json-path", "json-diff"}:
-        row["reason"] = "完整JSON核心已共享；四操作实验模块仍有正则预算与编译限额跨架构差异，未冻结或Host验收。"
+        row["reason"] = "完整JSON核心已共享；四操作实验模块固定预算通过，完整冷启动仍有一例超时，更大合法正则预算未完成；未冻结或Host验收。"
         assert row["pluginStatus"] == "not_delivered"
         for scope in row["operationScopes"]:
             scope["core"] = "zi-json-core/0.1.0"
             scope["coreStatus"] = "standalone_shared_core_verified_experimental_fields_adapter_not_delivered"
             scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
-            scope["adapterVerification"] = "219_native_wasi_budget_pass_27_limit_matching_528_old_algorithm_parity_pass_cold_210_pass_9_deadline_fail_full_regex_budget_unproven"
+            scope["adapterVerification"] = "219_native_wasi_budget_pass_27_limit_matching_528_old_algorithm_parity_pass_cold_218_pass_1_deadline_fail_full_regex_budget_unproven"
             scope["design"] = "docs/json-plugin-design.md"
-            scope["blockingReason"] = "当前四操作模块219条固定功能向量通过，编译限额15例通过，预算218通过/1合法大正则编译失败，尚无最终冷启动、View、协议协商或Host验收；不是完整五操作提案或交付插件。"
+            scope["blockingReason"] = "当前四操作模块219条固定功能及原预算通过，27例编译/匹配与528例旧算法对照通过；完整冷启动218通过/1超五秒，更大合法正则仍超预算；尚无View、协议协商或Host验收，不是完整五操作交付。"
     if row["sourceToolId"] == "regex":
-        row["reason"] = "完整正则核心与四操作适配已实现功能验证；一条预算失败及编译限额跨架构差异，未冻结或Host验收。"
+        row["reason"] = "完整正则核心与四操作适配已实现功能验证；固定预算通过，完整冷启动仍有一例超时，更大合法正则预算未完成；未冻结或Host验收。"
         assert row["pluginStatus"] == "not_delivered"
         for scope in row["operationScopes"]:
             scope["core"] = "zi-regex-core/0.1.0"
             scope["coreStatus"] = "complete_standalone_core_verified_experimental_adapter_budget_incomplete"
             scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
-            scope["adapterVerification"] = "219_native_wasi_budget_pass_27_limit_matching_528_old_algorithm_parity_pass_cold_210_pass_9_deadline_fail_full_regex_budget_unproven"
+            scope["adapterVerification"] = "219_native_wasi_budget_pass_27_limit_matching_528_old_algorithm_parity_pass_cold_218_pass_1_deadline_fail_full_regex_budget_unproven"
             scope["design"] = "docs/regex-plugin-design.md"
-            scope["blockingReason"] = "完整算法已共享；空捕获与超限字面量重复已优化；15例编译限额跨架构诊断通过，但合法a{200000}编译仍耗尽10M，仍需优化、最终冷启动、View与真实Host验收。"
+            scope["blockingReason"] = "完整算法已共享；空捕获与固定字面量重复已优化，a{200000}空文本用例在原10M内通过；a{300000}回退仍超预算，完整冷启动218通过/1超五秒，仍需完整预算、View与真实Host验收。"
     if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
         assert row["pluginStatus"] == "not_delivered"
         row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
