@@ -32,8 +32,10 @@ impl Operation {
     pub fn undo(&self) -> &Undo {
         &self.undo
     }
-    fn new(mut plan: Prepared) -> Result<Self> {
-        let operation_id = uuid::Uuid::new_v4().to_string();
+    fn new(mut plan: Prepared, operation_id: &str) -> Result<Self> {
+        ensure!(operation_id.len() == 36, "MSI操作标识长度无效");
+        Identity::Portable(operation_id.into()).validate()?;
+        let operation_id = operation_id.to_owned();
         plan.after.pending_msi = Some(operation_id.clone());
         plan.after.validate()?;
         let undo = Undo {
@@ -61,18 +63,40 @@ pub fn install(
     activate: bool,
     eligible: &Eligible,
 ) -> Result<Operation> {
+    install_with_id(
+        before,
+        installation,
+        activate,
+        eligible,
+        &uuid::Uuid::new_v4().to_string(),
+    )
+}
+
+/// Installer preparation allocates this ID before scheduling rollback actions.
+pub fn install_with_id(
+    before: &Ledger,
+    installation: Installation,
+    activate: bool,
+    eligible: &Eligible,
+    operation_id: &str,
+) -> Result<Operation> {
+    ensure!(operation_id.len() == 36, "MSI操作标识长度无效");
+    Identity::Portable(operation_id.into()).validate()?;
     before.validate()?;
     validate_msi(&installation)?;
     let expected_generation = msi(before).map(|record| record.generation.clone());
-    Operation::new(prepare(
-        before,
-        Change::Put {
-            installation,
-            expected_generation,
-            activate,
-        },
-        eligible,
-    )?)
+    Operation::new(
+        prepare(
+            before,
+            Change::Put {
+                installation,
+                expected_generation,
+                activate,
+            },
+            eligible,
+        )?,
+        operation_id,
+    )
 }
 
 /// None only when both the record and expected generation are absent.
@@ -81,6 +105,22 @@ pub fn remove(
     expected_generation: Option<&str>,
     eligible: &Eligible,
 ) -> Result<Option<Operation>> {
+    remove_with_id(
+        before,
+        expected_generation,
+        eligible,
+        &uuid::Uuid::new_v4().to_string(),
+    )
+}
+
+pub fn remove_with_id(
+    before: &Ledger,
+    expected_generation: Option<&str>,
+    eligible: &Eligible,
+    operation_id: &str,
+) -> Result<Option<Operation>> {
+    ensure!(operation_id.len() == 36, "MSI操作标识长度无效");
+    Identity::Portable(operation_id.into()).validate()?;
     before.validate()?;
     ensure!(before.pending_msi.is_none(), "存在待完成或恢复的MSI操作");
     let current = msi(before);
@@ -91,14 +131,17 @@ pub fn remove(
     let Some(current) = current else {
         return Ok(None);
     };
-    Operation::new(prepare(
-        before,
-        Change::Remove {
-            identity: Identity::Msi,
-            expected_generation: current.generation.clone(),
-        },
-        eligible,
-    )?)
+    Operation::new(
+        prepare(
+            before,
+            Change::Remove {
+                identity: Identity::Msi,
+                expected_generation: current.generation.clone(),
+            },
+            eligible,
+        )?,
+        operation_id,
+    )
     .map(Some)
 }
 
@@ -117,6 +160,19 @@ pub struct Undo {
 impl Undo {
     pub fn operation_id(&self) -> &str {
         &self.operation_id
+    }
+    pub(super) fn require_transition(
+        &self,
+        before_generation: Option<&str>,
+        after: Option<&Installation>,
+    ) -> Result<()> {
+        ensure!(
+            self.schema_version == 2
+                && self.before.as_ref().map(|r| r.generation.as_str()) == before_generation
+                && self.after.as_ref() == after,
+            "日志意图与逆操作不一致"
+        );
+        Ok(())
     }
     fn validate(&self) -> Result<()> {
         ensure!(
@@ -159,7 +215,7 @@ impl Undo {
         result.validate()?;
         Ok(result)
     }
-    fn require_applied(&self, current: &Ledger) -> Result<()> {
+    pub(super) fn require_applied(&self, current: &Ledger) -> Result<()> {
         self.validate()?;
         current.validate()?;
         ensure!(

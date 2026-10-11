@@ -1,8 +1,8 @@
 use super::super::super::tests::{put, sample};
 use super::*;
 
-struct Fixture {
-    scope: Scope,
+pub(in crate::explorer::lifecycle::store) struct Fixture {
+    pub(in crate::explorer::lifecycle::store) scope: Scope,
     classes_root: String,
 }
 static FIXTURE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -146,7 +146,7 @@ fn native_full_ledger_uninstall_reserves_undo_capacity_and_finalizes_atomically(
 #[test]
 #[ignore = "requires an explicitly created disposable CI user with a loaded profile"]
 fn cross_account_joint_transaction_does_not_use_cached_process_hkcu() {
-    let (scope, prepared) = audit::native::with_ci_user(|| {
+    let (scope, prepared, journal_path) = audit::native::with_ci_user(|| {
         let fixture = Fixture::new();
         let p = record(Identity::portable());
         let prepared = preview_at(
@@ -169,9 +169,15 @@ fn cross_account_joint_transaction_does_not_use_cached_process_hkcu() {
         fixture.clear();
         assert_eq!(fixture.ledger(), Ledger::default());
         assert!(fixture.menu().keys.is_empty());
-        (scope, prepared)
+        let journal_path = super::super::recovery::tests::cross_account_journal_probe();
+        (scope, prepared, journal_path)
     });
     // Now back under the original process user. No corresponding keys may exist.
+    assert!(
+        open(&journal_path, &Transaction::begin().unwrap(), false)
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(
         read(&scope.ledger, &Transaction::begin().unwrap()).unwrap(),
         Ledger::default()
@@ -374,7 +380,7 @@ fn native_msi_upgrade_and_uninstall_inverse_commit_and_rollback_both_hives() {
     }
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(in crate::explorer::lifecycle::store) fn new() -> Self {
         let id = uuid::Uuid::new_v4();
         let ledger = format!(r"Software\ZiCode\ZiDevTools\Tests\ExplorerJoint-{id}");
         let classes_root = format!(r"ZiCode.DevTools.Tests\ExplorerJoint-{id}");
@@ -397,10 +403,10 @@ impl Fixture {
         tx.commit().unwrap();
         result
     }
-    fn ledger(&self) -> Ledger {
+    pub(in crate::explorer::lifecycle::store) fn ledger(&self) -> Ledger {
         read(&self.scope.ledger, &Transaction::begin().unwrap()).unwrap()
     }
-    fn menu(&self) -> Snapshot {
+    pub(in crate::explorer::lifecycle::store) fn menu(&self) -> Snapshot {
         audit::native::read_tx(&self.scope.roots(), None).unwrap()
     }
     fn clear(&self) {

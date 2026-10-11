@@ -289,6 +289,7 @@ pub fn commit(prepared: &Prepared) -> Result<()> {
 }
 
 pub(in crate::explorer) mod joint;
+pub mod recovery;
 
 #[cfg(test)]
 mod tests;

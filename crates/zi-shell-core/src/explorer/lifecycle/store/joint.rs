@@ -7,8 +7,8 @@ use crate::explorer::{
 
 #[derive(Clone)]
 pub(in crate::explorer) struct Scope {
-    ledger: String,
-    menus: [String; 2],
+    pub(super) ledger: String,
+    pub(super) menus: [String; 2],
 }
 impl Scope {
     pub(in crate::explorer) fn production() -> Self {
@@ -111,7 +111,14 @@ pub(in crate::explorer) fn preview(ledger: Prepared) -> Result<MenuPrepared> {
 }
 fn preview_at(ledger: Prepared, scope: &Scope) -> Result<MenuPrepared> {
     let tx = Transaction::begin()?;
-    ledger.require_current(&read(&scope.ledger, &tx)?)?;
+    preview_in(ledger, scope, &tx)
+}
+pub(super) fn preview_in(
+    ledger: Prepared,
+    scope: &Scope,
+    tx: &Transaction,
+) -> Result<MenuPrepared> {
+    ledger.require_current(&read(&scope.ledger, tx)?)?;
     let before = audit::native::read_in(&scope.roots(), Some(tx.handle), &tx.user)?;
     validate_owned(&before, &image(&ledger.before, scope)?, scope)?;
     let after = image(&ledger.after, scope)?;
@@ -132,10 +139,15 @@ fn relative(path: &str) -> Result<String> {
 
 fn apply_at(prepared: &MenuPrepared, scope: &Scope, commit: bool) -> Result<()> {
     let tx = Transaction::begin()?;
+    apply_in(prepared, scope, &tx)?;
+    if commit {
+        tx.commit()?;
+    }
+    Ok(())
+}
+pub(super) fn apply_in(prepared: &MenuPrepared, scope: &Scope, tx: &Transaction) -> Result<()> {
     tx.user.require_identity(&prepared.user)?;
-    prepared
-        .ledger
-        .require_current(&read(&scope.ledger, &tx)?)?;
+    prepared.ledger.require_current(&read(&scope.ledger, tx)?)?;
     let current = audit::native::read_in(&scope.roots(), Some(tx.handle), &tx.user)?;
     ensure!(current == prepared.before, "菜单在预览后已变化，请重新检查");
     validate_owned(&current, &image(&prepared.ledger.before, scope)?, scope)?;
@@ -148,7 +160,7 @@ fn apply_at(prepared: &MenuPrepared, scope: &Scope, commit: bool) -> Result<()> 
         if current.values.get(&(path.clone(), name.clone())) == Some(&(*kind, bytes.clone())) {
             continue;
         }
-        let key = open_at(classes.0, &relative(path)?, &tx, true)?
+        let key = open_at(classes.0, &relative(path)?, tx, true)?
             .ok_or_else(|| anyhow::anyhow!("无法创建菜单项"))?;
         success(unsafe {
             RegSetValueExW(
@@ -166,7 +178,7 @@ fn apply_at(prepared: &MenuPrepared, scope: &Scope, commit: bool) -> Result<()> 
         .keys()
         .filter(|key| !prepared.after.values.contains_key(*key))
     {
-        let key = open_at(classes.0, &relative(path)?, &tx, true)?
+        let key = open_at(classes.0, &relative(path)?, tx, true)?
             .ok_or_else(|| anyhow::anyhow!("菜单项已消失"))?;
         success(unsafe { RegDeleteValueW(key.0, wide(name).as_ptr()) })?;
     }
@@ -177,21 +189,18 @@ fn apply_at(prepared: &MenuPrepared, scope: &Scope, commit: bool) -> Result<()> 
         let (parent, leaf) = path
             .rsplit_once('\\')
             .ok_or_else(|| anyhow::anyhow!("菜单删除范围无效"))?;
-        let parent = open_at(classes.0, parent, &tx, false)?
+        let parent = open_at(classes.0, parent, tx, false)?
             .ok_or_else(|| anyhow::anyhow!("菜单父项已消失"))?;
         // Nonrecursive deletion refuses unexpected children; never RegDeleteTree.
         success(unsafe {
             RegDeleteKeyTransactedW(parent.0, wide(leaf).as_ptr(), 0, 0, tx.handle, ptr::null())
         })?;
     }
-    write(&scope.ledger, &prepared.ledger.after, &tx)?;
+    write(&scope.ledger, &prepared.ledger.after, tx)?;
     ensure!(
         audit::native::read_in(&scope.roots(), Some(tx.handle), &tx.user)? == prepared.after,
         "菜单事务内复核失败"
     );
-    if commit {
-        tx.commit()?;
-    }
     Ok(())
 }
 pub(in crate::explorer) fn apply(prepared: &MenuPrepared) -> Result<()> {
@@ -212,4 +221,4 @@ pub(in crate::explorer) fn unapplicable_fixture(ledger: Prepared) -> MenuPrepare
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
