@@ -1,0 +1,31 @@
+name: Explorer user context
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/zi-shell-core/**'
+      - 'scripts/test_explorer_user_context.ps1'
+      - '.github/workflows/explorer-user-context.yml'
+      - 'Cargo.lock'
+  pull_request:
+    paths:
+      - 'crates/zi-shell-core/**'
+      - 'scripts/test_explorer_user_context.ps1'
+      - '.github/workflows/explorer-user-context.yml'
+      - 'Cargo.lock'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile existing core test configuration
+        run: cargo test -p zi-shell-core --locked --no-run
+      - name: Different user after predefined HKCU access
+        shell: pwsh
+        run: ./scripts/test_explorer_user_context.ps1

@@ -36,9 +36,11 @@ impl Drop for Key {
 struct Transaction {
     handle: HANDLE,
     committed: bool,
+    user: crate::explorer::audit::native::UserContext,
 }
 impl Transaction {
     fn begin() -> Result<Self> {
+        let user = crate::explorer::audit::native::UserContext::capture()?;
         let handle = unsafe {
             CreateTransaction(
                 ptr::null_mut(),
@@ -57,6 +59,7 @@ impl Transaction {
         Ok(Self {
             handle,
             committed: false,
+            user,
         })
     }
     fn commit(mut self) -> Result<()> {
@@ -80,7 +83,7 @@ impl Drop for Transaction {
 }
 
 fn open(path: &str, tx: &Transaction, create: bool) -> Result<Option<Key>> {
-    open_at(HKEY_CURRENT_USER, path, tx, create)
+    open_at(tx.user.user.0, path, tx, create)
 }
 fn open_at(base: HKEY, path: &str, tx: &Transaction, create: bool) -> Result<Option<Key>> {
     let mut parent = base;

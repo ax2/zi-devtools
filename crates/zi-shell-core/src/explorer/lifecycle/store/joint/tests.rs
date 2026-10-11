@@ -8,6 +8,91 @@ struct Fixture {
 static FIXTURE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[test]
+#[ignore = "requires an explicitly created disposable CI user with a loaded profile"]
+fn cross_account_joint_transaction_does_not_use_cached_process_hkcu() {
+    let (scope, prepared) = audit::native::with_ci_user(|| {
+        let fixture = Fixture::new();
+        let p = record(Identity::portable());
+        let prepared = preview_at(
+            put(
+                &Ledger::default(),
+                p.clone(),
+                None,
+                std::slice::from_ref(&p),
+            ),
+            &fixture.scope,
+        )
+        .unwrap();
+        apply_at(&prepared, &fixture.scope, false).unwrap();
+        assert_eq!(fixture.ledger(), Ledger::default());
+        assert!(fixture.menu().keys.is_empty());
+        apply_at(&prepared, &fixture.scope, true).unwrap();
+        assert_eq!(fixture.ledger().active(), Some(&p));
+        assert_eq!(fixture.menu(), prepared.after);
+        let scope = fixture.scope.clone();
+        fixture.clear();
+        assert_eq!(fixture.ledger(), Ledger::default());
+        assert!(fixture.menu().keys.is_empty());
+        (scope, prepared)
+    });
+    // Now back under the original process user. No corresponding keys may exist.
+    assert_eq!(
+        read(&scope.ledger, &Transaction::begin().unwrap()).unwrap(),
+        Ledger::default()
+    );
+    assert!(
+        audit::native::read_tx(&scope.roots(), None)
+            .unwrap()
+            .keys
+            .is_empty()
+    );
+    let error = apply_at(&prepared, &scope, true).err().unwrap();
+    assert!(error.to_string().contains("操作用户已变化"));
+    assert_eq!(
+        read(&scope.ledger, &Transaction::begin().unwrap()).unwrap(),
+        Ledger::default()
+    );
+    assert!(
+        audit::native::read_tx(&scope.roots(), None)
+            .unwrap()
+            .keys
+            .is_empty()
+    );
+}
+
+#[test]
+fn native_joint_transaction_uses_effective_thread_user_and_rejects_foreign_ticket() {
+    audit::native::with_impersonated_user(|| {
+        let fixture = Fixture::new();
+        let p = record(Identity::portable());
+        let prepared = preview_at(
+            put(
+                &Ledger::default(),
+                p.clone(),
+                None,
+                std::slice::from_ref(&p),
+            ),
+            &fixture.scope,
+        )
+        .unwrap();
+        let mut foreign = prepared.clone();
+        foreign.user = audit::native::UserIdentity("different-fixture-user".into());
+        assert!(apply_at(&foreign, &fixture.scope, true).is_err());
+        assert_eq!(fixture.ledger(), Ledger::default());
+        assert!(fixture.menu().keys.is_empty());
+        apply_at(&prepared, &fixture.scope, false).unwrap();
+        assert_eq!(fixture.ledger(), Ledger::default());
+        assert!(fixture.menu().keys.is_empty());
+        apply_at(&prepared, &fixture.scope, true).unwrap();
+        assert_eq!(fixture.ledger().active(), Some(&p));
+        assert_eq!(fixture.menu(), prepared.after);
+        fixture.clear();
+        assert!(fixture.menu().keys.is_empty());
+        assert_eq!(fixture.ledger(), Ledger::default());
+    });
+}
+
+#[test]
 fn msi_undo_preserves_later_portable_selection_and_migrates_native_legacy_ledger() {
     use super::super::super::msi_operation;
     let fixture = Fixture::new();
@@ -193,9 +278,9 @@ impl Fixture {
                 .starts_with(r"ZiCode.DevTools.Tests\ExplorerJoint-")
         );
         unsafe {
-            RegDeleteTreeW(HKEY_CURRENT_USER, wide(&self.scope.ledger).as_ptr());
-            if let Ok(classes) = audit::native::classes() {
-                RegDeleteTreeW(classes.0, wide(&self.classes_root).as_ptr());
+            if let Ok(user) = audit::native::UserContext::capture() {
+                RegDeleteTreeW(user.user.0, wide(&self.scope.ledger).as_ptr());
+                RegDeleteTreeW(user.classes.0, wide(&self.classes_root).as_ptr());
             }
         }
     }

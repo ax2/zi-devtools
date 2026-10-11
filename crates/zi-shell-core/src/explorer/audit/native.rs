@@ -8,6 +8,9 @@ use windows_sys::Win32::{
     System::Registry::*,
 };
 mod identity;
+#[cfg(test)]
+pub(in crate::explorer) use identity::tests::{with_ci_user, with_impersonated_user};
+pub(in crate::explorer) use identity::{UserContext, UserIdentity};
 
 const MAX_KEYS: usize = 128;
 const MAX_VALUES: usize = 1024;
@@ -195,35 +198,31 @@ fn scan(
 pub(super) fn read(roots: &[&str]) -> Result<Snapshot> {
     read_tx(roots, None)
 }
+#[cfg(test)]
 pub(in crate::explorer) fn classes() -> Result<Key> {
-    identity::classes()
+    Ok(UserContext::capture()?.classes)
 }
 pub(in crate::explorer) fn read_tx(
     roots: &[&str],
     transaction: Option<HANDLE>,
+) -> Result<Snapshot> {
+    read_in(roots, transaction, &UserContext::capture()?)
+}
+pub(in crate::explorer) fn read_in(
+    roots: &[&str],
+    transaction: Option<HANDLE>,
+    context: &UserContext,
 ) -> Result<Snapshot> {
     let mut result = Snapshot::default();
     let mut bytes = 0;
     // Windows makes HKCU\Software\Classes a link to the current user's
     // separate classes hive. Open that known hive directly, never an arbitrary
     // link target or the merged HKCR view (which also includes machine data).
-    let classes = if roots
-        .iter()
-        .any(|root| root.starts_with(r"Software\Classes\"))
-    {
-        Some(identity::classes()?)
-    } else {
-        None
-    };
     for root in roots {
         let key = if let Some(relative) = root.strip_prefix(r"Software\Classes\") {
-            open_tx(
-                classes.as_ref().expect("classes anchor initialized").0,
-                relative,
-                transaction,
-            )?
+            open_tx(context.classes.0, relative, transaction)?
         } else {
-            open_tx(HKEY_CURRENT_USER, root, transaction)?
+            open_tx(context.user.0, root, transaction)?
         };
         if let Some(key) = key {
             scan(&key, root, 0, &mut result, &mut bytes, transaction)?;

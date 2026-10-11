@@ -79,6 +79,7 @@ pub(in crate::explorer) struct MenuPrepared {
     ledger: Prepared,
     before: Snapshot,
     after: Snapshot,
+    user: audit::native::UserIdentity,
 }
 impl MenuPrepared {
     pub(in crate::explorer) fn current(&self) -> &Ledger {
@@ -111,13 +112,14 @@ pub(in crate::explorer) fn preview(ledger: Prepared) -> Result<MenuPrepared> {
 fn preview_at(ledger: Prepared, scope: &Scope) -> Result<MenuPrepared> {
     let tx = Transaction::begin()?;
     ledger.require_current(&read(&scope.ledger, &tx)?)?;
-    let before = audit::native::read_tx(&scope.roots(), Some(tx.handle))?;
+    let before = audit::native::read_in(&scope.roots(), Some(tx.handle), &tx.user)?;
     validate_owned(&before, &image(&ledger.before, scope)?, scope)?;
     let after = image(&ledger.after, scope)?;
     Ok(MenuPrepared {
         ledger,
         before,
         after,
+        user: tx.user.identity.clone(),
     })
 }
 
@@ -130,17 +132,18 @@ fn relative(path: &str) -> Result<String> {
 
 fn apply_at(prepared: &MenuPrepared, scope: &Scope, commit: bool) -> Result<()> {
     let tx = Transaction::begin()?;
+    tx.user.require_identity(&prepared.user)?;
     prepared
         .ledger
         .require_current(&read(&scope.ledger, &tx)?)?;
-    let current = audit::native::read_tx(&scope.roots(), Some(tx.handle))?;
+    let current = audit::native::read_in(&scope.roots(), Some(tx.handle), &tx.user)?;
     ensure!(current == prepared.before, "菜单在预览后已变化，请重新检查");
     validate_owned(&current, &image(&prepared.ledger.before, scope)?, scope)?;
     ensure!(
         prepared.after == image(&prepared.ledger.after, scope)?,
         "菜单计划与安装记录不一致"
     );
-    let classes = audit::native::classes()?;
+    let classes = &tx.user.classes;
     for ((path, name), (kind, bytes)) in &prepared.after.values {
         if current.values.get(&(path.clone(), name.clone())) == Some(&(*kind, bytes.clone())) {
             continue;
@@ -183,10 +186,9 @@ fn apply_at(prepared: &MenuPrepared, scope: &Scope, commit: bool) -> Result<()> 
     }
     write(&scope.ledger, &prepared.ledger.after, &tx)?;
     ensure!(
-        audit::native::read_tx(&scope.roots(), Some(tx.handle))? == prepared.after,
+        audit::native::read_in(&scope.roots(), Some(tx.handle), &tx.user)? == prepared.after,
         "菜单事务内复核失败"
     );
-    drop(classes);
     if commit {
         tx.commit()?;
     }
@@ -205,6 +207,7 @@ pub(in crate::explorer) fn unapplicable_fixture(ledger: Prepared) -> MenuPrepare
         ledger,
         before: Snapshot::default(),
         after: Snapshot::default(),
+        user: audit::native::UserIdentity(String::new()),
     }
 }
 
