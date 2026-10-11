@@ -78,6 +78,33 @@ fn fresh_file_hash_and_write_delete_lock_protect_commit_identity() {
 }
 
 #[test]
+fn missing_config_is_allowed_only_at_the_explicit_default_without_creating_it() {
+    let files = Files::new();
+    let default = canonical_location(&crate::paths::default_config_path(&files.0), true).unwrap();
+    assert!(!default.exists());
+    assert!(!files.0.join(".zi-devtools").exists());
+    assert_eq!(
+        canonical_config_for(&default, Some(&default)).unwrap(),
+        default
+    );
+    assert!(canonical_config_for(&default, None).is_err());
+    assert!(canonical_config_for(&files.0.join("other.yml"), Some(&default)).is_err());
+    assert!(canonical_location(&files.0.join("config.yml/child.yml"), true).is_err());
+    assert!(canonical_location(&files.0.join("../foreign.yml"), true).is_err());
+    assert!(!default.exists());
+    assert!(!files.0.join(".zi-devtools").exists());
+    // Existing custom config remains valid, without reading its contents.
+    assert!(canonical_config_for(&files.0.join("config.yml"), Some(&default)).is_ok());
+}
+
+#[test]
+fn native_default_config_uses_the_effective_profile_layout() {
+    let profile = crate::explorer::audit::native::effective_profile_dir().unwrap();
+    let expected = canonical_location(&crate::paths::default_config_path(&profile), true).unwrap();
+    assert_eq!(msi_default_config_path().unwrap(), expected);
+}
+
+#[test]
 fn controlled_preview_is_rejected_before_file_or_registry_application() {
     let files = Files::new();
     let record = VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml"))

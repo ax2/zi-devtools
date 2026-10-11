@@ -528,6 +528,13 @@ fn unknown_root_children_and_values_are_preserved_and_block_journal_access() {
 pub(in crate::explorer::lifecycle::store) fn cross_account_journal_probe() -> String {
     protected_journal_install_and_restore_are_jointly_atomic_and_callbacks_are_idempotent();
     broadened_native_dacl_is_rejected_without_adoption();
+    verified_execution_and_recovery_require_actual_files_at_the_correct_phase();
+    assert!(
+        !super::super::super::installer::msi_default_config_path()
+            .unwrap()
+            .exists()
+    );
+    verified_install_accepts_native_default_config_without_creating_user_files();
     let fixture = Fixture::new();
     let id = uuid::Uuid::new_v4().to_string();
     prepare_at(
@@ -537,4 +544,123 @@ pub(in crate::explorer::lifecycle::store) fn cross_account_journal_probe() -> St
     )
     .unwrap();
     fixture.scope.journal.clone()
+}
+
+struct ActualFiles(PathBuf);
+impl ActualFiles {
+    fn new() -> Self {
+        let root =
+            std::env::temp_dir().join(format!("zi-msi-files-proof-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("app.exe"), b"MZoriginal synthetic file").unwrap();
+        std::fs::write(
+            root.join("config.yml"),
+            b"synthetic configuration, never read",
+        )
+        .unwrap();
+        Self(root)
+    }
+    fn installation(&self, content: &[u8]) -> Installation {
+        use sha2::{Digest, Sha256};
+        let mut value = Installation::new(
+            Identity::Msi,
+            std::fs::canonicalize(self.0.join("app.exe")).unwrap(),
+            std::fs::canonicalize(self.0.join("config.yml")).unwrap(),
+            "9.8.7".into(),
+        );
+        value.executable_sha256 = Some(format!("{:x}", Sha256::digest(content)));
+        value
+    }
+}
+impl Drop for ActualFiles {
+    fn drop(&mut self) {
+        assert!(
+            self.0
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("zi-msi-files-proof-")
+        );
+        for leaf in ["app.exe", "config.yml"] {
+            if self.0.join(leaf).exists() {
+                std::fs::remove_file(self.0.join(leaf)).unwrap();
+            }
+        }
+        std::fs::remove_dir(&self.0).unwrap();
+    }
+}
+
+#[test]
+fn verified_execution_and_recovery_require_actual_files_at_the_correct_phase() {
+    let fixture = Fixture::new();
+    let files = ActualFiles::new();
+    let old = files.installation(b"MZoriginal synthetic file");
+    fixture.commit(put(
+        &Ledger::default(),
+        old.clone(),
+        None,
+        std::slice::from_ref(&old),
+    ));
+    let new = files.installation(b"MZnew synthetic file");
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(
+        &fixture.scope,
+        &id,
+        install_intent(&new, Some(old.generation.clone())),
+    )
+    .unwrap();
+    let before = fixture.menu.ledger();
+    let menus = fixture.menu.menu();
+    // The expected new digest is not proof that new files are installed.
+    assert!(transition_verified(&fixture.scope, &id, Action::Execute).is_err());
+    assert_eq!(fixture.state(&id), Status::Prepared);
+    assert_eq!(fixture.menu.ledger(), before);
+    assert_eq!(fixture.menu.menu(), menus);
+    std::fs::write(files.0.join("app.exe"), b"MZnew synthetic file").unwrap();
+    let applied = transition_verified(&fixture.scope, &id, Action::Execute).unwrap();
+    assert_eq!(applied.active(), Some(&new));
+    assert_eq!(fixture.state(&id), Status::Applied);
+    // Recovery cannot claim old files were restored while the new file remains.
+    assert!(transition_verified(&fixture.scope, &id, Action::Rollback).is_err());
+    assert_eq!(fixture.menu.ledger(), applied);
+    assert_eq!(fixture.state(&id), Status::Applied);
+    std::fs::write(files.0.join("app.exe"), b"MZoriginal synthetic file").unwrap();
+    let restored = transition_verified(&fixture.scope, &id, Action::Rollback).unwrap();
+    assert_eq!(restored.active(), Some(&old));
+    assert_eq!(fixture.state(&id), Status::Reverted);
+}
+
+#[test]
+fn verified_install_accepts_native_default_config_without_creating_user_files() {
+    let fixture = Fixture::new();
+    let files = ActualFiles::new();
+    let default = super::super::super::installer::msi_default_config_path().unwrap();
+    let config_existed = default.exists();
+    let parent_existed = default.parent().unwrap().exists();
+    let mut value = files.installation(b"MZoriginal synthetic file");
+    value.config = default.clone();
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&value, None)).unwrap();
+    let installed = transition_verified(&fixture.scope, &id, Action::Execute).unwrap();
+    assert_eq!(installed.active(), Some(&value));
+    transition_verified(&fixture.scope, &id, Action::Rollback).unwrap();
+    assert_eq!(fixture.menu.ledger().entries().len(), 0);
+    assert_eq!(default.exists(), config_existed);
+    assert_eq!(default.parent().unwrap().exists(), parent_existed);
+}
+
+#[test]
+fn verified_install_rejects_a_missing_custom_config_without_changing_registry() {
+    let fixture = Fixture::new();
+    let files = ActualFiles::new();
+    let value = files.installation(b"MZoriginal synthetic file");
+    std::fs::remove_file(files.0.join("config.yml")).unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&value, None)).unwrap();
+    assert!(transition_verified(&fixture.scope, &id, Action::Execute).is_err());
+    assert_eq!(fixture.state(&id), Status::Prepared);
+    assert_eq!(fixture.menu.ledger(), Ledger::default());
+    assert!(fixture.menu.menu().keys.is_empty());
+    assert!(!files.0.join("config.yml").exists());
 }

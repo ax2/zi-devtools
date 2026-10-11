@@ -10,7 +10,7 @@ use windows_sys::Win32::{
 mod identity;
 #[cfg(test)]
 pub(in crate::explorer) use identity::tests::{with_ci_user, with_impersonated_user};
-pub(in crate::explorer) use identity::{UserContext, UserIdentity};
+pub(in crate::explorer) use identity::{UserContext, UserIdentity, effective_profile_dir};
 
 const MAX_KEYS: usize = 128;
 const MAX_VALUES: usize = 1024;

@@ -33,6 +33,33 @@ fn effective_token() -> Result<(Token, bool)> {
     Ok((Token(handle), false))
 }
 
+pub(in crate::explorer) fn effective_profile_dir() -> Result<std::path::PathBuf> {
+    #[link(name = "userenv")]
+    unsafe extern "system" {
+        fn GetUserProfileDirectoryW(token: HANDLE, path: *mut u16, size: *mut u32) -> i32;
+    }
+    let (token, _) = effective_token()?;
+    let mut size = 0;
+    ensure!(
+        unsafe { GetUserProfileDirectoryW(token.0, ptr::null_mut(), &mut size) } == 0
+            && unsafe { GetLastError() }
+                == windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER
+            && (2..=32768).contains(&size),
+        "无法确认安装用户的默认配置位置"
+    );
+    let mut buffer = vec![0u16; size as usize];
+    ensure!(
+        unsafe { GetUserProfileDirectoryW(token.0, buffer.as_mut_ptr(), &mut size) } != 0
+            && size > 1
+            && size as usize <= buffer.len()
+            && buffer[size as usize - 1] == 0,
+        "无法读取安装用户的默认配置位置"
+    );
+    let path = std::path::PathBuf::from(String::from_utf16(&buffer[..size as usize - 1])?);
+    ensure!(path.is_absolute(), "安装用户默认位置不是绝对路径");
+    Ok(path)
+}
+
 // Deliberately no Debug/Serialize: account identifiers stay out of reports.
 #[derive(Clone, PartialEq, Eq)]
 pub(in crate::explorer) struct UserIdentity(pub(in crate::explorer) String);

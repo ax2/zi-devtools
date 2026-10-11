@@ -146,7 +146,8 @@ fn native_full_ledger_uninstall_reserves_undo_capacity_and_finalizes_atomically(
 #[test]
 #[ignore = "requires an explicitly created disposable CI user with a loaded profile"]
 fn cross_account_joint_transaction_does_not_use_cached_process_hkcu() {
-    let (scope, prepared, journal_path) = audit::native::with_ci_user(|| {
+    let original_config = super::super::super::installer::msi_default_config_path().unwrap();
+    let (scope, prepared, journal_path, other_config) = audit::native::with_ci_user(|| {
         let fixture = Fixture::new();
         let p = record(Identity::portable());
         let prepared = preview_at(
@@ -170,8 +171,10 @@ fn cross_account_joint_transaction_does_not_use_cached_process_hkcu() {
         assert_eq!(fixture.ledger(), Ledger::default());
         assert!(fixture.menu().keys.is_empty());
         let journal_path = super::super::recovery::tests::cross_account_journal_probe();
-        (scope, prepared, journal_path)
+        let other_config = super::super::super::installer::msi_default_config_path().unwrap();
+        (scope, prepared, journal_path, other_config)
     });
+    assert_ne!(original_config, other_config);
     // Now back under the original process user. No corresponding keys may exist.
     assert!(
         open(&journal_path, &Transaction::begin().unwrap(), false)

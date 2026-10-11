@@ -93,10 +93,9 @@ pub fn import_config(source: &Path, destination: &Path, force: bool) -> Result<P
 }
 
 pub fn default_config_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".zi-devtools")
-        .join("services.yml")
+    zi_shell_core::paths::default_config_path(
+        &dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
+    )
 }
 
 pub fn default_state_dir() -> PathBuf {

@@ -161,6 +161,9 @@ impl Undo {
     pub fn operation_id(&self) -> &str {
         &self.operation_id
     }
+    pub(super) fn previous_installation(&self) -> Option<&Installation> {
+        self.before.as_ref()
+    }
     pub(super) fn require_transition(
         &self,
         before_generation: Option<&str>,

@@ -11,24 +11,78 @@ use std::{
 use store::joint::{self, MenuPrepared};
 use windows_sys::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_REPARSE_POINT, FILE_SHARE_READ};
 
-fn canonical_file(path: &Path) -> Result<PathBuf> {
-    let path = std::path::absolute(path)?;
-    let mut cursor = Some(path.as_path());
-    while let Some(part) = cursor {
-        ensure!(
-            std::fs::symlink_metadata(part)?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0,
-            "安装路径含链接，请选择实际程序或配置位置"
-        );
-        cursor = part.parent();
-    }
+fn canonical_location(path: &Path, allow_missing: bool) -> Result<PathBuf> {
     ensure!(
-        path.is_file(),
-        "程序或配置文件不存在，请先保存配置并重新检查"
+        !path
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir)),
+        "安装位置不能包含上级目录跳转"
     );
-    Ok(std::fs::canonicalize(path)?)
+    let path = std::path::absolute(path)?;
+    let mut nearest = None;
+    for part in path.ancestors() {
+        match std::fs::symlink_metadata(part) {
+            Ok(metadata) => {
+                ensure!(
+                    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0,
+                    "安装路径含链接，请选择实际程序或配置位置"
+                );
+                if nearest.is_none() {
+                    if part != path {
+                        ensure!(metadata.is_dir(), "配置的既有上级位置不是目录");
+                    }
+                    nearest = Some(part);
+                }
+            }
+            Err(error) if allow_missing && error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("程序或配置位置无法核验"),
+        }
+    }
+    let nearest = nearest.context("安装位置没有可核验的既有上级目录")?;
+    let canonical = std::fs::canonicalize(nearest)?;
+    if nearest == path {
+        Ok(canonical)
+    } else {
+        Ok(canonical.join(path.strip_prefix(nearest)?))
+    }
 }
 
-struct VerifiedFile {
+fn canonical_file(path: &Path) -> Result<PathBuf> {
+    let canonical = canonical_location(path, false)?;
+    ensure!(
+        canonical.is_file(),
+        "程序或配置文件不存在，请先保存配置并重新检查"
+    );
+    Ok(canonical)
+}
+
+/// Resolves the effective installation user's layout without creating anything.
+pub fn msi_default_config_path() -> Result<PathBuf> {
+    let home = crate::explorer::audit::native::effective_profile_dir()?;
+    let default = crate::paths::default_config_path(&home);
+    match std::fs::symlink_metadata(&default) {
+        Ok(_) => canonical_file(&default),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            canonical_location(&default, true)
+        }
+        Err(error) => Err(error).context("默认配置位置无法核验"),
+    }
+}
+
+fn canonical_config_for(path: &Path, allowed_default: Option<&Path>) -> Result<PathBuf> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => canonical_file(path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let allowed = allowed_default.context("缺失配置只允许当前MSI用户的默认位置")?;
+            let canonical = canonical_location(path, true)?;
+            ensure!(canonical == allowed, "缺失配置不是当前MSI用户的默认位置");
+            Ok(canonical)
+        }
+        Err(error) => Err(error).context("无法核验配置位置"),
+    }
+}
+
+pub(super) struct VerifiedFile {
     _file: File,
     executable: PathBuf,
     config: PathBuf,
@@ -36,8 +90,11 @@ struct VerifiedFile {
 }
 impl VerifiedFile {
     fn open(executable: &Path, config: &Path) -> Result<Self> {
+        Self::open_with_default(executable, config, None)
+    }
+    fn open_with_default(executable: &Path, config: &Path, default: Option<&Path>) -> Result<Self> {
         let executable = canonical_file(executable)?;
-        let config = canonical_file(config)?;
+        let config = canonical_config_for(config, default)?;
         let mut file = OpenOptions::new()
             .read(true)
             .share_mode(FILE_SHARE_READ)
@@ -82,8 +139,17 @@ impl VerifiedFile {
         result.executable_sha256 = Some(self.digest.clone());
         result
     }
-    fn verify(record: &Installation) -> Result<Self> {
-        let result = Self::open(&record.executable, &record.config)?;
+    pub(super) fn verify(record: &Installation) -> Result<Self> {
+        record.validate()?;
+        let missing = matches!(std::fs::symlink_metadata(&record.config),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound);
+        let default = if record.identity == Identity::Msi && missing {
+            Some(msi_default_config_path()?)
+        } else {
+            None
+        };
+        let result =
+            Self::open_with_default(&record.executable, &record.config, default.as_deref())?;
         ensure!(
             Some(&result.digest) == record.executable_sha256.as_ref()
                 && result.executable == record.executable

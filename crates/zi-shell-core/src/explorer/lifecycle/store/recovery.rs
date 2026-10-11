@@ -347,12 +347,56 @@ fn prepare_at(scope: &Scope, id: &str, intent: Intent) -> Result<()> {
     )?;
     tx.commit()
 }
-/// Actual installed files and exact Eligible records must have been reverified.
-pub fn execute(id: &str, eligible: &Eligible) -> Result<Ledger> {
-    transition(&Scope::production(), id, eligible, Action::Execute, true)
+/// Rehash and lock required executables until the registry transaction ends.
+/// Call only after Installer has put the new files in their final locations.
+pub fn execute_verified(id: &str) -> Result<Ledger> {
+    transition_verified(&Scope::production(), id, Action::Execute)
 }
-pub fn rollback(id: &str, eligible: &Eligible) -> Result<Ledger> {
-    transition(&Scope::production(), id, eligible, Action::Rollback, true)
+/// Call only after Installer has restored the old files.
+pub fn rollback_verified(id: &str) -> Result<Ledger> {
+    transition_verified(&Scope::production(), id, Action::Rollback)
+}
+fn transition_verified(scope: &Scope, id: &str, action: Action) -> Result<Ledger> {
+    let tx = Transaction::begin()?;
+    let record = read_record(scope, id, &tx)?;
+    let current = read(&scope.menu.ledger, &tx)?;
+    let required = match (action, &record.state, &record.intent) {
+        (Action::Execute, State::Prepared, Intent::Install { installation, .. }) => {
+            Some(installation)
+        }
+        (Action::Rollback, State::Applied { undo }, _) => undo.previous_installation(),
+        _ => None,
+    };
+    let mut guards = Vec::new();
+    let mut eligible = Vec::new();
+    if let Some(required) = required {
+        guards.push(super::super::installer::VerifiedFile::verify(required)?);
+        eligible.push(required.clone());
+    }
+    // Only the best remaining usable installation is needed for fallback.
+    // Preserve a user's currently selected portable installation first.
+    let mut remaining: Vec<_> = current
+        .entries()
+        .iter()
+        .filter(|e| e.installation.identity != Identity::Msi)
+        .collect();
+    remaining.sort_by_key(|e| {
+        (
+            current.active() != Some(&e.installation),
+            std::cmp::Reverse(e.updated_at_revision),
+        )
+    });
+    for entry in remaining {
+        if let Ok(guard) = super::super::installer::VerifiedFile::verify(&entry.installation) {
+            guards.push(guard);
+            eligible.push(entry.installation.clone());
+            break;
+        }
+    }
+    let after = transition_in(scope, id, &Eligible(eligible), action, &tx)?;
+    tx.commit()?;
+    drop(guards);
+    Ok(after)
 }
 /// Only call after Windows Installer has successfully committed.
 pub fn complete(id: &str) -> Result<Ledger> {
@@ -385,8 +429,21 @@ fn transition(
     commit: bool,
 ) -> Result<Ledger> {
     let tx = Transaction::begin()?;
-    let mut record = read_record(scope, id, &tx)?;
-    let current = read(&scope.menu.ledger, &tx)?;
+    let after = transition_in(scope, id, eligible, action, &tx)?;
+    if commit {
+        tx.commit()?;
+    }
+    Ok(after)
+}
+fn transition_in(
+    scope: &Scope,
+    id: &str,
+    eligible: &Eligible,
+    action: Action,
+    tx: &Transaction,
+) -> Result<Ledger> {
+    let mut record = read_record(scope, id, tx)?;
+    let current = read(&scope.menu.ledger, tx)?;
     let plan = match (action, &record.state) {
         (Action::Execute, State::Prepared) => {
             record.intent.require_current(&current)?;
@@ -449,16 +506,13 @@ fn transition(
     };
     let after = if let Some(plan) = plan {
         let result = plan.result().clone();
-        let menu = joint::preview_in(plan, &scope.menu, &tx)?;
-        joint::apply_in(&menu, &scope.menu, &tx)?;
+        let menu = joint::preview_in(plan, &scope.menu, tx)?;
+        joint::apply_in(&menu, &scope.menu, tx)?;
         result
     } else {
         current
     };
-    write_record(scope, &record, &tx, false)?;
-    if commit {
-        tx.commit()?;
-    }
+    write_record(scope, &record, tx, false)?;
     Ok(after)
 }
 /// Explicitly remove one terminal record. Never clear a root or pending entry.
