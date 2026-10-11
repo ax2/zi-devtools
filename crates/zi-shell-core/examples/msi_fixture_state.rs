@@ -1,4 +1,4 @@
-//! Disposable CI observer. Finalization is AFTER MsiInstallProduct returns zero.
+//! Disposable CI observer; recovery uses the same receipt-backed preview/apply as UI.
 #[cfg(windows)]
 fn main() -> anyhow::Result<()> {
     use zi_shell_core::{
@@ -9,18 +9,20 @@ fn main() -> anyhow::Result<()> {
     let value = match args.as_slice() {
         [] => serde_json::to_value(store::load()?)?,
         [flag] if flag == "--products" => serde_json::to_value(msi::registered_products()?)?,
+        [flag] if flag == "--journal" => serde_json::Value::Array(store::recovery::list()?.into_iter()
+            .map(|record| serde_json::json!({"id":record.operation_id,"status":format!("{:?}",record.status)})).collect()),
         [flag, path] if flag == "--package" => {
             serde_json::to_value(msi::inspect(std::path::Path::new(path))?)?
         }
-        [flag, id] if flag == "--finish" || flag == "--forget" => {
+        [flag, id] if flag == "--resume" || flag == "--forget" => {
             anyhow::ensure!(
                 std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
                     && std::env::var("CI").as_deref() == Ok("true")
                     && std::env::var("RUNNER_ENVIRONMENT").as_deref() == Ok("github-hosted"),
                 "Fixture mutation requires a disposable CI runner"
             );
-            if flag == "--finish" {
-                store::recovery::complete(id)?;
+            if flag == "--resume" {
+                store::recovery::completion::apply(store::recovery::completion::preview(id)?)?;
             } else {
                 store::recovery::forget(id)?;
             }

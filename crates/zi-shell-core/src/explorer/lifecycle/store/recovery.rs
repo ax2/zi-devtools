@@ -2,6 +2,7 @@
 //! Callers must verify actual files and Eligible records immediately before use.
 use super::super::msi_operation::{self, Undo};
 use super::*;
+pub mod completion;
 mod security;
 const JOURNAL: &str = r"Software\ZiCode\ZiDevTools\ExplorerRecovery";
 const MAX_RECORDS: usize = 32;
@@ -72,6 +73,7 @@ impl Intent {
 pub enum Status {
     Prepared,
     Applied,
+    Committed,
     Reverted,
     Completed,
 }
@@ -117,6 +119,7 @@ fn list_at(scope: &Scope) -> Result<Vec<Summary>> {
 enum State {
     Prepared,
     Applied { undo: Box<Undo> },
+    Committed { undo: Box<Undo> },
     Reverted,
     Completed,
 }
@@ -125,6 +128,7 @@ impl State {
         match self {
             Self::Prepared => Status::Prepared,
             Self::Applied { .. } => Status::Applied,
+            Self::Committed { .. } => Status::Committed,
             Self::Reverted => Status::Reverted,
             Self::Completed => Status::Completed,
         }
@@ -149,7 +153,7 @@ impl Record {
         );
         validate_id(id)?;
         self.intent.validate()?;
-        if let State::Applied { undo } = &self.state {
+        if let State::Applied { undo } | State::Committed { undo } = &self.state {
             ensure!(undo.operation_id() == id, "日志逆操作身份不符");
             undo.to_bytes()?;
             match &self.intent {
@@ -531,7 +535,7 @@ fn transition_in(
             record.state = State::Reverted;
             Some(plan)
         }
-        (Action::Complete, State::Applied { undo }) => {
+        (Action::Complete, State::Applied { undo } | State::Committed { undo }) => {
             let plan = undo.complete(&current)?;
             record.state = State::Completed;
             Some(plan)

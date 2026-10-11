@@ -172,7 +172,7 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 
 ## 事务结束后自动收尾候选0.15.0
 
-候选新增ZiMenuFinalize immediate动作，明确排在InstallFinalize之后。它读取准备时保存的规范UUID并调用complete；拒绝deferred/rollback/commit模式及错误家族/作用域。按Microsoft InstallFinalize文档，该标准动作结束事务，因此此处才消费Undo并释放待操作。不是commit custom action。最终化动作Return=ignore：如果收尾本身失败，已提交安装文件不能假装回滚，保留Applied及待操作并写固定失败消息，仍需后续显式恢复；进程强杀和最终化失败恢复UI尚未完成。
+候选新增ZiMenuFinalize immediate动作，明确排在InstallFinalize之后。它读取准备时保存的规范UUID并调用complete；拒绝deferred/rollback/commit模式及错误家族/作用域。这只是在普通独立MSI上的候选时序，不能推广为多包事务不可逆成功：外层MsiEndTransaction仍可回滚整个安装链，详见下方0.18.0限制。不是commit custom action。最终化动作Return=ignore：如果收尾本身失败，保留恢复证据并写固定失败消息；进程强杀和无凭据恢复尚未完成。
 
 一次性候选矩阵已取消所有成功路径的观察器--finish调用，成功原生API返回后只读检查无pending；有applied消息时必须有completed after InstallFinalize消息。读取最终MSI动作表要求InstallFinalize < ZiMenuFinalize；仍不在开发机安装。真实安装结果以该提交CI为准，正式WiX尚未接入。此前0.14.0使用观察器收尾仅为历史夹具行为。跨用户CI 38132013579已通过。
 
@@ -195,3 +195,15 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 设置页新增主动后台查看记录：只显示规范UUID、状态、动作与版本，不读取配置内容。核心每次有界验证整个受保护journal，未知内容/权限拒绝，缺失根不创建。只有Completed/Reverted有“清理这条历史”按钮，选中后独立复核范围及确认框；后端重新检查终态，Prepared/Applied不能删除。清理成功但刷新失败单独报告，不伪称未提交，保留其他显示记录并提示过期。无自动批量清空。
 
 这一入口解决终态记录达到32条时的人工清理通道，尚不能恢复Prepared/Applied中断，也不将其标为完成。正式接入仍需要中断恢复、故障验证和真实Explorer验收。
+
+## 确认式收尾恢复候选0.18.0
+
+候选DLL在普通独立安装的InstallFinalize后，先把Applied与Undo共同保存为Committed，再执行自动完成。Committed仍保留回滚数据和待操作占用；桌面只对该状态提供“预览结束维护”，核对并展示操作UUID、当前入口和登记数量，用户勾选后才能确认。Prepared/Applied没有结束凭据，禁止通过该按钮强制完成。
+
+恢复票据绑定有效用户、完整受保护日志、当前账本和精确菜单计划；确认时在同一KTM内重新校验，过期或不同用户拒绝。收尾只释放本次占用并进入Completed，保留当前菜单、后续便携登记和用户选择。合成界面票据永远不能应用。未知Committed状态的旧解码器拒绝读取并保留记录，不会降级为Applied。
+
+测试包括不提交事务、重复回调、预览后登记变化、用户不匹配及模拟票据拒绝。五种候选包编译通过；receipt-only包故意省略最终化，供一次性Windows runner在原生安装API返回后启动新观察器，调用与桌面相同的preview/apply。它模拟最终化缺失，不能证明真实进程强杀行为。
+
+**正式WiX尚未接入；多包事务安全尚未证明。** 单包InstallFinalize不是外层安装链已提交的证据。Microsoft的[MsiEndTransaction](https://learn.microsoft.com/en-us/windows/win32/api/msi/nf-msi-msiendtransaction)明确允许外层事务回滚所有参与安装；[MsiEmbeddedChainer](https://learn.microsoft.com/en-us/windows/win32/msi/msiembeddedchainer-table)也要求链拥有者结束事务。因此新增独立托管runner上的MsiBeginTransaction→实际包安装→MsiEndTransaction(ROLLBACK)探针，核对文件、产品、菜单、登记和占用均恢复，并保留结束前日志状态。不得通过清理或补登记掩盖失败；普通矩阵成功也不能替代该门槛。在结果与方案明确前，禁止把候选凭据用于正式多包生命周期。
+
+仍未完成：凭据前中断、Prepared/Applied恢复、真正强杀、完整Explorer窗口/多选/现代菜单，以及正式安装包生命周期接入。

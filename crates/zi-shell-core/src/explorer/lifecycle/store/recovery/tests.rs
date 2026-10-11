@@ -64,6 +64,73 @@ fn install_intent(m: &Installation, expected_generation: Option<String>) -> Inte
 }
 
 #[test]
+fn durable_commit_receipt_recovers_with_preview_and_preserves_later_portable_changes() {
+    let fixture = Fixture::new();
+    let m = record(Identity::Msi);
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(&fixture.scope, &id, install_intent(&m, None)).unwrap();
+    assert!(completion::preview_at(&fixture.scope, &id).is_err());
+    assert!(completion::mark_at(&fixture.scope, &id, true).is_err());
+    fixture
+        .change(&id, Action::Execute, vec![m.clone()], true)
+        .unwrap();
+    assert!(completion::preview_at(&fixture.scope, &id).is_err());
+    let ledger = fixture.menu.ledger();
+    let menu = fixture.menu.menu();
+    completion::mark_at(&fixture.scope, &id, false).unwrap();
+    assert_eq!(fixture.state(&id), Status::Applied);
+    completion::mark_at(&fixture.scope, &id, true).unwrap();
+    completion::mark_at(&fixture.scope, &id, true).unwrap();
+    assert_eq!(fixture.state(&id), Status::Committed);
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menu);
+    assert!(forget_at(&fixture.scope, &id).is_err());
+    assert!(
+        fixture
+            .change(&id, Action::Rollback, vec![m], true)
+            .is_err()
+    );
+    let ticket = completion::preview_at(&fixture.scope, &id).unwrap();
+    let mut foreign = ticket.clone();
+    foreign.user = crate::explorer::audit::native::UserIdentity("foreign-fixture".into());
+    assert!(completion::apply_at(foreign, &fixture.scope, true).is_err());
+    assert_eq!(fixture.menu.ledger(), ledger);
+    assert_eq!(fixture.menu.menu(), menu);
+    let p = record(Identity::portable());
+    fixture.commit(put(
+        &fixture.menu.ledger(),
+        p.clone(),
+        None,
+        std::slice::from_ref(&p),
+    ));
+    let current = fixture.menu.ledger();
+    let menu = fixture.menu.menu();
+    assert!(completion::apply_at(ticket, &fixture.scope, true).is_err());
+    let ticket = completion::preview_at(&fixture.scope, &id).unwrap();
+    let expected = ticket.result().clone();
+    completion::apply_at(ticket.clone(), &fixture.scope, false).unwrap();
+    assert_eq!(fixture.state(&id), Status::Committed);
+    assert_eq!(fixture.menu.ledger(), current);
+    assert_eq!(fixture.menu.menu(), menu);
+    let result = completion::apply_at(ticket.clone(), &fixture.scope, true).unwrap();
+    assert_eq!(result, expected);
+    assert_eq!(result.active(), Some(&p));
+    assert_eq!(result.entries(), current.entries());
+    assert_eq!(fixture.menu.menu(), menu);
+    assert!(result.pending_msi_operation().is_none());
+    assert_eq!(fixture.state(&id), Status::Completed);
+    assert!(completion::apply_at(ticket, &fixture.scope, true).is_err());
+    completion::mark_at(&fixture.scope, &id, true).unwrap();
+    forget_at(&fixture.scope, &id).unwrap();
+}
+
+#[test]
+#[cfg(feature = "ui-preview")]
+fn synthetic_completion_ticket_cannot_apply_to_real_registry() {
+    assert!(completion::apply(completion::fixture_preview().unwrap()).is_err());
+}
+
+#[test]
 fn journal_listing_is_read_only_bounded_metadata_and_validates_every_record() {
     let fixture = Fixture::new();
     assert!(list_at(&fixture.scope).unwrap().is_empty());

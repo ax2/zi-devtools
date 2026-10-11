@@ -25,6 +25,10 @@ jobs:
   windows:
     runs-on: windows-2022
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [standalone, outer-rollback]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,12 +48,20 @@ jobs:
           "ZIDEVTOOLS_WIX=$toolDir/wix.exe" >> $env:GITHUB_ENV
       - run: cargo build -p zi-msi-actions --locked
       - run: cargo build -p zi-shell-core --example msi_fixture_state --locked
-      - run: python scripts/explorer_msi_actions_smoke.py
+      - name: Candidate lifecycle verification
+        shell: pwsh
+        run: |
+          if ('${{ matrix.mode }}' -eq 'outer-rollback') {
+            python scripts/explorer_msi_actions_smoke.py --outer-transaction-probe
+          } else {
+            python scripts/explorer_msi_actions_smoke.py
+          }
+          exit $LASTEXITCODE
       - name: Preserve candidate diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: explorer-msi-action-candidates
+          name: explorer-msi-action-candidates-${{ matrix.mode }}
           path: |
             ${{ runner.temp }}/zi-msi-menu-*/*.safe.log
             ${{ runner.temp }}/zi-msi-menu-*/proof.json

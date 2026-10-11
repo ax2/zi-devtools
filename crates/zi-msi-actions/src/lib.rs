@@ -180,7 +180,7 @@ fn rollback(session: u32) -> Result<()> {
     report(session, "ZiMenu: reverted");
     Ok(())
 }
-fn finalize(session: u32) -> Result<()> {
+fn completion_id(session: u32) -> Result<Option<String>> {
     // This immediate action is sequenced AFTER InstallFinalize, never as a
     // commit action: a commit action can still be followed by MSI rollback.
     ensure!(
@@ -196,9 +196,23 @@ fn finalize(session: u32) -> Result<()> {
     );
     let id = property(session, "ZiMenuExecute")?;
     if id.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     valid_id(&id)?;
+    Ok(Some(id))
+}
+fn receipt(session: u32) -> Result<()> {
+    if let Some(id) = completion_id(session)? {
+        recovery::completion::mark_committed(&id)?;
+        report(session, "ZiMenu: committed receipt after InstallFinalize");
+    }
+    Ok(())
+}
+fn finalize(session: u32) -> Result<()> {
+    let Some(id) = completion_id(session)? else {
+        return Ok(());
+    };
+    recovery::completion::mark_committed(&id)?;
     recovery::complete(&id)?;
     report(session, "ZiMenu: completed after InstallFinalize");
     Ok(())
@@ -219,13 +233,23 @@ pub extern "system" fn ZiMenuRollback(session: u32) -> u32 {
 pub extern "system" fn ZiMenuFinalize(session: u32) -> u32 {
     boundary(session, finalize)
 }
+#[unsafe(no_mangle)]
+pub extern "system" fn ZiMenuCommitReceipt(session: u32) -> u32 {
+    boundary(session, receipt)
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn invalid_session_is_rejected_by_all_exports() {
-        for action in [ZiMenuPrepare, ZiMenuExecute, ZiMenuRollback, ZiMenuFinalize] {
+        for action in [
+            ZiMenuPrepare,
+            ZiMenuExecute,
+            ZiMenuRollback,
+            ZiMenuFinalize,
+            ZiMenuCommitReceipt,
+        ] {
             assert_eq!(action(0), FAILURE);
         }
     }
