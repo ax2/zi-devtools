@@ -301,6 +301,7 @@ def main():
             menus = [read_tree(p) for p in MENU_ROOTS]
             result, log = invoke(label)
             assert result == 1603 and 'ZiMenu: reverted' in log
+            assert 'ZiMenu: completed after InstallFinalize' not in log, 'Failed MSI must retain rollback until restoration'
             if label == 'after':
                 assert 'ZiMenu: applied' in log, 'Failure must be after actual deferred menu execution'
             assert installed('old') == repaired
@@ -332,7 +333,7 @@ def main():
         assert read_tree(RECOVERY_ROOT) == {'': {}}
         (folder / 'proof.json').write_text(json.dumps(dict(passed=proofs, productionInstallerWired=False,
             automaticCompletion=True, scope='real candidate DLL/MSI; immediate finalizer after InstallFinalize, no observer completion'), indent=2) + '\n')
-        print('PASS: candidate DLL MSI transactions; completion still controlled by fixture observer')
+        print('PASS: candidate DLL MSI transactions with automatic post-InstallFinalize completion')
     finally:
         for label in packages:
             # Exact fixture product IDs only. On a failed test preserve journal/menu
