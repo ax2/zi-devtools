@@ -5,50 +5,9 @@ use std::{
     sync::mpsc,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Target {
-    Csv,
-    Tsv,
-    JsonData,
-    Json,
-    Java,
-    Python,
-    Threads,
-    Gc,
-    Sql,
-    Celery,
-    Files,
-}
-impl Target {
-    pub const ALL: [Self; 11] = [
-        Self::Csv,
-        Self::Tsv,
-        Self::JsonData,
-        Self::Json,
-        Self::Java,
-        Self::Python,
-        Self::Threads,
-        Self::Gc,
-        Self::Sql,
-        Self::Celery,
-        Self::Files,
-    ];
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Csv => "CSV 数据表",
-            Self::Tsv => "TSV 数据表",
-            Self::JsonData => "JSON 对象数组",
-            Self::Json => "JSON 格式化",
-            Self::Java => "Java 异常链",
-            Self::Python => "Python / Django 异常",
-            Self::Threads => "JVM 线程转储",
-            Self::Gc => "GC 日志",
-            Self::Sql => "Django SQL 分析",
-            Self::Celery => "Celery 日志",
-            Self::Files => "文件校验",
-        }
-    }
-}
+pub use crate::commands::file_actions::Target;
+use crate::commands::file_actions::{MAX_FILES, MAX_TEXT_BYTES};
+
 pub fn recommend(paths: &[PathBuf]) -> Target {
     if paths.len() != 1 {
         return Target::Files;
@@ -73,12 +32,7 @@ pub struct Imported {
     pub text: String,
 }
 pub fn read(paths: Vec<PathBuf>, target: Target) -> Result<Imported, String> {
-    if paths.is_empty() || paths.len() > 64 {
-        return Err("请选择 1–64 个文件".into());
-    }
-    if target != Target::Files && paths.len() != 1 {
-        return Err("文本工具每次导入一个文件；多个文件请选择文件校验".into());
-    }
+    target.validate_selection(&paths)?;
     for path in &paths {
         if !path.is_file() {
             return Err(format!(
@@ -103,10 +57,10 @@ fn read_utf8(path: &Path) -> Result<String, String> {
     let mut bytes = Vec::new();
     std::fs::File::open(path)
         .map_err(|e| e.to_string())?
-        .take(2 * 1024 * 1024 + 1)
+        .take(MAX_TEXT_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() > 2 * 1024 * 1024 {
+    if bytes.len() > MAX_TEXT_BYTES {
         return Err("文本超过 2 MiB，请先缩小范围；文件校验不受此文本限制".into());
     }
     String::from_utf8(bytes)
@@ -132,12 +86,21 @@ impl Default for State {
     }
 }
 impl State {
+    pub fn accept_action(&mut self, paths: Vec<PathBuf>, target: Target) -> Result<(), String> {
+        if self.busy() {
+            return Err("正在读取文件，请等待当前导入完成".into());
+        }
+        target.validate_selection(&paths)?;
+        self.accept(paths);
+        self.target = target;
+        Ok(())
+    }
     pub fn accept(&mut self, paths: Vec<PathBuf>) {
         if self.receiver.is_some() {
             self.message = "正在读取文件，请等待当前导入完成".into();
             return;
         }
-        if paths.is_empty() || paths.len() > 64 {
+        if paths.is_empty() || paths.len() > MAX_FILES {
             self.message = "一次可接收 1–64 个文件；未修改当前列表".into();
             return;
         }
@@ -257,6 +220,32 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explicit_receiver_preserves_draft_on_rejection_and_only_queues_paths() {
+        let mut state = State::default();
+        state
+            .accept_action(vec!["missing.json".into()], Target::JsonData)
+            .unwrap();
+        assert_eq!(state.target, Target::JsonData);
+        assert!(!state.busy());
+        let original = state.paths.clone();
+        assert!(
+            state
+                .accept_action(vec!["a".into(), "b".into()], Target::Java)
+                .is_err()
+        );
+        assert_eq!(state.paths, original);
+        assert_eq!(state.target, Target::JsonData);
+        let (_tx, rx) = mpsc::channel();
+        state.receiver = Some(rx);
+        assert!(
+            state
+                .accept_action(vec!["other.txt".into()], Target::Files)
+                .is_err()
+        );
+        assert_eq!(state.paths, original);
+        assert_eq!(state.target, Target::JsonData);
+    }
     #[test]
     fn recommendation_is_case_insensitive_and_batches_use_hashing() {
         assert_eq!(recommend(&["测试.CSV".into()]), Target::Csv);

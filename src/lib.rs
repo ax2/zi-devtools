@@ -17,6 +17,7 @@ pub mod disk_inspector;
 pub mod document_ingestion;
 pub mod duplicate_finder;
 pub mod embedding;
+pub mod explorer;
 pub mod file_encoding;
 pub mod fixture;
 pub mod framework;

@@ -108,7 +108,11 @@ fn main() -> Result<()> {
                 app.open_startup_tool(&id);
             }
             if !arguments.open_files.is_empty() {
-                app.open_startup_files(arguments.open_files);
+                if let Some(target) = arguments.file_action {
+                    app.open_startup_file_action(arguments.open_files, target)?;
+                } else {
+                    app.open_startup_files(arguments.open_files);
+                }
             }
             Ok(Box::new(app))
         }),
@@ -119,6 +123,7 @@ fn main() -> Result<()> {
 struct Arguments {
     tool: Option<String>,
     open_files: Vec<std::path::PathBuf>,
+    file_action: Option<zi_devtools::intake::Target>,
     config_path: std::path::PathBuf,
     restore_services: bool,
     fixture_port: Option<u16>,
@@ -134,6 +139,7 @@ fn parse_args() -> Result<Arguments> {
 fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Result<Arguments> {
     let mut tool = None;
     let mut open_files = Vec::new();
+    let mut file_action = None;
     let mut config_path = default_config_path();
     let mut restore_services = true;
     let mut fixture_port = None;
@@ -143,6 +149,16 @@ fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Resul
     let mut args = input.into_iter();
     while let Some(arg) = args.next() {
         match arg.to_str().context("参数不是有效 Unicode")? {
+            "--file-action" => {
+                anyhow::ensure!(file_action.is_none(), "--file-action cannot be repeated");
+                let id = args.next().context("--file-action requires an action ID")?;
+                file_action = Some(
+                    zi_devtools::intake::Target::from_action_id(
+                        id.to_str().context("文件动作编号不是有效 Unicode")?,
+                    )
+                    .context("未知文件动作")?,
+                );
+            }
             "--open-files" => {
                 // Terminal argument: everything after it is a path, never another option.
                 for value in args.by_ref().take(65) {
@@ -215,10 +231,16 @@ fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Resul
                 && !force_import),
         "--open-files cannot be combined with tool, fixture or config-import actions"
     );
+    if let Some(target) = file_action {
+        target
+            .validate_selection(&open_files)
+            .map_err(anyhow::Error::msg)?;
+    }
     Ok(Arguments {
         restore_services: restore_services && tool.is_none() && open_files.is_empty(),
         tool,
         open_files,
+        file_action,
         config_path,
         fixture_port,
         fixture_shutdown_port,
@@ -232,6 +254,97 @@ use std::sync::Arc;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn file_actions_select_exact_receivers_and_reject_invalid_or_conflicting_requests() {
+        let parse = |args: &[&str]| parse_args_from(args.iter().map(std::ffi::OsString::from));
+        for target in zi_devtools::intake::Target::ALL {
+            let args = parse(&[
+                "--file-action",
+                target.action_id(),
+                "--open-files",
+                "missing.input",
+            ])
+            .unwrap();
+            assert_eq!(args.file_action, Some(target));
+            assert!(!args.restore_services);
+        }
+        for args in [
+            vec!["--file-action"],
+            vec!["--file-action", "unknown", "--open-files", "a"],
+            vec!["--file-action", "import:csv"],
+            vec!["--file-action", "import:csv", "--open-files", "a", "b"],
+            vec![
+                "--file-action",
+                "import:files",
+                "--file-action",
+                "import:csv",
+                "--open-files",
+                "a",
+            ],
+            vec![
+                "--tool",
+                "json",
+                "--file-action",
+                "import:json",
+                "--open-files",
+                "a",
+            ],
+        ] {
+            assert!(parse(&args).is_err(), "{args:?}");
+        }
+        assert_eq!(
+            parse(&["--file-action", "import:files", "--open-files", "a", "b"])
+                .unwrap()
+                .open_files
+                .len(),
+            2
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn generated_shell_templates_roundtrip_through_windows_argument_parser() {
+        use windows::{Win32::UI::Shell::CommandLineToArgvW, core::PCWSTR};
+        let dir = std::env::current_dir().unwrap().join("资料 folder");
+        let exe = dir.join("ZiDevTools.exe");
+        let config = dir.join("配置.yml");
+        let file = dir.join("file & --tool $(literal).json");
+        let plan = zi_devtools::explorer::plan(&exe, &config).unwrap();
+        for entry in plan
+            .values
+            .iter()
+            .filter(|entry| entry.key.ends_with("\\command"))
+        {
+            let command = entry.value.replace("%1", file.to_str().unwrap());
+            let wide: Vec<u16> = command.encode_utf16().chain(Some(0)).collect();
+            let mut count = 0;
+            unsafe {
+                let argv = CommandLineToArgvW(PCWSTR(wide.as_ptr()), &mut count);
+                assert!(!argv.is_null());
+                let values: Vec<_> = std::slice::from_raw_parts(argv, count as usize)
+                    .iter()
+                    .map(|p| std::ffi::OsString::from(p.to_string().unwrap()))
+                    .collect();
+                windows_sys::Win32::Foundation::LocalFree(argv.cast());
+                assert_eq!(std::path::PathBuf::from(&values[0]), exe);
+                let args = parse_args_from(values.into_iter().skip(1)).unwrap();
+                assert_eq!(args.config_path, config);
+                assert_eq!(args.open_files, vec![file.clone()]);
+                assert!(!args.restore_services);
+                if let Some(id) = entry
+                    .key
+                    .strip_suffix("\\command")
+                    .unwrap()
+                    .rsplit('\\')
+                    .next()
+                    .filter(|id| *id != "choose")
+                {
+                    assert_eq!(args.file_action.unwrap().action_id(), id);
+                } else {
+                    assert!(args.file_action.is_none());
+                }
+            }
+        }
+    }
     #[test]
     fn external_files_are_literal_bounded_and_do_not_restore_services() {
         let parse = |args: &[&str]| parse_args_from(args.iter().map(std::ffi::OsString::from));

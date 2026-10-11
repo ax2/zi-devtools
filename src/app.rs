@@ -1,4 +1,5 @@
 mod commands;
+mod explorer;
 mod file_materials;
 mod handoff;
 mod launcher;
@@ -1237,6 +1238,18 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            462..=463 => {
+                self.page = Page::Settings;
+                ctx.data_mut(|data| data.insert_temp(egui::Id::new("preview-explorer-only"), true));
+                let path = fixture.with_file_name("订单数据.csv");
+                for target in crate::intake::Target::ALL {
+                    self.open_startup_file_action(vec![path.clone()], target)
+                        .unwrap();
+                    assert_eq!(self.intake.target, target);
+                    assert!(!self.intake.busy());
+                }
+                self.page = Page::Settings;
+            }
             460..=461 => {
                 self.page = Page::Data;
                 self.data_state.preview_workflow_library(&fixture);
@@ -3036,6 +3049,20 @@ impl DevToolsApp {
         self.navigate(Page::Intake, None);
     }
 
+    pub fn open_startup_file_action(
+        &mut self,
+        paths: Vec<PathBuf>,
+        target: crate::intake::Target,
+    ) -> anyhow::Result<()> {
+        self.intake
+            .accept_action(paths, target)
+            .map_err(anyhow::Error::msg)?;
+        self.quick_open = false;
+        self.launcher_open = false;
+        self.navigate(Page::Intake, None);
+        Ok(())
+    }
+
     pub fn open_startup_tool(&mut self, id: &str) {
         if let Some(entry) = self.entries("").into_iter().find(|e| e.id == id) {
             self.open_entry(&entry);
@@ -4325,6 +4352,14 @@ impl DevToolsApp {
     }
 
     fn settings_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        #[cfg(feature = "ui-preview")]
+        if ctx.data(|data| {
+            data.get_temp::<bool>(egui::Id::new("preview-explorer-only"))
+                .unwrap_or(false)
+        }) {
+            self.explorer_preview(ui, ctx);
+            return;
+        }
         ui.heading(RichText::new("设置").size(28.0));
         if ui.button("程序更新 · 版本与发布说明").clicked() {
             self.page = Page::Updates;
@@ -4393,6 +4428,8 @@ impl DevToolsApp {
                         .color(self.colors.muted),
                 );
             });
+        ui.add_space(14.0);
+        self.explorer_preview(ui, ctx);
         ui.add_space(14.0);
         egui::Frame::new()
             .fill(self.colors.card)

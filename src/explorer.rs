@@ -1,0 +1,142 @@
+//! Read-only classic-menu registration plans. No registry access or execution.
+use anyhow::{Context, Result, ensure};
+use serde::Serialize;
+use std::path::Path;
+
+use crate::{commands::file_actions::Target, tool_shortcuts::quote};
+
+#[derive(Debug, Serialize)]
+pub struct Value {
+    pub key: String,
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Plan {
+    pub schema_version: u32,
+    pub preview_only: bool,
+    pub scope: &'static str,
+    pub shell_max_files: usize,
+    pub values: Vec<Value>,
+    pub limitations: [&'static str; 3],
+}
+
+fn template_path(path: &Path) -> Result<String> {
+    let path = std::path::absolute(path)?;
+    let value = path.to_str().context("菜单模板路径不是有效Unicode")?;
+    ensure!(
+        !value
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '"' | '%')),
+        "菜单模板路径含引号、控制字符或百分号，不能可靠地用于Shell占位符模板；尚未安装任何入口"
+    );
+    Ok(quote(value))
+}
+
+pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
+    let exe = template_path(exe)?;
+    let config = template_path(config)?;
+    let parent = r"Software\Classes\*\shell\ZiCode.DevTools";
+    let actions = r"Software\Classes\ZiCode.DevTools.FileActions";
+    let mut values = Vec::new();
+    let mut add = |key: &str, name: &str, value: String| {
+        values.push(Value {
+            key: key.into(),
+            name: name.into(),
+            value,
+        });
+    };
+    add(parent, "MUIVerb", "Zi DevTools".into());
+    add(parent, "Icon", exe.clone());
+    add(
+        parent,
+        "ExtendedSubCommandsKey",
+        "ZiCode.DevTools.FileActions".into(),
+    );
+    // Ownership markers are a proposed layout, not evidence of an installed owner.
+    for key in [parent, actions] {
+        add(key, "ZiCodeOwner", "com.zicode.devtools".into());
+        add(key, "ZiCodeMenuProtocol", "1".into());
+    }
+    let generic = format!(r"{actions}\shell\choose");
+    add(&generic, "MUIVerb", "选择工具处理…".into());
+    add(&generic, "MultiSelectModel", "Single".into());
+    add(
+        &format!(r"{generic}\command"),
+        "",
+        format!("{exe} --config {config} --no-restore --open-files \"%1\""),
+    );
+    for target in Target::ALL {
+        let key = format!(r"{actions}\shell\{}", target.action_id());
+        add(&key, "MUIVerb", format!("导入到{}…", target.label()));
+        add(&key, "MultiSelectModel", "Single".into());
+        add(
+            &format!(r"{key}\command"),
+            "",
+            format!(
+                "{exe} --config {config} --no-restore --file-action {} --open-files \"%1\"",
+                target.action_id()
+            ),
+        );
+    }
+    Ok(Plan {
+        schema_version: 1,
+        preview_only: true,
+        scope: "HKEY_CURRENT_USER",
+        shell_max_files: 1,
+        values,
+        limitations: [
+            "只预览单选文件的经典菜单；不读取或写入注册表，不生成可直接导入的.reg文件",
+            "尚无Explorer实际可见性、多选整组传输、目录接收或Windows11现代菜单验收",
+            "EXE/MSI安装所有权、共存、升级、修复、卸载和回滚仍待实现",
+        ],
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn plans_only_current_user_single_file_receivers_and_literal_process_commands() {
+        let dir = std::env::current_dir().unwrap().join("资料 folder");
+        let p = plan(&dir.join("ZiDevTools.exe"), &dir.join("服务.yml")).unwrap();
+        assert!(p.preview_only);
+        assert_eq!(p.scope, "HKEY_CURRENT_USER");
+        assert_eq!(p.shell_max_files, 1);
+        let commands: Vec<_> = p
+            .values
+            .iter()
+            .filter(|v| v.key.ends_with("\\command"))
+            .collect();
+        assert_eq!(commands.len(), Target::ALL.len() + 1);
+        assert!(
+            commands
+                .iter()
+                .all(|c| c.value.ends_with("--open-files \"%1\""))
+        );
+        let mut keys = std::collections::BTreeSet::new();
+        for value in &p.values {
+            assert!(value.key.starts_with("Software\\Classes\\"));
+            assert!(keys.insert((&value.key, &value.name)));
+            if value.name == "MultiSelectModel" {
+                assert_eq!(value.value, "Single");
+            }
+        }
+        for target in Target::ALL {
+            assert_eq!(
+                commands
+                    .iter()
+                    .filter(|v| v
+                        .value
+                        .contains(&format!("--file-action {} --", target.action_id())))
+                    .count(),
+                1
+            );
+        }
+        for bad in ["bad%1.exe", "bad\"path.exe", "bad\0path", "bad\npath"] {
+            assert!(plan(&dir.join(bad), &dir.join("config.yml")).is_err());
+            assert!(plan(&dir.join("ZiDevTools.exe"), &dir.join(bad)).is_err());
+        }
+    }
+}

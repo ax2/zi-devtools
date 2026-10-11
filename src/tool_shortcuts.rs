@@ -19,7 +19,7 @@ pub fn app_id(id: &str) -> String {
     format!("ZiCode.DevTools.Tool.{:x}", Sha256::digest(id.as_bytes()))
 }
 
-fn quote(value: &str) -> String {
+pub(crate) fn quote(value: &str) -> String {
     let mut out = String::from("\"");
     let mut slashes = 0;
     for c in value.chars() {

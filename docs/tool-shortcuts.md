@@ -31,3 +31,7 @@ ZiDevTools.exe --tool django-sql
 启动打开已有“从文件开始”确认页，仅排队和推荐打开方式，不读取内容、不导入、不执行文件或工具、不自动恢复服务。用户可改选工具，再主动确认读取；已有2 MiB UTF-8及批量文件校验限制仍适用，目录不递归导入。无效或已消失文件在确认读取时显示错误。
 
 每次目前仍创建独立窗口；本功能是资源管理器入口的文件接收基础，不代表右键菜单已安装。统一经典菜单、按类型适配、单实例转发及EXE/MSI安装/升级/修复/卸载仍待实现与实际Windows验收。
+
+文件入口1.2.0可在`--open-files`之前增加`--file-action`精确预选接收器，例如`ZiDevTools.exe --file-action import:json --open-files "C:\data\a.json"`。共享动作：`import:csv`、`import:tsv`、`import:json-data`、`import:json`、`import:java-trace`、`import:django-trace`、`import:java-threads`、`import:java-gc`、`import:django-sql`、`import:celery`、`import:files`。除文件校验允许1–64文件外，其余每次一个UTF-8文件、最多2 MiB；这些限制与导入页及注册预览共用。必须同时提供文件列表，不可重复动作选项。预选仍不读取内容或自动诊断，用户可改选工具后确认。
+
+设置页“资源管理器右键入口”可展开候选菜单及复制JSON明细。该页不查询或写入注册表，不生成可导入的.reg文件；当前计划只对文件单选、经典菜单有效，不能当成完整多选、安装生命周期或Windows11现代菜单已交付。模板中程序/配置路径含百分号、引号或控制字符时拒绝生成；此限制只适用于Shell占位符模板，普通文件启动参数保持原有路径范围。

@@ -1,4 +1,5 @@
 //! Shared command identities, kept independent of Windows hooks and UI focus.
+pub mod file_actions;
 pub mod profile;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
