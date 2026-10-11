@@ -1,5 +1,33 @@
 use super::*;
 
+#[test]
+fn manual_msi_removal_and_relocation_refused_before_registry_access() {
+    for request in [
+        Request::Remove(Identity::Msi),
+        Request::Relocate(Identity::Msi),
+    ] {
+        assert!(
+            preview(Path::new("missing-config.yml"), request)
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("必须由Windows Installer维护")
+        );
+    }
+    assert!(validate_manual_request(&Request::Activate(Identity::Msi)).is_ok());
+    assert!(validate_manual_request(&Request::Install).is_ok());
+    let portable = Identity::portable();
+    assert!(validate_manual_request(&Request::Remove(portable.clone())).is_ok());
+    assert!(validate_manual_request(&Request::Relocate(portable)).is_ok());
+}
+
+#[test]
+fn unregistered_file_origin_is_allowed_but_missing_file_is_not() {
+    let files = Files::new();
+    assert!(ensure_portable_origin(&files.0.join("sample.exe")).is_ok());
+    assert!(ensure_portable_origin(&files.0.join("missing.exe")).is_err());
+}
+
 struct Files(PathBuf);
 impl Files {
     fn new() -> Self {

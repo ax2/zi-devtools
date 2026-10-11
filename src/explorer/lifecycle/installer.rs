@@ -90,6 +90,9 @@ impl VerifiedFile {
                 && result.config == record.config,
             "程序或路径身份已变化，请重新预览安装/修复"
         );
+        if matches!(record.identity, Identity::Portable(_)) {
+            ensure_portable_origin(&result.executable)?;
+        }
         Ok(result)
     }
 }
@@ -100,6 +103,29 @@ pub enum Request {
     Activate(Identity),
     Remove(Identity),
     Relocate(Identity),
+}
+
+fn validate_manual_request(request: &Request) -> Result<()> {
+    ensure!(
+        !matches!(
+            request,
+            Request::Remove(Identity::Msi) | Request::Relocate(Identity::Msi)
+        ),
+        "MSI安装登记的移除和迁移必须由Windows Installer维护，尚未接入"
+    );
+    Ok(())
+}
+
+/// Read-only check shared by manual maintenance and the native MSI fixture.
+/// Component ownership is authoritative even for legacy MSI without InstallLocation.
+pub fn ensure_portable_origin(executable: &Path) -> Result<()> {
+    let executable = canonical_file(executable)?;
+    let directory = executable.parent().context("程序目录无效")?;
+    ensure!(
+        crate::updates::installer::owner(directory)?.is_none(),
+        "此程序目录由MSI管理，不能登记或迁移为便携版；请通过Windows Installer维护菜单（尚未接入）"
+    );
+    Ok(())
 }
 
 fn binding(config: &Path) -> Result<(PathBuf, PathBuf)> {
@@ -134,11 +160,13 @@ impl Ticket {
 }
 
 pub fn preview(config: &Path, request: Request) -> Result<Ticket> {
+    validate_manual_request(&request)?;
     let before = store::load()?;
     let binding = binding(config)?;
     let (change, eligible, title) = match request {
         Request::Install | Request::Relocate(_) => {
             let verified = VerifiedFile::open(&binding.0, &binding.1)?;
+            ensure_portable_origin(&verified.executable)?;
             let current: Vec<_> = before
                 .entries()
                 .iter()

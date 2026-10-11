@@ -174,7 +174,21 @@ fn native_authenticated_upgrade_transaction() {
         0
     );
     fs::write(target.join("user-data.txt"), b"must survive").unwrap();
+    let remaining_exe = target.join("user-owned-portable.exe");
+    fs::write(&remaining_exe, b"user-owned fixture; never executed").unwrap();
+    assert!(
+        crate::explorer::lifecycle::installer::ensure_portable_origin(&remaining_exe).is_err(),
+        "MSI directory ownership also protects unregistered files in that directory"
+    );
     let installed = installer::owner(&target).unwrap().unwrap();
+    assert!(
+        crate::explorer::lifecycle::installer::ensure_portable_origin(&target.join(NAMES[0]))
+            .is_err(),
+        "Legacy MSI must not become a portable Shell installation without InstallLocation"
+    );
+    let portable_exe = staging.join("portable-fixture.exe");
+    fs::write(&portable_exe, b"synthetic portable origin; never executed").unwrap();
+    crate::explorer::lifecycle::installer::ensure_portable_origin(&portable_exe).unwrap();
     let helper = fs::read(target.join(NAMES[0])).unwrap();
     for (label, state) in [("failure", "old-verified"), ("new", "installed")] {
         let package = fs::read(dir.join(format!("{label}.msi"))).unwrap();
@@ -201,6 +215,12 @@ fn native_authenticated_upgrade_transaction() {
         fs::write(prepared.stage.join("package.msi"), &package).unwrap();
         let receipt = apply_checked(&prepared.stage, &p, &auth, false).unwrap();
         assert_eq!(receipt.state, state);
+        assert!(
+            crate::explorer::lifecycle::installer::ensure_portable_origin(&target.join(NAMES[0]))
+                .is_err(),
+            "MSI Shell ownership must remain protected after failed or successful upgrade"
+        );
+        crate::explorer::lifecycle::installer::ensure_portable_origin(&portable_exe).unwrap();
         assert_eq!(
             receipt.status,
             Some(if label == "failure" { 1603 } else { 0 })
@@ -233,6 +253,11 @@ fn native_authenticated_upgrade_transaction() {
     assert!(installer::registered_products().unwrap().is_empty());
     assert!(!target.join(NAMES[0]).exists());
     assert!(!target.join(NAMES[1]).exists());
+    crate::explorer::lifecycle::installer::ensure_portable_origin(&remaining_exe).unwrap();
+    assert_eq!(
+        fs::read(&remaining_exe).unwrap(),
+        b"user-owned fixture; never executed"
+    );
     assert_eq!(
         fs::read(target.join("user-data.txt")).unwrap(),
         b"must survive"
