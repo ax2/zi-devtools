@@ -17,6 +17,8 @@ pub enum Phase {
     ResultSerialized,
     TextDiffComputed,
     TextReportFormatted,
+    TextInputsValidated,
+    TextDirectPrepared,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -134,6 +136,8 @@ fn handle(bytes: &[u8], observe: &mut impl FnMut(Phase)) -> Envelope {
                 observe(match phase {
                     zi_diff_core::ComparePhase::DiffComputed => Phase::TextDiffComputed,
                     zi_diff_core::ComparePhase::ReportFormatted => Phase::TextReportFormatted,
+                    zi_diff_core::ComparePhase::InputsValidated => Phase::TextInputsValidated,
+                    zi_diff_core::ComparePhase::DirectPrepared => Phase::TextDirectPrepared,
                 })
             },
         );

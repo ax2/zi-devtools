@@ -6,6 +6,7 @@ use std::{fmt, fmt::Write, time::Duration};
 
 use similar::TextDiff;
 
+mod direct;
 mod disjoint;
 
 pub const MAX_INPUT_BYTES: usize = 128 * 1024;
@@ -17,6 +18,8 @@ const IDENTICAL: &str = "两份文本完全相同";
 pub enum ComparePhase {
     DiffComputed,
     ReportFormatted,
+    InputsValidated,
+    DirectPrepared,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,11 +71,12 @@ pub fn compare_text_budgets_observed(
 ) -> Result<String, CompareError> {
     if before.len() > MAX_INPUT_BYTES
         || after.len() > MAX_INPUT_BYTES
-        || before.lines().count() > MAX_INPUT_LINES
-        || after.lines().count() > MAX_INPUT_LINES
+        || rust_line_count(before) > MAX_INPUT_LINES
+        || rust_line_count(after) > MAX_INPUT_LINES
     {
         return Err(CompareError::InputTooLarge);
     }
+    observe(ComparePhase::InputsValidated);
     let mut output = ReportWriter {
         text: String::new(),
         limit: max_report_bytes.unwrap_or(usize::MAX),
@@ -90,6 +94,10 @@ pub fn compare_text_budgets_observed(
             observe(ComparePhase::ReportFormatted);
             return Ok(output.text);
         }
+        if let Some(result) = direct::try_write(before, after, &mut output, &mut observe) {
+            result.map_err(|_| CompareError::ReportTooLarge)?;
+            return Ok(output.text);
+        }
         let diff = TextDiff::configure()
             .timeout(Duration::from_millis(500))
             .diff_lines(before, after);
@@ -105,6 +113,13 @@ pub fn compare_text_budgets_observed(
     }
     observe(ComparePhase::ReportFormatted);
     Ok(output.text)
+}
+
+fn rust_line_count(text: &str) -> usize {
+    // str::lines splits on LF, strips CR from CRLF, and omits an empty
+    // trailing item. A lone CR does not add a Rust input-limit line.
+    text.bytes().filter(|&byte| byte == b'\n').count()
+        + usize::from(!text.is_empty() && !text.ends_with('\n'))
 }
 
 struct ReportWriter {

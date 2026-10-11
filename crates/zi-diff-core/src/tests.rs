@@ -1,6 +1,21 @@
 use super::*;
 
 #[test]
+fn byte_line_count_preserves_rust_lines_semantics() {
+    let alphabet = ["a", "\r", "\n", "中🙂"];
+    for size in 0..=7 {
+        for mut encoded in 0..4usize.pow(size) {
+            let mut text = String::new();
+            for _ in 0..size {
+                text.push_str(alphabet[encoded % 4]);
+                encoded /= 4;
+            }
+            assert_eq!(rust_line_count(&text), text.lines().count());
+        }
+    }
+}
+
+#[test]
 fn escaped_report_budget_matches_actual_json_serializer() {
     let controls: String = (0..=127).map(char::from).collect();
     for (before, after) in [

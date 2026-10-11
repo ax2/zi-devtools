@@ -50,7 +50,7 @@
     {
       "id": "devtools.compare.text.diff",
       "sourceToolId": "diff",
-      "sourceVersion": "1.0.2",
+      "sourceVersion": "1.0.3",
       "title": "文本差异",
       "inputSchema": {
         "type": "object",
@@ -192,6 +192,35 @@
     }
   },
   "providerVerification": {
+    "scope": "Current diff 1.0.3 fixed vectors only; not full legal-input or Host acceptance",
+    "diffSourceVersion": "1.0.3",
+    "functionalVectors": 263,
+    "originalBudgetVectors": 258,
+    "nativeMixedParityCases": 512,
+    "productionWasmSha256": "c674c4265deff1d26472b2d3903646782a48a730ab5d63319c36389202bf26ff",
+    "productionWasmBytes": 1821537,
+    "productionWasiOnlyImports": true,
+    "currentDesktopRegression": {
+      "passed": 869,
+      "failed": 0,
+      "ignored": 34
+    },
+    "currentIndependentColdReplay": {
+      "passed": 258,
+      "failed": 0,
+      "allProcessesClosed": true,
+      "maxElapsedMs": 3277.577,
+      "proof": "cold-indexed-v1-258.json",
+      "hostAccepted": false
+    },
+    "hostAccepted": false,
+    "currentDesktopReleaseBuild": {
+      "passed": true,
+      "elapsed": "7m41s",
+      "isolatedServicePassed": true
+    }
+  },
+  "historicalProviderVerification": {
     "scope": "Independent adapters and fixed vectors only; not Host acceptance",
     "functionalVectors": 248,
     "originalBudgetVectors": 243,
@@ -208,6 +237,8 @@
       "shared-middle-1000",
       "alternating",
       "repeated-prefix"
-    ]
+    ],
+    "sourceRevision": "d05d78852105fead254218a558f44aa9825d4538",
+    "diffSourceVersion": "1.0.2"
   }
 }

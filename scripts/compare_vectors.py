@@ -68,4 +68,37 @@ for count, expected in [
     body = request(left, right)
     assert (len(body) <= 49152) == (count == 1530)
     cases.append((f'text-escaped-request-edge-{count}', body, expected))
+# Independent reports for unique disjoint lines, including CR/CRLF terminators.
+for ending, label in [('\n', 'lf'), ('\r\n', 'crlf'), ('\r', 'cr')]:
+    for count in [511, 512, 1000]:
+        left_lines = [f'a{i}{ending}' for i in range(count)]
+        right_lines = [f'b{i}{ending}' for i in range(count)]
+        report = f'--- 原文\n+++ 修改后\n@@ -1,{count} +1,{count} @@\n'
+        report += ''.join('-' + line for line in left_lines)
+        report += ''.join('+' + line for line in right_lines)
+        cases.append((f'text-lines-{label}-{count}', request(''.join(left_lines), ''.join(right_lines)), success(report)))
+for count in [512, 1000]:
+    left_lines = [f'a{i}\n' for i in range(count)]
+    right_lines = [f'b{i}\n' for i in range(count)]
+    header = f'--- 原文\n+++ 修改后\n@@ -1,{count} +1,{count} @@\n'
+    report = header
+    for prefix, lines in [('-', left_lines), ('+', right_lines)]:
+        report += ''.join(prefix + line for line in lines[:-1])
+        report += prefix + lines[-1][:-1] + '\n\\ No newline at end of file\n'
+    cases.append((f'text-no-eof-{count}', request(''.join(left_lines)[:-1], ''.join(right_lines)[:-1]), success(report)))
+    middle = count // 2
+    left_lines[middle] = right_lines[middle] = 'anchor\n'
+    report = header
+    report += ''.join('-' + line for line in left_lines[:middle])
+    report += ''.join('+' + line for line in right_lines[:middle])
+    report += ' anchor\n'
+    report += ''.join('-' + line for line in left_lines[middle + 1:])
+    report += ''.join('+' + line for line in right_lines[middle + 1:])
+    cases.append((f'text-shared-middle-{count}', request(''.join(left_lines), ''.join(right_lines)), success(report)))
+cases += [
+    ('text-alternating', request('a\nb\n' * 2000, 'b\na\n' * 2000),
+     success('--- 原文\n+++ 修改后\n@@ -1,3 +1,4 @@\n+b\n a\n b\n a\n@@ -3997,4 +3998,3 @@\n a\n b\n a\n-b\n')),
+    ('text-repeated-prefix', request('x\n' * 3500 + 'a\n', 'x\n' * 3500 + 'b\n'),
+     success('--- 原文\n+++ 修改后\n@@ -3498,4 +3498,4 @@\n x\n x\n x\n-a\n+b\n')),
+]
 assert len({case[0] for case in cases}) == len(cases), 'Duplicate functional case ID'

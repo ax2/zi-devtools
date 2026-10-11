@@ -114,13 +114,13 @@ for operation, source_id, title in trace_actions:
 for row in rows:
     if row["sourceToolId"] == "diff":
         assert row["pluginStatus"] == "not_delivered"
-        row["reason"] = "完整文本差异核心及显式时钟适配已实现；248项功能、243例原预算及独立冷启动通过；扩展15例输出一致但6例耗尽fuel，完整合法输入性能、View与Host协商待验收，插件未交付。"
+        row["reason"] = "1.0.3已通过263功能/时钟、258原预算、512混合文本对照、869原生回归与优化构建/隔离服务；258项独立冷启动全部通过（最长3277.577ms）；View/Host待验收，固定矩阵不证明全部合法输入性能，插件未交付。"
         for scope in row["operationScopes"]:
             scope["core"] = "zi-diff-core/0.1.0"
             scope["coreStatus"] = "native_core_verified_node_wasi_clock_and_full_input_limits_diagnostic_pass_Host_unnegotiated"
             scope["experimentalAdapter"] = "zi-compare-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.3_not_Host_negotiated"
-            scope["adapterVerification"] = "248_functional_pass_243_original_budget_and_cold_pass_15_extended_parity_6_fuel_fail_View_Host_unproven"
+            scope["adapterVerification"] = "1_0_3_263_functional_258_budget_512_mixed_parity_869_native_release_service_258_cold_pass_View_Host_pending"
             scope["proposal"] = "proposals/studio-fields/v0.1.2/README.md"
             scope["design"] = "docs/text-diff-plugin-design.md"
             scope["blockingReason"] = row["reason"]
