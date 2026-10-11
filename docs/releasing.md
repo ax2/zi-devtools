@@ -69,3 +69,5 @@ Stage 63 的 MCP stdio 调试台持久工具规则、调用前复核与撤销已
 只上传页面实际引用的 WebP 与必要小型 SVG；源 PNG 留本地，不整目录上传 assets。检查代表性 WebP 文字、桌面/手机页面布局与主站返回链接，主站构建后再切换。构建产物包含无关工作时不得整站部署。静态格式/字节预算校验不能代替网页渲染验收。
 
 菜单接入候选：正式包现在构建并嵌入zi-msi-actions DLL，构建时计算真实桌面EXE SHA-256。packaging/explorer.wxi与托管故障矩阵共享动作声明；本地编译不意味着安装验收。默认关闭；静默安装传ZIMENU=1开启、ZIMENU=0关闭，修复/升级未指定时继承。可见选择UI、旧正式发行版升级与完整Explorer验收仍待验证，不得凭候选结果直接发布。DLL缺失时package拒绝继续。
+
+发版门禁：必须同一提交的standalone/outer-rollback/outer-commit/real-payload四作业全部成功，才继续构建并发布。若版本或文档提交没有触发路径过滤，应先手动运行Explorer MSI action candidates到该提交；其他提交的绿灯不能代替当前提交。此检查不自动发布、不递增版本。

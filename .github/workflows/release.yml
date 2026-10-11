@@ -39,6 +39,26 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) { throw 'Tag does not match Cargo.toml' }
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) { throw 'Release already exists; do not overwrite published assets' }
+          # Compilation alone cannot approve the shipping menu lifecycle.
+          # Require the disposable installation matrix on this exact source.
+          $runsJson = gh run list --repo $env:GITHUB_REPOSITORY --workflow explorer-msi-actions.yml --commit $env:GITHUB_SHA --status success --limit 10 --json databaseId,headSha
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect installer acceptance runs' }
+          $runs = @($runsJson | ConvertFrom-Json)
+          $accepted = $false
+          $required = @('windows (standalone)', 'windows (outer-rollback)', 'windows (outer-commit)', 'windows (real-payload)')
+          foreach ($run in $runs) {
+            if ($run.headSha -ne $env:GITHUB_SHA) { continue }
+            $resultJson = gh run view $run.databaseId --repo $env:GITHUB_REPOSITORY --json headSha,status,conclusion,jobs
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect installer acceptance jobs' }
+            $result = $resultJson | ConvertFrom-Json
+            if ($result.headSha -ne $env:GITHUB_SHA -or $result.status -ne 'completed' -or $result.conclusion -ne 'success') { continue }
+            $missing = @($required | Where-Object {
+              $expected = $_
+              @($result.jobs | Where-Object { $_.name -eq $expected -and $_.status -eq 'completed' -and $_.conclusion -eq 'success' }).Count -ne 1
+            })
+            if ($missing.Count -eq 0) { $accepted = $true; break }
+          }
+          if (-not $accepted) { throw 'Run Explorer MSI action candidates on this exact commit; all four installation jobs must pass before release.' }
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
           $global:LASTEXITCODE = 0
       - run: cargo build --release --locked
