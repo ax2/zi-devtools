@@ -80,6 +80,7 @@ for index, (name, value, checks, error) in enumerate(cases):
             timer = threading.Timer(5, engine.increment_epoch)
             start = time.monotonic()
             trap = None
+            instance = None
             timer.start()
             try:
                 instance = linker.instantiate(store, module)
@@ -93,7 +94,9 @@ for index, (name, value, checks, error) in enumerate(cases):
             remaining = store.get_fuel()
             output = (folder/'stdout').read_bytes()
             stderr = (folder/'stderr').read_bytes()
-            memory = instance.exports(store)['memory'].data_len(store) if trap is None else None
+            # A runtime trap does not discard the instantiated memory. Keep
+            # its size for diagnosis; the trap still makes the case fail.
+            memory = instance.exports(store)['memory'].data_len(store) if instance is not None else None
     if args.native:
         native=subprocess.run([str(args.native.resolve())],input=data,capture_output=True,timeout=5,check=True)
         assert not native.stderr

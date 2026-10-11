@@ -67,9 +67,14 @@ rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
 ui-preview = []
 
 [workspace]
+exclude = ["vendor/regex-automata"]
 members = ["crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
 default-members = ["."]
 resolver = "3"
+
+[patch.crates-io]
+# Version-pinned upstream source with a WASI-only program-limit accounting fix.
+regex-automata = { path = "vendor/regex-automata" }
 
 [[example]]
 name = "capture_ui"

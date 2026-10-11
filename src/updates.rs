@@ -182,6 +182,14 @@ fn fetch_url(channel: Channel, url: &str) -> Result<Option<Report>, String> {
         .user_agent(concat!("ZiDevTools/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|_| "无法创建更新检查连接")?;
+    fetch_with_client(channel, url, &client)
+}
+
+fn fetch_with_client(
+    channel: Channel,
+    url: &str,
+    client: &reqwest::blocking::Client,
+) -> Result<Option<Report>, String> {
     let response = client
         .get(url)
         .header("Accept", "application/vnd.github+json")
@@ -532,6 +540,12 @@ mod tests {
     #[test]
     fn http_errors_limits_and_redirects_are_not_success() {
         use std::{io::Write, net::TcpListener};
+        let client = reqwest::blocking::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
         for (headers, body, expected) in [
             ("404 Not Found", "", "none"),
             ("429 Too Many Requests", "", "limited"),
@@ -542,19 +556,14 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let url = format!("http://{}/", listener.local_addr().unwrap());
             let thread = std::thread::spawn(move || {
-                let (mut stream, _) = listener.accept().unwrap();
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(3)))
-                    .unwrap();
-                let mut request = [0; 4096];
-                let _ = stream.read(&mut request);
+                let mut stream = crate::http_test_support::accept_get(listener);
                 stream
                     .write_all(
                         format!("HTTP/1.1 {headers}\r\nConnection: close\r\n\r\n{body}").as_bytes(),
                     )
                     .unwrap();
             });
-            let result = fetch_url(Channel::Stable, &url);
+            let result = fetch_with_client(Channel::Stable, &url, &client);
             thread.join().unwrap();
             match expected {
                 "none" => assert!(result.unwrap().is_none()),

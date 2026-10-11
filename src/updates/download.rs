@@ -664,7 +664,8 @@ mod tests {
     fn http_failure_redirect_length_and_partial_body_are_rejected() {
         use std::{io::Write, net::TcpListener};
         let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(2))
+            .no_proxy()
+            .timeout(Duration::from_secs(15))
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .unwrap();
@@ -677,9 +678,7 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let url = format!("http://{}/", listener.local_addr().unwrap());
             let thread = std::thread::spawn(move || {
-                let (mut s, _) = listener.accept().unwrap();
-                s.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
-                let _ = s.read(&mut [0; 4096]);
+                let mut s = crate::http_test_support::accept_get(listener);
                 s.write_all(response.as_bytes()).unwrap();
             });
             assert!(

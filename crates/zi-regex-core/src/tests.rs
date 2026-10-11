@@ -1,6 +1,6 @@
 use super::*;
 #[path = "legacy.rs"]
-mod legacy;
+pub(super) mod legacy;
 fn outcome(value: Result<String>) -> std::result::Result<String, String> {
     value.map_err(|error| format!("{error:#}"))
 }

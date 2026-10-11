@@ -120,9 +120,9 @@ for row in rows:
             scope["coreStatus"] = "standalone_shared_core_verified_experimental_fields_adapter_not_delivered"
             scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
-            scope["adapterVerification"] = "197_native_wasi_fixed_vectors_196_budget_pass_1_regex_fuel_fail_program_limit_parity_diagnostic_fail_no_final_cold"
+            scope["adapterVerification"] = "219_native_wasi_budget_pass_27_limit_matching_528_old_algorithm_parity_pass_cold_210_pass_9_deadline_fail_full_regex_budget_unproven"
             scope["design"] = "docs/json-plugin-design.md"
-            scope["blockingReason"] = "当前四操作模块197条固定功能向量通过，预算196通过/1正则失败，另有编译限额跨架构不一致，尚无最终冷启动、View、协议协商或Host验收；不是完整五操作提案或交付插件。"
+            scope["blockingReason"] = "当前四操作模块219条固定功能向量通过，编译限额15例通过，预算218通过/1合法大正则编译失败，尚无最终冷启动、View、协议协商或Host验收；不是完整五操作提案或交付插件。"
     if row["sourceToolId"] == "regex":
         row["reason"] = "完整正则核心与四操作适配已实现功能验证；一条预算失败及编译限额跨架构差异，未冻结或Host验收。"
         assert row["pluginStatus"] == "not_delivered"
@@ -131,9 +131,9 @@ for row in rows:
             scope["coreStatus"] = "complete_standalone_core_verified_experimental_adapter_budget_incomplete"
             scope["experimentalAdapter"] = "zi-fields-wasi/0.1.0"
             scope["adapterContract"] = "1.1.0-proposal.2_not_Host_negotiated"
-            scope["adapterVerification"] = "197_native_wasi_fixed_vectors_196_budget_pass_1_regex_fuel_fail_program_limit_parity_diagnostic_fail_no_final_cold"
+            scope["adapterVerification"] = "219_native_wasi_budget_pass_27_limit_matching_528_old_algorithm_parity_pass_cold_210_pass_9_deadline_fail_full_regex_budget_unproven"
             scope["design"] = "docs/regex-plugin-design.md"
-            scope["blockingReason"] = "完整算法已共享；空捕获放大已优化；大重复编译仍耗尽10M，另有编译限额跨架构不一致，仍需优化或明确Host预算协商、最终冷启动、View与真实Host验收。"
+            scope["blockingReason"] = "完整算法已共享；空捕获与超限字面量重复已优化；15例编译限额跨架构诊断通过，但合法a{200000}编译仍耗尽10M，仍需优化、最终冷启动、View与真实Host验收。"
     if row["sourceToolId"] in {"ascii-codes", "symbol-library", "ascii-art"}:
         assert row["pluginStatus"] == "not_delivered"
         row["reason"] = "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"

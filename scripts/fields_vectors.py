@@ -151,4 +151,34 @@ add('regex-empty-anchor-no-match',request('regex.matches',dict(text='a',pattern=
 add('regex-empty-nonempty-fallback',request('regex.matches',dict(text='甲a',pattern='a()')),success('#1 字节 3..4: a\n  $1: \n'))
 report=''.join(f'#{i+1} 字节 {i}..{i}: \n  $1: \n' for i in range(100))+'\n... 仅展示前 100 个匹配 ...'
 add('regex-empty-match-limit',request('regex.matches',dict(text='a'*100,pattern='()')),success(report))
+# Compiler-bound regression: fixed original native expectations, including a
+# valid large program. A quick rejection must never reject every large repeat.
+for name, pattern in [
+ ('ascii-escape', r'\x61{1000000}'),
+ ('unicode-escape', r'\x{4E2D}{1000000}'),
+ ('unicode-literal', '中{1000000}'),
+ ('literal-sequence', '(?:ab){1000000}'),
+ ('optional-outer', '(?:a{1000000})?'),
+ ('lazy', 'a{1000000}?'),
+ ('u32-max', 'a{4294967295}'),
+ ('u32-over', 'a{4294967296}'),
+ ('named-capture', '(?P<x>a{1000000})'),
+]:
+ add('regex-compile-bound-'+name,request('regex.matches',dict(text='',pattern=pattern)),algorithm_error)
+for name,pattern in [('dead-outer','(?:a{1000000}){0}'),('zero','a{0}')]:
+ add('regex-compile-bound-'+name,request('regex.matches',dict(text='',pattern=pattern)),success('#1 字节 0..0: \n'))
+add('regex-large-valid-repeat',request('regex.matches',dict(text='',pattern='a{200000}')),success('没有匹配'))
+for name,pattern,text,report in [
+ ('ascii', '(?:ab){2}', 'zababab', '#1 字节 1..5: abab\n'),
+ ('unicode', '(?:中🙂){2}', '甲中🙂中🙂乙', '#1 字节 3..17: 中🙂中🙂\n'),
+ ('bounded', 'a{2,3}', 'aaaaaaa', '#1 字节 0..3: aaa\n#2 字节 3..6: aaa\n'),
+ ('lazy', 'a{2,3}?', 'aaaaaa', '#1 字节 0..2: aa\n#2 字节 2..4: aa\n#3 字节 4..6: aa\n'),
+ ('at-least', 'a{3,}', 'aaaaa', '#1 字节 0..5: aaaaa\n'),
+ ('dead-capture', '(ab){0}', '中a', '#1 字节 0..0: \n#2 字节 3..3: \n#3 字节 4..4: \n'),
+ ('capture', '(ab){2}', 'abab', '#1 字节 0..4: abab\n  $1: ab\n'),
+ ('prefix-suffix', 'x.*(?:ab){2}y', '甲xababy乙', '#1 字节 3..9: xababy\n'),
+ ('alternation', '(?:(?:ab){2}|(?:cd){2})', 'ababcdcd', '#1 字节 0..4: abab\n#2 字节 4..8: cdcd\n'),
+ ('unicode-suffix', '(?:中🙂){2}z', '甲中🙂中🙂z', '#1 字节 3..18: 中🙂中🙂z\n'),
+]:
+ add('regex-repeat-match-'+name,request('regex.matches',dict(text=text,pattern=pattern)),success(report))
 assert len({name for name,_,_ in rows})==len(rows)

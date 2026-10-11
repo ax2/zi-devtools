@@ -1,6 +1,7 @@
 //! Complete standalone regex matching with no Host IO.
 use anyhow::{Context, Result, anyhow};
 mod empty;
+mod literal_repeat;
 
 #[derive(Debug)]
 pub struct ReportTooLarge;
@@ -51,6 +52,9 @@ pub fn test_regex_with_result_budget(
             return Err(ReportTooLarge.into());
         }
         return Ok(output);
+    }
+    if let Some(result) = literal_repeat::evaluate(pattern, input, result_budget) {
+        return result;
     }
     let expression = regex::Regex::new(pattern).context("正则表达式无效")?;
     let mut output = String::new();

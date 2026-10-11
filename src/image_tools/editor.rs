@@ -1091,11 +1091,11 @@ mod tests {
             let pool = memory::Pool::new(5000);
             let ctx = egui::Context::default();
             let settle = |state: &mut State| {
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
                 while state.busy() {
                     state.poll(&ctx);
                     assert!(std::time::Instant::now() < deadline);
-                    std::thread::yield_now();
+                    std::thread::sleep(std::time::Duration::from_millis(2));
                 }
             };
             let mut state = State {

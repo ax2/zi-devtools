@@ -90,4 +90,6 @@ mod mcp_oauth_tls_tests;
 pub mod mcp_oauth_token;
 pub mod workspace_store;
 
+#[cfg(test)]
+mod http_test_support;
 pub(crate) mod workflow_document;

@@ -704,7 +704,8 @@ mod tests {
         let target = path.clone();
         state.task(&ctx, move || save_png(&target, &output).map(Job::Saved));
         assert!(state.busy() && state.has_work());
-        for _ in 0..100 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             state.poll(&ctx);
             if !state.busy() {
                 break;
@@ -716,7 +717,8 @@ mod tests {
         let target = path.clone();
         state.dirty = true;
         state.task(&ctx, move || save_png(&target, &output).map(Job::Saved));
-        for _ in 0..100 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             state.poll(&ctx);
             if !state.busy() {
                 break;

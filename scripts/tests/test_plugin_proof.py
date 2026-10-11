@@ -21,6 +21,15 @@ class ColdProofTests(unittest.TestCase):
     def test_exact_results_pass(self):
         self.assertEqual(self.verify(), [])
 
+    def test_instrumented_diagnostic_cannot_be_promoted_to_acceptance(self):
+        for value in [True, 1, 'false', None]:
+            candidate = copy.deepcopy(self.cold)
+            candidate['diagnosticOnly'] = value
+            with self.assertRaises(AssertionError):
+                self.verify(candidate)
+        self.cold['diagnosticOnly'] = False
+        self.assertEqual(self.verify(), [])
+
     def test_duplicate_case_cannot_replace_missing_case(self):
         self.cold['rows'][1] = copy.deepcopy(self.cold['rows'][0])
         with self.assertRaises(AssertionError):
@@ -73,6 +82,14 @@ class BudgetProofTests(unittest.TestCase):
         return validate_budget(self.budget, self.parity, 'c' * 64, 20)
 
     def test_bound_measurements_pass(self):
+        self.verify()
+
+    def test_diagnostic_cost_measurement_cannot_be_promoted_to_acceptance(self):
+        for value in [True, 1, 'false', None]:
+            self.budget['diagnosticOnly'] = value
+            with self.assertRaises(AssertionError):
+                self.verify()
+        self.budget['diagnosticOnly'] = False
         self.verify()
 
     def test_false_pass_cannot_hide_a_trap_or_exhaustion(self):

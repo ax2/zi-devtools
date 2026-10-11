@@ -25,6 +25,7 @@ def validate_compute_metadata(manifest, catalog, reference):
 
 def validate_budget(budget, parity, module_sha256, module_bytes):
     """Reject internally inconsistent budget evidence before directory writes."""
+    assert budget.get('diagnosticOnly', False) is False, 'Diagnostic measurement is not acceptance evidence'
     assert budget['wasmSha256'] == parity['wasmSha256'] == module_sha256
     assert budget['wasmBytes'] == parity['wasmBytes'] == module_bytes
     assert budget['fixtureKind'] == 'plugin-runtime'
@@ -50,6 +51,7 @@ def validate_budget(budget, parity, module_sha256, module_bytes):
 
 
 def validate_cold(cold, parity, module_sha256, module_bytes, engine, require_pass=True):
+    assert cold.get('diagnosticOnly', False) is False, 'Instrumented cold diagnostic is not acceptance evidence'
     assert cold['wasmSha256'] == module_sha256 and cold['wasmBytes'] == module_bytes
     assert cold['remaining'] == 0
     assert cold['engine']['nativeEngineVersion'] == engine['nativeEngineVersion'] == '36.0.2'

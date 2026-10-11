@@ -231,6 +231,24 @@ pub struct HttpRequestSpec {
     pub body: String,
 }
 
+fn is_loopback_url(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| match address {
+                std::net::IpAddr::V4(address) => address.is_loopback(),
+                std::net::IpAddr::V6(address) => {
+                    address.is_loopback()
+                        || address.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
+                }
+            })
+}
+
 pub fn execute_http(spec: &HttpRequestSpec) -> Result<String> {
     if spec.url.len() > 2_048 || spec.headers.len() > 8_192 || spec.body.len() > 1024 * 1024 {
         return Err(anyhow!("URL、请求头或请求体超过大小限制"));
@@ -246,11 +264,13 @@ pub fn execute_http(spec: &HttpRequestSpec) -> Result<String> {
     if !HTTP_METHODS.contains(&method.as_str()) {
         return Err(anyhow!("不支持该 HTTP 方法"));
     }
-    let client = Client::builder()
+    let mut client = Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(15))
-        .build()
-        .context("无法创建 HTTP 客户端")?;
+        .timeout(Duration::from_secs(15));
+    if is_loopback_url(&url) {
+        client = client.no_proxy();
+    }
+    let client = client.build().context("无法创建 HTTP 客户端")?;
     let mut request = client.request(method, url);
     for (index, line) in spec.headers.lines().enumerate() {
         if line.trim().is_empty() {
@@ -335,9 +355,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let server = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0_u8; 1024];
-            let _ = stream.read(&mut request).unwrap();
+            let mut stream = crate::http_test_support::accept_get(listener);
             stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok").unwrap();
         });
         let result = execute_http(&HttpRequestSpec {
@@ -345,9 +363,9 @@ mod tests {
             url: format!("http://127.0.0.1:{port}/health"),
             headers: String::new(),
             body: String::new(),
-        })
-        .unwrap();
+        });
         server.join().unwrap();
+        let result = result.unwrap();
         assert!(result.contains("HTTP 200 OK"));
         assert!(result.ends_with("ok"));
         assert!(
@@ -359,6 +377,35 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn proxy_bypass_is_limited_to_explicit_loopback_hosts() {
+        for host in [
+            "localhost",
+            "LOCALHOST",
+            "127.0.0.1",
+            "127.0.0.2",
+            "[::1]",
+            "[::ffff:127.0.0.1]",
+        ] {
+            assert!(is_loopback_url(
+                &Url::parse(&format!("http://{host}/")).unwrap()
+            ));
+        }
+        for host in [
+            "example.com",
+            "localhost.example.com",
+            "127.0.0.1.example.com",
+            "192.168.1.1",
+            "0.0.0.0",
+            "[::]",
+            "[::ffff:192.168.1.1]",
+        ] {
+            assert!(!is_loopback_url(
+                &Url::parse(&format!("http://{host}/")).unwrap()
+            ));
+        }
     }
 
     #[test]

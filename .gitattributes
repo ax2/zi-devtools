@@ -1,1 +1,2 @@
 contracts/studio-devtools/v1/** -text
+vendor/regex-automata/** -text
