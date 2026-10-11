@@ -115,7 +115,7 @@ for name, pattern, expected_ok, text in cases:
     row['wasi']['passed'] &= expected is not None and row['wasi'].get('result', '').encode('utf-8') == expected
     row['passed'] = row['native']['passed'] and row['wasi']['passed']
     rows.append(row)
-    print(f"{name} {pattern}: native={row['native']['passed']} wasi={row['wasi']['passed']}", flush=True)
+    print(f"{name} {ascii(pattern)}: native={row['native']['passed']} wasi={row['wasi']['passed']}", flush=True)
 
 proof = dict(rows=rows, failures=[r['id'] for r in rows if not r['passed']],
              cargoLockSha256=hashlib.sha256((ROOT/'Cargo.lock').read_bytes()).hexdigest(),
