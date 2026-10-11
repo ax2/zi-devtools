@@ -95,7 +95,7 @@ def main():
         assert log.is_file(), f'Missing diagnostic log: {result}'
         text = sanitize_log(log)
         assert result == 0, f'{label} failed: {result}'
-        assert observe()['pending_msi'] is None, 'Successful native installation retained pending menu state'
+        assert observe().get('pending_msi') is None, 'Successful native installation retained pending menu state'
         return text
 
     code = metadata['product_code']
