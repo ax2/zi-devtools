@@ -357,6 +357,7 @@ impl Maintenance {
                                     ui.strong(match record.status {
                                         Status::Prepared => "已准备 / 待应用",
                                         Status::Applied => "已应用 / 待结束",
+                                        Status::CommitReady => "提交动作已执行 / 待安装器确认",
                                         Status::Committed => "安装已结束 / 待收尾",
                                         Status::Reverted => "已回滚",
                                         Status::Completed => "已完成",

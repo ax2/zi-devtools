@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [standalone, outer-rollback]
+        mode: [standalone, outer-rollback, outer-commit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,6 +53,8 @@ jobs:
         run: |
           if ('${{ matrix.mode }}' -eq 'outer-rollback') {
             python scripts/explorer_msi_actions_smoke.py --outer-transaction-probe
+          } elseif ('${{ matrix.mode }}' -eq 'outer-commit') {
+            python scripts/explorer_msi_actions_smoke.py --outer-commit-probe
           } else {
             python scripts/explorer_msi_actions_smoke.py
           }

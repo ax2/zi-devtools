@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
         [flag, path] if flag == "--package" => {
             serde_json::to_value(msi::inspect(std::path::Path::new(path))?)?
         }
-        [flag, id] if flag == "--resume" || flag == "--forget" => {
+        [flag, id] if flag == "--resume" || flag == "--forget" || flag == "--owner-commit" => {
             anyhow::ensure!(
                 std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
                     && std::env::var("CI").as_deref() == Ok("true")
@@ -23,6 +23,9 @@ fn main() -> anyhow::Result<()> {
             );
             if flag == "--resume" {
                 store::recovery::completion::apply(store::recovery::completion::preview(id)?)?;
+            } else if flag == "--owner-commit" {
+                // Fixture calls only after real MsiEndTransaction(COMMIT) returned 0.
+                store::recovery::completion::mark_committed(id)?;
             } else {
                 store::recovery::forget(id)?;
             }

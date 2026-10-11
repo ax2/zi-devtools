@@ -77,8 +77,16 @@ fn durable_commit_receipt_recovers_with_preview_and_preserves_later_portable_cha
     assert!(completion::preview_at(&fixture.scope, &id).is_err());
     let ledger = fixture.menu.ledger();
     let menu = fixture.menu.menu();
-    completion::mark_at(&fixture.scope, &id, false).unwrap();
+    assert!(completion::mark_at(&fixture.scope, &id, true).is_err());
+    completion::ready_at(&fixture.scope, &id, false).unwrap();
     assert_eq!(fixture.state(&id), Status::Applied);
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
+    assert_eq!(fixture.state(&id), Status::CommitReady);
+    assert!(completion::preview_at(&fixture.scope, &id).is_err());
+    assert!(forget_at(&fixture.scope, &id).is_err());
+    completion::mark_at(&fixture.scope, &id, false).unwrap();
+    assert_eq!(fixture.state(&id), Status::CommitReady);
     completion::mark_at(&fixture.scope, &id, true).unwrap();
     completion::mark_at(&fixture.scope, &id, true).unwrap();
     assert_eq!(fixture.state(&id), Status::Committed);
@@ -122,6 +130,54 @@ fn durable_commit_receipt_recovers_with_preview_and_preserves_later_portable_cha
     assert!(completion::apply_at(ticket, &fixture.scope, true).is_err());
     completion::mark_at(&fixture.scope, &id, true).unwrap();
     forget_at(&fixture.scope, &id).unwrap();
+}
+
+#[test]
+fn commit_ready_retains_undo_for_later_commit_failure_and_cannot_be_manually_completed() {
+    let fixture = Fixture::new();
+    let old = record(Identity::Msi);
+    fixture.commit(put(
+        &Ledger::default(),
+        old.clone(),
+        None,
+        std::slice::from_ref(&old),
+    ));
+    let next = record(Identity::Msi);
+    let id = uuid::Uuid::new_v4().to_string();
+    prepare_at(
+        &fixture.scope,
+        &id,
+        install_intent(&next, Some(old.generation.clone())),
+    )
+    .unwrap();
+    assert!(completion::ready_at(&fixture.scope, &id, true).is_err());
+    fixture
+        .change(&id, Action::Execute, vec![next], true)
+        .unwrap();
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
+    assert!(completion::preview_at(&fixture.scope, &id).is_err());
+    assert!(fixture.change(&id, Action::Complete, vec![], true).is_err());
+    let portable = record(Identity::portable());
+    fixture.commit(put(
+        &fixture.menu.ledger(),
+        portable.clone(),
+        None,
+        std::slice::from_ref(&portable),
+    ));
+    let restored = fixture
+        .change(
+            &id,
+            Action::Rollback,
+            vec![old.clone(), portable.clone()],
+            true,
+        )
+        .unwrap();
+    assert_eq!(restored.active(), Some(&portable));
+    assert!(restored.entries().iter().any(|e| e.installation == old));
+    assert!(restored.pending_msi_operation().is_none());
+    assert_eq!(fixture.state(&id), Status::Reverted);
+    assert!(completion::ready_at(&fixture.scope, &id, true).is_err());
+    assert!(completion::mark_at(&fixture.scope, &id, true).is_err());
 }
 
 #[test]
@@ -755,10 +811,11 @@ fn verified_execution_and_recovery_require_actual_files_at_the_correct_phase() {
     let applied = transition_verified(&fixture.scope, &id, Action::Execute).unwrap();
     assert_eq!(applied.active(), Some(&new));
     assert_eq!(fixture.state(&id), Status::Applied);
+    completion::ready_at(&fixture.scope, &id, true).unwrap();
     // Recovery cannot claim old files were restored while the new file remains.
     assert!(transition_verified(&fixture.scope, &id, Action::Rollback).is_err());
     assert_eq!(fixture.menu.ledger(), applied);
-    assert_eq!(fixture.state(&id), Status::Applied);
+    assert_eq!(fixture.state(&id), Status::CommitReady);
     std::fs::write(files.0.join("app.exe"), b"MZoriginal synthetic file").unwrap();
     let restored = transition_verified(&fixture.scope, &id, Action::Rollback).unwrap();
     assert_eq!(restored.active(), Some(&old));

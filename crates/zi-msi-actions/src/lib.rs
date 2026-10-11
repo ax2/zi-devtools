@@ -10,7 +10,7 @@ use zi_shell_core::explorer::lifecycle::{
 
 const FAILURE: u32 = 1603;
 const MAX_TEXT: usize = 32767;
-const ACTIONS: [&str; 2] = ["ZiMenuExecute", "ZiMenuRollback"];
+const ACTIONS: [&str; 3] = ["ZiMenuExecute", "ZiMenuRollback", "ZiMenuCommitReady"];
 
 fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(Some(0)).collect()
@@ -201,8 +201,23 @@ fn completion_id(session: u32) -> Result<Option<String>> {
     valid_id(&id)?;
     Ok(Some(id))
 }
+fn commit_ready(session: u32) -> Result<()> {
+    ensure!(
+        mode(session, MSIRUNMODE_COMMIT) && !mode(session, MSIRUNMODE_ROLLBACK),
+        "提交准备动作模式错误"
+    );
+    let id = property(session, "CustomActionData")?;
+    valid_id(&id)?;
+    recovery::completion::mark_commit_ready(&id)?;
+    report(session, "ZiMenu: commit ready; Undo retained");
+    Ok(())
+}
 fn receipt(session: u32) -> Result<()> {
     if let Some(id) = completion_id(session)? {
+        if recovery::status(&id)? == recovery::Status::Applied {
+            report(session, "ZiMenu: outer transaction pending; Undo retained");
+            return Ok(());
+        }
         recovery::completion::mark_committed(&id)?;
         report(session, "ZiMenu: committed receipt after InstallFinalize");
     }
@@ -212,6 +227,10 @@ fn finalize(session: u32) -> Result<()> {
     let Some(id) = completion_id(session)? else {
         return Ok(());
     };
+    if recovery::status(&id)? == recovery::Status::Applied {
+        report(session, "ZiMenu: outer transaction pending; Undo retained");
+        return Ok(());
+    }
     recovery::completion::mark_committed(&id)?;
     recovery::complete(&id)?;
     report(session, "ZiMenu: completed after InstallFinalize");
@@ -237,6 +256,10 @@ pub extern "system" fn ZiMenuFinalize(session: u32) -> u32 {
 pub extern "system" fn ZiMenuCommitReceipt(session: u32) -> u32 {
     boundary(session, receipt)
 }
+#[unsafe(no_mangle)]
+pub extern "system" fn ZiMenuCommitReady(session: u32) -> u32 {
+    boundary(session, commit_ready)
+}
 
 #[cfg(test)]
 mod tests {
@@ -249,6 +272,7 @@ mod tests {
             ZiMenuRollback,
             ZiMenuFinalize,
             ZiMenuCommitReceipt,
+            ZiMenuCommitReady,
         ] {
             assert_eq!(action(0), FAILURE);
         }

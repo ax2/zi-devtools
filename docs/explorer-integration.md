@@ -211,3 +211,13 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 ### 0.18.0实际CI结果（a022813）
 
 CI38135316384的standalone任务成功，七组普通矩阵包含receipt-only安装/卸载后新进程确认恢复。outer-rollback任务失败：真实安装返回0、MsiEndTransaction(ROLLBACK)返回0，但restored=false，外层结束前日志已Completed、pending为空。故单包后置最终化确实过早消费Undo，不能作为正式生命周期方案。该失败是产品候选缺陷，不能通过移除测试、只测普通安装或强制清理菜单来关闭。下一步需要保留外层可回滚证据并重新定义实际拥有者完成契约，或实现经证据验证的事务感知机制；不能虚构MSI属性或用服务空闲推断既往成功。正式WiX仍未接入，实际失败证据存长期档案ci-38135316384。
+
+## 分离提交准备与事务结束0.19.0
+
+针对a022813/c45af22在真实外层回滚中的失败，候选新增CommitReady。commit custom action只将Applied转为CommitReady，保留完整Undo、待操作及卸载恢复位置；CommitReady不能由桌面预览、完成或清理。后续commit action失败时仍可执行经旧文件核验的局部回滚，保留便携登记和用户后续选择。
+
+ZiMenuCommitReady在执行序列中排在ZiMenuExecute之后，使用严格UUID CustomActionData和commit模式检查。普通独立包在InstallFinalize后仅看到Ready/Committed才记录结束凭据并完成；若此时仍Applied，固定提示外层事务尚未结束，跳过结束和消费Undo。未知状态不降级。多包事务把commit动作延期到最后，不能从单包的后置动作直接结束。实际拥有者必须在MsiEndTransaction(COMMIT)成功返回后调用受信任的mark_committed，再走原有预览/确认恢复。候选观察器的--owner-commit仅为托管CI这一调用契约的验证入口，不是桌面能力、自动检测或安全认证。
+
+依据：[Microsoft多包动作次序](https://devblogs.microsoft.com/setup/installation-sequence-restrictions-for-multi-package-transactions/)说明commit动作延期到最后；[Commit Custom Actions](https://learn.microsoft.com/en-us/windows/win32/msi/commit-custom-actions)明确commit动作失败仍可触发回滚。因此Ready既不是Committed，也不释放回滚证据。
+
+CI独立执行三路：普通完整矩阵（新增Ready之后另一个commit动作失败，要求旧文件/产品/菜单恢复）；真实外层rollback（要求单包返回时Applied/pending保留、外层结束后恢复）；真实外层commit（要求单包不提前完成、结束后Ready不能桌面恢复、拥有者成功API返回后才能确认结束，最终正常卸载）。本机仅编译六候选包。实现意图不能替代这三路实际结果；正式WiX仍未接入，真实强杀和无凭据恢复仍待完成。

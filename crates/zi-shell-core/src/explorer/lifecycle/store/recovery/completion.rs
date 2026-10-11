@@ -2,11 +2,35 @@
 //! This is not authentication against malicious code running as the same user.
 use super::*;
 
+/// Commit action ran, but a later commit action can still trigger rollback.
+/// This never releases Undo or grants the desktop permission to complete.
+pub fn mark_commit_ready(id: &str) -> Result<()> {
+    ready_at(&Scope::production(), id, true)
+}
+pub(super) fn ready_at(scope: &Scope, id: &str, commit: bool) -> Result<()> {
+    let tx = Transaction::begin()?;
+    let mut record = read_record(scope, id, &tx)?;
+    let current = read(&scope.menu.ledger, &tx)?;
+    match &record.state {
+        State::Applied { undo } => {
+            undo.require_applied(&current)?;
+            record.state = State::CommitReady { undo: undo.clone() };
+            write_record(scope, &record, &tx, false)?;
+        }
+        State::CommitReady { undo } => undo.require_applied(&current)?,
+        _ => anyhow::bail!("安装维护不允许记录提交准备状态"),
+    }
+    if commit {
+        tx.commit()?;
+    }
+    Ok(())
+}
+
 /// Installer-only contract: call AFTER the entire owning transaction ended.
 /// For a standalone package this is after InstallFinalize. In a multi-package
 /// transaction, package InstallFinalize is insufficient: the owner must first
-/// successfully commit MsiEndTransaction. Candidate DLL wiring is not approved
-/// for that mode until the real outer-rollback fixture passes.
+/// successfully commit MsiEndTransaction. CommitReady alone is not proof; this
+/// API is a trusted transaction-owner callback, never exposed in desktop UI.
 /// Persist the receipt before releasing Undo or the ledger reservation.
 pub fn mark_committed(id: &str) -> Result<()> {
     mark_at(&Scope::production(), id, true)
@@ -16,7 +40,7 @@ pub(super) fn mark_at(scope: &Scope, id: &str, commit: bool) -> Result<()> {
     let mut record = read_record(scope, id, &tx)?;
     let current = read(&scope.menu.ledger, &tx)?;
     match &record.state {
-        State::Applied { undo } => {
+        State::CommitReady { undo } => {
             undo.require_applied(&current)?;
             record.state = State::Committed { undo: undo.clone() };
             write_record(scope, &record, &tx, false)?;

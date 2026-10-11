@@ -73,6 +73,7 @@ impl Intent {
 pub enum Status {
     Prepared,
     Applied,
+    CommitReady,
     Committed,
     Reverted,
     Completed,
@@ -119,6 +120,7 @@ fn list_at(scope: &Scope) -> Result<Vec<Summary>> {
 enum State {
     Prepared,
     Applied { undo: Box<Undo> },
+    CommitReady { undo: Box<Undo> },
     Committed { undo: Box<Undo> },
     Reverted,
     Completed,
@@ -128,6 +130,7 @@ impl State {
         match self {
             Self::Prepared => Status::Prepared,
             Self::Applied { .. } => Status::Applied,
+            Self::CommitReady { .. } => Status::CommitReady,
             Self::Committed { .. } => Status::Committed,
             Self::Reverted => Status::Reverted,
             Self::Completed => Status::Completed,
@@ -153,7 +156,9 @@ impl Record {
         );
         validate_id(id)?;
         self.intent.validate()?;
-        if let State::Applied { undo } | State::Committed { undo } = &self.state {
+        if let State::Applied { undo } | State::CommitReady { undo } | State::Committed { undo } =
+            &self.state
+        {
             ensure!(undo.operation_id() == id, "日志逆操作身份不符");
             undo.to_bytes()?;
             match &self.intent {
@@ -405,7 +410,9 @@ fn transition_verified(scope: &Scope, id: &str, action: Action) -> Result<Ledger
         (Action::Execute, State::Prepared, Intent::Install { installation, .. }) => {
             Some(installation)
         }
-        (Action::Rollback, State::Applied { undo }, _) => undo.previous_installation(),
+        (Action::Rollback, State::Applied { undo } | State::CommitReady { undo }, _) => {
+            undo.previous_installation()
+        }
         _ => None,
     };
     let mut guards = Vec::new();
@@ -530,7 +537,7 @@ fn transition_in(
             record.state = State::Reverted;
             None
         }
-        (Action::Rollback, State::Applied { undo }) => {
+        (Action::Rollback, State::Applied { undo } | State::CommitReady { undo }) => {
             let plan = undo.rollback(&current, eligible)?;
             record.state = State::Reverted;
             Some(plan)

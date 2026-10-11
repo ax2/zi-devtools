@@ -116,6 +116,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true')
     parser.add_argument('--outer-transaction-probe', action='store_true')
+    parser.add_argument('--outer-commit-probe', action='store_true')
     args = parser.parse_args()
     build = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
     probe = build / 'debug/examples/msi_fixture_state.exe'
@@ -137,7 +138,7 @@ def main():
     compile_orders = {}
     for label, version, fault in [('old', '0.1.0', None), ('before', '0.2.0', 'before'),
                                    ('after', '0.2.0', 'after'), ('new', '0.2.0', None),
-                                   ('receipt', '0.3.0', None)]:
+                                   ('receipt', '0.3.0', None), ('commitfail', '0.2.0', 'commit')]:
         payload = folder / label
         payload.mkdir()
         # Synthetic MZ payloads satisfy the product's documented basic check;
@@ -160,7 +161,7 @@ def main():
         ET.SubElement(package, NS + 'Property', Id='ZIFIXTURE_DISABLE_ROLLBACK', Secure='yes')
         ET.SubElement(package, NS + 'Property', Id='ZiMenuBinarySha256', Value=hashlib.sha256(content).hexdigest())
         ET.SubElement(package, NS + 'Binary', Id='ZiMenuActions', SourceFile=str(actions))
-        for name, execution in [('Prepare', 'immediate'), ('Rollback', 'rollback'),
+        for name, execution in [('Prepare', 'immediate'), ('Rollback', 'rollback'), ('CommitReady', 'commit'),
                                 ('Execute', 'deferred'), ('CommitReceipt', 'immediate'), ('Finalize', 'immediate')]:
             if label == 'receipt' and name == 'Finalize':
                 continue  # Simulate interruption after durable receipt, before completion.
@@ -178,9 +179,10 @@ def main():
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuPrepare', Before='ZiMenuRollback', Condition='1')
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuRollback', After='InstallInitialize', Condition='ZiMenuRollback')
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuExecute', After='InstallFiles', Condition='ZiMenuExecute')
-        # InstallFinalize ends the MSI transaction. Failure here must leave the
-        # Applied journal recoverable, never falsely request rollback of files
-        # that have already been committed. No observer-assisted success path.
+        # CommitReady preserves Undo; it is NOT proof of irreversible success.
+        # An outer transaction defers it until the owner ends the entire chain.
+        ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuCommitReady', After='ZiMenuExecute', Condition='ZiMenuCommitReady')
+        # Post-Finalize completion requires CommitReady to have run already.
         ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuCommitReceipt', After='InstallFinalize', Condition='ZiMenuExecute')
         if label != 'receipt':
             ET.SubElement(sequence, NS + 'Custom', Action='ZiMenuFinalize', After='ZiMenuCommitReceipt', Condition='ZiMenuExecute')
@@ -196,9 +198,14 @@ def main():
                 ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure',
                               BinaryRef='ZiMenuActions', DllEntry='ZiMenuExecute',
                               Execute='deferred', Return='check', Impersonate='yes')
+            elif fault == 'commit':
+                ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure',
+                              BinaryRef='ZiMenuActions', DllEntry='ZiMenuExecute',
+                              Execute='commit', Return='check', Impersonate='yes')
             else:
                 ET.SubElement(package, NS + 'CustomAction', Id='MenuFixtureFailure', Error='Intentional menu rollback fixture')
-            position = {'Sequence': '1520'} if fault == 'before' else {'Before': 'InstallFinalize'}
+            position = ({'Sequence': '1520'} if fault == 'before' else
+                        {'After': 'ZiMenuCommitReady'} if fault == 'commit' else {'Before': 'InstallFinalize'})
             ET.SubElement(sequence, NS + 'Custom', Action='MenuFixtureFailure', Condition='NOT REMOVE', **position)
         source = folder / (label + '.wxs')
         tree.write(source, encoding='utf-8', xml_declaration=True)
@@ -209,7 +216,7 @@ def main():
         assert metadata['version'] == version and metadata['transactional_upgrade']
         order = action_sequence(msi)
         required = ['InstallInitialize', 'ZiMenuPrepare', 'ZiMenuRollback',
-                    'InstallFiles', 'ZiMenuExecute', 'InstallExecute', 'RemoveExistingProducts',
+                    'InstallFiles', 'ZiMenuExecute', 'ZiMenuCommitReady', 'InstallExecute', 'RemoveExistingProducts',
                     'InstallFinalize', 'ZiMenuCommitReceipt']
         if label != 'receipt':
             required.append('ZiMenuFinalize')
@@ -219,17 +226,19 @@ def main():
             assert order['ZiMenuRollback'] < order['MenuFixtureFailure'] < order['InstallFiles']
         if fault == 'after':
             assert order['ZiMenuExecute'] < order['InstallExecute'] < order['RemoveExistingProducts'] < order['MenuFixtureFailure'] < order['InstallFinalize']
+        if fault == 'commit':
+            assert order['ZiMenuCommitReady'] < order['MenuFixtureFailure'] < order['InstallExecute']
         compile_orders[label] = dict(zip(required, positions))
         packages[label] = (msi, metadata, content)
     assert len({value[1]['desktop_component'] for value in packages.values()}) == 1
     (folder / 'compile-proof.json').write_text(json.dumps(dict(sequences=compile_orders,
         dllSha256=hashlib.sha256(actions.read_bytes()).hexdigest()), indent=2) + '\n')
     if args.compile_only:
-        print('PASS: five candidate DLL fixtures compiled, no installation performed')
+        print('PASS: six candidate DLL fixtures compiled, no installation performed')
         return
 
     native = ctypes.WinDLL(str(actions))
-    for name in ['ZiMenuPrepare', 'ZiMenuExecute', 'ZiMenuRollback', 'ZiMenuFinalize', 'ZiMenuCommitReceipt']:
+    for name in ['ZiMenuPrepare', 'ZiMenuExecute', 'ZiMenuRollback', 'ZiMenuFinalize', 'ZiMenuCommitReceipt', 'ZiMenuCommitReady']:
         entry = getattr(native, name)
         entry.argtypes = [ctypes.c_uint]
         entry.restype = ctypes.c_uint
@@ -316,7 +325,7 @@ def main():
         assert not observe().get('pending_msi') and not default.exists()
         return record
     try:
-        if args.outer_transaction_probe:
+        if args.outer_transaction_probe or args.outer_commit_probe:
             # A package-level InstallFinalize is not evidence that an owning
             # multi-package transaction has committed. Observe before AND after
             # the real outer rollback; never repair the state to make this pass.
@@ -340,7 +349,7 @@ def main():
                 log_result = msi_api.MsiEnableLogW(0x3FFF, str(rollback_log), 2)
                 try:
                     # End the transaction even if diagnostics could not start.
-                    rollback_result = end(0)  # MSITRANSACTIONSTATE_ROLLBACK
+                    rollback_result = end(1 if args.outer_commit_probe else 0)
                 finally:
                     msi_api.MsiEnableLogW(0, None, 0)
                     msi_api.MsiCloseHandle(handle)
@@ -353,6 +362,30 @@ def main():
                 sanitize_log(rollback_log)
             after = observe()
             after_menus = [read_tree(p) for p in MENU_ROOTS]
+            deferred = (during.get('pending_msi') is not None
+                        and during_journal == [dict(id=during['pending_msi'], status='Applied')])
+            if args.outer_commit_probe:
+                pending = after.get('pending_msi')
+                assert result == 0 and rollback_result == 0 and deferred and pending
+                assert observe('--journal') == [dict(id=pending, status='CommitReady')]
+                rejected = subprocess.run([str(probe), '--resume', pending], capture_output=True, timeout=30)
+                assert rejected.returncode != 0 and observe() == after
+                # This callback belongs to the actual transaction owner, only
+                # AFTER successful MsiEndTransaction(COMMIT), never a CA or UI.
+                observe('--owner-commit', pending)
+                observe('--resume', pending)
+                installed('old')
+                assert invoke('old', uninstall=True)[0] == 0
+                assert observe()['entries'] == [] and not any(read_tree(p) for p in MENU_ROOTS)
+                for operation_id in known_ids:
+                    observe('--forget', operation_id)
+                (folder / 'proof.json').write_text(json.dumps(dict(
+                    scope='real outer commit; explicit owner completion after API return',
+                    installResult=result, commitResult=rollback_result,
+                    deferredBeforeOuterEnd=deferred, readyCannotResume=True,
+                    ownerCompletion=True, productionInstallerWired=False), indent=2) + '\n')
+                print('PASS: outer commit preserves Undo until explicit transaction owner completion')
+                return
             # Ledger cursors may advance on a correct rollback; compare actual
             # registrations, active selection, reservation, files and products.
             restored = (after['entries'] == baseline['entries']
@@ -373,7 +406,7 @@ def main():
                 remainingProducts=observe('--products'),
                 pendingAfterOuterEnd=after.get('pending_msi'),
                 restored=restored, productionInstallerWired=False), indent=2) + '\n')
-            assert result == 0 and rollback_result == 0 and restored, \
+            assert result == 0 and rollback_result == 0 and deferred and restored, \
                 'Outer rollback did not restore the menu lifecycle; production wiring remains blocked'
             print('PASS: outer MSI rollback restored files, products, menus and registrations')
             return
@@ -394,13 +427,15 @@ def main():
         repaired = installed('old')
         assert repaired['generation'] != before['generation']
         proofs.append('enabled first install and inherited repair use DLL and real files')
-        for label in ['before', 'after']:
+        for label in ['before', 'after', 'commitfail']:
             menus = [read_tree(p) for p in MENU_ROOTS]
             result, log = invoke(label)
             assert result == 1603 and 'ZiMenu: reverted' in log
             assert 'ZiMenu: completed after InstallFinalize' not in log, 'Failed MSI must retain rollback until restoration'
             if label == 'after':
                 assert 'ZiMenu: applied' in log, 'Failure must be after actual deferred menu execution'
+            if label == 'commitfail':
+                assert 'ZiMenu: commit ready; Undo retained' in log
             assert installed('old') == repaired
             assert [read_tree(p) for p in MENU_ROOTS] == menus
             assert marker.read_bytes() == b'not installer owned'
