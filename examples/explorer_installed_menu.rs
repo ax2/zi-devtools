@@ -105,14 +105,26 @@ fn main() -> anyhow::Result<()> {
         CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?;
     }
     let _com = Com;
-    let wide: Vec<_> = file
-        .to_str()
-        .context("Fixture path is not Unicode")?
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
-    let item: IShellItem = unsafe { SHCreateItemFromParsingName(PCWSTR(wide.as_ptr()), None) }?;
-    let context: IContextMenu = unsafe { item.BindToHandler(None, &BHID_SFUIObject) }?;
+    // Keep canonical paths for identity/scope checks. Shell parsing uses the
+    // ordinary Win32 namespace, as in the existing native invocation probe.
+    let canonical = file.to_str().context("Fixture path is not Unicode")?;
+    let shell_path = if let Some(unc) = canonical.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        canonical
+            .strip_prefix(r"\\?\")
+            .unwrap_or(canonical)
+            .to_owned()
+    };
+    ensure!(
+        std::fs::canonicalize(&shell_path)? == file,
+        "Shell path differs from verified fixture"
+    );
+    let wide: Vec<_> = shell_path.encode_utf16().chain(Some(0)).collect();
+    let item: IShellItem = unsafe { SHCreateItemFromParsingName(PCWSTR(wide.as_ptr()), None) }
+        .context("SHCreateItemFromParsingName for installed-menu fixture")?;
+    let context: IContextMenu = unsafe { item.BindToHandler(None, &BHID_SFUIObject) }
+        .context("IShellItem::BindToHandler for installed-menu fixture")?;
     let menu = Menu(unsafe { CreatePopupMenu() });
     ensure!(!menu.0.is_null(), "Cannot create native menu");
     unsafe {
@@ -124,7 +136,8 @@ fn main() -> anyhow::Result<()> {
                 32767,
                 4096,
             )
-            .ok()?;
+            .ok()
+            .context("IContextMenu::QueryContextMenu for installed menu")?;
     }
     fn labels(menu: HMENU) -> anyhow::Result<Vec<(String, u32)>> {
         let count = unsafe { GetMenuItemCount(menu) };
@@ -165,14 +178,16 @@ fn main() -> anyhow::Result<()> {
     let position = positions[0];
     let submenu = unsafe { GetSubMenu(menu.0, position as i32) };
     ensure!(!submenu.is_null(), "Installed cascade cannot expand");
-    let messages: IContextMenu3 = context.cast()?;
+    let messages: IContextMenu3 = context.cast().context("Installed menu IContextMenu3")?;
     unsafe {
-        messages.HandleMenuMsg2(
-            WM_INITMENUPOPUP,
-            windows::Win32::Foundation::WPARAM(submenu as usize),
-            windows::Win32::Foundation::LPARAM(position as isize),
-            None,
-        )?;
+        messages
+            .HandleMenuMsg2(
+                WM_INITMENUPOPUP,
+                windows::Win32::Foundation::WPARAM(submenu as usize),
+                windows::Win32::Foundation::LPARAM(position as isize),
+                None,
+            )
+            .context("WM_INITMENUPOPUP for installed cascade")?;
     }
     let actions = labels(submenu)?;
     let expected: Vec<_> = std::iter::once("选择工具处理…".to_owned())
