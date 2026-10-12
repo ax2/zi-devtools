@@ -19,3 +19,9 @@ PE读取仅使用已有File的Read/Seek，不LoadLibrary、不启动EXE。大小
 本机原有注册表事务测试出现系统错误6801；独立只读打开既有HKCU Software的事务调用同样返回6801，未修改注册表。新增纯解析测试通过，完整本机回归不能宣称通过，托管Windows完整工作区/实际安装声明检查另行记录。未自动重置系统事务日志或重启。
 
 后续按[多版本共存设计](explorer-capability-compatibility.md)实现账本/日志协议迁移、旧程序未知能力策略、预览展示和失败回滚，再启用新目录动作。应用版本保持0.82.0-dev.105。
+
+## f4fdb6c最终验证
+
+[CI38216992126](https://github.com/ax2/zi-devtools/actions/runs/38216992126)五路全部成功，production-upgrade完整工作区944 passed / 0 failed / 35 ignored（52组含文档测试）。实际安装桌面文件声明与11动作一致，MCP无桌面声明；公开旧版升级、键盘操作、12项Shell解析、完整UI卸载和用户文件保留继续通过。此结果不消除本机6801问题，托管原生事务通过与本机回归失败分别记录。
+
+单次本地优化桌面构建4m25s成功，实际只读检查保留11动作声明（32368128字节，SHA256 `de3e090e6eb33854e6fde1d254c9a7c194dff9b66bb0dffde68165e1cb664c8e`）。该优化EXE一次性服务健康检查、正常停止、退出0及端口释放通过；未发布、未复制EXE、未为证据文案重复优化构建。最终证据在技术档案`iterations/explorer-capability-declaration-2026-10-12`。
