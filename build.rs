@@ -1,7 +1,16 @@
 use std::{env, fs, path::PathBuf};
 
+#[allow(dead_code)]
+#[path = "crates/zi-shell-core/src/capability_manifest.rs"]
+mod capability_manifest;
+#[allow(dead_code)]
+#[path = "crates/zi-shell-core/src/file_actions.rs"]
+mod file_actions;
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=crates/zi-shell-core/src/file_actions.rs");
+    println!("cargo:rerun-if-changed=crates/zi-shell-core/src/capability_manifest.rs");
     if env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;
     }
@@ -9,6 +18,12 @@ fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let icon_path = out_dir.join("zi-devtools.ico");
     fs::write(&icon_path, make_icon()).expect("write generated icon");
+    let payload = capability_manifest::Manifest::current().encode();
+    let mut declaration = b"ZICAP001".to_vec();
+    declaration.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    declaration.extend_from_slice(&payload);
+    let declaration_path = out_dir.join("shell-capabilities.bin");
+    fs::write(&declaration_path, &declaration).expect("write capability resource");
 
     let mut resource = winresource::WindowsResource::new();
     resource

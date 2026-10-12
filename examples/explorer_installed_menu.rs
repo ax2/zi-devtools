@@ -79,6 +79,26 @@ fn main() -> anyhow::Result<()> {
                 == Some(format!("{:x}", digest.finalize()).as_str()),
         "Executable differs from installed ledger"
     );
+    let declaration = zi_shell_core::capability_image::read(&mut file_lock, length)?
+        .context("Installed desktop capability declaration missing")?;
+    ensure!(
+        declaration.targets() == Target::ALL,
+        "Installed desktop declaration differs from receivers"
+    );
+    let mut mcp_lock = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ)
+        .open(
+            executable
+                .parent()
+                .context("Executable parent missing")?
+                .join("ZiDevToolsMcp.exe"),
+        )?;
+    let mcp_length = mcp_lock.metadata()?.len();
+    ensure!(
+        zi_shell_core::capability_image::read(&mut mcp_lock, mcp_length)?.is_none(),
+        "MCP must not declare desktop UI receivers"
+    );
     let owner =
         zi_shell_core::msi::owner(executable.parent().context("Executable parent missing")?)?
             .context("Native MSI ownership missing")?;
@@ -226,6 +246,8 @@ fn main() -> anyhow::Result<()> {
         serde_json::json!({
             "installedMsiMenuResolved": true,
             "receiverCount": Target::ALL.len(),
+            "desktopDeclarationMatches": true,
+            "mcpDeclaresDesktopReceivers": false,
             "nativeCommandCount": actions.len(),
             "labels": expected,
             "associationWrites": false,

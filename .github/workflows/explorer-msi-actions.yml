@@ -59,6 +59,9 @@ jobs:
           "ZIDEVTOOLS_WIX=$toolDir/wix.exe" >> $env:GITHUB_ENV
       - run: cargo build -p zi-msi-actions --locked
       - run: cargo build -p zi-shell-core --example msi_fixture_state --locked
+      - name: Test workspace on disposable native Windows
+        if: matrix.mode == 'production-upgrade'
+        run: cargo test --workspace --locked
       - name: Build actual desktop payload for installed execution
         if: matrix.mode == 'real-payload' || matrix.mode == 'production-upgrade'
         run: cargo build --locked

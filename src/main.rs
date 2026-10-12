@@ -4,7 +4,19 @@ use anyhow::{Context, Result};
 use eframe::egui;
 use zi_devtools::{app::DevToolsApp, config::import_config, fixture, launch::parse_args, tray};
 
+// Desktop-only declaration: MCP must not advertise UI receivers.
+#[cfg(windows)]
+#[used]
+#[unsafe(link_section = ".zicap")]
+static SHELL_CAPABILITIES: [u8; include_bytes!(concat!(
+    env!("OUT_DIR"),
+    "/shell-capabilities.bin"
+))
+.len()] = *include_bytes!(concat!(env!("OUT_DIR"), "/shell-capabilities.bin"));
+
 fn main() -> Result<()> {
+    #[cfg(windows)]
+    std::hint::black_box(&SHELL_CAPABILITIES);
     let raw: Vec<_> = std::env::args_os().skip(1).collect();
     if raw.first().is_some_and(|s| s == "--apply-msi-update") {
         anyhow::ensure!(raw.len() == 5, "MSI helper needs PLAN PID STAMP CONFIG");
