@@ -121,13 +121,18 @@ def main():
     parser.add_argument('--outer-transaction-probe', action='store_true')
     parser.add_argument('--outer-commit-probe', action='store_true')
     parser.add_argument('--real-payload', action='store_true')
+    parser.add_argument('--installed-shell-invoke', action='store_true')
     args = parser.parse_args()
     assert not (args.real_payload and (args.outer_transaction_probe or args.outer_commit_probe))
+    assert not (args.installed_shell_invoke and (args.real_payload or args.outer_transaction_probe or args.outer_commit_probe))
     build = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
     probe = build / 'debug/examples/msi_fixture_state.exe'
     inspector = build / 'debug/examples/capability_inspect.exe'
+    installed_menu = build / 'debug/examples/explorer_installed_menu.exe'
     actions = build / 'debug/zi_msi_actions.dll'
     assert probe.is_file() and inspector.is_file() and actions.is_file(), 'Build candidate DLL, capability inspector, and core observer first'
+    if args.installed_shell_invoke:
+        assert installed_menu.is_file(), 'Build the installed Shell menu probe first'
     def observe(*arguments):
         return json.loads(subprocess.check_output([str(probe), *map(str, arguments)], timeout=30))
     if not args.compile_only:
@@ -271,6 +276,7 @@ def main():
     assert not default.exists(), 'Disposable default config must be absent'
     known_ids = set()
     proofs = []
+    shell_invocation_proof = None
     counter = 0
     portable_config = folder / 'portable-fixture.yml'
     portable_config.write_text('services: {}\n')
@@ -445,6 +451,31 @@ def main():
         portable_active()
         assert invoke('old', 'ZIMENU=1')[0] == 0
         before = installed('old')
+        if args.installed_shell_invoke:
+            source = folder / '真实文件 %1 & 空格.json'
+            source.write_bytes(b'synthetic installed Shell invocation fixture')
+            menu_before = [read_tree(path) for path in MENU_ROOTS]
+            result = subprocess.run(
+                [str(installed_menu), str(source), str(target / 'ZiDevTools.exe'), '--invoke-generic'],
+                capture_output=True, text=True, timeout=60, check=True)
+            native_menu = json.loads(result.stdout)
+            assert native_menu['installedMsiMenuResolved']
+            assert native_menu['commandInvocation']['performed']
+            assert native_menu['commandInvocation']['receivedArgumentsMatch']
+            assert native_menu['commandInvocation']['syntheticSourceUnchanged']
+            assert not native_menu['commandInvocation']['explorerWindowVerified']
+            assert source.read_bytes() == b'synthetic installed Shell invocation fixture'
+            assert not source.with_name('.zidevtools-shell-receipt.json').exists()
+            assert [read_tree(path) for path in MENU_ROOTS] == menu_before
+            shell_invocation_proof = dict(
+                installedShellMenuResolved=True,
+                genericReceiverInvoked=True,
+                commandLineMatchedRegisteredPlan=True,
+                unicodeSpacePercentAndAmpersandPathMatched=True,
+                syntheticSourceUnchanged=True,
+                menuRegistrationsUnchanged=True,
+                explorerWindowVerified=False)
+            proofs.append('actual installed MSI Shell COM command launched the headless receiver with the exact registered arguments; synthetic input and menu state remained unchanged')
         marker = target / 'user-data-must-survive.txt'
         marker.write_bytes(b'not installer owned')
         assert invoke('old', 'REINSTALL=ALL REINSTALLMODE=amus', repair=True)[0] == 0
@@ -558,6 +589,7 @@ def main():
         assert read_tree(RECOVERY_ROOT) == {'': {}}
         (folder / 'proof.json').write_text(json.dumps(dict(passed=proofs, productionTemplateWired=True,
             realCurrentPayload=args.real_payload, legacyReleaseUpgradeVerified=False,
+            installedShellInvocation=shell_invocation_proof,
             automaticCompletion=True, receiptRecovery=True,
             scope='ordinary candidates auto-complete; receipt-only candidate resumes via guarded desktop backend after native API return'), indent=2) + '\n')
         print('PASS: candidate DLL MSI transactions with automatic post-InstallFinalize completion')

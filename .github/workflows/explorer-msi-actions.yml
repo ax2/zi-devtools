@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [standalone, outer-rollback, outer-commit, real-payload, production-upgrade]
+        mode: [standalone, outer-rollback, outer-commit, real-payload, shell-invocation, production-upgrade]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -67,7 +67,7 @@ jobs:
         if: matrix.mode == 'real-payload' || matrix.mode == 'production-upgrade'
         run: cargo build --locked
       - name: Build read-only installed Shell menu discovery probe
-        if: matrix.mode == 'production-upgrade'
+        if: matrix.mode == 'production-upgrade' || matrix.mode == 'shell-invocation'
         run: cargo build --example explorer_installed_menu --locked
       - name: Stage actual payload and retrieve pinned public upgrade baseline
         if: matrix.mode == 'production-upgrade'
@@ -92,6 +92,8 @@ jobs:
             python scripts/explorer_msi_actions_smoke.py --outer-commit-probe
           } elseif ('${{ matrix.mode }}' -eq 'real-payload') {
             python scripts/explorer_msi_actions_smoke.py --real-payload
+          } elseif ('${{ matrix.mode }}' -eq 'shell-invocation') {
+            python scripts/explorer_msi_actions_smoke.py --installed-shell-invoke
           } elseif ('${{ matrix.mode }}' -eq 'production-upgrade') {
             python scripts/explorer_production_msi_smoke.py --baseline-dir $env:ZI_PUBLIC_MSI_BASELINE --ui-probe
           } else {

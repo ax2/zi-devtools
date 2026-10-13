@@ -168,10 +168,10 @@ def main():
             native_menu = json.loads(subprocess.check_output([
                 str(build / 'debug/examples/explorer_installed_menu.exe'), str(fixture), str(target / 'ZiDevTools.exe')], timeout=30))
             assert native_menu['installedMsiMenuResolved'] and native_menu['nativeCommandCount'] == native_menu['receiverCount'] + 1
-            assert native_menu['receiverCount'] >= 11 and not native_menu['commandInvocationPerformed']
+            assert native_menu['receiverCount'] >= 11 and not native_menu['commandInvocation']['performed']
             assert native_menu['desktopDeclarationMatches'] and not native_menu['mcpDeclaresDesktopReceivers']
             assert native_menu['declaredPlanMatchesShell']
-            assert not native_menu['associationWrites'] and not native_menu['explorerWindowVerified']
+            assert not native_menu['associationWrites'] and not native_menu['commandInvocation']['explorerWindowVerified']
             click(lambda: invoke('ui-full-uninstall', package, code, state=2), None, None, None, expect_options=False)
             assert not observe('--products') and marker.read_bytes() == b'not installer owned'
             assert not observe()['entries'] and not any(read_tree(key) for key in MENU_ROOTS)

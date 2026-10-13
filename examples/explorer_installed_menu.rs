@@ -1,5 +1,5 @@
-//! Read-only native Shell discovery of the actually installed MSI menu.
-//! Does not invoke commands or certify the Explorer window interaction.
+//! Native Shell discovery of the actually installed MSI menu.
+//! Optional invocation is limited to a disposable hosted runner and a synthetic file.
 #[cfg(windows)]
 fn main() -> anyhow::Result<()> {
     use anyhow::{Context, ensure};
@@ -9,11 +9,11 @@ fn main() -> anyhow::Result<()> {
         Win32::{
             System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize},
             UI::Shell::{
-                BHID_SFUIObject, IContextMenu, IContextMenu3, IShellItem,
-                SHCreateItemFromParsingName,
+                BHID_SFUIObject, CMINVOKECOMMANDINFO, CommandLineToArgvW, IContextMenu,
+                IContextMenu3, IShellItem, SHCreateItemFromParsingName,
             },
         },
-        core::{Interface, PCWSTR},
+        core::{Interface, PCSTR, PCWSTR},
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
     use zi_shell_core::{
@@ -28,9 +28,10 @@ fn main() -> anyhow::Result<()> {
     );
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     ensure!(
-        args.len() == 2,
-        "Expected fixture file and installed executable"
+        args.len() == 2 || (args.len() == 3 && args[2] == "--invoke-generic"),
+        "Expected fixture file, installed executable, and optional --invoke-generic"
     );
+    let invoke_generic = args.len() == 3;
     let file = std::fs::canonicalize(PathBuf::from(&args[0]))?;
     let executable = std::fs::canonicalize(PathBuf::from(&args[1]))?;
     let temporary =
@@ -243,27 +244,116 @@ fn main() -> anyhow::Result<()> {
             "Invalid or duplicate native command ID"
         );
     }
+    let mut invocation = serde_json::json!({
+        "performed": false,
+        "receivedArgumentsMatch": false,
+        "explorerWindowVerified": false,
+    });
+    if invoke_generic {
+        ensure!(
+            file.file_name().and_then(|name| name.to_str()) == Some("真实文件 %1 & 空格.json"),
+            "Invocation is limited to the named synthetic fixture"
+        );
+        ensure!(
+            std::fs::read(&file)? == b"synthetic installed Shell invocation fixture",
+            "Refusing to invoke a non-synthetic file"
+        );
+        let receipt = file.with_file_name(".zidevtools-shell-receipt.json");
+        ensure!(!receipt.exists(), "Synthetic receipt already exists");
+        let matches: Vec<_> = actions
+            .iter()
+            .filter(|(label, _)| label == "选择工具处理…")
+            .collect();
+        ensure!(matches.len() == 1, "Generic receiver missing or duplicated");
+        let command = matches[0].1;
+        ensure!((1..32767).contains(&command), "Invalid generic command ID");
+        let info = CMINVOKECOMMANDINFO {
+            cbSize: std::mem::size_of::<CMINVOKECOMMANDINFO>() as u32,
+            fMask: 0x100 | 0x400, // NOASYNC | FLAG_NO_UI; the receiver is a headless fixture.
+            lpVerb: PCSTR((command - 1) as usize as *const u8),
+            nShow: 0,
+            ..Default::default()
+        };
+        unsafe {
+            context
+                .InvokeCommand(&info)
+                .context("IContextMenu::InvokeCommand for installed generic receiver")?;
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !receipt.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let received: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&receipt)
+                .context("Installed Shell receiver did not write its synthetic receipt")?,
+        )?;
+        let generic_command = declared_plan
+            .values
+            .iter()
+            .find(|value| value.key.ends_with(r"\shell\choose\command"))
+            .context("Generic command is absent from the installed declaration plan")?;
+        let command_line = generic_command.value.replace("%1", &shell_path);
+        let command_wide: Vec<_> = command_line.encode_utf16().chain(Some(0)).collect();
+        let mut argument_count = 0;
+        let command_arguments =
+            unsafe { CommandLineToArgvW(PCWSTR(command_wide.as_ptr()), &mut argument_count) };
+        ensure!(
+            !command_arguments.is_null(),
+            "Cannot parse planned Shell command"
+        );
+        let wanted: Vec<String> = unsafe {
+            std::slice::from_raw_parts(command_arguments, argument_count as usize)
+                .iter()
+                .skip(1)
+                .map(|value| {
+                    value
+                        .to_string()
+                        .context("Planned Shell argument is invalid Unicode")
+                })
+                .collect::<anyhow::Result<_>>()?
+        };
+        unsafe { windows_sys::Win32::Foundation::LocalFree(command_arguments.cast()) };
+        ensure!(
+            received["fixtureOnly"] == true
+                && received["contentRead"] == false
+                && received["executed"] == false
+                && received["arguments"] == serde_json::json!(wanted)
+                && std::fs::canonicalize(std::path::PathBuf::from(
+                    received["received"]
+                        .as_str()
+                        .context("Receiver omitted source path")?
+                ))? == file,
+            "Installed Shell invocation arguments differ from the registered command"
+        );
+        invocation = serde_json::json!({
+            "performed": true,
+            "receivedArgumentsMatch": true,
+            "receiver": "generic file chooser",
+            "syntheticSourceUnchanged": std::fs::read(&file)? == b"synthetic installed Shell invocation fixture",
+            "explorerWindowVerified": false,
+        });
+        std::fs::remove_file(&receipt)?;
+    }
     ensure!(
         store::load()? == before,
-        "Menu ledger changed during discovery"
+        "Menu ledger changed during discovery or invocation"
     );
     println!(
         "{}",
         serde_json::json!({
             "installedMsiMenuResolved": true,
-            "receiverCount": Target::ALL.len(),
+            "receiverCount": declaration.targets().len(),
             "desktopDeclarationMatches": true,
             "declaredPlanMatchesShell": true,
             "mcpDeclaresDesktopReceivers": false,
             "nativeCommandCount": actions.len(),
             "labels": expected,
             "associationWrites": false,
-            "commandInvocationPerformed": false,
-            "explorerWindowVerified": false,
+            "commandInvocation": invocation,
         })
     );
-    // Keep the native context and executable consistency lock until discovery
-    // and the final ledger recheck have completed. No command is invoked.
+    // Keep the native context and executable consistency lock until discovery,
+    // optional invocation and the final ledger recheck have completed.
     Ok(())
 }
 

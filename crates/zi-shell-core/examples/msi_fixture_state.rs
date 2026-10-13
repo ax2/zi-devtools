@@ -13,10 +13,47 @@ fn main() -> anyhow::Result<()> {
     let value = match args.as_slice() {
         [config_flag, _, no_restore, open, path]
             if config_flag == "--config" && no_restore == "--no-restore" && open == "--open-files" => {
-            // Minimal headless fixture receiver; no GUI/import claim or file reads.
-            let path = std::path::absolute(path)?;
+            // Minimal headless fixture receiver; no GUI or import claim.
+            let path = std::fs::canonicalize(std::path::absolute(path)?)?;
             anyhow::ensure!(path.is_file(), "Fixture receiver requires one ordinary file");
-            serde_json::json!({"fixtureOnly":true,"received":path,"contentRead":false,"executed":false})
+            let value = serde_json::json!({
+                "fixtureOnly":true,
+                "received":path,
+                "arguments":args,
+                "contentRead":false,
+                "executed":false
+            });
+            // The installed Shell invocation probe uses a fresh, named file
+            // with exact synthetic bytes. Only this test fixture writes a
+            // receipt, and it is placed beside that runner-owned input.
+            if path.file_name().is_some_and(|name| name == "真实文件 %1 & 空格.json") {
+                anyhow::ensure!(
+                    std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
+                        && std::env::var("CI").as_deref() == Ok("true")
+                        && std::env::var("RUNNER_ENVIRONMENT").as_deref() == Ok("github-hosted"),
+                    "Synthetic Shell receipt is limited to a disposable hosted runner"
+                );
+                let temporary = std::fs::canonicalize(
+                    std::env::var_os("RUNNER_TEMP").ok_or_else(|| anyhow::anyhow!("RUNNER_TEMP missing"))?,
+                )?;
+                anyhow::ensure!(
+                    path.starts_with(temporary),
+                    "Synthetic Shell input is outside the disposable runner directory"
+                );
+                anyhow::ensure!(
+                    std::fs::read(&path)? == b"synthetic installed Shell invocation fixture",
+                    "Refusing a receipt for non-synthetic input"
+                );
+                let receipt = path.with_file_name(".zidevtools-shell-receipt.json");
+                use std::io::Write;
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(receipt)?;
+                file.write_all(&serde_json::to_vec(&value)?)?;
+                file.sync_all()?;
+            }
+            value
         }
         [] => serde_json::to_value(store::load()?)?,
         [flag] if flag == "--products" => serde_json::to_value(msi::registered_products()?)?,
