@@ -222,7 +222,7 @@ def main():
              'genericReceiverVisible': False}
     try:
         existing_windows = {hwnd for hwnd, cls, _ in top_windows() if cls == 'CabinetWClass'}
-        subprocess.Popen(['explorer.exe', '/n', f'/select,{source}'],
+        subprocess.Popen(['explorer.exe', f'/n,/select,{source}'],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.monotonic() + 30
         last_windows = []
