@@ -57,3 +57,5 @@ PE读取仅使用已有File的Read/Seek，不LoadLibrary、不启动EXE。大小
 ## 本机窗口启动补充（2026-10-13）
 
 当前桌面构建在本机通过 --no-restore 和 --open-folder 启动后实际显示 Zi DevTools — disk-inspector 窗口且进程响应正常。窗口创建已在本机验证；没有屏幕截图或扫描完成结果，不能据此宣称结果页验收。详细摘要见技术档案 ci-20d3046-open-gl-limit/local-runtime-proof.json。
+
+扫描逻辑的完成态由现有精确回归测试验证（1 passed）：等待后台任务结束并断言结果根目录及总字节数。它与本机窗口启动记录共同覆盖接收器入口和扫描状态，但没有截图或人工检查完成后的结果页。

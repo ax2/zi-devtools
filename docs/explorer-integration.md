@@ -342,3 +342,5 @@ proof 和六张原始 Explorer 截图归档于 iterations/explorer-folder-contex
 使用当前构建产物 target/release/ZiDevTools.exe（0.82.0-dev.105，SHA-256 032751BA7C55F8D15D39DD0F048D1565B06D9D3F69154BEBACA381B80F96CFB8）和一次性合成文件夹，通过 --no-restore、--tool disk-inspector、--open-folder 参数启动。实际进程路径与参数匹配，窗口标题为“Zi DevTools — disk-inspector”，窗口响应正常；因此本机 OpenGL 环境通过了 hosted runner 未通过的窗口创建关口。关闭窗口后进程依产品的关闭到托盘行为继续运行；核实进程路径、PID和专属夹具参数后，只终止本次测试进程。
 
 本次未取得屏幕截图，也没有观察扫描完成后的结果，因此不将其记为扫描结果页验收。隔离夹具仅含两个合成小文件（47 字节），仍留在用户临时目录；清理命令被执行策略拒绝，没有影响项目文件。运行摘要保存在 ci-20d3046-open-gl-limit/local-runtime-proof.json。
+
+扫描结果另由精确回归测试 disk_inspector::tests::explorer_folder_input_opens_this_tool_and_starts_the_bounded_scan 验证：1 passed、0 failed。测试等待后台扫描完成并断言返回根目录与17字节合计值，随后由测试清理自身临时夹具。它验证目录扫描状态，不替代人工观察应用结果页；本机启动记录的 folderScanResultObserved 仍为 false。
