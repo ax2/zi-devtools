@@ -244,7 +244,7 @@ def main():
         proof['explorerWindowVisible'] = True
         assert user.SetForegroundWindow(explorer)
         time.sleep(.5)
-        press(0xA0, 0x73)  # Shift+F10 opens the selected file's classic context menu.
+        press(0xA0, 0x79)  # Shift+F10 opens the selected file's classic context menu.
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
