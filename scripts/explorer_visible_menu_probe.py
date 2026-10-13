@@ -255,7 +255,7 @@ def main():
         assert folder_argument == expected_folder.resolve(strict=True)
         launched = subprocess.Popen(
             argv, cwd=str(executable.parent), stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
         deadline = time.monotonic() + 30
         hwnd = None
@@ -276,10 +276,20 @@ def main():
                 break
             assert len(matches) <= 1, f'Multiple folder receiver windows appeared: {matches}'
             time.sleep(.2)
-        assert hwnd, (
-            'The installed Shell command did not open a Zi DevTools window; '
-            f'new visible windows: {observed_windows}'
-        )
+        if not hwnd:
+            return_code = launched.poll()
+            if return_code is None:
+                launched.terminate()
+            try:
+                stdout, stderr = launched.communicate(timeout=8)
+            except subprocess.TimeoutExpired:
+                launched.kill()
+                stdout, stderr = launched.communicate(timeout=8)
+            assert False, (
+                'The installed Shell command did not open a Zi DevTools window; '
+                f'childExit={return_code}, stdout={stdout[-1200:]!r}, '
+                f'stderr={stderr[-2400:]!r}, new visible windows: {observed_windows}'
+            )
         pid, process = receiver_process_info(hwnd)
         assert pid == launched.pid, 'Visible receiver window belongs to another process'
         image = Path(process['ExecutablePath']).resolve(strict=True)
@@ -336,6 +346,7 @@ def main():
         finally:
             kernel.CloseHandle(handle)
         proof_result['receiverProcessExited'] = True
+        launched.communicate(timeout=8)
         return proof_result
 
     def text(hwnd, function):
