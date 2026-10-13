@@ -8,17 +8,17 @@ use crate::explorer::{
 #[derive(Clone)]
 pub(in crate::explorer) struct Scope {
     pub(super) ledger: String,
-    pub(super) menus: [String; 2],
+    pub(super) menus: Vec<String>,
 }
 impl Scope {
     pub(in crate::explorer) fn production() -> Self {
         Self {
             ledger: ROOT.into(),
-            menus: ROOTS.map(str::to_owned),
+            menus: ROOTS.iter().map(|root| (*root).to_owned()).collect(),
         }
     }
-    fn roots(&self) -> [&str; 2] {
-        [self.menus[0].as_str(), self.menus[1].as_str()]
+    fn roots(&self) -> Vec<&str> {
+        self.menus.iter().map(String::as_str).collect()
     }
 }
 
@@ -35,7 +35,14 @@ fn image(ledger: &Ledger, scope: &Scope) -> Result<Snapshot> {
             }
         }
         if value.name == "ExtendedSubCommandsKey" {
-            value.value = scope.menus[1]
+            let alias_index = if value.key.starts_with(&scope.menus[2]) {
+                4
+            } else if value.key.starts_with(&scope.menus[3]) {
+                5
+            } else {
+                1
+            };
+            value.value = scope.menus[alias_index]
                 .strip_prefix(r"Software\Classes\")
                 .ok_or_else(|| anyhow::anyhow!("菜单范围无效"))?
                 .into();

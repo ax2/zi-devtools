@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 pub struct Arguments {
     pub tool: Option<String>,
     pub open_files: Vec<std::path::PathBuf>,
+    pub open_folder: Option<std::path::PathBuf>,
     pub file_action: Option<crate::intake::Target>,
     pub config_path: std::path::PathBuf,
     pub restore_services: bool,
@@ -21,6 +22,7 @@ pub fn parse_args() -> Result<Arguments> {
 pub fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> Result<Arguments> {
     let mut tool = None;
     let mut open_files = Vec::new();
+    let mut open_folder = None;
     let mut file_action = None;
     let mut config_path = default_config_path();
     let mut restore_services = true;
@@ -53,6 +55,22 @@ pub fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> R
                 anyhow::ensure!(
                     (1..=64).contains(&open_files.len()),
                     "--open-files requires 1–64 file paths"
+                );
+                break;
+            }
+            "--open-folder" => {
+                anyhow::ensure!(open_folder.is_none(), "--open-folder cannot be repeated");
+                let value = args.next().context("--open-folder requires a path")?;
+                anyhow::ensure!(
+                    !value.is_empty() && !value.as_encoded_bytes().contains(&0),
+                    "目录路径为空或包含无效字符"
+                );
+                open_folder = Some(std::path::absolute(std::path::PathBuf::from(value))?);
+                // Like --open-files, this receiver is terminal so a path that
+                // starts with `--` remains literal rather than becoming an option.
+                anyhow::ensure!(
+                    args.next().is_none(),
+                    "--open-folder accepts exactly one path and must be the final argument"
                 );
                 break;
             }
@@ -113,15 +131,30 @@ pub fn parse_args_from(input: impl IntoIterator<Item = std::ffi::OsString>) -> R
                 && !force_import),
         "--open-files cannot be combined with tool, fixture or config-import actions"
     );
+    anyhow::ensure!(
+        open_folder.is_none()
+            || (open_files.is_empty()
+                && file_action.is_none()
+                && fixture_port.is_none()
+                && fixture_shutdown_port.is_none()
+                && import_config.is_none()
+                && !force_import
+                && tool.as_deref().is_none_or(|id| id == "disk-inspector")),
+        "--open-folder only supports the disk-inspector tool"
+    );
     if let Some(target) = file_action {
         target
             .validate_selection(&open_files)
             .map_err(anyhow::Error::msg)?;
     }
     Ok(Arguments {
-        restore_services: restore_services && tool.is_none() && open_files.is_empty(),
+        restore_services: restore_services
+            && tool.is_none()
+            && open_files.is_empty()
+            && open_folder.is_none(),
         tool,
         open_files,
+        open_folder,
         file_action,
         config_path,
         fixture_port,
@@ -194,7 +227,11 @@ mod tests {
             .iter()
             .filter(|entry| entry.key.ends_with("\\command"))
         {
-            let command = entry.value.replace("%1", file.to_str().unwrap());
+            let folder_command = entry.value.contains("--open-folder");
+            let command = entry
+                .value
+                .replace("%1", file.to_str().unwrap())
+                .replace("%V", file.to_str().unwrap());
             let wide: Vec<u16> = command.encode_utf16().chain(Some(0)).collect();
             let mut count = 0;
             unsafe {
@@ -208,9 +245,16 @@ mod tests {
                 assert_eq!(std::path::PathBuf::from(&values[0]), exe);
                 let args = parse_args_from(values.into_iter().skip(1)).unwrap();
                 assert_eq!(args.config_path, config);
-                assert_eq!(args.open_files, vec![file.clone()]);
+                if folder_command {
+                    assert_eq!(args.open_folder, Some(file.clone()));
+                    assert_eq!(args.tool.as_deref(), Some("disk-inspector"));
+                } else {
+                    assert_eq!(args.open_files, vec![file.clone()]);
+                }
                 assert!(!args.restore_services);
-                if let Some(id) = entry
+                if folder_command {
+                    assert!(args.file_action.is_none());
+                } else if let Some(id) = entry
                     .key
                     .strip_suffix("\\command")
                     .unwrap()
@@ -278,5 +322,36 @@ mod tests {
         assert!(parse(&["--tool"]).is_err());
         assert!(parse(&["--tool", "json", "--tool", "base64"]).is_err());
         assert!(parse(&[]).unwrap().restore_services);
+    }
+
+    #[test]
+    fn folder_launch_is_single_literal_disk_inspector_input() {
+        let parse = |args: &[&str]| parse_args_from(args.iter().map(std::ffi::OsString::from));
+        let parsed = parse(&[
+            "--config",
+            "local.yml",
+            "--tool",
+            "disk-inspector",
+            "--open-folder",
+            "a folder\\--literal",
+        ])
+        .unwrap();
+        assert_eq!(parsed.tool.as_deref(), Some("disk-inspector"));
+        assert_eq!(
+            parsed.open_folder,
+            Some(std::path::absolute("a folder\\--literal").unwrap())
+        );
+        assert!(parsed.open_files.is_empty());
+        assert!(!parsed.restore_services);
+        for args in [
+            vec!["--open-folder"],
+            vec!["--open-folder", ""],
+            vec!["--open-folder", "a", "b"],
+            vec!["--tool", "json", "--open-folder", "a"],
+            vec!["--open-folder", "a", "--open-files", "b"],
+            vec!["--file-action", "import:files", "--open-folder", "a"],
+        ] {
+            assert!(parse(&args).is_err(), "{args:?}");
+        }
     }
 }

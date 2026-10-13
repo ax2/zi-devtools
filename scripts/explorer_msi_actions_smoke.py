@@ -24,7 +24,14 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 NS = '{http://wixtoolset.org/schemas/v4/wxs}'
 ET.register_namespace('', NS[1:-1])
-MENU_ROOTS = [r'Software\Classes\*\shell\ZiCode.DevTools', r'Software\Classes\ZiCode.DevTools.FileActions']
+MENU_ROOTS = [
+    r'Software\Classes\*\shell\ZiCode.DevTools',
+    r'Software\Classes\ZiCode.DevTools.FileActions',
+    r'Software\Classes\Directory\shell\ZiCode.DevTools',
+    r'Software\Classes\Directory\Background\shell\ZiCode.DevTools',
+    r'Software\Classes\ZiCode.DevTools.DirectoryActions',
+    r'Software\Classes\ZiCode.DevTools.BackgroundActions',
+]
 LEDGER_ROOT = r'Software\ZiCode\ZiDevTools\ExplorerInstallations'
 RECOVERY_ROOT = r'Software\ZiCode\ZiDevTools\ExplorerRecovery'
 
@@ -257,7 +264,7 @@ def main():
         if fault == 'commit':
             assert order['ZiMenuCommitReady'] < order['MenuFixtureFailure'] < order['InstallExecute']
         compile_orders[label] = dict(zip(required, positions))
-        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\n' + ''.join(
+        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\nchoose-folders\n' + ''.join(
             action + '\n' for action in inspection['actions'])
         packages[label] = (msi, metadata, content, expected_manifest)
     assert len({value[1]['desktop_component'] for value in packages.values()}) == 1
@@ -309,7 +316,7 @@ def main():
         receipt = observe('--config', portable_config, '--no-restore', '--open-files', portable_file)
         assert receipt['fixtureOnly'] and not receipt['contentRead'] and not receipt['executed']
         assert Path(receipt['received']).samefile(portable_file)
-        assert all(read_tree(root)['']['zicodeinstallgeneration'][0] == record['generation'] for root in MENU_ROOTS)
+        assert all(read_tree(root)['']['zicodeinstallgeneration'][0] == record['generation'] for root in MENU_ROOTS[:2])
 
     def invoke(label, options='', repair=False, uninstall=False, cleanup=False):
         nonlocal counter

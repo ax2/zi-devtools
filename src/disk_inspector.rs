@@ -256,6 +256,7 @@ fn size(bytes: u64) -> String {
 
 pub struct State {
     path: String,
+    launch_path: Option<PathBuf>,
     result: Option<ScanResult>,
     message: String,
     receiver: Option<Receiver<Result<ScanResult, String>>>,
@@ -267,6 +268,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             path: String::new(),
+            launch_path: None,
             result: None,
             message: String::new(),
             receiver: None,
@@ -308,7 +310,10 @@ impl State {
     }
 
     fn start(&mut self) {
-        let root = PathBuf::from(self.path.trim().trim_matches('"'));
+        let root = self
+            .launch_path
+            .take()
+            .unwrap_or_else(|| PathBuf::from(self.path.trim().trim_matches('"')));
         self.result = None;
         self.message = "正在分析目录…".to_owned();
         self.cancel = Arc::new(AtomicBool::new(false));
@@ -326,6 +331,14 @@ impl State {
             .map_err(|error| format!("扫描失败：{error:#}"));
             let _ = sender.send(result);
         });
+    }
+
+    /// Open a folder received from an explicit Explorer menu action and start
+    /// the bounded, read-only scan in the same tool page.
+    pub(crate) fn open_folder(&mut self, path: PathBuf) {
+        self.path = path.to_string_lossy().into_owned();
+        self.launch_path = Some(path);
+        self.start();
     }
 
     #[cfg(feature = "ui-preview")]
@@ -406,6 +419,7 @@ impl State {
                 )
                 .changed()
             {
+                self.launch_path = None;
                 self.result = None;
                 self.message.clear();
             }
@@ -415,6 +429,7 @@ impl State {
                 && let Some(path) = rfd::FileDialog::new().pick_folder()
             {
                 self.path = path.display().to_string();
+                self.launch_path = None;
                 self.result = None;
             }
         });
@@ -607,6 +622,29 @@ mod tests {
         .unwrap();
         assert_eq!(result.status, ScanStatus::Cancelled);
         assert_eq!(result.progress.entries, 128);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn explorer_folder_input_opens_this_tool_and_starts_the_bounded_scan() {
+        let root = std::env::temp_dir().join(format!("zi-disk-shell-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("fixture.txt"), b"folder menu input").unwrap();
+        let mut state = State::default();
+        state.open_folder(root.clone());
+        assert_eq!(state.path, root.to_string_lossy());
+        assert!(state.background_active());
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while state.background_active() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+            state.poll();
+        }
+        assert!(!state.background_active(), "folder scan did not finish");
+        let result = state.result.as_ref().expect("folder scan result");
+        assert_eq!(result.root, root);
+        assert_eq!(result.progress.bytes, b"folder menu input".len() as u64);
+        drop(state);
         fs::remove_dir_all(root).unwrap();
     }
 }

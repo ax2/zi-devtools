@@ -310,3 +310,11 @@ UI表校验结果在compile-tables-v2.log及其target/zi-msi-production-4qclvusv
 [CI38397930418](https://github.com/ax2/zi-devtools/actions/runs/38397930418)七路全部成功。`explorer-visible`在一次性Windows Server 2022 runner中安装真实桌面EXE载荷的MSI，Shell打开仅含一个合成JSON文件的隔离目录；通过真实Explorer文件右键菜单展示唯一`Zi DevTools`入口，鼠标点击入口后读取到“选择工具处理…”及11个接收动作。菜单安装后立即可见，无需测试器额外触发Shell刷新；合成文件字节不变，未点击接收动作。
 
 已查看两张桌面截图，并核对proof中的窗口可见、文件选择、菜单出现、级联点击、通用接收项与文件未变断言。长期档案保留proof与截图于`iterations/explorer-installation-capabilities-2026-10-13/ci-89f8d5a-visible-menu/`。这证明Windows Server 2022经典文件菜单的单文件显示和点击展开；目录/空白处、多选、Windows 11现代菜单、实际接收器启动及应用导入仍待验证。七路工作流之外不据此推断完整CI或发布通过；应用版本不变，未在开发机安装候选MSI或写入注册表。
+
+## 文件夹菜单接入目录空间分析（2026-10-13，候选）
+
+为文件夹选中项和文件夹空白处增加相同的`Zi DevTools`级联入口，分别绑定Shell的`%1`和`%V`，子菜单只有“分析目录空间…”。菜单能力通过`choose-folders`位独立声明；旧安装记录不会被推断为支持此入口。两套入口分别绑定登记别名，六个Classes根与安装账本一起审计、提交和回滚。
+
+点击子菜单会用`--open-folder`启动`disk-inspector`，打开页面并开始已有有界只读扫描；参数路由拒绝文件动作、其他工具和多余路径。Rust工作区测试、CLI模板往返和真实临时目录扫描通过；当前尚未完成托管Explorer文件夹/空白处实际显示和点击级联验收，也未运行实际安装包矩阵。工具单独升至1.0.1；应用dev版本未变。详情见[能力声明文件夹扩展](explorer-capability-declaration.md)。
+
+注册对象遵循[Microsoft Shell 预定义对象的菜单扩展模型](https://learn.microsoft.com/windows/win32/shell/reg-shell-exts)：`Directory`对应文件夹，`Directory\Background`对应文件夹背景。

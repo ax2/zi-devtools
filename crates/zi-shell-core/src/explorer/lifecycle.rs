@@ -295,17 +295,20 @@ pub(in crate::explorer) fn menu_plan(installation: &Installation) -> Result<supe
         .executable_sha256
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("安装记录缺少程序摘要，需先核验此程序"))?;
-    let mut result = super::plan_declared(
-        &installation.executable,
-        &installation.config,
-        &installation.menu_declaration()?,
-    )?;
+    let declaration = installation.menu_declaration()?;
+    let mut result =
+        super::plan_declared(&installation.executable, &installation.config, &declaration)?;
     for value in &mut result.values {
         if value.name == "ZiCodeMenuProtocol" {
             value.value = "2".into();
         }
     }
-    for root in super::ROOTS {
+    let roots = if declaration.supports_folder_contexts() {
+        &super::ROOTS[..]
+    } else {
+        &super::ROOTS[..2]
+    };
+    for root in roots {
         for (name, value) in [
             (
                 "ZiCodeActiveInstall",
@@ -315,7 +318,7 @@ pub(in crate::explorer) fn menu_plan(installation: &Installation) -> Result<supe
             ("ZiCodeBinarySha256", digest.clone()),
         ] {
             result.values.push(super::Value {
-                key: root.into(),
+                key: (*root).into(),
                 name: name.into(),
                 value,
             });

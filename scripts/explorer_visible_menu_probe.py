@@ -1,15 +1,16 @@
-"""Open and inspect the installed MSI context menu in a disposable Explorer window.
+"""Inspect file, selected-directory, and directory-background MSI menus in Explorer.
 
-This is intentionally limited to GitHub-hosted Windows runners. It creates one
-synthetic file under RUNNER_TEMP, opens its real Explorer context menu, captures
-the visible menu, and verifies the installed product cascade and receiver labels.
-It never invokes a receiver or edits the fixture file.
+This is intentionally limited to GitHub-hosted Windows runners. It creates
+synthetic fixtures under RUNNER_TEMP, captures the real visible menus, and checks
+the installed product cascade and receiver labels in all three contexts. It
+never invokes a receiver or edits the fixture file.
 """
 import ctypes
 import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 import sys
 import time
@@ -122,6 +123,8 @@ def main():
         ('GetWindowTextW', [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int], ctypes.c_int),
         ('IsWindowVisible', [ctypes.c_void_p], ctypes.c_bool),
         ('GetForegroundWindow', [], ctypes.c_void_p),
+        ('ShowWindow', [ctypes.c_void_p, ctypes.c_int], ctypes.c_bool),
+        ('GetWindowRect', [ctypes.c_void_p, ctypes.c_void_p], ctypes.c_bool),
         ('SetForegroundWindow', [ctypes.c_void_p], ctypes.c_bool),
         ('SendInput', [ctypes.c_uint, ctypes.c_void_p, ctypes.c_int], ctypes.c_uint),
         ('PostMessageW', [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t,
@@ -180,6 +183,12 @@ def main():
             item = Input(0, InputUnion(mouse=MouseInput(0, 0, 0, flag, 0, None)))
             assert user.SendInput(1, ctypes.byref(item), ctypes.sizeof(Input)) == 1
 
+    def right_click_at(x, y):
+        assert user.SetCursorPos(x, y), f'Could not move to blank folder area at {x},{y}'
+        for flag in (0x0008, 0x0010):  # right button down, then up
+            item = Input(0, InputUnion(mouse=MouseInput(0, 0, 0, flag, 0, None)))
+            assert user.SendInput(1, ctypes.byref(item), ctypes.sizeof(Input)) == 1
+
     def text(hwnd, function):
         buffer = ctypes.create_unicode_buffer(1024)
         function(hwnd, buffer, len(buffer))
@@ -212,13 +221,15 @@ def main():
         return values
 
     fixture_dir = source.parent.name
+    selected_folder = output / 'A-文件夹菜单测试'
     explorer = None
     root_menu_window = None
     proof = {'fixtureUnchanged': False, 'explorerWindowVisible': False,
              'fileSelectionInputSent': False,
              'contextMenuVisible': False, 'productCascadeVisible': False,
-             'productCascadeClicked': False,
-             'genericReceiverVisible': False}
+             'productCascadeClicked': False, 'genericReceiverVisible': False,
+             'directoryMenuVisible': False, 'directoryCascadeVisible': False,
+             'backgroundMenuVisible': False, 'backgroundCascadeVisible': False}
     try:
         existing_windows = {hwnd for hwnd, cls, _ in top_windows() if cls == 'CabinetWClass'}
         os.startfile(str(source.parent))
@@ -242,6 +253,7 @@ def main():
                           f'visible File Explorer windows were {last_windows}')
         proof['explorerWindowVisible'] = True
         assert user.SetForegroundWindow(explorer)
+        user.ShowWindow(explorer, 3)  # maximize so background clicks land in the file view
         time.sleep(1)
         # The fixture folder contains exactly one file, so this focuses/selects
         # only the synthetic file even if Explorer did not honor /select.
@@ -321,6 +333,91 @@ def main():
         capture_desktop(proof['receiverScreenshot'], user, gdi)
         proof['fixtureUnchanged'] = source.read_bytes() == original
         assert proof['fixtureUnchanged'], 'Explorer menu interaction changed the synthetic file'
+
+        # Add one empty child after the one-file receiver check. Explorer sorts
+        # folders first, so Home selects this directory without selecting files.
+        selected_folder.mkdir()
+        press(0x1B)
+        press(0x1B)
+        press(0x74)  # F5 refresh the disposable folder view.
+        time.sleep(.5)
+        press(0x24)  # Home selects the first (folder) item.
+        press(0xA0, 0x79)  # Shift+F10 opens the selected folder menu.
+        deadline = time.monotonic() + 10
+        root_menu_window = None
+        while time.monotonic() < deadline:
+            menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
+            if menus:
+                root_menu_window = menus[-1]
+                break
+            time.sleep(.1)
+        assert root_menu_window, 'Explorer did not display the selected-directory context menu'
+        popup = menu_handle(root_menu_window)
+        directory_labels = labels(popup)
+        assert directory_labels.count('Zi DevTools') == 1, directory_labels
+        proof['directoryMenuVisible'] = True
+        proof['directoryRootLabels'] = directory_labels
+        proof['directoryScreenshot'] = str(output / 'explorer-menu-directory.png')
+        capture_desktop(proof['directoryScreenshot'], user, gdi)
+        directory_index = directory_labels.index('Zi DevTools')
+        rect = ScreenRect()
+        assert user.GetMenuItemRect(explorer, popup, directory_index, ctypes.byref(rect))
+        click_at((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+        time.sleep(.35)
+        submenu = user.GetSubMenu(popup, directory_index)
+        if not submenu:
+            popup = menu_handle(root_menu_window)
+            submenu = user.GetSubMenu(popup, directory_index)
+        assert submenu, 'Directory Zi DevTools item did not open a submenu'
+        directory_actions = labels(submenu)
+        assert directory_actions.count('分析目录空间…') == 1, directory_actions
+        proof['directoryCascadeVisible'] = True
+        proof['directoryReceiverLabels'] = directory_actions
+        proof['directoryReceiverScreenshot'] = str(output / 'explorer-menu-directory-action.png')
+        capture_desktop(proof['directoryReceiverScreenshot'], user, gdi)
+
+        # Exercise the true Directory\Background object by right-clicking blank
+        # space in the visible file view; no directory receiver is invoked.
+        press(0x1B)
+        press(0x1B)
+        rect = ScreenRect()
+        assert user.GetWindowRect(explorer, ctypes.byref(rect))
+        assert rect.right - rect.left > 500 and rect.bottom - rect.top > 400, rect
+        right_click_at(rect.right - 100, rect.bottom - 110)
+        deadline = time.monotonic() + 10
+        root_menu_window = None
+        while time.monotonic() < deadline:
+            menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
+            if menus:
+                root_menu_window = menus[-1]
+                break
+            time.sleep(.1)
+        assert root_menu_window, 'Explorer did not display the folder-background context menu'
+        popup = menu_handle(root_menu_window)
+        background_labels = labels(popup)
+        assert background_labels.count('Zi DevTools') == 1, background_labels
+        proof['backgroundMenuVisible'] = True
+        proof['backgroundRootLabels'] = background_labels
+        proof['backgroundScreenshot'] = str(output / 'explorer-menu-background.png')
+        capture_desktop(proof['backgroundScreenshot'], user, gdi)
+        background_index = background_labels.index('Zi DevTools')
+        rect = ScreenRect()
+        assert user.GetMenuItemRect(explorer, popup, background_index, ctypes.byref(rect))
+        click_at((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+        time.sleep(.35)
+        submenu = user.GetSubMenu(popup, background_index)
+        if not submenu:
+            popup = menu_handle(root_menu_window)
+            submenu = user.GetSubMenu(popup, background_index)
+        assert submenu, 'Background Zi DevTools item did not open a submenu'
+        background_actions = labels(submenu)
+        assert background_actions.count('分析目录空间…') == 1, background_actions
+        proof['backgroundCascadeVisible'] = True
+        proof['backgroundReceiverLabels'] = background_actions
+        proof['backgroundReceiverScreenshot'] = str(output / 'explorer-menu-background-action.png')
+        capture_desktop(proof['backgroundReceiverScreenshot'], user, gdi)
+        proof['fixtureUnchanged'] = source.read_bytes() == original
+        assert proof['fixtureUnchanged'], 'Explorer menu interaction changed the synthetic file'
         (output / 'explorer-visible-proof.json').write_text(
             json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         print(json.dumps(proof, ensure_ascii=True))
@@ -333,6 +430,9 @@ def main():
             pass
         if explorer:
             user.PostMessageW(explorer, 0x0010, 0, 0)
+        if selected_folder.exists():
+            assert selected_folder.parent == output
+            shutil.rmtree(selected_folder)
         proof['fixtureUnchanged'] = source.read_bytes() == original
 
 

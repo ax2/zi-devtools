@@ -125,7 +125,7 @@ def main():
         installation = current['entries'][0]['installation']
         assert installation['identity'] == {'kind': 'msi'}
         assert installation['version'] == version and installation['executable_sha256'] == digest
-        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\n' + ''.join(
+        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\nchoose-folders\n' + ''.join(
             action + '\n' for action in inspection['actions'])
         assert installation['menu_capabilities'] == expected_manifest
         assert all(read_tree(key)['']['zicodebinarysha256'][0] == digest for key in MENU_ROOTS)

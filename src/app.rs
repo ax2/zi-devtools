@@ -3083,6 +3083,12 @@ impl DevToolsApp {
         if let Some(id) = &arguments.tool {
             self.open_startup_tool(id);
         }
+        if let Some(folder) = &arguments.open_folder {
+            self.disk_inspector.open_folder(folder.clone());
+            self.quick_open = false;
+            self.launcher_open = false;
+            self.navigate(Page::DiskInspector, None);
+        }
         if !arguments.open_files.is_empty() {
             if let Some(target) = arguments.file_action {
                 self.open_startup_file_action(arguments.open_files.clone(), target)?;

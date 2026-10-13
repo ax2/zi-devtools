@@ -6,9 +6,13 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 use crate::quote;
-const ROOTS: [&str; 2] = [
+const ROOTS: [&str; 6] = [
     r"Software\Classes\*\shell\ZiCode.DevTools",
     r"Software\Classes\ZiCode.DevTools.FileActions",
+    r"Software\Classes\Directory\shell\ZiCode.DevTools",
+    r"Software\Classes\Directory\Background\shell\ZiCode.DevTools",
+    r"Software\Classes\ZiCode.DevTools.DirectoryActions",
+    r"Software\Classes\ZiCode.DevTools.BackgroundActions",
 ];
 const OWNER: &str = "com.zicode.devtools";
 const MENU_PROTOCOL: &str = "1";
@@ -126,6 +130,37 @@ pub fn plan_declared(
             ),
         );
     }
+    if declaration.supports_folder_contexts() {
+        for (root, action_root) in [
+            (
+                ROOTS[2],
+                (ROOTS[4], "ZiCode.DevTools.DirectoryActions", "%1"),
+            ),
+            (
+                ROOTS[3],
+                (ROOTS[5], "ZiCode.DevTools.BackgroundActions", "%V"),
+            ),
+        ] {
+            add(root, "MUIVerb", "Zi DevTools".into());
+            add(root, "Icon", exe.clone());
+            add(root, "ZiCodeOwner", OWNER.into());
+            add(root, "ZiCodeMenuProtocol", MENU_PROTOCOL.into());
+            add(root, "ExtendedSubCommandsKey", action_root.1.into());
+            add(action_root.0, "ZiCodeOwner", OWNER.into());
+            add(action_root.0, "ZiCodeMenuProtocol", MENU_PROTOCOL.into());
+            let action = format!(r"{}\shell\disk-inspector", action_root.0);
+            add(&action, "MUIVerb", "分析目录空间…".into());
+            add(&action, "Icon", exe.clone());
+            add(
+                &format!(r"{action}\command"),
+                "",
+                format!(
+                    "{exe} --config {config} --no-restore --tool disk-inspector --open-folder \"{}\"",
+                    action_root.2
+                ),
+            );
+        }
+    }
     ensure!(
         values
             .iter()
@@ -143,7 +178,7 @@ pub fn plan_declared(
         values,
         limitations: [
             "此JSON仅是单选经典菜单候选布局，生成计划不读取或写入注册表；维护流程需另行预览确认",
-            "尚无Explorer实际可见性、多选整组传输、目录接收或Windows11现代菜单验收",
+            "文件夹入口使用独立有界只读扫描；文件多选和Windows11现代菜单仍需验收",
             "MSI自动维护、Windows Installer回滚及真实Explorer显示/调用仍需独立验收",
         ],
     })
@@ -235,10 +270,11 @@ mod tests {
             .iter()
             .filter(|v| v.key.ends_with("\\command"))
             .collect();
-        assert_eq!(commands.len(), Target::ALL.len() + 1);
+        assert_eq!(commands.len(), Target::ALL.len() + 3);
         assert!(
             commands
                 .iter()
+                .filter(|c| c.key.contains("FileActions"))
                 .all(|c| c.value.ends_with("--open-files \"%1\""))
         );
         let mut keys = std::collections::BTreeSet::new();
@@ -268,6 +304,49 @@ mod tests {
         assert!(
             plan(&long, &long).is_err(),
             "two individually bounded paths must not form an oversized Windows command line"
+        );
+    }
+
+    #[test]
+    fn folder_contexts_have_distinct_bounded_directory_receivers() {
+        use crate::capability_manifest::Manifest;
+        let dir = std::env::current_dir().unwrap().join("资料 folder");
+        let exe = dir.join("ZiDevTools.exe");
+        let config = dir.join("服务.yml");
+        let current = plan(&exe, &config).unwrap();
+        let folder_commands: Vec<_> = current
+            .values
+            .iter()
+            .filter(|value| {
+                value.key.ends_with("\\command") && value.value.contains("--open-folder")
+            })
+            .collect();
+        assert_eq!(folder_commands.len(), 2);
+        assert!(folder_commands.iter().any(|command| {
+            command.key.starts_with(ROOTS[4]) && command.value.ends_with("--open-folder \"%1\"")
+        }));
+        assert!(folder_commands.iter().any(|command| {
+            command.key.starts_with(ROOTS[5]) && command.value.ends_with("--open-folder \"%V\"")
+        }));
+        for command in &folder_commands {
+            assert!(command.value.contains("--tool disk-inspector"));
+            assert!(!command.value.contains("--open-files"));
+        }
+
+        let legacy = plan_declared(
+            &exe,
+            &config,
+            &Manifest::parse(b"ZiDevTools/ShellCapabilities/1\nchoose-files\n").unwrap(),
+        )
+        .unwrap();
+        assert!(
+            !legacy
+                .values
+                .iter()
+                .any(|value| value.key.starts_with(ROOTS[2])
+                    || value.key.starts_with(ROOTS[3])
+                    || value.key.starts_with(ROOTS[4])
+                    || value.key.starts_with(ROOTS[5]))
         );
     }
 }

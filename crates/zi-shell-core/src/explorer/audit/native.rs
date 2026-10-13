@@ -255,8 +255,12 @@ mod tests {
         let roots = [
             format!("{}\\parent", fixture.0),
             format!("{}\\actions", fixture.0),
+            format!("{}\\directory\\ZiCode.DevTools", fixture.0),
+            format!("{}\\background\\ZiCode.DevTools", fixture.0),
+            format!("{}\\directory-actions", fixture.0),
+            format!("{}\\background-actions", fixture.0),
         ];
-        let refs = [roots[0].as_str(), roots[1].as_str()];
+        let refs: Vec<_> = roots.iter().map(String::as_str).collect();
         let dir = std::env::current_dir().unwrap();
         let mut plan =
             super::super::super::plan(&dir.join("ZiDevTools.exe"), &dir.join("config.yml"))

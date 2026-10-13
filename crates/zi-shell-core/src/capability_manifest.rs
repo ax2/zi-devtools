@@ -10,18 +10,26 @@ pub const MAX_MSI_PROPERTY_BYTES: usize = 255;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Manifest {
     targets: Vec<Target>,
+    folder_contexts: bool,
 }
 impl Manifest {
     pub fn current() -> Self {
         Self {
             targets: Target::ALL.to_vec(),
+            folder_contexts: true,
         }
     }
     pub fn targets(&self) -> &[Target] {
         &self.targets
     }
+    pub fn supports_folder_contexts(&self) -> bool {
+        self.folder_contexts
+    }
     pub fn encode(&self) -> Vec<u8> {
         let mut text = HEADER.to_owned();
+        if self.folder_contexts {
+            text.push_str("choose-folders\n");
+        }
         for target in &self.targets {
             text.push_str(target.action_id());
             text.push('\n');
@@ -33,8 +41,11 @@ impl Manifest {
     /// of the protocol header.
     pub fn encode_msi_property(&self) -> Result<String, String> {
         let mut text = MSI_PREFIX.to_owned();
+        if self.folder_contexts {
+            text.push_str("choose-folders");
+        }
         for (index, target) in self.targets.iter().enumerate() {
-            if index > 0 {
+            if index > 0 || self.folder_contexts {
                 text.push(',');
             }
             text.push_str(target.action_id());
@@ -52,13 +63,21 @@ impl Manifest {
             .strip_prefix(MSI_PREFIX)
             .ok_or("未知MSI菜单能力属性协议")?;
         let mut declaration = HEADER.to_owned();
+        let mut folder_contexts = false;
         if !body.is_empty() {
             for action in body.split(',') {
-                if Target::from_action_id(action).is_none() {
+                if action == "choose-folders" {
+                    if folder_contexts {
+                        return Err("MSI菜单能力属性含重复动作".into());
+                    }
+                    folder_contexts = true;
+                    declaration.push_str("choose-folders\n");
+                } else if Target::from_action_id(action).is_some() {
+                    declaration.push_str(action);
+                    declaration.push('\n');
+                } else {
                     return Err("MSI菜单能力属性含未知动作或空项".into());
                 }
-                declaration.push_str(action);
-                declaration.push('\n');
             }
         }
         Self::parse(declaration.as_bytes())
@@ -72,7 +91,15 @@ impl Manifest {
             .strip_prefix(HEADER)
             .ok_or("未知菜单能力协议或缺少文件选择入口")?;
         let mut targets = Vec::new();
+        let mut folder_contexts = false;
         for line in body.split_terminator('\n') {
+            if line == "choose-folders" {
+                if folder_contexts {
+                    return Err("菜单能力声明含重复动作".into());
+                }
+                folder_contexts = true;
+                continue;
+            }
             let target = Target::from_action_id(line).ok_or("未知菜单接收动作")?;
             if targets.contains(&target) {
                 return Err("菜单能力声明含重复动作".into());
@@ -80,7 +107,10 @@ impl Manifest {
             targets.push(target);
         }
         // Preserve the producer's order; the byte declaration is part of identity.
-        Ok(Self { targets })
+        Ok(Self {
+            targets,
+            folder_contexts,
+        })
     }
 }
 
@@ -93,6 +123,7 @@ mod tests {
         assert_eq!(Manifest::parse(&current.encode()).unwrap(), current);
         let old = Manifest::parse(format!("{HEADER}import:csv\n").as_bytes()).unwrap();
         assert_eq!(old.targets(), &[Target::Csv]);
+        assert!(!old.supports_folder_contexts());
         assert_ne!(old, current);
         assert!(
             Manifest::parse(HEADER.as_bytes())

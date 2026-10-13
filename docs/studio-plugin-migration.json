@@ -1266,7 +1266,7 @@
     {
       "sourceToolId": "disk-inspector",
       "title": "目录空间分析",
-      "sourceVersion": "1.0.0",
+      "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1275,9 +1275,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "明确选择目录后后台只读统计逻辑大小、直属子目录与大文件；跳过链接及重解析点，限制时间/条目/深度，支持取消并标出部分结果；不删除文件",
+          "scope": "明确选择目录或通过 Explorer 文件夹菜单启动后台只读统计；统计逻辑大小、直属子目录与大文件，跳过链接及重解析点，限制时间/条目/深度，支持取消并标出部分结果；不删除文件",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.0.0",
+          "sourceVersion": "1.0.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }

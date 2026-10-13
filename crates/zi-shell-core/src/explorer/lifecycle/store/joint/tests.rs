@@ -54,7 +54,7 @@ fn native_capability_snapshot_and_menu_subset_rollback_together() {
             .keys()
             .filter(|(key, _)| key.ends_with("\\command"))
             .count(),
-        12
+        14
     );
     let backward = preview_at(
         operation
@@ -456,9 +456,16 @@ impl Fixture {
         let menus = [
             format!(r"Software\Classes\{classes_root}\parent"),
             format!(r"Software\Classes\{alias_root}"),
+            format!(r"Software\Classes\{classes_root}\directory\ZiCode.DevTools"),
+            format!(r"Software\Classes\{classes_root}\background\ZiCode.DevTools"),
+            format!(r"Software\Classes\{classes_root}\directory-actions"),
+            format!(r"Software\Classes\{classes_root}\background-actions"),
         ];
         let result = Self {
-            scope: Scope { ledger, menus },
+            scope: Scope {
+                ledger,
+                menus: menus.into(),
+            },
             classes_root,
             alias_root,
         };
