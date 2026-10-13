@@ -283,7 +283,7 @@ def main():
         record = ledger['entries'][0]['installation']
         assert record['identity']['kind'] == 'portable'
         assert ledger['active'] == record['identity']
-        assert record['menu_capabilities'] == packages[label][3]
+        assert record['menu_capabilities'] == 'ZiDevTools/ShellCapabilities/1\nchoose-files\n'
         actions = read_tree(MENU_ROOTS[1])
         assert len([key for key in actions if key.endswith('\\command')]) == 1
         assert '\\shell\\choose\\command' in actions
