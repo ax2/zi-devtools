@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import struct
-import subprocess
 import sys
 import time
 import zlib
@@ -222,8 +221,7 @@ def main():
              'genericReceiverVisible': False}
     try:
         existing_windows = {hwnd for hwnd, cls, _ in top_windows() if cls == 'CabinetWClass'}
-        subprocess.Popen(['explorer.exe', f'/n,/select,{source}'],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.startfile(str(source.parent))
         deadline = time.monotonic() + 30
         last_windows = []
         while time.monotonic() < deadline:
