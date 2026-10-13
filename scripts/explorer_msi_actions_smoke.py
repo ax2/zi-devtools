@@ -571,7 +571,7 @@ def main():
             result = subprocess.run(
                 [sys.executable, str(ROOT / 'scripts/explorer_visible_menu_probe.py'),
                  str(source), str(target / 'ZiDevTools.exe')],
-                capture_output=True, text=True, encoding='utf-8', timeout=90, check=False)
+                capture_output=True, text=True, encoding='utf-8', timeout=150, check=False)
             if result.returncode:
                 raise RuntimeError(
                     f'Visible Explorer probe exited {result.returncode}; '
@@ -585,13 +585,24 @@ def main():
             assert explorer_visible_proof['contextMenuVisible']
             assert explorer_visible_proof['productCascadeClicked']
             assert explorer_visible_proof['genericReceiverVisible']
+            assert explorer_visible_proof['directoryReceiverLaunched']
+            assert explorer_visible_proof['backgroundReceiverLaunched']
+            assert explorer_visible_proof['directoryReceiverInvocation']['folderArgumentMatched']
+            assert explorer_visible_proof['backgroundReceiverInvocation']['folderArgumentMatched']
+            assert explorer_visible_proof['directoryReceiverInvocation']['receiverProcessExited']
+            assert explorer_visible_proof['backgroundReceiverInvocation']['receiverProcessExited']
             assert explorer_visible_proof['fixtureUnchanged']
             assert all(Path(explorer_visible_proof[key]).is_file()
                        and Path(explorer_visible_proof[key]).stat().st_size > 0
-                       for key in ('rootScreenshot', 'receiverScreenshot'))
+                       for key in ('rootScreenshot', 'receiverScreenshot',
+                                   'directoryScreenshot', 'directoryReceiverScreenshot',
+                                   'backgroundScreenshot', 'backgroundReceiverScreenshot'))
+            assert all(Path(explorer_visible_proof[key]['windowScreenshot']).is_file()
+                       and Path(explorer_visible_proof[key]['windowScreenshot']).stat().st_size > 0
+                       for key in ('directoryReceiverInvocation', 'backgroundReceiverInvocation'))
             assert source.read_bytes() == b'synthetic installed Shell invocation fixture'
             assert not source.with_name('.zidevtools-shell-receipt.json').exists()
-            proofs.append('real installed desktop payload displayed the MSI cascade in Explorer; physical click opened the receiver submenu; screenshots captured; synthetic source unchanged; receiver not invoked')
+            proofs.append('real installed desktop payload displayed all three MSI menus; selected-folder and background actions launched the installed disk-inspector with exact %1/%V paths; windows captured and test processes closed; synthetic source unchanged')
             with socket.socket() as reserve:
                 reserve.bind(('127.0.0.1', 0))
                 port = reserve.getsockname()[1]

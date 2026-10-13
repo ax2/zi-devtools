@@ -2,8 +2,9 @@
 
 This is intentionally limited to GitHub-hosted Windows runners. It creates
 synthetic fixtures under RUNNER_TEMP, captures the real visible menus, and checks
-the installed product cascade and receiver labels in all three contexts. It
-never invokes a receiver or edits the fixture file.
+the installed product cascade and receiver labels in all three contexts. It also
+clicks the installed folder receiver and verifies its executable and exact folder
+argument. The synthetic source file is never edited.
 """
 import ctypes
 import hashlib
@@ -12,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import struct
+import subprocess
 import sys
 import time
 import zlib
@@ -132,6 +134,8 @@ def main():
         ('SetCursorPos', [ctypes.c_int, ctypes.c_int], ctypes.c_bool),
         ('GetMenuItemRect', [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint,
                              ctypes.c_void_p], ctypes.c_bool),
+        ('GetWindowThreadProcessId', [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)],
+         ctypes.c_uint32),
         ('SendMessageW', [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t,
                           ctypes.c_ssize_t], ctypes.c_ssize_t),
     ]:
@@ -189,6 +193,108 @@ def main():
             item = Input(0, InputUnion(mouse=MouseInput(0, 0, 0, flag, 0, None)))
             assert user.SendInput(1, ctypes.byref(item), ctypes.sizeof(Input)) == 1
 
+    def receiver_process_info(hwnd):
+        pid = ctypes.c_uint32()
+        assert user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid)) and pid.value
+        command = (
+            "$ErrorActionPreference='Stop'; "
+            f"$p=Get-CimInstance Win32_Process -Filter 'ProcessId = {pid.value}'; "
+            "if ($null -eq $p) { throw 'receiver process not found' }; "
+            "$p | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"
+        )
+        powershell = shutil.which('pwsh.exe') or shutil.which('powershell.exe')
+        assert powershell, 'PowerShell is required to verify the launched receiver process'
+        result = subprocess.run(
+            [powershell, '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
+            capture_output=True, text=True, encoding='utf-8', timeout=15, check=False)
+        assert result.returncode == 0, f'Could not inspect receiver process {pid.value}'
+        value = json.loads(result.stdout)
+        assert int(value['ProcessId']) == pid.value
+        return pid.value, value
+
+    def verify_and_capture_receiver(menu, action_index, expected_folder, screenshot):
+        baseline = {hwnd for hwnd, _, _ in top_windows()}
+        action_rect = ScreenRect()
+        assert user.GetMenuItemRect(explorer, menu, action_index, ctypes.byref(action_rect))
+        assert action_rect.right > action_rect.left and action_rect.bottom > action_rect.top
+        click_at((action_rect.left + action_rect.right) // 2,
+                 (action_rect.top + action_rect.bottom) // 2)
+        deadline = time.monotonic() + 30
+        hwnd = None
+        while time.monotonic() < deadline:
+            matches = [
+                (candidate, title) for candidate, _, title in top_windows()
+                if candidate not in baseline
+                and title.startswith('Zi DevTools')
+                and 'disk-inspector' in title
+            ]
+            if len(matches) == 1:
+                hwnd = matches[0][0]
+                break
+            assert len(matches) <= 1, f'Multiple folder receiver windows appeared: {matches}'
+            time.sleep(.2)
+        assert hwnd, 'Clicking the folder receiver did not open the disk-inspector window'
+        pid, process = receiver_process_info(hwnd)
+        image = Path(process['ExecutablePath']).resolve(strict=True)
+        assert image == executable, 'Folder receiver did not launch the installed desktop EXE'
+        command_line = process['CommandLine']
+        shell = ctypes.WinDLL('shell32', use_last_error=True)
+        shell.CommandLineToArgvW.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_int)]
+        shell.CommandLineToArgvW.restype = ctypes.POINTER(ctypes.c_wchar_p)
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel.LocalFree.restype = ctypes.c_void_p
+        argc = ctypes.c_int()
+        argv_pointer = shell.CommandLineToArgvW(command_line, ctypes.byref(argc))
+        assert argv_pointer and argc.value > 0, 'Could not parse the launched receiver arguments'
+        try:
+            argv = [argv_pointer[index] for index in range(argc.value)]
+        finally:
+            kernel.LocalFree(argv_pointer)
+        assert '--no-restore' in argv
+        assert argv[argv.index('--tool') + 1] == 'disk-inspector'
+        folder_argument = Path(argv[argv.index('--open-folder') + 1]).resolve(strict=True)
+        assert folder_argument == expected_folder.resolve(strict=True), (
+            f'Explorer supplied the wrong folder: {folder_argument}'
+        )
+        time.sleep(1.5)
+        capture_desktop(screenshot, user, gdi)
+        proof_result = dict(
+            visibleWindow=True,
+            installedExecutable=True,
+            diskInspectorSelected=True,
+            noServiceRestore=True,
+            folderArgumentMatched=True,
+            receiverProcessExited=False,
+            windowScreenshot=str(screenshot),
+        )
+
+        # Close first. If the app hides to its tray, reap only this verified
+        # runner-local process launched by the current test action.
+        user.PostMessageW(hwnd, 0x0010, 0, 0)
+        kernel.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
+        kernel.OpenProcess.restype = ctypes.c_void_p
+        kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel.WaitForSingleObject.restype = ctypes.c_uint32
+        kernel.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel.TerminateProcess.restype = ctypes.c_bool
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        kernel.CloseHandle.restype = ctypes.c_bool
+        handle = kernel.OpenProcess(0x00100001, False, pid)  # SYNCHRONIZE | PROCESS_TERMINATE
+        assert handle, 'Could not monitor the test-launched receiver process'
+        try:
+            state = kernel.WaitForSingleObject(handle, 8000)
+            if state == 0x00000102:  # WAIT_TIMEOUT: close-to-tray kept the window process alive.
+                assert image == executable and folder_argument == expected_folder.resolve(strict=True)
+                assert kernel.TerminateProcess(handle, 0), 'Could not stop the verified runner receiver process'
+                assert kernel.WaitForSingleObject(handle, 8000) == 0
+            else:
+                assert state == 0, f'Unexpected receiver process wait state: {state:#x}'
+        finally:
+            kernel.CloseHandle(handle)
+        proof_result['receiverProcessExited'] = True
+        return proof_result
+
     def text(hwnd, function):
         buffer = ctypes.create_unicode_buffer(1024)
         function(hwnd, buffer, len(buffer))
@@ -229,7 +335,9 @@ def main():
              'contextMenuVisible': False, 'productCascadeVisible': False,
              'productCascadeClicked': False, 'genericReceiverVisible': False,
              'directoryMenuVisible': False, 'directoryCascadeVisible': False,
-             'backgroundMenuVisible': False, 'backgroundCascadeVisible': False}
+             'directoryReceiverLaunched': False,
+             'backgroundMenuVisible': False, 'backgroundCascadeVisible': False,
+             'backgroundReceiverLaunched': False}
     try:
         existing_windows = {hwnd for hwnd, cls, _ in top_windows() if cls == 'CabinetWClass'}
         os.startfile(str(source.parent))
@@ -375,9 +483,13 @@ def main():
         proof['directoryReceiverLabels'] = directory_actions
         proof['directoryReceiverScreenshot'] = str(output / 'explorer-menu-directory-action.png')
         capture_desktop(proof['directoryReceiverScreenshot'], user, gdi)
+        proof['directoryReceiverInvocation'] = verify_and_capture_receiver(
+            submenu, directory_actions.index('分析目录空间…'), selected_folder,
+            output / 'explorer-directory-analysis-launched.png')
+        proof['directoryReceiverLaunched'] = True
 
         # Exercise the true Directory\Background object by right-clicking blank
-        # space in the visible file view; no directory receiver is invoked.
+        # space and verify its %V expansion reaches the installed receiver.
         press(0x1B)
         press(0x1B)
         rect = ScreenRect()
@@ -416,6 +528,10 @@ def main():
         proof['backgroundReceiverLabels'] = background_actions
         proof['backgroundReceiverScreenshot'] = str(output / 'explorer-menu-background-action.png')
         capture_desktop(proof['backgroundReceiverScreenshot'], user, gdi)
+        proof['backgroundReceiverInvocation'] = verify_and_capture_receiver(
+            submenu, background_actions.index('分析目录空间…'), output,
+            output / 'explorer-background-analysis-launched.png')
+        proof['backgroundReceiverLaunched'] = True
         proof['fixtureUnchanged'] = source.read_bytes() == original
         assert proof['fixtureUnchanged'], 'Explorer menu interaction changed the synthetic file'
         (output / 'explorer-visible-proof.json').write_text(
