@@ -59,3 +59,7 @@ PE读取仅使用已有File的Read/Seek，不LoadLibrary、不启动EXE。大小
 当前桌面构建在本机通过 --no-restore 和 --open-folder 启动后实际显示 Zi DevTools — disk-inspector 窗口且进程响应正常。窗口创建已在本机验证；没有屏幕截图或扫描完成结果，不能据此宣称结果页验收。详细摘要见技术档案 ci-20d3046-open-gl-limit/local-runtime-proof.json。
 
 扫描逻辑的完成态由现有精确回归测试验证（1 passed）：等待后台任务结束并断言结果根目录及总字节数。它与本机窗口启动记录共同覆盖接收器入口和扫描状态，但没有截图或人工检查完成后的结果页。
+
+## 本机真实应用路由与完成结果页（2026-10-13）
+
+ui-preview 捕获场景通过真实参数解析和 DevToolsApp.open_startup_arguments 路由，扫描只含两份合成文件的隔离目录；断言 Complete、2 files、13 bytes，实际渲染结果页并保存截图。图像经人工检查可读。截图发现长路径/项目名被截断，工具现为路径及结果列表增加悬停全文提示。截图未覆盖提示层，实际Explorer菜单点击与Windows 11菜单仍待验证。proof和截图见技术档案 ci-20d3046-open-gl-limit/local-ui-scan-result/。

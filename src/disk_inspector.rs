@@ -342,6 +342,16 @@ impl State {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub fn preview_folder_result(&self, expected: &Path) -> Option<(ScanStatus, u64, u64)> {
+        let result = self.result.as_ref()?;
+        (result.root == expected).then_some((
+            result.status,
+            result.progress.files,
+            result.progress.bytes,
+        ))
+    }
+
+    #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self) {
         self.path = r"C:\Projects\sample-app".to_owned();
         self.message = "扫描完成 · 合成预览，未读取本机文件".to_owned();
@@ -410,19 +420,18 @@ impl State {
         );
         ui.add_space(12.0);
         ui.horizontal(|ui| {
-            if ui
-                .add(
-                    egui::TextEdit::singleline(&mut self.path)
-                        .hint_text("本机目录路径")
-                        .desired_width(580.0)
-                        .interactive(self.receiver.is_none()),
-                )
-                .changed()
-            {
+            let path_response = ui.add(
+                egui::TextEdit::singleline(&mut self.path)
+                    .hint_text("本机目录路径")
+                    .desired_width(580.0)
+                    .interactive(self.receiver.is_none()),
+            );
+            if path_response.changed() {
                 self.launch_path = None;
                 self.result = None;
                 self.message.clear();
             }
+            path_response.on_hover_text(&self.path);
             if ui
                 .add_enabled(self.receiver.is_none(), egui::Button::new("选择目录…"))
                 .clicked()
@@ -504,7 +513,8 @@ impl State {
         for group in &result.groups {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(format!("{:>12}", size(group.bytes))).monospace());
-                ui.add_sized([190.0, 22.0], egui::Label::new(&group.path));
+                ui.add_sized([190.0, 22.0], egui::Label::new(&group.path))
+                    .on_hover_text(&group.path);
                 let share = if result.progress.bytes == 0 {
                     0.0
                 } else {
@@ -518,7 +528,7 @@ impl State {
         for file in &result.largest_files {
             ui.horizontal(|ui| {
                 ui.monospace(format!("{:>12}", size(file.bytes)));
-                ui.label(&file.path);
+                ui.label(&file.path).on_hover_text(&file.path);
             });
         }
         ui.add_space(8.0);

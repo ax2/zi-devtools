@@ -344,3 +344,11 @@ proof 和六张原始 Explorer 截图归档于 iterations/explorer-folder-contex
 本次未取得屏幕截图，也没有观察扫描完成后的结果，因此不将其记为扫描结果页验收。隔离夹具仅含两个合成小文件（47 字节），仍留在用户临时目录；清理命令被执行策略拒绝，没有影响项目文件。运行摘要保存在 ci-20d3046-open-gl-limit/local-runtime-proof.json。
 
 扫描结果另由精确回归测试 disk_inspector::tests::explorer_folder_input_opens_this_tool_and_starts_the_bounded_scan 验证：1 passed、0 failed。测试等待后台扫描完成并断言返回根目录与17字节合计值，随后由测试清理自身临时夹具。它验证目录扫描状态，不替代人工观察应用结果页；本机启动记录的 folderScanResultObserved 仍为 false。
+
+## 文件夹接收器完成扫描与结果页（本机，2026-10-13）
+
+新增 capture_ui 的 disk-inspector-folder-smoke 场景，直接用真实参数解析器构造 --no-restore、--tool disk-inspector、--open-folder，随后调用生产 DevToolsApp 启动路由。演练只扫描归档中的合成子目录：根目录8字节文件和嵌套5字节文件。程序断言最终状态 Complete、文件数2、字节数13，并在结果页渲染后输出proof与截图。命令通过；1600×1125 截图已人工检查，显示“扫描完成”、13 B、2个文件、2/3目录与条目、直属分类及最大文件，文本和层级清晰。结构化记录与图像在 ci-20d3046-open-gl-limit/local-ui-scan-result/。
+
+截图同时暴露长路径与较长结果项会被单行控件截短。路径输入框、直属分类标签和最大文件名现增加悬停全文提示；截图用于核验结果页布局，未悬停到提示层，所以提示文字本身没有截图验收。全工作区测试、全target/all-feature Clippy、cargo fmt检查及该实际渲染扫描场景通过。没有更新版本、安装MSI或更改注册表。实际Explorer子项点击仍未验证。
+
+最后，cargo build --release --locked 通过（7分41秒）。本机 target/release/ZiDevTools.exe 仍为 0.82.0-dev.105，32,404,480 字节，SHA-256 EB4186118D2E5611FA40A1553A1DC89A4D874395931AB33E7D2575F0D3659B45；没有递增dev版本或发布安装包。

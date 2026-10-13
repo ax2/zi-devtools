@@ -1811,6 +1811,83 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("disk-inspector-folder-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "Explorer folder startup scan timed out"
+            );
+            let target = self.folder.join("receiver-target");
+            if self.frames == 0 {
+                let args = zi_devtools::launch::parse_args_from([
+                    std::ffi::OsString::from("--config"),
+                    self.folder.join("services.yml").into_os_string(),
+                    std::ffi::OsString::from("--no-restore"),
+                    std::ffi::OsString::from("--tool"),
+                    std::ffi::OsString::from("disk-inspector"),
+                    std::ffi::OsString::from("--open-folder"),
+                    target.clone().into_os_string(),
+                ])
+                .expect("valid folder receiver arguments");
+                self.app
+                    .open_startup_arguments(&args)
+                    .expect("folder receiver startup route");
+            }
+            self.app.update(ctx, frame);
+            if let Some((status, files, bytes)) = self.app.preview_folder_scan_result(&target) {
+                assert_eq!(status, zi_devtools::disk_inspector::ScanStatus::Complete);
+                assert_eq!(files, 2);
+                assert_eq!(bytes, 13);
+                if !self.pending {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                    self.pending = true;
+                }
+                let screenshot = ctx.input(|input| {
+                    input.events.iter().find_map(|event| match event {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                });
+                if let Some(image) = screenshot {
+                    let bytes_rgba: Vec<u8> = image
+                        .pixels
+                        .iter()
+                        .flat_map(|pixel| pixel.to_array())
+                        .collect();
+                    image::save_buffer(
+                        self.folder.join("disk-inspector-folder-result.png"),
+                        &bytes_rgba,
+                        image.size[0] as u32,
+                        image.size[1] as u32,
+                        image::ColorType::Rgba8,
+                    )
+                    .expect("save folder receiver result screenshot");
+                    let proof = serde_json::json!({
+                        "startupRoute": true,
+                        "selectedTool": "disk-inspector",
+                        "folderArgumentMatched": true,
+                        "scanStatus": "Complete",
+                        "files": files,
+                        "bytes": bytes,
+                        "resultPageRendered": true,
+                        "screenshot": "disk-inspector-folder-result.png"
+                    });
+                    fs::write(
+                        self.folder.join("disk-inspector-folder-smoke.json"),
+                        serde_json::to_vec_pretty(&proof).expect("serialize folder scan proof"),
+                    )
+                    .expect("write folder scan proof");
+                    println!(
+                        "PASS Explorer folder startup route rendered completed scan: {files} files, {bytes} bytes"
+                    );
+                    std::process::exit(0);
+                }
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(40));
+            return;
+        }
         if smoke_mode
             .as_deref()
             .is_some_and(|mode| mode.starts_with("planner-compare"))
@@ -4329,6 +4406,12 @@ fn main() -> Result<(), eframe::Error> {
     fs::write(folder.join("订单数据.csv"), "name,count\nexample,3\n").unwrap();
     let config = folder.join("services.yml");
     fs::write(&config,format!("state_dir: '{}'\nservices:\n  demo:\n    name: Demo fixture\n    repo: '{}'\n    command: 'echo fixture'\n",folder.join("state").display(),folder.display())).unwrap();
+    if std::env::args().nth(3).as_deref() == Some("disk-inspector-folder-smoke") {
+        let receiver = folder.join("receiver-target");
+        fs::create_dir_all(receiver.join("nested")).unwrap();
+        fs::write(receiver.join("root.bin"), [0u8; 8]).unwrap();
+        fs::write(receiver.join(r"nested\small.txt"), b"abcde").unwrap();
+    }
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("Zi DevTools — UI preview fixture")
         .with_inner_size([1280.0, 900.0]);

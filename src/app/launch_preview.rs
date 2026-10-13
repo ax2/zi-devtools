@@ -1,8 +1,19 @@
 //! Checks the actual startup/intake/application routes, without bypassing UI import.
 use super::*;
 use crate::intake::Target;
+use std::path::Path;
 
 impl DevToolsApp {
+    pub fn preview_folder_scan_result(
+        &self,
+        expected: &Path,
+    ) -> Option<(crate::disk_inspector::ScanStatus, u64, u64)> {
+        if self.page != Page::DiskInspector {
+            return None;
+        }
+        self.disk_inspector.preview_folder_result(expected)
+    }
+
     pub fn preview_launch_prepare(
         &mut self,
         ctx: &egui::Context,
