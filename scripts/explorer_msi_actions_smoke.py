@@ -122,9 +122,12 @@ def main():
     parser.add_argument('--outer-commit-probe', action='store_true')
     parser.add_argument('--real-payload', action='store_true')
     parser.add_argument('--installed-shell-invoke', action='store_true')
+    parser.add_argument('--explorer-visible', action='store_true')
     args = parser.parse_args()
+    actual_payload = args.real_payload or args.explorer_visible
     assert not (args.real_payload and (args.outer_transaction_probe or args.outer_commit_probe))
-    assert not (args.installed_shell_invoke and (args.real_payload or args.outer_transaction_probe or args.outer_commit_probe))
+    assert not ((args.installed_shell_invoke or args.explorer_visible)
+                and (args.outer_transaction_probe or args.outer_commit_probe))
     build = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
     probe = build / 'debug/examples/msi_fixture_state.exe'
     inspector = build / 'debug/examples/capability_inspect.exe'
@@ -157,12 +160,12 @@ def main():
         # Synthetic MZ payloads satisfy the product's documented basic check;
         # never execute them or claim full PE/Shell/UI acceptance.
         content = ((build / 'debug/ZiDevTools.exe').read_bytes()
-                   if args.real_payload and label != 'old'
+                   if actual_payload and label != 'old'
                    else probe.read_bytes())
         for name in ['ZiDevTools.exe', 'ZiDevToolsMcp.exe']:
-            if args.real_payload and label != 'old':
+            if actual_payload and label != 'old':
                 data = (build / 'debug' / name).read_bytes()
-            elif args.installed_shell_invoke and name == 'ZiDevToolsMcp.exe':
+            elif (args.installed_shell_invoke or args.explorer_visible) and name == 'ZiDevToolsMcp.exe':
                 # The installed-menu probe requires MCP to declare no UI
                 # receivers; this unused fixture slot must not reuse the app.
                 data = inspector.read_bytes()
@@ -284,6 +287,7 @@ def main():
     known_ids = set()
     proofs = []
     shell_invocation_proof = None
+    explorer_visible_proof = None
     counter = 0
     portable_config = folder / 'portable-fixture.yml'
     portable_config.write_text('services: {}\n')
@@ -458,9 +462,10 @@ def main():
         portable_active()
         assert invoke('old', 'ZIMENU=1')[0] == 0
         before = installed('old')
-        if args.installed_shell_invoke:
+        if args.installed_shell_invoke or args.explorer_visible:
             source = folder / '真实文件 %1 & 空格.json'
             source.write_bytes(b'synthetic installed Shell invocation fixture')
+        if args.installed_shell_invoke:
             menu_before = [read_tree(path) for path in MENU_ROOTS]
             result = subprocess.run(
                 [str(installed_menu), str(source), str(target / 'ZiDevTools.exe'), '--invoke-generic'],
@@ -540,9 +545,35 @@ def main():
             proofs.append(label + ' failure restores old file, menu generation and record')
         assert invoke('new')[0] == 0
         installed('new')
-        if args.real_payload:
-            # Execute the installed product, not a build-tree substitute.
+        if args.real_payload or args.explorer_visible:
+            # Verify that MSI installed the same MCP payload used to build the menu.
             assert (target / 'ZiDevToolsMcp.exe').read_bytes() == (build / 'debug/ZiDevToolsMcp.exe').read_bytes()
+        if args.explorer_visible:
+            source = folder / '真实文件 %1 & 空格.json'
+            source.write_bytes(b'synthetic installed Shell invocation fixture')
+            result = subprocess.run(
+                [sys.executable, str(ROOT / 'scripts/explorer_visible_menu_probe.py'),
+                 str(source), str(target / 'ZiDevTools.exe')],
+                capture_output=True, text=True, encoding='utf-8', timeout=90, check=False)
+            if result.returncode:
+                raise RuntimeError(
+                    f'Visible Explorer probe exited {result.returncode}; '
+                    f'stdout={result.stdout[-4000:]!r}; stderr={result.stderr[-4000:]!r}')
+            proof_path = source.parent / 'explorer-visible-proof.json'
+            if proof_path.is_file():
+                explorer_visible_proof = json.loads(proof_path.read_text(encoding='utf-8'))
+            assert explorer_visible_proof, f'Visible Explorer probe returned no proof: {result.stdout[-4000:]!r}'
+            assert explorer_visible_proof['explorerWindowVisible']
+            assert explorer_visible_proof['contextMenuVisible']
+            assert explorer_visible_proof['productCascadeClicked']
+            assert explorer_visible_proof['genericReceiverVisible']
+            assert explorer_visible_proof['fixtureUnchanged']
+            assert all(Path(explorer_visible_proof[key]).is_file()
+                       and Path(explorer_visible_proof[key]).stat().st_size > 0
+                       for key in ('rootScreenshot', 'receiverScreenshot'))
+            assert source.read_bytes() == b'synthetic installed Shell invocation fixture'
+            assert not source.with_name('.zidevtools-shell-receipt.json').exists()
+            proofs.append('real installed desktop payload displayed the MSI cascade in Explorer; physical click opened the receiver submenu; screenshots captured; synthetic source unchanged; receiver not invoked')
             with socket.socket() as reserve:
                 reserve.bind(('127.0.0.1', 0))
                 port = reserve.getsockname()[1]
@@ -609,8 +640,9 @@ def main():
             observe('--forget', operation_id)
         assert read_tree(RECOVERY_ROOT) == {'': {}}
         (folder / 'proof.json').write_text(json.dumps(dict(passed=proofs, productionTemplateWired=True,
-            realCurrentPayload=args.real_payload, legacyReleaseUpgradeVerified=False,
+            realCurrentPayload=actual_payload, legacyReleaseUpgradeVerified=False,
             installedShellInvocation=shell_invocation_proof,
+            explorerVisibleMenu=explorer_visible_proof,
             automaticCompletion=True, receiptRecovery=True,
             scope='ordinary candidates auto-complete; receipt-only candidate resumes via guarded desktop backend after native API return'), indent=2) + '\n')
         print('PASS: candidate DLL MSI transactions with automatic post-InstallFinalize completion')

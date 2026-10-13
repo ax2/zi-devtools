@@ -6,6 +6,7 @@ on:
       - 'crates/zi-msi-actions/**'
       - 'crates/zi-shell-core/**'
       - 'scripts/explorer_msi_actions_smoke.py'
+      - 'scripts/explorer_visible_menu_probe.py'
       - 'scripts/explorer_production_msi_smoke.py'
       - 'scripts/installer_ui_probe.py'
       - 'examples/explorer_installed_menu.rs'
@@ -20,6 +21,7 @@ on:
       - 'crates/zi-msi-actions/**'
       - 'crates/zi-shell-core/**'
       - 'scripts/explorer_msi_actions_smoke.py'
+      - 'scripts/explorer_visible_menu_probe.py'
       - 'scripts/explorer_production_msi_smoke.py'
       - 'scripts/installer_ui_probe.py'
       - 'examples/explorer_installed_menu.rs'
@@ -39,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [standalone, outer-rollback, outer-commit, real-payload, shell-invocation, production-upgrade]
+        mode: [standalone, outer-rollback, outer-commit, real-payload, shell-invocation, explorer-visible, production-upgrade]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,7 +66,7 @@ jobs:
         if: matrix.mode == 'production-upgrade'
         run: cargo test --workspace --locked
       - name: Build actual desktop payload for installed execution
-        if: matrix.mode == 'real-payload' || matrix.mode == 'production-upgrade'
+        if: matrix.mode == 'real-payload' || matrix.mode == 'explorer-visible' || matrix.mode == 'production-upgrade'
         run: cargo build --locked
       - name: Build read-only installed Shell menu discovery probe
         if: matrix.mode == 'production-upgrade' || matrix.mode == 'shell-invocation'
@@ -94,6 +96,8 @@ jobs:
             python scripts/explorer_msi_actions_smoke.py --real-payload
           } elseif ('${{ matrix.mode }}' -eq 'shell-invocation') {
             python scripts/explorer_msi_actions_smoke.py --installed-shell-invoke
+          } elseif ('${{ matrix.mode }}' -eq 'explorer-visible') {
+            python scripts/explorer_msi_actions_smoke.py --explorer-visible
           } elseif ('${{ matrix.mode }}' -eq 'production-upgrade') {
             python scripts/explorer_production_msi_smoke.py --baseline-dir $env:ZI_PUBLIC_MSI_BASELINE --ui-probe
           } else {
@@ -108,6 +112,8 @@ jobs:
           path: |
             ${{ runner.temp }}/zi-msi-menu-*/*.safe.log
             ${{ runner.temp }}/zi-msi-menu-*/proof.json
+            ${{ runner.temp }}/zi-msi-menu-*/explorer-visible-proof.json
+            ${{ runner.temp }}/zi-msi-menu-*/*.png
             ${{ runner.temp }}/zi-msi-production-*/*.safe.log
             ${{ runner.temp }}/zi-msi-production-*/proof.json
             ${{ runner.temp }}/zi-msi-production-*/ui-*.png
