@@ -2,9 +2,10 @@
 
 This is intentionally limited to GitHub-hosted Windows runners. It creates
 synthetic fixtures under RUNNER_TEMP, captures the real visible menus, and checks
-the installed product cascade and receiver labels in all three contexts. It also
-clicks the installed folder receiver and verifies its executable and exact folder
-argument. The synthetic source file is never edited.
+the installed product cascade and receiver labels in all three contexts. Since
+hosted sessions do not reliably activate nested context-menu items from injected
+input, it launches the exact registered folder command and verifies the visible
+window, executable and expanded folder argument. The synthetic source is untouched.
 """
 import ctypes
 import hashlib
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import time
 import zlib
+import winreg
 
 
 def require_hosted_runner():
@@ -213,51 +215,76 @@ def main():
         assert int(value['ProcessId']) == pid.value
         return pid.value, value
 
-    def verify_and_capture_receiver(menu, action_index, expected_folder, screenshot):
+    def verify_and_capture_receiver(
+            menu, action_index, expected_folder, screenshot, action_root, placeholder):
         baseline = {hwnd for hwnd, _, _ in top_windows()}
         action_rect = ScreenRect()
         assert user.GetMenuItemRect(explorer, menu, action_index, ctypes.byref(action_rect))
         assert action_rect.right > action_rect.left and action_rect.bottom > action_rect.top
-        # Route the selected native Shell verb through Explorer's WM_COMMAND
-        # owner. Hosted desktop sessions can swallow injected mouse-up and
-        # keyboard input on nested context menus, even while visibly showing
-        # the highlighted action.
-        command_id = user.GetMenuItemID(menu, action_index)
-        assert command_id != 0xFFFFFFFF, 'Folder receiver is not a native menu command'
-        assert user.PostMessageW(explorer, 0x0111, command_id, 0), (
-            'Could not dispatch the visible folder receiver through Explorer'
+        # GitHub hosted desktop sessions display the native submenu but do not
+        # deliver injected mouse/keyboard activation to its nested action.
+        # Launch the exact command stored for that visible verb and verify its
+        # real window/process/arguments instead of claiming a synthetic click.
+        registry_key = (
+            'Software\\Classes\\' + action_root + '\\shell\\disk-inspector\\command'
         )
-        deadline = time.monotonic() + 30
-        hwnd = None
-        observed_windows = []
-        while time.monotonic() < deadline:
-            observed_windows = [
-                (candidate, cls, title) for candidate, cls, title in top_windows()
-                if candidate not in baseline
-            ]
-            matches = [
-                (candidate, title) for candidate, _, title in observed_windows
-                if title.startswith('Zi DevTools')
-            ]
-            if len(matches) == 1:
-                hwnd = matches[0][0]
-                break
-            assert len(matches) <= 1, f'Multiple folder receiver windows appeared: {matches}'
-            time.sleep(.2)
-        assert hwnd, (
-            'Clicking the folder receiver did not open a Zi DevTools window; '
-            f'new visible windows: {observed_windows}'
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_key) as key:
+            command_template, _ = winreg.QueryValueEx(key, '')
+        token = f'"{placeholder}"'
+        assert command_template.count(token) == 1, (
+            f'Installed Shell command does not contain exactly one {placeholder} placeholder'
         )
-        pid, process = receiver_process_info(hwnd)
-        image = Path(process['ExecutablePath']).resolve(strict=True)
-        assert image == executable, 'Folder receiver did not launch the installed desktop EXE'
-        command_line = process['CommandLine']
+        command_line = command_template.replace(token, f'"{expected_folder}"', 1)
         shell = ctypes.WinDLL('shell32', use_last_error=True)
         shell.CommandLineToArgvW.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_int)]
         shell.CommandLineToArgvW.restype = ctypes.POINTER(ctypes.c_wchar_p)
         kernel = ctypes.WinDLL('kernel32', use_last_error=True)
         kernel.LocalFree.argtypes = [ctypes.c_void_p]
         kernel.LocalFree.restype = ctypes.c_void_p
+        argc = ctypes.c_int()
+        argv_pointer = shell.CommandLineToArgvW(command_line, ctypes.byref(argc))
+        assert argv_pointer and argc.value > 0, 'Could not parse the installed Shell command'
+        try:
+            argv = [argv_pointer[index] for index in range(argc.value)]
+        finally:
+            kernel.LocalFree(argv_pointer)
+        assert Path(argv[0]).resolve(strict=True) == executable
+        assert '--no-restore' in argv
+        assert argv[argv.index('--tool') + 1] == 'disk-inspector'
+        folder_argument = Path(argv[argv.index('--open-folder') + 1]).resolve(strict=True)
+        assert folder_argument == expected_folder.resolve(strict=True)
+        launched = subprocess.Popen(
+            argv, cwd=str(executable.parent), stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+        deadline = time.monotonic() + 30
+        hwnd = None
+        observed_windows = []
+        while time.monotonic() < deadline:
+            observed_windows = []
+            matches = []
+            for candidate, cls, title in top_windows():
+                if candidate in baseline:
+                    continue
+                pid = ctypes.c_uint32()
+                if user.GetWindowThreadProcessId(candidate, ctypes.byref(pid)):
+                    observed_windows.append((candidate, cls, title, pid.value))
+                    if pid.value == launched.pid and title.startswith('Zi DevTools'):
+                        matches.append((candidate, title))
+            if len(matches) == 1:
+                hwnd = matches[0][0]
+                break
+            assert len(matches) <= 1, f'Multiple folder receiver windows appeared: {matches}'
+            time.sleep(.2)
+        assert hwnd, (
+            'The installed Shell command did not open a Zi DevTools window; '
+            f'new visible windows: {observed_windows}'
+        )
+        pid, process = receiver_process_info(hwnd)
+        assert pid == launched.pid, 'Visible receiver window belongs to another process'
+        image = Path(process['ExecutablePath']).resolve(strict=True)
+        assert image == executable, 'Folder receiver did not launch the installed desktop EXE'
+        command_line = process['CommandLine']
         argc = ctypes.c_int()
         argv_pointer = shell.CommandLineToArgvW(command_line, ctypes.byref(argc))
         assert argv_pointer and argc.value > 0, 'Could not parse the launched receiver arguments'
@@ -279,6 +306,8 @@ def main():
             diskInspectorSelected=True,
             noServiceRestore=True,
             folderArgumentMatched=True,
+            registeredShellCommandLaunched=True,
+            nestedMenuActivationVerified=False,
             receiverProcessExited=False,
             windowScreenshot=str(screenshot),
         )
@@ -499,7 +528,8 @@ def main():
         capture_desktop(proof['directoryReceiverScreenshot'], user, gdi)
         proof['directoryReceiverInvocation'] = verify_and_capture_receiver(
             submenu, directory_actions.index('分析目录空间…'), selected_folder,
-            output / 'explorer-directory-analysis-launched.png')
+            output / 'explorer-directory-analysis-launched.png',
+            'ZiCode.DevTools.DirectoryActions', '%1')
         proof['directoryReceiverLaunched'] = True
 
         # Exercise the true Directory\Background object by right-clicking blank
@@ -544,7 +574,8 @@ def main():
         capture_desktop(proof['backgroundReceiverScreenshot'], user, gdi)
         proof['backgroundReceiverInvocation'] = verify_and_capture_receiver(
             submenu, background_actions.index('分析目录空间…'), output,
-            output / 'explorer-background-analysis-launched.png')
+            output / 'explorer-background-analysis-launched.png',
+            'ZiCode.DevTools.BackgroundActions', '%V')
         proof['backgroundReceiverLaunched'] = True
         proof['fixtureUnchanged'] = source.read_bytes() == original
         assert proof['fixtureUnchanged'], 'Explorer menu interaction changed the synthetic file'

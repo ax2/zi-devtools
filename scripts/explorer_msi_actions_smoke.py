@@ -589,6 +589,10 @@ def main():
             assert explorer_visible_proof['backgroundReceiverLaunched']
             assert explorer_visible_proof['directoryReceiverInvocation']['folderArgumentMatched']
             assert explorer_visible_proof['backgroundReceiverInvocation']['folderArgumentMatched']
+            assert explorer_visible_proof['directoryReceiverInvocation']['registeredShellCommandLaunched']
+            assert explorer_visible_proof['backgroundReceiverInvocation']['registeredShellCommandLaunched']
+            assert not explorer_visible_proof['directoryReceiverInvocation']['nestedMenuActivationVerified']
+            assert not explorer_visible_proof['backgroundReceiverInvocation']['nestedMenuActivationVerified']
             assert explorer_visible_proof['directoryReceiverInvocation']['receiverProcessExited']
             assert explorer_visible_proof['backgroundReceiverInvocation']['receiverProcessExited']
             assert explorer_visible_proof['fixtureUnchanged']
@@ -602,7 +606,7 @@ def main():
                        for key in ('directoryReceiverInvocation', 'backgroundReceiverInvocation'))
             assert source.read_bytes() == b'synthetic installed Shell invocation fixture'
             assert not source.with_name('.zidevtools-shell-receipt.json').exists()
-            proofs.append('real installed desktop payload displayed all three MSI menus; selected-folder and background actions launched the installed disk-inspector with exact %1/%V paths; windows captured and test processes closed; synthetic source unchanged')
+            proofs.append('real installed desktop payload displayed all three MSI menus; exact installed selected-folder and background Shell commands launched disk-inspector with expanded %1/%V paths; windows captured and test processes closed; nested-menu input activation remains unverified on hosted desktop sessions; synthetic source unchanged')
             with socket.socket() as reserve:
                 reserve.bind(('127.0.0.1', 0))
                 port = reserve.getsockname()[1]
