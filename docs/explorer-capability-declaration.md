@@ -53,3 +53,7 @@ PE读取仅使用已有File的Read/Seek，不LoadLibrary、不启动EXE。大小
 [Explorer/MSI 工作流 38415199930](https://github.com/ax2/zi-devtools/actions/runs/38415199930) 和同提交常规 [CI 38415199761](https://github.com/ax2/zi-devtools/actions/runs/38415199761) 通过。当前带 choose-folders 的实际桌面载荷在 Windows Server 2022 的 Explorer 中显示选中目录与目录背景入口及“分析目录空间…”级联项；六张 Explorer 截图已检查。文件夹命令参数展开及目标路径匹配通过。
 
 实际接收器窗口未通过托管 runner 验收：启动尝试遇到 egui_glow requires opengl 2.0+，且 nestedMenuActivationVerified=false。因此本轮只确认菜单显示与参数构造，不确认子菜单真实点击、目录扫描或结果页面。应在具备 OpenGL 2.0 的交互式 Windows 桌面继续验证；Windows 11 现代菜单和多选也仍待验证。
+
+## 本机窗口启动补充（2026-10-13）
+
+当前桌面构建在本机通过 --no-restore 和 --open-folder 启动后实际显示 Zi DevTools — disk-inspector 窗口且进程响应正常。窗口创建已在本机验证；没有屏幕截图或扫描完成结果，不能据此宣称结果页验收。详细摘要见技术档案 ci-20d3046-open-gl-limit/local-runtime-proof.json。

@@ -336,3 +336,9 @@ Explorer MSI 工作流 [38415199930](https://github.com/ax2/zi-devtools/actions/
 该 runner 不具备应用所需的 OpenGL 2.0。测试器按已注册命令尝试启动实际安装的 disk-inspector 接收器时，应用窗口不可见并以明确的 egui_glow OpenGL 错误退出。probe 另记录 nestedMenuActivationVerified=false：不能据此声称真实点击该子项已成功启动 UI，也没有证明目录扫描或结果页体验。此结果属于托管 runner 的图形限制，不能外推为用户桌面上的启动失败。Windows 11 现代菜单、多选、用户桌面实机以及正式发布验收仍未覆盖。
 
 proof 和六张原始 Explorer 截图归档于 iterations/explorer-folder-contexts-2026-10-13/ci-20d3046-open-gl-limit/。未在开发机安装 MSI、未写入本机注册表、未发布应用。
+
+## 本机文件夹接收器启动验证（2026-10-13）
+
+使用当前构建产物 target/release/ZiDevTools.exe（0.82.0-dev.105，SHA-256 032751BA7C55F8D15D39DD0F048D1565B06D9D3F69154BEBACA381B80F96CFB8）和一次性合成文件夹，通过 --no-restore、--tool disk-inspector、--open-folder 参数启动。实际进程路径与参数匹配，窗口标题为“Zi DevTools — disk-inspector”，窗口响应正常；因此本机 OpenGL 环境通过了 hosted runner 未通过的窗口创建关口。关闭窗口后进程依产品的关闭到托盘行为继续运行；核实进程路径、PID和专属夹具参数后，只终止本次测试进程。
+
+本次未取得屏幕截图，也没有观察扫描完成后的结果，因此不将其记为扫描结果页验收。隔离夹具仅含两个合成小文件（47 字节），仍留在用户临时目录；清理命令被执行策略拒绝，没有影响项目文件。运行摘要保存在 ci-20d3046-open-gl-limit/local-runtime-proof.json。
