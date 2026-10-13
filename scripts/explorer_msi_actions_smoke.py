@@ -133,6 +133,7 @@ def main():
     assert probe.is_file() and inspector.is_file() and actions.is_file(), 'Build candidate DLL, capability inspector, and core observer first'
     if args.installed_shell_invoke:
         assert installed_menu.is_file(), 'Build the installed Shell menu probe first'
+        assert inspector.is_file(), 'Build an MCP fixture without desktop capabilities'
     def observe(*arguments):
         return json.loads(subprocess.check_output([str(probe), *map(str, arguments)], timeout=30))
     if not args.compile_only:
@@ -159,8 +160,14 @@ def main():
                    if args.real_payload and label != 'old'
                    else probe.read_bytes())
         for name in ['ZiDevTools.exe', 'ZiDevToolsMcp.exe']:
-            data = ((build / 'debug' / name).read_bytes()
-                    if args.real_payload and label != 'old' else content)
+            if args.real_payload and label != 'old':
+                data = (build / 'debug' / name).read_bytes()
+            elif args.installed_shell_invoke and name == 'ZiDevToolsMcp.exe':
+                # The installed-menu probe requires MCP to declare no UI
+                # receivers; this unused fixture slot must not reuse the app.
+                data = inspector.read_bytes()
+            else:
+                data = content
             (payload / name).write_bytes(data)
         inspection = json.loads(subprocess.check_output([str(inspector), str(payload / 'ZiDevTools.exe')], timeout=30))
         assert inspection['declarationPresent'] and inspection['declarationProperty']
