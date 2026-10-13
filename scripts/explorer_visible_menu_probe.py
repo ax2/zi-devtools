@@ -323,7 +323,7 @@ def main():
         assert proof['fixtureUnchanged'], 'Explorer menu interaction changed the synthetic file'
         (output / 'explorer-visible-proof.json').write_text(
             json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-        print(json.dumps(proof, ensure_ascii=False))
+        print(json.dumps(proof, ensure_ascii=True))
     finally:
         # Dismiss our menus and close only the uniquely named disposable window.
         try:
