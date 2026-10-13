@@ -70,9 +70,17 @@ pub fn msi_default_config_path() -> Result<PathBuf> {
 }
 
 /// Target metadata from the package before InstallFiles; not file verification.
-pub fn msi_candidate(directory: &Path, version: &str, digest: &str) -> Result<Installation> {
+pub fn msi_candidate(
+    directory: &Path,
+    version: &str,
+    digest: &str,
+    declaration_property: &str,
+) -> Result<Installation> {
     ensure!(directory.is_absolute(), "MSI目标目录必须为绝对路径");
     crate::msi::numeric_version(version)?;
+    let declaration =
+        crate::capability_manifest::Manifest::parse_msi_property(declaration_property)
+            .map_err(anyhow::Error::msg)?;
     let mut record = Installation::new(
         Identity::Msi,
         canonical_location(&directory.join("ZiDevTools.exe"), true)?,
@@ -80,6 +88,7 @@ pub fn msi_candidate(directory: &Path, version: &str, digest: &str) -> Result<In
         version.into(),
     );
     record.executable_sha256 = Some(digest.into());
+    record.menu_capabilities = Some(String::from_utf8(declaration.encode())?);
     record.validate()?;
     Ok(record)
 }

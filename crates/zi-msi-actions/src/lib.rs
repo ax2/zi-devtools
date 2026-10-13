@@ -136,6 +136,7 @@ fn prepare(session: u32) -> Result<()> {
             Path::new(&property(session, "INSTALLFOLDER")?),
             &property(session, "ProductVersion")?,
             &property(session, "ZiMenuBinarySha256")?,
+            &property(session, "ZiMenuCapabilities")?,
         )?;
         recovery::Intent::Install {
             installation: candidate,

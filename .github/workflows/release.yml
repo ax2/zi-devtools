@@ -63,6 +63,7 @@ jobs:
           $global:LASTEXITCODE = 0
       - run: cargo build --release --locked
       - run: cargo build -p zi-msi-actions --release --locked
+      - run: cargo build -p zi-shell-core --release --example capability_inspect --locked
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'

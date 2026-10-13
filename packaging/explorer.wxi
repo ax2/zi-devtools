@@ -2,6 +2,7 @@
   <!-- Shared by the shipping package and disposable lifecycle candidates. -->
   <Property Id="ZIMENU" Secure="yes" />
   <Property Id="ZiMenuBinarySha256" Value="$(var.AppExeSha256)" />
+  <Property Id="ZiMenuCapabilities" Value="$(var.AppMenuCapabilities)" />
   <Binary Id="ZiMenuActions" SourceFile="$(var.MenuActionsDll)" />
   <CustomAction Id="ZiMenuPrepare" BinaryRef="ZiMenuActions" DllEntry="ZiMenuPrepare" Execute="immediate" Return="check" Impersonate="yes" />
   <CustomAction Id="ZiMenuRollback" BinaryRef="ZiMenuActions" DllEntry="ZiMenuRollback" Execute="rollback" Return="check" Impersonate="yes" />

@@ -46,6 +46,11 @@ fn main() -> Result<()> {
             .map(|t| t.action_id())
             .collect::<Vec<_>>()
     });
+    let declaration_property = declaration
+        .as_ref()
+        .map(|value| value.encode_msi_property())
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
     let plan = if arguments.len() == 3 {
         let declaration = declaration
             .as_ref()
@@ -61,7 +66,8 @@ fn main() -> Result<()> {
     println!(
         "{}",
         serde_json::json!({"sha256":format!("{:x}",digest.finalize()), "bytes":length,
-        "declarationPresent":declaration.is_some(), "actions":targets, "executableStarted":false,
+        "declarationPresent":declaration.is_some(), "declarationProperty":declaration_property,
+        "actions":targets, "executableStarted":false,
         "publisherAuthenticated":false, "ledgerUpdated":false, "declaredPlan":plan})
     );
     std::hint::black_box(file.metadata().context("Final consistency check")?);

@@ -30,6 +30,8 @@ def main():
     args = parser.parse_args()
     build = ROOT / 'target'
     observer = build / 'debug/examples/msi_fixture_state.exe'
+    inspector = build / 'debug/examples/capability_inspect.exe'
+    assert inspector.is_file(), 'Build the read-only capability inspector first'
 
     def observe(*values):
         return json.loads(subprocess.check_output([str(observer), *map(str, values)], timeout=30))
@@ -47,9 +49,13 @@ def main():
     version = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))['package']['version'].split('-')[0]
     payloads = {name: (build / 'release' / name).read_bytes() for name in ['ZiDevTools.exe', 'ZiDevToolsMcp.exe']}
     digest = hashlib.sha256(payloads['ZiDevTools.exe']).hexdigest()
+    inspection = json.loads(subprocess.check_output([str(inspector), str(build / 'release/ZiDevTools.exe')], timeout=30))
+    assert inspection['declarationPresent'] and inspection['declarationProperty']
+    assert inspection['sha256'] == digest
     package = folder / 'current.msi'
     subprocess.run([os.environ.get('ZIDEVTOOLS_WIX', 'wix'), 'build', 'packaging/windows.wxs',
                     '-arch', 'x64', '-d', f'AppVersion={version}', '-d', f'AppExeSha256={digest}',
+                    '-d', f"AppMenuCapabilities={inspection['declarationProperty']}",
                     '-d', f'MenuActionsDll={build / "release/zi_msi_actions.dll"}', '-o', str(package)],
                    cwd=ROOT, check=True, timeout=180)
     metadata = observe('--package', package)
@@ -119,6 +125,9 @@ def main():
         installation = current['entries'][0]['installation']
         assert installation['identity'] == {'kind': 'msi'}
         assert installation['version'] == version and installation['executable_sha256'] == digest
+        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\n' + ''.join(
+            action + '\n' for action in inspection['actions'])
+        assert installation['menu_capabilities'] == expected_manifest
         assert all(read_tree(key)['']['zicodebinarysha256'][0] == digest for key in MENU_ROOTS)
         invoke('inherited-repair', package, code, 'REINSTALL=ALL REINSTALLMODE=amus', 5)
         assert len(observe()['entries']) == 1 and all(read_tree(key) for key in MENU_ROOTS)

@@ -117,14 +117,50 @@ fn native_default_config_uses_the_effective_profile_layout() {
 fn package_candidate_is_bounded_metadata_and_not_proof_of_installed_files() {
     let files = Files::new();
     let target = files.0.join("not-installed");
-    let candidate = msi_candidate(&target, "9.8.7", &"a".repeat(64)).unwrap();
+    let declaration = crate::capability_manifest::Manifest::current()
+        .encode_msi_property()
+        .unwrap();
+    let candidate = msi_candidate(&target, "9.8.7", &"a".repeat(64), &declaration).unwrap();
     assert_eq!(candidate.identity, Identity::Msi);
+    assert_eq!(
+        candidate.menu_capabilities.as_deref(),
+        Some(
+            std::str::from_utf8(&crate::capability_manifest::Manifest::current().encode()).unwrap()
+        )
+    );
     assert_eq!(candidate.executable.file_name().unwrap(), "ZiDevTools.exe");
     assert!(!target.exists());
     assert!(VerifiedFile::verify(&candidate).is_err());
-    assert!(msi_candidate(Path::new("relative"), "9.8.7", &"a".repeat(64)).is_err());
-    assert!(msi_candidate(&target, "9.8.7-dev.1", &"a".repeat(64)).is_err());
-    assert!(msi_candidate(&target, "9.8.7", "not-a-digest").is_err());
+    assert!(
+        msi_candidate(
+            Path::new("relative"),
+            "9.8.7",
+            &"a".repeat(64),
+            &declaration
+        )
+        .is_err()
+    );
+    assert!(msi_candidate(&target, "9.8.7-dev.1", &"a".repeat(64), &declaration).is_err());
+    assert!(msi_candidate(&target, "9.8.7", "not-a-digest", &declaration).is_err());
+    assert!(msi_candidate(&target, "9.8.7", &"a".repeat(64), "not-a-capability").is_err());
+    assert!(
+        msi_candidate(
+            &target,
+            "9.8.7",
+            &"a".repeat(64),
+            "ZiDevTools/ShellCapabilities/1|"
+        )
+        .is_ok()
+    );
+    assert!(
+        msi_candidate(
+            &target,
+            "9.8.7",
+            &"a".repeat(64),
+            &format!("ZiDevTools/ShellCapabilities/1|{}", "x".repeat(240))
+        )
+        .is_err()
+    );
     assert!(!target.exists());
 }
 

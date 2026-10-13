@@ -125,8 +125,9 @@ def main():
     assert not (args.real_payload and (args.outer_transaction_probe or args.outer_commit_probe))
     build = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
     probe = build / 'debug/examples/msi_fixture_state.exe'
+    inspector = build / 'debug/examples/capability_inspect.exe'
     actions = build / 'debug/zi_msi_actions.dll'
-    assert probe.is_file() and actions.is_file(), 'Build candidate DLL and core observer first'
+    assert probe.is_file() and inspector.is_file() and actions.is_file(), 'Build candidate DLL, capability inspector, and core observer first'
     def observe(*arguments):
         return json.loads(subprocess.check_output([str(probe), *map(str, arguments)], timeout=30))
     if not args.compile_only:
@@ -151,11 +152,14 @@ def main():
         # never execute them or claim full PE/Shell/UI acceptance.
         content = ((build / 'debug/ZiDevTools.exe').read_bytes()
                    if args.real_payload and label != 'old'
-                   else b'MZ' + (b'old' if label == 'old' else b'new') * 64)
+                   else probe.read_bytes())
         for name in ['ZiDevTools.exe', 'ZiDevToolsMcp.exe']:
             data = ((build / 'debug' / name).read_bytes()
                     if args.real_payload and label != 'old' else content)
             (payload / name).write_bytes(data)
+        inspection = json.loads(subprocess.check_output([str(inspector), str(payload / 'ZiDevTools.exe')], timeout=30))
+        assert inspection['declarationPresent'] and inspection['declarationProperty']
+        assert inspection['sha256'] == hashlib.sha256(content).hexdigest()
         tree = ET.parse(ROOT / 'packaging/windows.wxs')
         package = tree.getroot().find(NS + 'Package')
         package.set('Version', version)
@@ -173,6 +177,7 @@ def main():
         for child in shared:
             package.append(child)
         package.find(NS + "Property[@Id='ZiMenuBinarySha256']").set('Value', hashlib.sha256(content).hexdigest())
+        package.find(NS + "Property[@Id='ZiMenuCapabilities']").set('Value', inspection['declarationProperty'])
         package.find(NS + "Binary[@Id='ZiMenuActions']").set('SourceFile', str(actions))
         ET.SubElement(package, NS + 'Property', Id='ZIFIXTURE_DISABLE_ROLLBACK', Secure='yes')
         sequence = package.find(NS + 'InstallExecuteSequence')
@@ -236,7 +241,9 @@ def main():
         if fault == 'commit':
             assert order['ZiMenuCommitReady'] < order['MenuFixtureFailure'] < order['InstallExecute']
         compile_orders[label] = dict(zip(required, positions))
-        packages[label] = (msi, metadata, content)
+        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\n' + ''.join(
+            action + '\n' for action in inspection['actions'])
+        packages[label] = (msi, metadata, content, expected_manifest)
     assert len({value[1]['desktop_component'] for value in packages.values()}) == 1
     (folder / 'compile-proof.json').write_text(json.dumps(dict(sequences=compile_orders,
         dllSha256=hashlib.sha256(actions.read_bytes()).hexdigest()), indent=2) + '\n')
@@ -276,7 +283,7 @@ def main():
         record = ledger['entries'][0]['installation']
         assert record['identity']['kind'] == 'portable'
         assert ledger['active'] == record['identity']
-        assert record['menu_capabilities'] == 'ZiDevTools/ShellCapabilities/1\nchoose-files\n'
+        assert record['menu_capabilities'] == packages[label][3]
         actions = read_tree(MENU_ROOTS[1])
         assert len([key for key in actions if key.endswith('\\command')]) == 1
         assert '\\shell\\choose\\command' in actions

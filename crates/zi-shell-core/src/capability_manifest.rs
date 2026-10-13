@@ -4,6 +4,8 @@ use crate::file_actions::Target;
 
 pub const MAX_BYTES: usize = 4096;
 const HEADER: &str = "ZiDevTools/ShellCapabilities/1\nchoose-files\n";
+const MSI_PREFIX: &str = "ZiDevTools/ShellCapabilities/1|";
+pub const MAX_MSI_PROPERTY_BYTES: usize = 255;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Manifest {
@@ -25,6 +27,41 @@ impl Manifest {
             text.push('\n');
         }
         text.into_bytes()
+    }
+    /// Compact, versioned representation for the Windows Installer Property
+    /// table. The named action order is retained; choose-files is always part
+    /// of the protocol header.
+    pub fn encode_msi_property(&self) -> Result<String, String> {
+        let mut text = MSI_PREFIX.to_owned();
+        for (index, target) in self.targets.iter().enumerate() {
+            if index > 0 {
+                text.push(',');
+            }
+            text.push_str(target.action_id());
+        }
+        if text.len() > MAX_MSI_PROPERTY_BYTES {
+            return Err("MSI菜单能力属性超出Windows Installer长度限制".into());
+        }
+        Ok(text)
+    }
+    pub fn parse_msi_property(property: &str) -> Result<Self, String> {
+        if property.len() > MAX_MSI_PROPERTY_BYTES || !property.is_ascii() {
+            return Err("MSI菜单能力属性过大或不是ASCII".into());
+        }
+        let body = property
+            .strip_prefix(MSI_PREFIX)
+            .ok_or("未知MSI菜单能力属性协议")?;
+        let mut declaration = HEADER.to_owned();
+        if !body.is_empty() {
+            for action in body.split(',') {
+                if Target::from_action_id(action).is_none() {
+                    return Err("MSI菜单能力属性含未知动作或空项".into());
+                }
+                declaration.push_str(action);
+                declaration.push('\n');
+            }
+        }
+        Self::parse(declaration.as_bytes())
     }
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() > MAX_BYTES || !bytes.ends_with(b"\n") {
