@@ -220,18 +220,27 @@ def main():
              'productCascadeClicked': False,
              'genericReceiverVisible': False}
     try:
-        subprocess.Popen(['explorer.exe', f'/select,{source}'],
+        existing_windows = {hwnd for hwnd, cls, _ in top_windows() if cls == 'CabinetWClass'}
+        subprocess.Popen(['explorer.exe', '/n', f'/select,{source}'],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.monotonic() + 30
+        last_windows = []
         while time.monotonic() < deadline:
-            matches = [(hwnd, cls, title) for hwnd, cls, title in top_windows()
-                       if cls == 'CabinetWClass' and fixture_dir.lower() in title.lower()]
+            last_windows = [(hwnd, cls, title) for hwnd, cls, title in top_windows()
+                            if cls == 'CabinetWClass']
+            matches = [(hwnd, cls, title) for hwnd, cls, title in last_windows
+                       if fixture_dir.lower() in title.lower()]
+            if not matches:
+                # Explorer may omit the folder name from its modern window title.
+                matches = [(hwnd, cls, title) for hwnd, cls, title in last_windows
+                           if hwnd not in existing_windows]
             if len(matches) == 1:
                 explorer = matches[0][0]
                 break
-            assert len(matches) <= 1, f'Multiple fixture Explorer windows: {matches}'
+            assert len(matches) <= 1, f'Multiple new Explorer windows: {matches}'
             time.sleep(.2)
-        assert explorer, f'Explorer did not open the disposable folder {fixture_dir}'
+        assert explorer, (f'Explorer did not open the disposable folder {fixture_dir}; '
+                          f'visible File Explorer windows were {last_windows}')
         proof['explorerWindowVisible'] = True
         assert user.SetForegroundWindow(explorer)
         time.sleep(.5)
