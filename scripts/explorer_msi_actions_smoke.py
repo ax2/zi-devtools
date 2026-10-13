@@ -279,7 +279,7 @@ def main():
         assert record['menu_capabilities'] == 'ZiDevTools/ShellCapabilities/1\nchoose-files\n'
         actions = read_tree(MENU_ROOTS[1])
         assert len([key for key in actions if key.endswith('\\command')]) == 1
-        assert 'shell\\choose\\command' in actions
+        assert '\\shell\\choose\\command' in actions
         assert not any('import:' in key for key in actions)
         receipt = observe('--config', portable_config, '--no-restore', '--open-files', portable_file)
         assert receipt['fixtureOnly'] and not receipt['contentRead'] and not receipt['executed']
