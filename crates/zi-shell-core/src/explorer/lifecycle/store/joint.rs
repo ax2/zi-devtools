@@ -223,7 +223,7 @@ pub(in crate::explorer) fn apply(prepared: &MenuPrepared) -> Result<()> {
     apply_at(prepared, &Scope::production(), true)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "ui-preview"))]
 pub(in crate::explorer) fn unapplicable_fixture(ledger: Prepared) -> MenuPrepared {
     // Deliberately inconsistent image: if a preview-only guard regresses, the
     // plan consistency check still rejects before any product registry writes.

@@ -54,6 +54,10 @@ pub struct Installation {
     pub version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub executable_sha256: Option<String>,
+    /// Exact declaration bound to executable_sha256; absent means the frozen
+    /// legacy registration layout, never the maintaining program's new actions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub menu_capabilities: Option<String>,
 }
 impl Installation {
     pub fn new(identity: Identity, executable: PathBuf, config: PathBuf, version: String) -> Self {
@@ -64,10 +68,19 @@ impl Installation {
             config,
             version,
             executable_sha256: None,
+            menu_capabilities: None,
         }
     }
     fn validate(&self) -> Result<()> {
         self.identity.validate()?;
+        if let Some(declaration) = &self.menu_capabilities {
+            crate::capability_manifest::Manifest::parse(declaration.as_bytes())
+                .map_err(anyhow::Error::msg)?;
+            ensure!(
+                self.executable_sha256.is_some(),
+                "菜单能力快照缺少绑定的程序摘要"
+            );
+        }
         if let Some(digest) = &self.executable_sha256 {
             ensure!(
                 digest.len() == 64
@@ -101,6 +114,23 @@ impl Installation {
         template_path(&self.config)?;
         Ok(())
     }
+    pub fn menu_declaration(&self) -> Result<crate::capability_manifest::Manifest> {
+        // Protocols 1–3 emitted exactly this layout. Preserve registered legacy
+        // behavior; do not infer new capability support from a version string.
+        const LEGACY: &str = concat!(
+            "ZiDevTools/ShellCapabilities/1\nchoose-files\n",
+            "import:csv\nimport:tsv\nimport:json-data\nimport:json\n",
+            "import:java-trace\nimport:django-trace\nimport:java-threads\n",
+            "import:java-gc\nimport:django-sql\nimport:celery\nimport:files\n"
+        );
+        crate::capability_manifest::Manifest::parse(
+            self.menu_capabilities
+                .as_deref()
+                .unwrap_or(LEGACY)
+                .as_bytes(),
+        )
+        .map_err(anyhow::Error::msg)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,7 +159,7 @@ pub struct Ledger {
 impl Default for Ledger {
     fn default() -> Self {
         Self {
-            schema_version: 3,
+            schema_version: 4,
             owner: OWNER.into(),
             revision: 0,
             active: None,
@@ -157,9 +187,9 @@ impl Ledger {
             .map(|entry| &entry.installation)
     }
     pub fn validate(&self) -> Result<()> {
-        ensure!(matches!(self.schema_version, 1..=3), "安装记录协议不受支持");
+        ensure!(matches!(self.schema_version, 1..=4), "安装记录协议不受支持");
         ensure!(
-            self.schema_version == 3 || self.pending_msi.is_none(),
+            self.schema_version >= 3 || self.pending_msi.is_none(),
             "旧安装协议不能携带待恢复操作"
         );
         if let Some(id) = &self.pending_msi {
@@ -183,6 +213,10 @@ impl Ledger {
         let mut identities = BTreeMap::new();
         let mut revisions = std::collections::BTreeSet::new();
         for entry in &self.entries {
+            ensure!(
+                self.schema_version >= 4 || entry.installation.menu_capabilities.is_none(),
+                "旧登记协议不能携带菜单能力快照"
+            );
             entry.installation.validate()?;
             ensure!(
                 entry.updated_at_revision > 0 && entry.updated_at_revision <= self.revision,
@@ -261,7 +295,11 @@ pub(in crate::explorer) fn menu_plan(installation: &Installation) -> Result<supe
         .executable_sha256
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("安装记录缺少程序摘要，需先核验此程序"))?;
-    let mut result = super::plan(&installation.executable, &installation.config)?;
+    let mut result = super::plan_declared(
+        &installation.executable,
+        &installation.config,
+        &installation.menu_declaration()?,
+    )?;
     for value in &mut result.values {
         if value.name == "ZiCodeMenuProtocol" {
             value.value = "2".into();
@@ -308,7 +346,7 @@ pub fn prepare(before: &Ledger, change: Change, eligible: &Eligible) -> Result<P
     };
     let selects_entry = explicitly_selected.is_some();
     let mut after = before.clone();
-    after.schema_version = 3;
+    after.schema_version = 4;
     after.revision = before
         .revision
         .checked_add(1)

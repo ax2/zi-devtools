@@ -144,7 +144,7 @@ impl VerifiedFile {
             digest: format!("{:x}", hasher.finalize()),
         })
     }
-    fn record(&self, identity: Identity, program_version: &str) -> Installation {
+    fn record(&self, identity: Identity, program_version: &str) -> Result<Installation> {
         let mut result = Installation::new(
             identity,
             self.executable.clone(),
@@ -152,7 +152,13 @@ impl VerifiedFile {
             program_version.into(),
         );
         result.executable_sha256 = Some(self.digest.clone());
-        result
+        let mut file = self._file.try_clone()?;
+        let length = file.metadata()?.len();
+        let declaration = crate::capability_image::read(&mut file, length)?
+            .context("此程序没有菜单能力声明，不能新增登记；已有旧登记可继续维护原布局")?;
+        result.menu_capabilities = Some(String::from_utf8(declaration.encode())?);
+        result.validate()?;
+        Ok(result)
     }
     pub(super) fn verify(record: &Installation) -> Result<Self> {
         record.validate()?;
@@ -163,7 +169,7 @@ impl VerifiedFile {
         } else {
             None
         };
-        let result =
+        let mut result =
             Self::open_with_default(&record.executable, &record.config, default.as_deref())?;
         ensure!(
             Some(&result.digest) == record.executable_sha256.as_ref()
@@ -171,6 +177,15 @@ impl VerifiedFile {
                 && result.config == record.config,
             "程序或路径身份已变化，请重新预览安装/修复"
         );
+        if let Some(expected) = &record.menu_capabilities {
+            let length = result._file.metadata()?.len();
+            let declaration = crate::capability_image::read(&mut result._file, length)?
+                .context("已登记程序的菜单能力声明消失")?;
+            ensure!(
+                declaration.encode() == expected.as_bytes(),
+                "程序能力声明已变化，请重新预览"
+            );
+        }
         if matches!(record.identity, Identity::Portable(_)) {
             ensure_portable_origin(&result.executable)?;
         }
@@ -282,12 +297,13 @@ pub fn preview(config: &Path, request: Request, program_version: &str) -> Result
             let identity = existing.map_or_else(Identity::portable, |entry| {
                 entry.installation.identity.clone()
             });
-            let mut installation = verified.record(identity.clone(), program_version);
+            let mut installation = verified.record(identity.clone(), program_version)?;
             if let Some(entry) = existing {
                 if entry.installation.executable_sha256 == installation.executable_sha256
                     && entry.installation.executable == installation.executable
                     && entry.installation.config == installation.config
                     && entry.installation.version == installation.version
+                    && entry.installation.menu_capabilities == installation.menu_capabilities
                 {
                     installation = entry.installation.clone();
                     (
@@ -415,9 +431,32 @@ fn notify_shell() {
 
 #[cfg(feature = "ui-preview")]
 pub fn fixture_preview(config: &Path, program_version: &str) -> Result<Ticket> {
-    let mut ticket = preview(config, Request::Install, program_version)?;
-    ticket.preview_only = true;
-    Ok(ticket)
+    // Synthetic model only: never reads product registry or registers capture EXE.
+    let binding = binding(config)?;
+    let mut installation = Installation::new(
+        Identity::portable(),
+        binding.0.clone(),
+        binding.1.clone(),
+        program_version.into(),
+    );
+    installation.executable_sha256 = Some("a".repeat(64));
+    installation.menu_capabilities =
+        Some("ZiDevTools/ShellCapabilities/1\nchoose-files\nimport:csv\nimport:json\n".into());
+    let prepared = prepare(
+        &Ledger::default(),
+        Change::Put {
+            installation: installation.clone(),
+            expected_generation: None,
+            activate: true,
+        },
+        &Eligible(vec![installation]),
+    )?;
+    Ok(Ticket {
+        prepared: joint::unapplicable_fixture(prepared),
+        binding,
+        title: "能力快照确认示例",
+        preview_only: true,
+    })
 }
 
 #[cfg(test)]

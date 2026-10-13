@@ -108,4 +108,4 @@ pub fn read<R: Read + Seek>(reader: &mut R, length: u64) -> Result<Option<Manife
 
 #[cfg(test)]
 #[path = "capability_image_tests.rs"]
-mod tests;
+pub(crate) mod tests;

@@ -241,6 +241,7 @@ impl Undo {
         ensure!(self.schema_version == 2, "旧逆操作不支持完成回执");
         self.require_applied(current)?;
         let mut after = current.clone();
+        after.schema_version = 4;
         after.revision = current
             .revision
             .checked_add(1)
@@ -257,7 +258,7 @@ impl Undo {
     pub fn rollback(&self, current: &Ledger, eligible: &Eligible) -> Result<Prepared> {
         self.require_applied(current)?;
         let mut after = current.clone();
-        after.schema_version = 3;
+        after.schema_version = 4;
         after.pending_msi = None;
         after.revision = current
             .revision

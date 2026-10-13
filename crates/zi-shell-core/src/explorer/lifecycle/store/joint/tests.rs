@@ -9,6 +9,70 @@ pub(in crate::explorer::lifecycle::store) struct Fixture {
 static FIXTURE_SETUP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[test]
+fn native_capability_snapshot_and_menu_subset_rollback_together() {
+    let fixture = Fixture::new();
+    let mut portable = record(Identity::portable());
+    portable.menu_capabilities =
+        Some("ZiDevTools/ShellCapabilities/1\nchoose-files\nimport:csv\n".into());
+    let initial = preview_at(
+        put(
+            &Ledger::default(),
+            portable.clone(),
+            None,
+            &[portable.clone()],
+        ),
+        &fixture.scope,
+    )
+    .unwrap();
+    apply_at(&initial, &fixture.scope, true).unwrap();
+    let old_menu = fixture.menu();
+    assert_eq!(
+        old_menu
+            .values
+            .keys()
+            .filter(|(key, _)| key.ends_with("\\command"))
+            .count(),
+        2
+    );
+    let mut msi = record(Identity::Msi);
+    msi.menu_capabilities =
+        Some(String::from_utf8(crate::capability_manifest::Manifest::current().encode()).unwrap());
+    let operation = super::super::super::msi_operation::install(
+        &fixture.ledger(),
+        msi.clone(),
+        true,
+        &Eligible(vec![msi.clone(), portable.clone()]),
+    )
+    .unwrap();
+    let forward = preview_at(operation.plan().clone(), &fixture.scope).unwrap();
+    apply_at(&forward, &fixture.scope, true).unwrap();
+    let full_ledger = fixture.ledger();
+    let full_menu = fixture.menu();
+    assert_eq!(
+        full_menu
+            .values
+            .keys()
+            .filter(|(key, _)| key.ends_with("\\command"))
+            .count(),
+        12
+    );
+    let backward = preview_at(
+        operation
+            .undo()
+            .rollback(&full_ledger, &Eligible(vec![portable.clone()]))
+            .unwrap(),
+        &fixture.scope,
+    )
+    .unwrap();
+    apply_at(&backward, &fixture.scope, false).unwrap();
+    assert_eq!(fixture.ledger(), full_ledger);
+    assert_eq!(fixture.menu(), full_menu);
+    apply_at(&backward, &fixture.scope, true).unwrap();
+    assert_eq!(fixture.ledger().active(), Some(&portable));
+    assert_eq!(fixture.menu(), old_menu);
+}
+
+#[test]
 fn native_full_ledger_uninstall_reserves_undo_capacity_and_finalizes_atomically() {
     use super::super::super::msi_operation;
     for restore in [false, true] {
@@ -276,7 +340,7 @@ fn msi_undo_preserves_later_portable_selection_and_migrates_native_legacy_ledger
     assert_eq!(fixture.ledger(), legacy);
     assert_eq!(fixture.menu(), first.after);
     apply_at(&forward, &fixture.scope, true).unwrap();
-    assert_eq!(fixture.ledger().schema_version, 3);
+    assert_eq!(fixture.ledger().schema_version, 4);
     let added = record(Identity::portable());
     let later = preview_at(
         put(

@@ -252,7 +252,7 @@ fn legacy_schema_reads_and_migrates_but_invalid_cursors_and_protocols_refuse() {
     let old: Ledger = serde_json::from_value(value.clone()).unwrap();
     old.validate().unwrap();
     let migrated = prepare(&old, Change::Activate(Identity::Msi), &Eligible(vec![m])).unwrap();
-    assert_eq!(migrated.result().schema_version, 3);
+    assert_eq!(migrated.result().schema_version, 4);
     assert!(
         migrated.result().msi_cursor.is_some() && migrated.result().activation_cursor.is_some()
     );
@@ -261,7 +261,7 @@ fn legacy_schema_reads_and_migrates_but_invalid_cursors_and_protocols_refuse() {
             "msi_cursor",
             serde_json::json!(uuid::Uuid::new_v4().to_string()),
         ),
-        ("schema_version", serde_json::json!(4)),
+        ("schema_version", serde_json::json!(5)),
     ] {
         let mut bad = value.clone();
         bad[field] = invalid;
@@ -406,7 +406,7 @@ fn old_receipts_migrate_without_claiming_a_new_pending_operation() {
     old.validate().unwrap();
     assert!(legacy.complete(&old).is_err());
     let restored = legacy.rollback(&old, &Eligible(vec![])).unwrap();
-    assert_eq!(restored.result().schema_version, 3);
+    assert_eq!(restored.result().schema_version, 4);
     assert!(restored.result().entries().is_empty());
     assert!(restored.result().pending_msi_operation().is_none());
     for version in [1, 2] {

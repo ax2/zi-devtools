@@ -1,5 +1,101 @@
 use super::*;
 
+#[test]
+fn capability_snapshots_roundtrip_filter_and_survive_fallback_and_undo() {
+    let mut portable = sample(Identity::portable());
+    portable.executable_sha256 = Some("a".repeat(64));
+    portable.menu_capabilities =
+        Some("ZiDevTools/ShellCapabilities/1\nchoose-files\nimport:csv\n".into());
+    let first = put(
+        &Ledger::default(),
+        portable.clone(),
+        None,
+        &[portable.clone()],
+    );
+    let roundtrip: Ledger =
+        serde_json::from_slice(&serde_json::to_vec(first.result()).unwrap()).unwrap();
+    roundtrip.validate().unwrap();
+    assert_eq!(
+        roundtrip.active().unwrap().menu_capabilities,
+        portable.menu_capabilities
+    );
+    assert_eq!(
+        menu_plan(&portable)
+            .unwrap()
+            .values
+            .iter()
+            .filter(|v| v.key.ends_with("\\command"))
+            .count(),
+        2
+    );
+    let mut msi = sample(Identity::Msi);
+    msi.executable_sha256 = Some("b".repeat(64));
+    msi.menu_capabilities =
+        Some(String::from_utf8(crate::capability_manifest::Manifest::current().encode()).unwrap());
+    let install = msi_operation::install(
+        &roundtrip,
+        msi.clone(),
+        true,
+        &Eligible(vec![msi.clone(), portable.clone()]),
+    )
+    .unwrap();
+    let undo = msi_operation::Undo::from_bytes(&install.undo().to_bytes().unwrap()).unwrap();
+    let restored = undo
+        .rollback(install.plan().result(), &Eligible(vec![portable.clone()]))
+        .unwrap();
+    assert_eq!(restored.result().active(), Some(&portable));
+    assert_eq!(
+        menu_plan(restored.result().active().unwrap())
+            .unwrap()
+            .values
+            .iter()
+            .filter(|v| v.key.ends_with("\\command"))
+            .count(),
+        2
+    );
+    let mut old_protocol = serde_json::to_value(&roundtrip).unwrap();
+    old_protocol["schema_version"] = 3.into();
+    assert!(
+        serde_json::from_value::<Ledger>(old_protocol)
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    let mut invalid = portable.clone();
+    invalid.menu_capabilities = Some("unknown".into());
+    assert!(invalid.validate().is_err());
+    invalid.menu_capabilities = portable.menu_capabilities.clone();
+    invalid.executable_sha256 = None;
+    assert!(invalid.validate().is_err());
+}
+
+#[test]
+fn legacy_layout_is_frozen_and_new_protocol_migration_is_explicit() {
+    let mut legacy = sample(Identity::portable());
+    legacy.executable_sha256 = Some("a".repeat(64));
+    let current = put(&Ledger::default(), legacy.clone(), None, &[legacy.clone()]);
+    let mut value = serde_json::to_value(current.result()).unwrap();
+    value["schema_version"] = 3.into();
+    let old: Ledger = serde_json::from_value(value).unwrap();
+    old.validate().unwrap();
+    assert_eq!(legacy.menu_declaration().unwrap().targets().len(), 11);
+    let migrated = prepare(
+        &old,
+        Change::Activate(legacy.identity.clone()),
+        &Eligible(vec![legacy]),
+    )
+    .unwrap();
+    assert_eq!(migrated.result().schema_version, 4);
+    assert!(
+        migrated
+            .result()
+            .active()
+            .unwrap()
+            .menu_capabilities
+            .is_none()
+    );
+}
+
 pub(super) fn sample(identity: Identity) -> Installation {
     let root = std::env::current_dir().unwrap().join("安装资料");
     Installation::new(
@@ -249,7 +345,7 @@ fn strict_ledger_rejects_foreign_schema_duplicates_bad_paths_and_overflow() {
     );
     let json = serde_json::to_value(prepared.result()).unwrap();
     for (field, value) in [
-        ("schema_version", serde_json::json!(4)),
+        ("schema_version", serde_json::json!(5)),
         ("owner", serde_json::json!("foreign")),
         ("revision", serde_json::json!(0)),
     ] {

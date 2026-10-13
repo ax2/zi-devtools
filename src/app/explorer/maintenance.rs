@@ -305,6 +305,19 @@ impl Maintenance {
                                         });
                                         path_label(ui, "程序：", &record.executable);
                                         path_label(ui, "配置：", &record.config);
+                                        if let Ok(declaration) = record.menu_declaration() {
+                                            ui.small(if record.menu_capabilities.is_some() {
+                                                format!(
+                                                    "登记了 {} 项接收工具",
+                                                    declaration.targets().len()
+                                                )
+                                            } else {
+                                                format!(
+                                                    "沿用旧登记的 {} 项工具布局",
+                                                    declaration.targets().len()
+                                                )
+                                            });
+                                        }
                                         ui.add_space(8.0);
                                     },
                                 );
@@ -331,7 +344,13 @@ impl Maintenance {
                     ui.label("确认后由以下程序接收文件：");
                     ui.add(egui::Label::new(path_text(&active.executable)).wrap());
                     path_label(ui, "配置：", &active.config);
-                    ui.small("程序文件已核验，应用前会再次核验。菜单选择后仍需在导入页确认处理文件。");
+                    if let Ok(declaration) = active.menu_declaration() {
+                        ui.small(format!("本次入口提供 {} 项接收工具", declaration.targets().len()));
+                        if active.menu_capabilities.is_none() {
+                            ui.small("沿用旧登记的工具布局；不会自动加入此程序尚未确认支持的新动作。");
+                        }
+                    }
+                    ui.small(if controlled || ticket.preview_only() { "受控界面示例，未验证或登记此程序。" } else { "程序文件已核验，应用前会再次核验。菜单选择后仍需在导入页确认处理文件。" });
                 } else { ui.label("本次没有可用的剩余安装，将移除共享菜单入口。程序、配置和用户数据保持不变。"); }
                 let (writes, removals) = ticket.counts();
                 egui::CollapsingHeader::new("变更数量").show(ui, |ui| { ui.small(format!("更新{writes}项入口设置，移除{removals}项；确认后保留{}份安装登记。", ticket.result().entries().len())); });

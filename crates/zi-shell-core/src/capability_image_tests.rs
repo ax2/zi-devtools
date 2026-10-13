@@ -3,7 +3,7 @@ use std::io::Cursor;
 fn put32(bytes: &mut [u8], offset: usize, value: u32) {
     bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
 }
-fn fixture() -> Vec<u8> {
+pub(crate) fn fixture() -> Vec<u8> {
     let mut bytes = vec![0; 1024];
     bytes[..2].copy_from_slice(b"MZ");
     put32(&mut bytes, 60, 128);

@@ -129,9 +129,9 @@ impl DevToolsApp {
         egui::Frame::new().fill(self.colors.card).corner_radius(12.0).inner_margin(18.0).show(ui, |ui| {
             ui.strong("资源管理器右键入口");
             ui.label("开发中 · 手动登记与维护单文件经典菜单");
-            ui.small("预览并确认后更新当前用户入口；不需要管理员权限。完整多选、目录、窗口转发、MSI自动维护和现代菜单仍待完成。");
+            ui.small("预览并确认后更新当前用户入口；不需要管理员权限。MSI安装器可设置菜单；完整多选、目录、窗口转发和现代菜单继续开发。");
             self.explorer_audit.ui(ui, ctx, plan.as_ref().ok());
-            egui::CollapsingHeader::new("查看候选菜单与注册明细").default_open(expanded).show(ui, |ui| {
+            egui::CollapsingHeader::new("查看此程序的候选菜单与注册明细").default_open(expanded).show(ui, |ui| {
                 match &plan {
                     Ok(plan) => {
                         ui.label("Zi DevTools › 选择工具处理…");

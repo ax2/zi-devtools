@@ -36,7 +36,7 @@ impl Files {
         std::fs::create_dir(&root).unwrap();
         std::fs::write(
             root.join("sample.exe"),
-            b"MZsynthetic fixture, never executed",
+            crate::capability_image::tests::fixture(),
         )
         .unwrap();
         std::fs::write(root.join("config.yml"), b"services: []\n").unwrap();
@@ -64,8 +64,13 @@ fn fresh_file_hash_and_write_delete_lock_protect_commit_identity() {
     let files = Files::new();
     let verified =
         VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml")).unwrap();
-    let record = verified.record(Identity::portable(), "9.8.7");
+    let record = verified.record(Identity::portable(), "9.8.7").unwrap();
     assert_eq!(record.version, "9.8.7");
+    assert!(record.menu_capabilities.is_some());
+    let mut mismatched = record.clone();
+    mismatched.menu_capabilities =
+        Some("ZiDevTools/ShellCapabilities/1\nchoose-files\nimport:csv\n".into());
+    assert!(VerifiedFile::verify(&mismatched).is_err());
     assert!(std::fs::write(&record.executable, b"MZchanged").is_err());
     assert!(std::fs::remove_file(&record.executable).is_err());
     let check = VerifiedFile::verify(&record).unwrap();
@@ -73,6 +78,10 @@ fn fresh_file_hash_and_write_delete_lock_protect_commit_identity() {
     drop(verified);
     std::fs::write(&record.executable, b"MZchanged").unwrap();
     assert!(VerifiedFile::verify(&record).is_err());
+    let undeclared =
+        VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml")).unwrap();
+    assert!(undeclared.record(Identity::portable(), "9.8.7").is_err());
+    drop(undeclared);
     std::fs::write(files.0.join("sample.exe"), b"not an executable").unwrap();
     assert!(VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml")).is_err());
 }
@@ -124,7 +133,8 @@ fn controlled_preview_is_rejected_before_file_or_registry_application() {
     let files = Files::new();
     let record = VerifiedFile::open(&files.0.join("sample.exe"), &files.0.join("config.yml"))
         .unwrap()
-        .record(Identity::portable(), "9.8.7");
+        .record(Identity::portable(), "9.8.7")
+        .unwrap();
     let config = files.0.join("config.yml");
     let ledger = prepare(
         &Ledger::default(),
