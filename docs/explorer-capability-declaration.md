@@ -47,3 +47,9 @@ PE读取仅使用已有File的Read/Seek，不LoadLibrary、不启动EXE。大小
 [CI38404005828](https://github.com/ax2/zi-devtools/actions/runs/38404005828)七路全通过。MSI事务矩阵确认旧/合成文件-only声明仅有两个文件菜单根，当前真实桌面载荷带 `choose-folders` 时使用六个根；不支持的根必须为空。Explorer 可见作业在隔离目录中实际显示文件夹项和背景菜单，两个级联都包含“分析目录空间…”。已查看归档的六张截图；未执行接收动作或扫描。生产升级作业另外通过公开 v0.81.0 升级、安装选项/修复/卸载及用户数据保留。
 
 这验证了能力位驱动菜单注册、文件夹选择和空白处显示，不代表接收器启动或扫描 UI 的端到端体验，也不覆盖 Windows 11 现代菜单、多选及正式发布验收。proof与脱敏日志、截图归档于 `iterations/explorer-folder-contexts-2026-10-13/ci-08fb27a-visible-menu/` 和 `ci-08fb27a-production-upgrade/`。
+
+## 0.25.0 文件夹菜单托管复验补充（20d3046）
+
+[Explorer/MSI 工作流 38415199930](https://github.com/ax2/zi-devtools/actions/runs/38415199930) 和同提交常规 [CI 38415199761](https://github.com/ax2/zi-devtools/actions/runs/38415199761) 通过。当前带 choose-folders 的实际桌面载荷在 Windows Server 2022 的 Explorer 中显示选中目录与目录背景入口及“分析目录空间…”级联项；六张 Explorer 截图已检查。文件夹命令参数展开及目标路径匹配通过。
+
+实际接收器窗口未通过托管 runner 验收：启动尝试遇到 egui_glow requires opengl 2.0+，且 nestedMenuActivationVerified=false。因此本轮只确认菜单显示与参数构造，不确认子菜单真实点击、目录扫描或结果页面。应在具备 OpenGL 2.0 的交互式 Windows 桌面继续验证；Windows 11 现代菜单和多选也仍待验证。

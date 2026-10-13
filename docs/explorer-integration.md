@@ -328,3 +328,11 @@ UI表校验结果在compile-tables-v2.log及其target/zi-msi-production-4qclvusv
 完整 proof、脱敏安装日志和 Explorer 截图保存在技术档案 `iterations/explorer-folder-contexts-2026-10-13/ci-08fb27a-visible-menu/` 与 `ci-08fb27a-production-upgrade/`。本次只修复候选矩阵对能力声明的预期，没有递增应用版本；`disk-inspector` 工具版本维持 1.0.1。未在开发机安装 MSI 或写入注册表。
 
 这项结果覆盖 Windows Server 2022 经典 Explorer 菜单中的单文件、单目录和目录背景。Windows 11 现代菜单、多选、实际接收器启动、分析完成后的 UI/结果体验与正式发布验收仍待验证。
+
+## 文件夹菜单 CI 复验与托管 GUI 限制（20d3046）
+
+Explorer MSI 工作流 [38415199930](https://github.com/ax2/zi-devtools/actions/runs/38415199930) 的七个 Windows 作业全部通过；同一提交的常规 [CI 38415199761](https://github.com/ax2/zi-devtools/actions/runs/38415199761) 也通过。Windows Server 2022 上的真实 Explorer 截图覆盖文件、选中目录、目录背景及三个级联内容；截图已人工检查，中文菜单清晰，目录和背景子菜单均显示“分析目录空间…”。proof 还记录了注册命令的 %1/%V 参数展开与文件夹路径匹配，测试夹具未改变。
+
+该 runner 不具备应用所需的 OpenGL 2.0。测试器按已注册命令尝试启动实际安装的 disk-inspector 接收器时，应用窗口不可见并以明确的 egui_glow OpenGL 错误退出。probe 另记录 nestedMenuActivationVerified=false：不能据此声称真实点击该子项已成功启动 UI，也没有证明目录扫描或结果页体验。此结果属于托管 runner 的图形限制，不能外推为用户桌面上的启动失败。Windows 11 现代菜单、多选、用户桌面实机以及正式发布验收仍未覆盖。
+
+proof 和六张原始 Explorer 截图归档于 iterations/explorer-folder-contexts-2026-10-13/ci-20d3046-open-gl-limit/。未在开发机安装 MSI、未写入本机注册表、未发布应用。
