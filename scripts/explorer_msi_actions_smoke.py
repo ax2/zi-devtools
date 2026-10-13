@@ -464,12 +464,22 @@ def main():
             menu_before = [read_tree(path) for path in MENU_ROOTS]
             result = subprocess.run(
                 [str(installed_menu), str(source), str(target / 'ZiDevTools.exe'), '--invoke-generic'],
-                capture_output=True, text=True, timeout=60, check=False)
+                capture_output=True, text=True, encoding='utf-8', timeout=60, check=False)
             if result.returncode:
                 raise RuntimeError(
                     f'Installed Shell probe exited {result.returncode}; '
                     f'stdout={result.stdout[-4000:]!r}; stderr={result.stderr[-4000:]!r}')
-            native_menu = json.loads(result.stdout)
+            native_menu = None
+            for line in reversed(result.stdout.splitlines()):
+                try:
+                    candidate = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(candidate, dict) and candidate.get('installedMsiMenuResolved'):
+                    native_menu = candidate
+                    break
+            if native_menu is None:
+                raise RuntimeError(f'Installed Shell probe returned no JSON proof: {result.stdout[-4000:]!r}')
             assert native_menu['installedMsiMenuResolved']
             assert native_menu['commandInvocation']['performed']
             assert native_menu['commandInvocation']['receivedArgumentsMatch']
