@@ -304,3 +304,9 @@ UI表校验结果在compile-tables-v2.log及其target/zi-msi-production-4qclvusv
 ## 原生安装选项的键盘验证（057e0b7）
 
 [CI38143119357](https://github.com/ax2/zi-devtools/actions/runs/38143119357)的production-upgrade通过四次真实SendInput操作，覆盖方向键切换、Tab/Shift+Tab焦点顺序、从单选项Enter确认及Esc取消。前台窗口、初始/移动焦点和全部单选状态均逐步核对，实际安装结果与取消无副作用检查通过；四张对应截图已查看，焦点虚线可见、控件文字可读。完整UI卸载和实际安装菜单解析继续通过。详见[键盘场景与限制](explorer-installer-ui.md)。不将此结果扩大为缩放、所有辅助技术或Explorer窗口验收。
+
+## 安装后 Explorer 菜单实际显示与点击（89f8d5a）
+
+[CI38397930418](https://github.com/ax2/zi-devtools/actions/runs/38397930418)七路全部成功。`explorer-visible`在一次性Windows Server 2022 runner中安装真实桌面EXE载荷的MSI，Shell打开仅含一个合成JSON文件的隔离目录；通过真实Explorer文件右键菜单展示唯一`Zi DevTools`入口，鼠标点击入口后读取到“选择工具处理…”及11个接收动作。菜单安装后立即可见，无需测试器额外触发Shell刷新；合成文件字节不变，未点击接收动作。
+
+已查看两张桌面截图，并核对proof中的窗口可见、文件选择、菜单出现、级联点击、通用接收项与文件未变断言。长期档案保留proof与截图于`iterations/explorer-installation-capabilities-2026-10-13/ci-89f8d5a-visible-menu/`。这证明Windows Server 2022经典文件菜单的单文件显示和点击展开；目录/空白处、多选、Windows 11现代菜单、实际接收器启动及应用导入仍待验证。七路工作流之外不据此推断完整CI或发布通过；应用版本不变，未在开发机安装候选MSI或写入注册表。
