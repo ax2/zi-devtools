@@ -264,8 +264,12 @@ def main():
         if fault == 'commit':
             assert order['ZiMenuCommitReady'] < order['MenuFixtureFailure'] < order['InstallExecute']
         compile_orders[label] = dict(zip(required, positions))
-        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\nchoose-folders\n' + ''.join(
-            action + '\n' for action in inspection['actions'])
+        declared_actions = inspection['declarationProperty'].split('|', 1)[1].split(',')
+        supports_folder_contexts = 'choose-folders' in declared_actions
+        expected_manifest = 'ZiDevTools/ShellCapabilities/1\nchoose-files\n'
+        if supports_folder_contexts:
+            expected_manifest += 'choose-folders\n'
+        expected_manifest += ''.join(action + '\n' for action in inspection['actions'])
         packages[label] = (msi, metadata, content, expected_manifest)
     assert len({value[1]['desktop_component'] for value in packages.values()}) == 1
     (folder / 'compile-proof.json').write_text(json.dumps(dict(sequences=compile_orders,
@@ -365,7 +369,10 @@ def main():
         assert record['version'] == packages[label][1]['version']
         assert hashlib.sha256((target / 'ZiDevTools.exe').read_bytes()).hexdigest() == record['executable_sha256']
         assert (target / 'ZiDevTools.exe').read_bytes() == packages[label][2]
-        for root in MENU_ROOTS:
+        supported_roots = MENU_ROOTS if 'choose-folders\n' in packages[label][3] else MENU_ROOTS[:2]
+        unsupported_roots = [root for root in MENU_ROOTS if root not in supported_roots]
+        assert all(not read_tree(root) for root in unsupported_roots), 'Undeclared menu context was registered'
+        for root in supported_roots:
             values = read_tree(root)['']
             assert values['zicodeowner'][0] == 'com.zicode.devtools'
             assert values['zicodemenuprotocol'][0] == '2'
