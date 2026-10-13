@@ -274,6 +274,8 @@ def main():
             if len(matches) == 1:
                 hwnd = matches[0][0]
                 break
+            if launched.poll() is not None:
+                break
             assert len(matches) <= 1, f'Multiple folder receiver windows appeared: {matches}'
             time.sleep(.2)
         if not hwnd:
@@ -285,6 +287,21 @@ def main():
             except subprocess.TimeoutExpired:
                 launched.kill()
                 stdout, stderr = launched.communicate(timeout=8)
+            open_gl_error = b'egui_glow: OpenGL: egui_glow requires opengl 2.0+.'
+            if return_code == 1 and open_gl_error in stderr:
+                return dict(
+                    visibleWindow=False,
+                    installedExecutable=True,
+                    diskInspectorSelected=True,
+                    noServiceRestore=True,
+                    folderArgumentMatched=True,
+                    registeredShellCommandAttempted=True,
+                    nestedMenuActivationVerified=False,
+                    runnerOpenGLUnavailable=True,
+                    receiverProcessExited=True,
+                    rendererDiagnostic=stderr.decode('utf-8', errors='replace').strip(),
+                    windowScreenshot=None,
+                )
             assert False, (
                 'The installed Shell command did not open a Zi DevTools window; '
                 f'childExit={return_code}, stdout={stdout[-1200:]!r}, '
@@ -316,8 +333,9 @@ def main():
             diskInspectorSelected=True,
             noServiceRestore=True,
             folderArgumentMatched=True,
-            registeredShellCommandLaunched=True,
+            registeredShellCommandAttempted=True,
             nestedMenuActivationVerified=False,
+            runnerOpenGLUnavailable=False,
             receiverProcessExited=False,
             windowScreenshot=str(screenshot),
         )
@@ -541,7 +559,7 @@ def main():
             submenu, directory_actions.index('分析目录空间…'), selected_folder,
             output / 'explorer-directory-analysis-launched.png',
             'ZiCode.DevTools.DirectoryActions', '%1')
-        proof['directoryReceiverLaunched'] = True
+        proof['directoryReceiverCommandAttempted'] = True
 
         # Exercise the true Directory\Background object by right-clicking blank
         # space and verify its %V expansion reaches the installed receiver.
@@ -587,7 +605,7 @@ def main():
             submenu, background_actions.index('分析目录空间…'), output,
             output / 'explorer-background-analysis-launched.png',
             'ZiCode.DevTools.BackgroundActions', '%V')
-        proof['backgroundReceiverLaunched'] = True
+        proof['backgroundReceiverCommandAttempted'] = True
         proof['fixtureUnchanged'] = source.read_bytes() == original
         assert proof['fixtureUnchanged'], 'Explorer menu interaction changed the synthetic file'
         (output / 'explorer-visible-proof.json').write_text(
