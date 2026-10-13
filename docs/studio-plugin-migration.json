@@ -3664,7 +3664,7 @@
     {
       "sourceToolId": "recorder-tutorial",
       "title": "教程录屏辅助",
-      "sourceVersion": "0.2.0",
+      "sourceVersion": "0.3.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -3673,9 +3673,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "编码与预览共用BGRA：固定/跟随放大、全景＋鼠标放大窗（四角可选）、平滑过渡、鼠标高亮/左右键波纹、鼠标聚光灯（半径/压暗可调、离开选区关闭）。录制中调整、静态源重新合成、暂停清除瞬态；1600万像素上限。真实桌面/物理输入/混合DPI/高分辨率性能及画笔/按键/提词器继续验收。",
+          "scope": "编码与预览共用BGRA：固定/跟随放大、全景＋鼠标放大窗（四角可选）、平滑过渡、鼠标高亮/左右键波纹、可调聚光灯、录制中可递增并置于四角的1–99步骤编号。效果写入导出视频；步骤编号只绘制数字，不读取键盘内容。静态源重新合成、暂停清除瞬态；1600万像素上限。真实桌面/物理输入/混合DPI/高分辨率性能及画笔/按键/提词器继续验收。",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.2.0",
+          "sourceVersion": "0.3.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }

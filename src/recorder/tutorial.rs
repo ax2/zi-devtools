@@ -51,6 +51,9 @@ pub struct Settings {
     /// Radius as fraction of the output's shorter side.
     pub spotlight_radius: f32,
     pub spotlight_dim: f32,
+    /// Optional tutorial step number burned into the recorded frame.
+    pub step_number: Option<u8>,
+    pub step_corner: Corner,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -65,6 +68,8 @@ impl Default for Settings {
             spotlight: false,
             spotlight_radius: 0.16,
             spotlight_dim: 0.55,
+            step_number: None,
+            step_corner: Corner::BottomLeft,
         }
     }
 }
@@ -80,13 +85,20 @@ impl Settings {
             || !(0.03..=0.45).contains(&self.spotlight_radius)
             || !self.spotlight_dim.is_finite()
             || !(0.0..=0.9).contains(&self.spotlight_dim)
+            || self
+                .step_number
+                .is_some_and(|value| !(1..=99).contains(&value))
         {
             bail!("教程参数无效：放大1–4倍、焦点0–100%、聚光半径3–45%、压暗0–90%");
         }
         Ok(())
     }
     pub fn active(self) -> bool {
-        self.mode != ZoomMode::Off || self.highlight || self.clicks || self.spotlight
+        self.mode != ZoomMode::Off
+            || self.highlight
+            || self.clicks
+            || self.spotlight
+            || self.step_number.is_some()
     }
 }
 pub struct Control {
@@ -349,9 +361,105 @@ impl Compositor {
                 (1.0 - t) * 0.9,
             );
         }
+        if let Some(number) = settings.step_number {
+            step_marker(output, size, number, settings.step_corner);
+        }
         Ok(())
     }
 }
+
+fn step_marker(output: &mut [u8], [w, h]: [u32; 2], number: u8, corner: Corner) {
+    if w == 0 || h == 0 {
+        return;
+    }
+    let scale = (w.min(h) / 96).clamp(1, 12);
+    let margin = (scale * 3)
+        .min(w.saturating_sub(1) / 2)
+        .min(h.saturating_sub(1) / 2);
+    let digits = if number >= 10 { 2usize } else { 1usize };
+    let glyph_width = 5 * scale;
+    let glyph_height = 7 * scale;
+    let padding = 2 * scale;
+    let box_width = digits as u32 * glyph_width + (digits - 1) as u32 * scale + 2 * padding;
+    let box_height = glyph_height + 2 * padding;
+    let left = if matches!(corner, Corner::TopLeft | Corner::BottomLeft) {
+        margin
+    } else {
+        w.saturating_sub(box_width + margin)
+    };
+    let top = if matches!(corner, Corner::TopLeft | Corner::TopRight) {
+        margin
+    } else {
+        h.saturating_sub(box_height + margin)
+    };
+    let right = left.saturating_add(box_width).min(w);
+    let bottom = top.saturating_add(box_height).min(h);
+    for y in top..bottom {
+        for x in left..right {
+            let pixel = &mut output[((y * w + x) * 4) as usize..][..4];
+            pixel.copy_from_slice(&[34, 116, 226, 255]);
+        }
+    }
+    let values = if digits == 2 {
+        [number / 10, number % 10]
+    } else {
+        [number % 10, 0]
+    };
+    for (index, value) in values.into_iter().enumerate().take(digits) {
+        let origin_x = left + padding + index as u32 * (glyph_width + scale);
+        let origin_y = top + padding;
+        for (row, bits) in DIGITS[value as usize].iter().copied().enumerate() {
+            for column in 0..5 {
+                if bits & (1 << (4 - column)) == 0 {
+                    continue;
+                }
+                for dy in 0..scale {
+                    for dx in 0..scale {
+                        let x = origin_x + column * scale + dx;
+                        let y = origin_y + row as u32 * scale + dy;
+                        if x < w && y < h {
+                            let pixel = &mut output[((y * w + x) * 4) as usize..][..4];
+                            pixel.copy_from_slice(&[255, 255, 255, 255]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+const DIGITS: [[u8; 7]; 10] = [
+    [
+        0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
+    ],
+    [
+        0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+    ],
+    [
+        0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111,
+    ],
+    [
+        0b11110, 0b00001, 0b00001, 0b01110, 0b00001, 0b00001, 0b11110,
+    ],
+    [
+        0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010,
+    ],
+    [
+        0b11111, 0b10000, 0b10000, 0b11110, 0b00001, 0b00001, 0b11110,
+    ],
+    [
+        0b01110, 0b10000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110,
+    ],
+    [
+        0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+    ],
+    [
+        0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110,
+    ],
+    [
+        0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00001, 0b01110,
+    ],
+];
 fn spotlight(output: &mut [u8], [w, h]: [u32; 2], point: [f32; 2], radius: f32, dim: f32) {
     let inner = radius * 0.9;
     for y in 0..h {
@@ -460,6 +568,60 @@ pub(super) fn physical_pointer(origin: [i32; 2], region: super::Region) -> Point
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn step_marker_is_optional_bounded_and_burned_into_the_selected_corner() {
+        let src = [24, 32, 40, 173].repeat(64 * 64);
+        let mut compositor = Compositor::default();
+        let mut out = Vec::new();
+        compositor
+            .render(
+                &src,
+                [64, 64],
+                Settings::default(),
+                Pointer::default(),
+                Duration::ZERO,
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(out, src);
+
+        let settings = Settings {
+            step_number: Some(12),
+            step_corner: Corner::BottomLeft,
+            ..Settings::default()
+        };
+        assert!(settings.active());
+        compositor
+            .render(
+                &src,
+                [64, 64],
+                settings,
+                Pointer::default(),
+                Duration::ZERO,
+                &mut out,
+            )
+            .unwrap();
+        let pixel = |x: usize, y: usize| &out[(y * 64 + x) * 4..][..4];
+        assert_eq!(pixel(3, 50), &[34, 116, 226, 255]);
+        assert_eq!(pixel(7, 52), &[255, 255, 255, 255]);
+        assert_eq!(pixel(12, 52), &[255, 255, 255, 255]);
+        assert_eq!(pixel(20, 20), &[24, 32, 40, 173]);
+    }
+
+    #[test]
+    fn step_number_rejects_zero_and_values_over_99() {
+        for number in [0, 100, u8::MAX] {
+            assert!(
+                Settings {
+                    step_number: Some(number),
+                    ..Settings::default()
+                }
+                .validate()
+                .is_err()
+            );
+        }
+    }
+
     #[test]
     fn spotlight_preserves_center_alpha_source_and_restores_when_pointer_leaves() {
         let src = [160, 200, 240, 173].repeat(64 * 64);

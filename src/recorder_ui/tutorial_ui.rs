@@ -98,6 +98,8 @@ impl RecorderState {
             focus: [0.65, 0.45],
             highlight: true,
             clicks: true,
+            step_number: Some(2),
+            step_corner: Corner::BottomRight,
             ..Settings::default()
         };
     }
@@ -155,6 +157,37 @@ impl RecorderState {
                     ui.add(egui::Slider::new(&mut self.tutorial.spotlight_radius,0.03..=0.45).text("聚光半径（画面短边比例）"));
                     ui.add(egui::Slider::new(&mut self.tutorial.spotlight_dim,0.0..=0.9).text("周围压暗程度"));
                     ui.small("鼠标离开选区时取消压暗；放大窗保持明亮。聚光灯用于强调，不用于隐藏敏感信息。");
+                }
+                ui.horizontal(|ui| {
+                    let label = self.tutorial.step_number.map_or_else(
+                        || "显示步骤编号".to_owned(),
+                        |number| format!("步骤 {number}"),
+                    );
+                    if ui.selectable_label(self.tutorial.step_number.is_some(), label).clicked() {
+                        self.tutorial.step_number = if self.tutorial.step_number.is_some() {
+                            None
+                        } else {
+                            Some(1)
+                        };
+                    }
+                    if let Some(number) = self.tutorial.step_number {
+                        if ui.add_enabled(number < 99, egui::Button::new("下一步")).clicked() {
+                            self.tutorial.step_number = Some(number + 1);
+                        }
+                        if ui.button("从 1 重新开始").clicked() {
+                            self.tutorial.step_number = Some(1);
+                        }
+                        egui::ComboBox::from_id_salt("tutorial-step-corner")
+                            .selected_text(self.tutorial.step_corner.label())
+                            .show_ui(ui, |ui| {
+                                for corner in [Corner::TopLeft, Corner::TopRight, Corner::BottomLeft, Corner::BottomRight] {
+                                    ui.selectable_value(&mut self.tutorial.step_corner, corner, corner.label());
+                                }
+                            });
+                    }
+                });
+                if self.tutorial.step_number.is_some() {
+                    ui.small("步骤编号会写入导出视频；只显示数字，不读取或显示键盘输入。99 后停止递增。");
                 }
             });
             if !allowed { ui.small("教程效果支持最多1600万像素；请缩小录制区域。"); }
@@ -222,6 +255,8 @@ impl RecorderState {
         self.tutorial.mode = ZoomMode::Inset;
         self.tutorial.spotlight = true;
         self.tutorial.smooth = false;
+        self.tutorial.step_number = Some(2);
+        self.tutorial.step_corner = Corner::BottomRight;
         self.tutorial_preview.label = "合成示例：全景＋局部放大窗与聚光灯，未录制真实桌面".into();
         self.tutorial_preview.fixture_pointer = Some(Pointer {
             position: Some([400.0, 120.0]),

@@ -4,6 +4,8 @@
 
 开发版新增外部文件启动入口（文件动作1.2.0）：`--open-files` 将1–64条路径送入已有确认页，用户选择工具后再导入；不自动恢复服务。详见[工具快捷方式与外部文件](docs/tool-shortcuts.md)。可用`--file-action`预选11种接收器；统一右键入口0.26.0已有确认式便携登记、修复、切换与移除，以及正式MSI模板的保留/启用/关闭选项。托管Windows已验证公开旧版升级、原生选项与键盘操作、完整界面卸载和实际安装菜单的12项Shell解析；新增[桌面能力声明与只读检查](docs/explorer-capability-declaration.md)，以及[便携安装能力快照](docs/explorer-installation-capabilities.md)，按对应程序生成菜单。MSI包能力传递、真实Explorer窗口、多选、目录及现代菜单等仍在开发，详见[实现范围与证据](docs/explorer-integration.md)。
 
+开发版0.82.0-dev.105的教程录屏辅助工具升至0.3.0：编号可在录制中递增、复位、关闭并选择成片角落；编号直接合成到预览与MP4，不捕获键盘输入。
+
 新增[多字段纯计算提案](proposals/studio-fields/v0.1.0/README.md)，为正则、文本差异和 JSON 差异定义具名输入、字段接力与明确预算，68 请求/17 结果结构向量通过；这是接口提案，未宣称实际 Host 支持或工具已交付。
 
 当前开发将 YAML/JSON、IPv4 CIDR、JWT 内容检查和 Unicode 三模式抽离到独立共享 Rust 核心；独立桌面沿用原有算法，新增[格式与检查插件候选](plugins/inspect/README.md)提供 7 个操作、搜索和逐操作草稿。94 条原生/WASI 对照、独立引擎预算及冷启动检查通过；JWT 不验证签名或可信度。插件交付与实际 Host 接受分开跟踪，版本继续固定为 `0.82.0-dev.105`。

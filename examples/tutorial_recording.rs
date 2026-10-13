@@ -223,6 +223,8 @@ fn main() -> eframe::Result {
                                 },
                                 spotlight: true,
                                 smooth: false,
+                                step_number: Some(if seconds < 2.6 { 1 } else { 2 }),
+                                step_corner: Corner::BottomRight,
                                 ..Settings::default()
                             }
                         }
