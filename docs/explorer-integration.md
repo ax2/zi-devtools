@@ -1,6 +1,6 @@
 # 资源管理器统一入口：实现约束与验收
 
-更新：2026-10-11。当前状态以[工具目录](tools.md)和本文最新验证节为准：菜单候选0.22.0已通过实际安装事务、真实当前载荷及公开v0.81.0正常升级；可见安装选项、公开旧版升级失败回滚和完整Explorer交互仍未完成。
+更新：2026-10-13。当前状态以[工具目录](tools.md)和本文最新验证节为准：文件与文件夹菜单能力已通过 Windows 托管安装事务和 Explorer 可见菜单验证；真实 Explorer 的多选、现代 Windows 11 菜单、接收动作实际启动及内容导入仍未完成。
 
 ## 已有基础及缺口
 
@@ -318,3 +318,13 @@ UI表校验结果在compile-tables-v2.log及其target/zi-msi-production-4qclvusv
 点击子菜单会用`--open-folder`启动`disk-inspector`，打开页面并开始已有有界只读扫描；参数路由拒绝文件动作、其他工具和多余路径。Rust工作区测试、CLI模板往返和真实临时目录扫描通过；当前尚未完成托管Explorer文件夹/空白处实际显示和点击级联验收，也未运行实际安装包矩阵。工具单独升至1.0.1；应用dev版本未变。详情见[能力声明文件夹扩展](explorer-capability-declaration.md)。
 
 注册对象遵循[Microsoft Shell 预定义对象的菜单扩展模型](https://learn.microsoft.com/windows/win32/shell/reg-shell-exts)：`Directory`对应文件夹，`Directory\Background`对应文件夹背景。
+
+## 文件夹菜单托管 Windows 验证（08fb27a）
+
+[CI38404005828](https://github.com/ax2/zi-devtools/actions/runs/38404005828)七个 Windows 作业全部通过，包括完整工作区、普通 MSI 事务矩阵、真实桌面载荷、外层事务回滚/提交、Shell 调用与公开 v0.81.0 升级。旧文件能力夹具继续只注册两个文件菜单根；带 `choose-folders` 的当前程序才安装全部六个菜单根，测试同时断言未声明的目录菜单根保持空。
+
+`explorer-visible` 作业在一次性 Windows Server 2022 runner 中，通过真实 Explorer 对隔离目录执行文件、选中目录和目录背景右键操作。三种上下文都显示统一的 `Zi DevTools` 入口；文件菜单展示现有接收器，目录及背景菜单展示“分析目录空间…”。菜单无需测试器额外刷新便可见。六张界面截图已逐张查看，路径与标签清楚可读。只验证菜单展示和级联点击，没有点击“分析目录空间…”动作；夹具文件未变。公开升级作业另行验证未修改正式模板、实际升级、启用/继承修复/关闭、键盘操作、完整卸载和用户文件保留。
+
+完整 proof、脱敏安装日志和 Explorer 截图保存在技术档案 `iterations/explorer-folder-contexts-2026-10-13/ci-08fb27a-visible-menu/` 与 `ci-08fb27a-production-upgrade/`。本次只修复候选矩阵对能力声明的预期，没有递增应用版本；`disk-inspector` 工具版本维持 1.0.1。未在开发机安装 MSI 或写入注册表。
+
+这项结果覆盖 Windows Server 2022 经典 Explorer 菜单中的单文件、单目录和目录背景。Windows 11 现代菜单、多选、实际接收器启动、分析完成后的 UI/结果体验与正式发布验收仍待验证。
