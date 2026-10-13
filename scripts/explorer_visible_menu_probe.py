@@ -262,11 +262,44 @@ def main():
         assert root_menu_window, 'Explorer did not display a native context-menu popup'
         popup = menu_handle(root_menu_window)
         root_labels = labels(popup)
-        assert root_labels.count('Zi DevTools') == 1, root_labels
         proof['contextMenuVisible'] = True
-        proof['rootMenuLabels'] = root_labels
+        proof['menuVisibleBeforeRefresh'] = root_labels.count('Zi DevTools') == 1
+        proof['rootMenuLabelsBeforeRefresh'] = root_labels
         proof['rootScreenshot'] = str(output / 'explorer-menu-root.png')
         capture_desktop(proof['rootScreenshot'], user, gdi)
+        if not proof['menuVisibleBeforeRefresh']:
+            # Diagnostic only: a per-user association refresh should already
+            # have happened inside the MSI commit path. Record whether a same-
+            # user refresh changes what this Explorer window displays.
+            press(0x1B)
+            shell = ctypes.WinDLL('shell32', use_last_error=True)
+            shell.SHChangeNotify.argtypes = [ctypes.c_int, ctypes.c_uint,
+                                             ctypes.c_void_p, ctypes.c_void_p]
+            shell.SHChangeNotify.restype = None
+            shell.SHChangeNotify(0x08000000, 0x3000, None, None)
+            time.sleep(.5)
+            press(0xA0, 0x79)
+            deadline = time.monotonic() + 10
+            root_menu_window = None
+            while time.monotonic() < deadline:
+                menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
+                if menus:
+                    root_menu_window = menus[-1]
+                    break
+                time.sleep(.1)
+            assert root_menu_window, 'Explorer did not reopen its context menu after association refresh'
+            popup = menu_handle(root_menu_window)
+            root_labels = labels(popup)
+            proof['menuVisibleAfterRefresh'] = root_labels.count('Zi DevTools') == 1
+            proof['rootMenuLabelsAfterRefresh'] = root_labels
+            proof['refreshScreenshot'] = str(output / 'explorer-menu-after-refresh.png')
+            capture_desktop(proof['refreshScreenshot'], user, gdi)
+            assert proof['menuVisibleBeforeRefresh'], (
+                'MSI menu was absent until an external SHChangeNotify; '
+                f'visibleAfterRefresh={proof["menuVisibleAfterRefresh"]}; '
+                f'before={proof["rootMenuLabelsBeforeRefresh"]}; after={root_labels}')
+        assert root_labels.count('Zi DevTools') == 1, root_labels
+        proof['rootMenuLabels'] = root_labels
 
         item_index = root_labels.index('Zi DevTools')
         rect = ScreenRect()
