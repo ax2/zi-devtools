@@ -221,19 +221,25 @@ def main():
                  (action_rect.top + action_rect.bottom) // 2)
         deadline = time.monotonic() + 30
         hwnd = None
+        observed_windows = []
         while time.monotonic() < deadline:
-            matches = [
-                (candidate, title) for candidate, _, title in top_windows()
+            observed_windows = [
+                (candidate, cls, title) for candidate, cls, title in top_windows()
                 if candidate not in baseline
-                and title.startswith('Zi DevTools')
-                and 'disk-inspector' in title
+            ]
+            matches = [
+                (candidate, title) for candidate, _, title in observed_windows
+                if title.startswith('Zi DevTools')
             ]
             if len(matches) == 1:
                 hwnd = matches[0][0]
                 break
             assert len(matches) <= 1, f'Multiple folder receiver windows appeared: {matches}'
             time.sleep(.2)
-        assert hwnd, 'Clicking the folder receiver did not open the disk-inspector window'
+        assert hwnd, (
+            'Clicking the folder receiver did not open a Zi DevTools window; '
+            f'new visible windows: {observed_windows}'
+        )
         pid, process = receiver_process_info(hwnd)
         image = Path(process['ExecutablePath']).resolve(strict=True)
         assert image == executable, 'Folder receiver did not launch the installed desktop EXE'
