@@ -5,7 +5,7 @@ use anyhow::{Context, Result, ensure};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use crate::{file_actions::Target, quote};
+use crate::quote;
 const ROOTS: [&str; 2] = [
     r"Software\Classes\*\shell\ZiCode.DevTools",
     r"Software\Classes\ZiCode.DevTools.FileActions",
@@ -65,6 +65,20 @@ fn template_path(path: &Path) -> Result<String> {
 }
 
 pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
+    plan_declared(
+        exe,
+        config,
+        &crate::capability_manifest::Manifest::current(),
+    )
+}
+
+/// Plans only the declared receivers, without reading files or writing registry.
+/// The caller must bind this declaration to the target executable before use.
+pub fn plan_declared(
+    exe: &Path,
+    config: &Path,
+    declaration: &crate::capability_manifest::Manifest,
+) -> Result<Plan> {
     let executable = std::path::absolute(exe)?;
     let configuration = std::path::absolute(config)?;
     let exe = template_path(&executable)?;
@@ -99,7 +113,7 @@ pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
         "",
         format!("{exe} --config {config} --no-restore --open-files \"%1\""),
     );
-    for target in Target::ALL {
+    for target in declaration.targets() {
         let key = format!(r"{actions}\shell\{}", target.action_id());
         add(&key, "MUIVerb", format!("导入到{}…", target.label()));
         add(&key, "MultiSelectModel", "Single".into());
@@ -138,6 +152,50 @@ pub fn plan(exe: &Path, config: &Path) -> Result<Plan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file_actions::Target;
+    #[test]
+    fn declared_subset_never_adds_actions_from_the_maintaining_program() {
+        use crate::capability_manifest::Manifest;
+        let dir = std::env::current_dir().unwrap().join("capability-subset");
+        let exe = dir.join("ZiDevTools.exe");
+        let config = dir.join("config.yml");
+        for (body, expected) in [
+            (
+                "import:csv\nimport:json\n",
+                vec!["import:csv", "import:json"],
+            ),
+            ("", vec![]),
+        ] {
+            let declaration = Manifest::parse(
+                format!("ZiDevTools/ShellCapabilities/1\nchoose-files\n{body}").as_bytes(),
+            )
+            .unwrap();
+            let planned = plan_declared(&exe, &config, &declaration).unwrap();
+            let commands: Vec<_> = planned
+                .values
+                .iter()
+                .filter(|v| v.key.ends_with("\\command"))
+                .collect();
+            assert_eq!(commands.len(), expected.len() + 1);
+            for target in Target::ALL {
+                assert_eq!(
+                    commands.iter().any(|v| v.key.contains(target.action_id())),
+                    expected.contains(&target.action_id())
+                );
+            }
+            assert!(
+                commands
+                    .iter()
+                    .all(|v| v.value.ends_with("--open-files \"%1\""))
+            );
+            assert!(planned.preview_only);
+        }
+        assert_eq!(
+            serde_json::to_value(plan(&exe, &config).unwrap()).unwrap(),
+            serde_json::to_value(plan_declared(&exe, &config, &Manifest::current()).unwrap())
+                .unwrap()
+        );
+    }
     #[cfg(windows)]
     #[test]
     fn canonical_file_identity_uses_shell_compatible_command_paths() {

@@ -4,7 +4,10 @@ use sha2::{Digest, Sha256};
 use std::io::{Read, Seek, SeekFrom};
 fn main() -> Result<()> {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    ensure!(arguments.len() == 1, "Expected one executable path");
+    ensure!(
+        arguments.len() == 1 || (arguments.len() == 3 && arguments[1] == "--plan"),
+        "Expected executable [--plan config-path]"
+    );
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
     #[cfg(windows)]
@@ -43,11 +46,23 @@ fn main() -> Result<()> {
             .map(|t| t.action_id())
             .collect::<Vec<_>>()
     });
+    let plan = if arguments.len() == 3 {
+        let declaration = declaration
+            .as_ref()
+            .context("Unknown legacy capabilities: cannot generate a declared menu plan")?;
+        Some(zi_shell_core::explorer::plan_declared(
+            &std::fs::canonicalize(&arguments[0])?,
+            &std::path::absolute(&arguments[2])?,
+            declaration,
+        )?)
+    } else {
+        None
+    };
     println!(
         "{}",
         serde_json::json!({"sha256":format!("{:x}",digest.finalize()), "bytes":length,
         "declarationPresent":declaration.is_some(), "actions":targets, "executableStarted":false,
-        "publisherAuthenticated":false, "ledgerUpdated":false})
+        "publisherAuthenticated":false, "ledgerUpdated":false, "declaredPlan":plan})
     );
     std::hint::black_box(file.metadata().context("Final consistency check")?);
     Ok(())

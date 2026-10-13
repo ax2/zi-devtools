@@ -210,12 +210,18 @@ fn main() -> anyhow::Result<()> {
             .context("WM_INITMENUPOPUP for installed cascade")?;
     }
     let actions = labels(submenu)?;
-    let expected: Vec<_> = std::iter::once("选择工具处理…".to_owned())
-        .chain(
-            Target::ALL
-                .into_iter()
-                .map(|target| format!("导入到{}…", target.label())),
-        )
+    let declared_plan =
+        zi_shell_core::explorer::plan_declared(&executable, &active.config, &declaration)?;
+    let expected: Vec<_> = declared_plan
+        .values
+        .iter()
+        .filter(|value| {
+            value.name == "MUIVerb"
+                && value
+                    .key
+                    .starts_with(r"Software\Classes\ZiCode.DevTools.FileActions\shell\")
+        })
+        .map(|value| value.value.clone())
         .collect();
     ensure!(
         actions.len() == expected.len(),
@@ -247,6 +253,7 @@ fn main() -> anyhow::Result<()> {
             "installedMsiMenuResolved": true,
             "receiverCount": Target::ALL.len(),
             "desktopDeclarationMatches": true,
+            "declaredPlanMatchesShell": true,
             "mcpDeclaresDesktopReceivers": false,
             "nativeCommandCount": actions.len(),
             "labels": expected,
