@@ -143,6 +143,7 @@ def main():
         function.argtypes, function.restype = args, result
     for name, args, result in [
         ('GetMenuItemCount', [ctypes.c_void_p], ctypes.c_int),
+        ('GetMenuItemID', [ctypes.c_void_p, ctypes.c_int], ctypes.c_uint),
         ('GetMenuStringW', [ctypes.c_void_p, ctypes.c_uint, ctypes.c_wchar_p,
                             ctypes.c_int, ctypes.c_uint], ctypes.c_int),
         ('GetSubMenu', [ctypes.c_void_p, ctypes.c_int], ctypes.c_void_p),
@@ -217,11 +218,15 @@ def main():
         action_rect = ScreenRect()
         assert user.GetMenuItemRect(explorer, menu, action_index, ctypes.byref(action_rect))
         assert action_rect.right > action_rect.left and action_rect.bottom > action_rect.top
-        # The expanded submenu action is already under the pointer (the
-        # preceding screenshot captures its visible highlight). Enter activates
-        # the focused Shell verb reliably on hosted runners, where synthetic
-        # mouse-up events on nested Explorer menus can be swallowed.
-        press(0x0D)
+        # Route the selected native Shell verb through Explorer's WM_COMMAND
+        # owner. Hosted desktop sessions can swallow injected mouse-up and
+        # keyboard input on nested context menus, even while visibly showing
+        # the highlighted action.
+        command_id = user.GetMenuItemID(menu, action_index)
+        assert command_id != 0xFFFFFFFF, 'Folder receiver is not a native menu command'
+        assert user.PostMessageW(explorer, 0x0111, command_id, 0), (
+            'Could not dispatch the visible folder receiver through Explorer'
+        )
         deadline = time.monotonic() + 30
         hwnd = None
         observed_windows = []
