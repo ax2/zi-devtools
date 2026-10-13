@@ -550,7 +550,9 @@ def main():
             # Verify that MSI installed the same MCP payload used to build the menu.
             assert (target / 'ZiDevToolsMcp.exe').read_bytes() == (build / 'debug/ZiDevToolsMcp.exe').read_bytes()
         if args.explorer_visible:
-            source = folder / '真实文件 %1 & 空格.json'
+            explorer_fixture = folder / 'explorer-fixture'
+            explorer_fixture.mkdir()
+            source = explorer_fixture / '真实文件 %1 & 空格.json'
             source.write_bytes(b'synthetic installed Shell invocation fixture')
             result = subprocess.run(
                 [sys.executable, str(ROOT / 'scripts/explorer_visible_menu_probe.py'),
@@ -565,6 +567,7 @@ def main():
                 explorer_visible_proof = json.loads(proof_path.read_text(encoding='utf-8'))
             assert explorer_visible_proof, f'Visible Explorer probe returned no proof: {result.stdout[-4000:]!r}'
             assert explorer_visible_proof['explorerWindowVisible']
+            assert explorer_visible_proof['fileSelectionInputSent']
             assert explorer_visible_proof['contextMenuVisible']
             assert explorer_visible_proof['productCascadeClicked']
             assert explorer_visible_proof['genericReceiverVisible']

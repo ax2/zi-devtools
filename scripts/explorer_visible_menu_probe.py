@@ -216,6 +216,7 @@ def main():
     explorer = None
     root_menu_window = None
     proof = {'fixtureUnchanged': False, 'explorerWindowVisible': False,
+             'fileSelectionInputSent': False,
              'contextMenuVisible': False, 'productCascadeVisible': False,
              'productCascadeClicked': False,
              'genericReceiverVisible': False}
@@ -243,7 +244,13 @@ def main():
                           f'visible File Explorer windows were {last_windows}')
         proof['explorerWindowVisible'] = True
         assert user.SetForegroundWindow(explorer)
-        time.sleep(.5)
+        time.sleep(1)
+        # The fixture folder contains exactly one file, so this focuses/selects
+        # only the synthetic file even if Explorer did not honor /select.
+        press(0x24)  # Home: move to the only item in the file view.
+        press(0x11, 0x41)  # Ctrl+A: select the only item, never multiple files.
+        proof['fileSelectionInputSent'] = True
+        time.sleep(.2)
         press(0xA0, 0x79)  # Shift+F10 opens the selected file's classic context menu.
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:

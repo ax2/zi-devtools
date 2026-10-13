@@ -114,6 +114,8 @@ jobs:
             ${{ runner.temp }}/zi-msi-menu-*/proof.json
             ${{ runner.temp }}/zi-msi-menu-*/explorer-visible-proof.json
             ${{ runner.temp }}/zi-msi-menu-*/*.png
+            ${{ runner.temp }}/zi-msi-menu-*/*/explorer-visible-proof.json
+            ${{ runner.temp }}/zi-msi-menu-*/*/*.png
             ${{ runner.temp }}/zi-msi-production-*/*.safe.log
             ${{ runner.temp }}/zi-msi-production-*/proof.json
             ${{ runner.temp }}/zi-msi-production-*/ui-*.png
