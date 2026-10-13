@@ -410,7 +410,24 @@ mod native {
             config.clone()
         };
         let plan = zi_devtools::explorer::plan(&executable, &command_config)?;
-        for value in plan.values {
+        // This probe registers only its private file association. Folder roots
+        // are checked by the Explorer-visible MSI probe and must never be
+        // copied into the shared Directory/Background classes hive here.
+        let folder_root = |key: &str| {
+            key.starts_with(r"Software\Classes\Directory\shell\ZiCode.DevTools")
+                || key.starts_with(r"Software\Classes\Directory\Background\shell\ZiCode.DevTools")
+                || key.starts_with(r"Software\Classes\ZiCode.DevTools.DirectoryActions")
+                || key.starts_with(r"Software\Classes\ZiCode.DevTools.BackgroundActions")
+        };
+        ensure!(
+            plan.values.iter().any(|value| folder_root(&value.key)),
+            "current plan omitted declared folder contexts"
+        );
+        for value in plan
+            .values
+            .into_iter()
+            .filter(|value| !folder_root(&value.key))
+        {
             let path = if let Some(tail) = value
                 .key
                 .strip_prefix(r"Software\Classes\*\shell\ZiCode.DevTools")
