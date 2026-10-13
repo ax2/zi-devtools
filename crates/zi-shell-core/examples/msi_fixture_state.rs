@@ -1,12 +1,23 @@
 //! Disposable CI observer; recovery uses the same receipt-backed preview/apply as UI.
 #[cfg(windows)]
+#[path = "msi_fixture_state/capabilities.rs"]
+mod capabilities;
+#[cfg(windows)]
 fn main() -> anyhow::Result<()> {
+    std::hint::black_box(&capabilities::DECLARATION);
     use zi_shell_core::{
         explorer::lifecycle::{Identity, installer, store},
         msi,
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
     let value = match args.as_slice() {
+        [config_flag, _, no_restore, open, path]
+            if config_flag == "--config" && no_restore == "--no-restore" && open == "--open-files" => {
+            // Minimal headless fixture receiver; no GUI/import claim or file reads.
+            let path = std::path::absolute(path)?;
+            anyhow::ensure!(path.is_file(), "Fixture receiver requires one ordinary file");
+            serde_json::json!({"fixtureOnly":true,"received":path,"contentRead":false,"executed":false})
+        }
         [] => serde_json::to_value(store::load()?)?,
         [flag] if flag == "--products" => serde_json::to_value(msi::registered_products()?)?,
         [flag] if flag == "--journal" => serde_json::Value::Array(store::recovery::list()?.into_iter()

@@ -267,6 +267,8 @@ def main():
     counter = 0
     portable_config = folder / 'portable-fixture.yml'
     portable_config.write_text('services: {}\n')
+    portable_file = folder / 'portable %1 & sample.txt'
+    portable_file.write_text('synthetic portable receiver fixture', encoding='utf-8')
 
     def portable_active():
         ledger = observe()
@@ -274,6 +276,14 @@ def main():
         record = ledger['entries'][0]['installation']
         assert record['identity']['kind'] == 'portable'
         assert ledger['active'] == record['identity']
+        assert record['menu_capabilities'] == 'ZiDevTools/ShellCapabilities/1\nchoose-files\n'
+        actions = read_tree(MENU_ROOTS[1])
+        assert len([key for key in actions if key.endswith('\\command')]) == 1
+        assert 'shell\\choose\\command' in actions
+        assert not any('import:' in key for key in actions)
+        receipt = observe('--config', portable_config, '--no-restore', '--open-files', portable_file)
+        assert receipt['fixtureOnly'] and not receipt['contentRead'] and not receipt['executed']
+        assert Path(receipt['received']).samefile(portable_file)
         assert all(read_tree(root)['']['zicodeinstallgeneration'][0] == record['generation'] for root in MENU_ROOTS)
 
     def invoke(label, options='', repair=False, uninstall=False, cleanup=False):
@@ -521,7 +531,7 @@ def main():
         installed('new')
         assert invoke('new', uninstall=True)[0] == 0
         assert observe()['entries'] == [] and not any(read_tree(p) for p in MENU_ROOTS)
-        proofs.append('both portable/MSI removal orders preserve the remaining native record and alias')
+        proofs.append('both portable/MSI removal orders preserve declared generic-only portable subset and its actual bounded headless receiver; no desktop GUI claim')
         # The receipt-only package models interrupted finalization. The native
         # API has returned; a fresh observer uses the desktop recovery backend,
         # not the old unconditional --finish helper, to complete this operation.
