@@ -16,10 +16,7 @@ fn main() -> anyhow::Result<()> {
         core::{Interface, PCSTR, PCWSTR},
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
-    use zi_shell_core::{
-        explorer::lifecycle::{Identity, store},
-        file_actions::Target,
-    };
+    use zi_shell_core::explorer::lifecycle::{Identity, store};
     ensure!(
         std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true")
             && std::env::var("CI").as_deref() == Ok("true")
@@ -83,8 +80,8 @@ fn main() -> anyhow::Result<()> {
     let declaration = zi_shell_core::capability_image::read(&mut file_lock, length)?
         .context("Installed desktop capability declaration missing")?;
     ensure!(
-        declaration.targets() == Target::ALL,
-        "Installed desktop declaration differs from receivers"
+        active.menu_declaration()?.encode() == declaration.encode(),
+        "Installed desktop declaration differs from its verified capability snapshot"
     );
     let mut mcp_lock = std::fs::OpenOptions::new()
         .read(true)
