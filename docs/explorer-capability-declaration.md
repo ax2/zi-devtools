@@ -33,3 +33,5 @@ PE读取仅使用已有File的Read/Seek，不LoadLibrary、不启动EXE。大小
 只读检查例程支持`capability_inspect.exe executable --plan config-path`。从同一受写删锁保护的文件读取声明和摘要后生成预览；缺失声明拒绝生成计划。config-path只用于计划，不读取或创建配置，不登记菜单。实际优化桌面的11动作、合成PE的两动作子集和仅选择工具都通过检查，MCP缺失声明拒绝；合成PE不是可运行的旧版本安装证据。
 
 原生安装探针使用同一规划器生成待核对标签，继续检查实际Shell菜单；对应托管结果单独记录。这不表示安装生命周期已依据声明过滤，目录动作仍待账本/恢复协议迁移后开发。
+
+99ed9e5的[CI38355789529](https://github.com/ax2/zi-devtools/actions/runs/38355789529)五路全部通过；完整工作区945 passed / 0 failed / 35 ignored（52组）。实际安装菜单proof确认`declaredPlanMatchesShell=true`，同时桌面声明匹配、MCP无桌面声明、四键盘场景、完整UI卸载及用户文件保留继续通过。子集语义通过合成PE只读计划和独立规划测试验证，尚不代表两个实际不同能力发行版的接管/回滚已验收。
