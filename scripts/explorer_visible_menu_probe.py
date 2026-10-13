@@ -217,8 +217,11 @@ def main():
         action_rect = ScreenRect()
         assert user.GetMenuItemRect(explorer, menu, action_index, ctypes.byref(action_rect))
         assert action_rect.right > action_rect.left and action_rect.bottom > action_rect.top
-        click_at((action_rect.left + action_rect.right) // 2,
-                 (action_rect.top + action_rect.bottom) // 2)
+        # The expanded submenu action is already under the pointer (the
+        # preceding screenshot captures its visible highlight). Enter activates
+        # the focused Shell verb reliably on hosted runners, where synthetic
+        # mouse-up events on nested Explorer menus can be swallowed.
+        press(0x0D)
         deadline = time.monotonic() + 30
         hwnd = None
         observed_windows = []
