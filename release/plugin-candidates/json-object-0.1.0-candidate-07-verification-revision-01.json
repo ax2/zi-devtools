@@ -1,0 +1,809 @@
+{
+  "packageId": "com.zicode.devtools.json-object",
+  "packageVersion": "0.1.0",
+  "status": "unsigned provider candidate; not Host-accepted",
+  "source": {
+    "revision": "65f9aa63c831a4540bdd5731aa4da3de76dbd4b8",
+    "dirty": true
+  },
+  "requiredProfiles": {
+    "output.schema.v1": "=1.0.0-rc.1",
+    "result.json.v1": "=1.0.0-preview.1"
+  },
+  "wasm": {
+    "sha256": "97113b847130f981e388c19d1929bc5e17039f65e342b275048108c34602fd8a",
+    "bytes": 218589
+  },
+  "nativeAdapter": {
+    "sha256": "12b315dc2fd25af9197dc0ff734a04f11c28a3ce5696893fef165c047d214f2b"
+  },
+  "contractSnapshot": {
+    "sourceSha256": "8b414763cea9b147460a5f5accbe500f82a8175ac9a906b89bd853a41bd50a9b",
+    "profileSha256": "8b414763cea9b147460a5f5accbe500f82a8175ac9a906b89bd853a41bd50a9b"
+  },
+  "sourceFiles": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "4eee67e9cc63c4e7ca34970483860fb85b3773e30210f14d814c4da9a1e64894"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "41dfa45bceb2e522279a6d524433c3d8d1546b7add9033b7eed6f0580b17ff78"
+    },
+    {
+      "path": "crates/zi-json-core/Cargo.toml",
+      "sha256": "ad6b87789eafddb3ea4a5ae2d26253c5c5f986b26fbbbc96e46c4d19156cfa94"
+    },
+    {
+      "path": "crates/zi-json-core/src/lib.rs",
+      "sha256": "3528f48ef1e350e5f88dd03659acc5d5377ca488c5464c40776da028082c5e64"
+    },
+    {
+      "path": "crates/zi-json-object-wasi/Cargo.toml",
+      "sha256": "2f1e83ba1b534bbbb84a7d3b34b24cb09141ae5f59c51bbbda6978a9780a2879"
+    },
+    {
+      "path": "crates/zi-json-object-wasi/src/lib.rs",
+      "sha256": "c7527cac211c6e50910b6b0e960869bad91665727d9b5e6f573a761fad57cca5"
+    },
+    {
+      "path": "crates/zi-json-object-wasi/src/main.rs",
+      "sha256": "b6b511d5c8da82263085d18da3e503200d524c54a8f652fca8fbfeb80b0723fd"
+    },
+    {
+      "path": "crates/zi-text-core/src/lib.rs",
+      "sha256": "cf7ea21806bef3142b468f73ffd47b784eb202ec35367badab5c7c715de5fc0a"
+    },
+    {
+      "path": "plugins/json-object/plugin.json",
+      "sha256": "ada25a4cbb701d687f1bf2ab7fcfac07257200fd41a82d303b7c8b4ee03c80bc"
+    },
+    {
+      "path": "plugins/json-object/catalog.json",
+      "sha256": "d1f074ad8c436ff734ee6b95b7c67086a71a70b27558447ece136b7f5212514b"
+    },
+    {
+      "path": "plugins/json-object/output.schema.json",
+      "sha256": "50fc2a272ac92a6038ff19e6cbcc5387dca0a7fceee1ad41cdff7192c381becd"
+    },
+    {
+      "path": "plugins/json-object/README.md",
+      "sha256": "eddb96edd92ecb67117ec6c21261b6a8ec7483b0063dbd6e42828d7634d89c80"
+    },
+    {
+      "path": "scripts/verify_json_object_wasi.py",
+      "sha256": "521cefe0eed812a5ae8db53fc27519495e3b75e9a486c3dd314a6faee370f7d4"
+    },
+    {
+      "path": "scripts/run_text_wasi.mjs",
+      "sha256": "8fbe77a8a23c8d44284df436173e79e16779e09c2ab6956e43d9793c5302411d"
+    },
+    {
+      "path": "scripts/verify_json_object_fuel.py",
+      "sha256": "bcc249a4e9e35182939692d4079caf08ed173b3ba387ebf74f5bef31fe462472"
+    },
+    {
+      "path": "scripts/package_json_object_plugin.py",
+      "sha256": "da84e2ede5f5ad6ec93de4a97fd23f370dba50f2ea1d6b25a454127dc95f0c46"
+    },
+    {
+      "path": "docs/tools.json",
+      "sha256": "a0c748a203cf3fef1e796dc582aa2fab014b70b1053f0dba2f4bd16fe25ed071"
+    }
+  ],
+  "files": [
+    {
+      "path": "catalog.json",
+      "size": 788,
+      "sha256": "843ff74bb994ba7f293aa1483aea9203547217f66322d624354ef018cd26e3fa"
+    },
+    {
+      "path": "contracts/result-json-profile.md",
+      "size": 4443,
+      "sha256": "8b414763cea9b147460a5f5accbe500f82a8175ac9a906b89bd853a41bd50a9b"
+    },
+    {
+      "path": "contracts/SOURCE.json",
+      "size": 444,
+      "sha256": "3a73eac167c12ef539b5539b7b210cac7d81c19b9d450e5b152f224aa1a03ed1"
+    },
+    {
+      "path": "fixtures/result-json-cases.json",
+      "size": 1555,
+      "sha256": "5671752fd64703b3a8158571b28f12d66ac5d86dd2bc4c503895d055e1b81488"
+    },
+    {
+      "path": "LICENSE",
+      "size": 1097,
+      "sha256": "9c2c89b705d4867136b15febaedc94a0ab4cfc32e98ad05f11abe8d837310732"
+    },
+    {
+      "path": "plugin.json",
+      "size": 4853,
+      "sha256": "ada25a4cbb701d687f1bf2ab7fcfac07257200fd41a82d303b7c8b4ee03c80bc"
+    },
+    {
+      "path": "README.md",
+      "size": 1582,
+      "sha256": "eddb96edd92ecb67117ec6c21261b6a8ec7483b0063dbd6e42828d7634d89c80"
+    },
+    {
+      "path": "runtime/tools.wasm",
+      "size": 218589,
+      "sha256": "97113b847130f981e388c19d1929bc5e17039f65e342b275048108c34602fd8a"
+    },
+    {
+      "path": "schemas/output.schema.json",
+      "size": 372,
+      "sha256": "50fc2a272ac92a6038ff19e6cbcc5387dca0a7fceee1ad41cdff7192c381becd"
+    },
+    {
+      "path": "verification/cases/000-inspect-object.expected.json",
+      "size": 314,
+      "sha256": "22dd8d6024575168ff12cb44190a0d1978fc29f79bed3510a42e11098bb19465"
+    },
+    {
+      "path": "verification/cases/000-inspect-object.request",
+      "size": 224,
+      "sha256": "b5ae440131950749f286d5ad471e6191434f22cd5192180e8b1385e5715b26a3"
+    },
+    {
+      "path": "verification/cases/001-receive-object.expected.json",
+      "size": 211,
+      "sha256": "cda8d57c7f1e779382912c2116010a631260baa7b12a3d996a6fea503e97dec4"
+    },
+    {
+      "path": "verification/cases/001-receive-object.request",
+      "size": 224,
+      "sha256": "19df3f2d501c0b9f1865ab59159d10c4af7f7a6c7cad4264100d47124e05b035"
+    },
+    {
+      "path": "verification/cases/002-inspect-empty-object.expected.json",
+      "size": 147,
+      "sha256": "d93251315d833e4030e3830a4c0b356a413b914acd23f32664d8b83f7f78bf50"
+    },
+    {
+      "path": "verification/cases/002-inspect-empty-object.request",
+      "size": 160,
+      "sha256": "5c704e67f294c99ee2457aaeba81785373383b08ff4d4dd323ac32ed8597417c"
+    },
+    {
+      "path": "verification/cases/003-reject-array.expected.json",
+      "size": 128,
+      "sha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da"
+    },
+    {
+      "path": "verification/cases/003-reject-array.request",
+      "size": 163,
+      "sha256": "c7743d852bd840d0d70050df71ab8e3fca1619c0353133824a7305bf2034475d"
+    },
+    {
+      "path": "verification/cases/004-reject-string.expected.json",
+      "size": 128,
+      "sha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da"
+    },
+    {
+      "path": "verification/cases/004-reject-string.request",
+      "size": 164,
+      "sha256": "0136d05d88901bd4abe83f2a6b792ef970ad56f23f3bb47276c60b032e01a8dc"
+    },
+    {
+      "path": "verification/cases/005-reject-extra-input.expected.json",
+      "size": 119,
+      "sha256": "d346e9bb18b3bb5dc73bae0b6a0ef86633035d5975d1c3633f8a3ed6331212d4"
+    },
+    {
+      "path": "verification/cases/005-reject-extra-input.request",
+      "size": 158,
+      "sha256": "843f354ca1dcb27c6d748a3a3d83ef6e013ad1c552486543e9e7074679f901c5"
+    },
+    {
+      "path": "verification/cases/006-reject-duplicate-key.expected.json",
+      "size": 119,
+      "sha256": "c121638e6e809c3d772db72acef3398393c18fed6c820cb04fb8d560a6899d89"
+    },
+    {
+      "path": "verification/cases/006-reject-duplicate-key.request",
+      "size": 159,
+      "sha256": "8d53fa76141a1e518ea0cc17065918a3caca29a5fda523be95e622b2cd9fb7bf"
+    },
+    {
+      "path": "verification/cases/007-reject-value-over-8k.expected.json",
+      "size": 127,
+      "sha256": "03c8afa625775354553182283335662c2556338387f5e84d01ab42d82f469e61"
+    },
+    {
+      "path": "verification/cases/007-reject-value-over-8k.request",
+      "size": 8358,
+      "sha256": "54c5af5711579d166365a70b6b88e05db5872b61942672724514d860882d0ca3"
+    },
+    {
+      "path": "verification/cases/008-reject-129-fields.expected.json",
+      "size": 131,
+      "sha256": "54b33dcaa051bb2a8657f094744c853e93e9adb304a0974d2083f31f2b5d1d15"
+    },
+    {
+      "path": "verification/cases/008-reject-129-fields.request",
+      "size": 1358,
+      "sha256": "473aea0d4dc65b93e04581804d27b6b1dffa6bce9ff4d963496679d8884adc3e"
+    },
+    {
+      "path": "verification/cases/009-reject-envelope-over-48k.expected.json",
+      "size": 122,
+      "sha256": "a8ba625aa2b04d6bedce31176e0581056c2164d07c580f81d902f94ae6249ff6"
+    },
+    {
+      "path": "verification/cases/009-reject-envelope-over-48k.request",
+      "size": 49153,
+      "sha256": "094bfd917517fdb605b63c5a47e3d6c12857b6a9bfb17b55c94ff6a41f0e8932"
+    },
+    {
+      "path": "verification/cold-start-proof.json",
+      "size": 5398,
+      "sha256": "674c3a8e96997aa3eb542b381234c748ffff694a551655d734b81e1aa0c3e159"
+    },
+    {
+      "path": "verification/engine-provenance.json",
+      "size": 649,
+      "sha256": "32b51f0fe7337f647934ec955997cb209af36019ae3207f09614296417930f91"
+    },
+    {
+      "path": "verification/native-wasi-parity.json",
+      "size": 5959,
+      "sha256": "cb9a7d4aaa2ffbfe23ea3279f1d8ef9527fe9a351d946115b182835550eeb96a"
+    },
+    {
+      "path": "verification/README.md",
+      "size": 640,
+      "sha256": "e83ecfc28633c8a0ffb642fa4427f2fa45e57b67a2ae978bf0c78febdc2333b9"
+    },
+    {
+      "path": "verification/run_text_wasi.mjs",
+      "size": 866,
+      "sha256": "8fbe77a8a23c8d44284df436173e79e16779e09c2ab6956e43d9793c5302411d"
+    },
+    {
+      "path": "verification/verify_json_object_fuel.py",
+      "size": 4985,
+      "sha256": "bcc249a4e9e35182939692d4079caf08ed173b3ba387ebf74f5bef31fe462472"
+    },
+    {
+      "path": "verification/verify_json_object_wasi.py",
+      "size": 8734,
+      "sha256": "521cefe0eed812a5ae8db53fc27519495e3b75e9a486c3dd314a6faee370f7d4"
+    },
+    {
+      "path": "verification/wasmtime-fuel-proof.json",
+      "size": 6147,
+      "sha256": "aec6042f19fd4757f2e1f0101f6a9e88418d6741c8dc36cd6d5d5e783e87d3cb"
+    }
+  ],
+  "directoryIndexSha256": "9479917a473acd40e1ef1b9f826c286de53ce2adcabbdc15b3bb72718fdcb3c1",
+  "packageSha256": null,
+  "functionalProof": {
+    "profile": "result.json.v1@1.0.0-preview.1",
+    "wasmBytes": 218589,
+    "wasmSha256": "97113b847130f981e388c19d1929bc5e17039f65e342b275048108c34602fd8a",
+    "nativeSha256": "12b315dc2fd25af9197dc0ff734a04f11c28a3ce5696893fef165c047d214f2b",
+    "cases": [
+      {
+        "id": "inspect-object",
+        "requestFile": "000-inspect-object.request",
+        "expectedFile": "000-inspect-object.expected.json",
+        "requestBytes": 224,
+        "resultBytes": 314,
+        "requestSha256": "b5ae440131950749f286d5ad471e6191434f22cd5192180e8b1385e5715b26a3",
+        "expectedSha256": "22dd8d6024575168ff12cb44190a0d1978fc29f79bed3510a42e11098bb19465",
+        "expectedError": null,
+        "elapsedMs": 207.353,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "receive-object",
+        "requestFile": "001-receive-object.request",
+        "expectedFile": "001-receive-object.expected.json",
+        "requestBytes": 224,
+        "resultBytes": 211,
+        "requestSha256": "19df3f2d501c0b9f1865ab59159d10c4af7f7a6c7cad4264100d47124e05b035",
+        "expectedSha256": "cda8d57c7f1e779382912c2116010a631260baa7b12a3d996a6fea503e97dec4",
+        "expectedError": null,
+        "elapsedMs": 93.434,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "inspect-empty-object",
+        "requestFile": "002-inspect-empty-object.request",
+        "expectedFile": "002-inspect-empty-object.expected.json",
+        "requestBytes": 160,
+        "resultBytes": 147,
+        "requestSha256": "5c704e67f294c99ee2457aaeba81785373383b08ff4d4dd323ac32ed8597417c",
+        "expectedSha256": "d93251315d833e4030e3830a4c0b356a413b914acd23f32664d8b83f7f78bf50",
+        "expectedError": null,
+        "elapsedMs": 98.403,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "reject-array",
+        "requestFile": "003-reject-array.request",
+        "expectedFile": "003-reject-array.expected.json",
+        "requestBytes": 163,
+        "resultBytes": 128,
+        "requestSha256": "c7743d852bd840d0d70050df71ab8e3fca1619c0353133824a7305bf2034475d",
+        "expectedSha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da",
+        "expectedError": "INVALID_INPUT",
+        "elapsedMs": 101.784,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "reject-string",
+        "requestFile": "004-reject-string.request",
+        "expectedFile": "004-reject-string.expected.json",
+        "requestBytes": 164,
+        "resultBytes": 128,
+        "requestSha256": "0136d05d88901bd4abe83f2a6b792ef970ad56f23f3bb47276c60b032e01a8dc",
+        "expectedSha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da",
+        "expectedError": "INVALID_INPUT",
+        "elapsedMs": 85.879,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "reject-extra-input",
+        "requestFile": "005-reject-extra-input.request",
+        "expectedFile": "005-reject-extra-input.expected.json",
+        "requestBytes": 158,
+        "resultBytes": 119,
+        "requestSha256": "843f354ca1dcb27c6d748a3a3d83ef6e013ad1c552486543e9e7074679f901c5",
+        "expectedSha256": "d346e9bb18b3bb5dc73bae0b6a0ef86633035d5975d1c3633f8a3ed6331212d4",
+        "expectedError": "INVALID_INPUT",
+        "elapsedMs": 160.821,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "reject-duplicate-key",
+        "requestFile": "006-reject-duplicate-key.request",
+        "expectedFile": "006-reject-duplicate-key.expected.json",
+        "requestBytes": 159,
+        "resultBytes": 119,
+        "requestSha256": "8d53fa76141a1e518ea0cc17065918a3caca29a5fda523be95e622b2cd9fb7bf",
+        "expectedSha256": "c121638e6e809c3d772db72acef3398393c18fed6c820cb04fb8d560a6899d89",
+        "expectedError": "INVALID_INPUT",
+        "elapsedMs": 69.757,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "reject-value-over-8k",
+        "requestFile": "007-reject-value-over-8k.request",
+        "expectedFile": "007-reject-value-over-8k.expected.json",
+        "requestBytes": 8358,
+        "resultBytes": 127,
+        "requestSha256": "54c5af5711579d166365a70b6b88e05db5872b61942672724514d860882d0ca3",
+        "expectedSha256": "03c8afa625775354553182283335662c2556338387f5e84d01ab42d82f469e61",
+        "expectedError": "INPUT_TOO_LARGE",
+        "elapsedMs": 94.585,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2228224
+      },
+      {
+        "id": "reject-129-fields",
+        "requestFile": "008-reject-129-fields.request",
+        "expectedFile": "008-reject-129-fields.expected.json",
+        "requestBytes": 1358,
+        "resultBytes": 131,
+        "requestSha256": "473aea0d4dc65b93e04581804d27b6b1dffa6bce9ff4d963496679d8884adc3e",
+        "expectedSha256": "54b33dcaa051bb2a8657f094744c853e93e9adb304a0974d2083f31f2b5d1d15",
+        "expectedError": "INVALID_INPUT",
+        "elapsedMs": 114.261,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2162688
+      },
+      {
+        "id": "reject-envelope-over-48k",
+        "requestFile": "009-reject-envelope-over-48k.request",
+        "expectedFile": "009-reject-envelope-over-48k.expected.json",
+        "requestBytes": 49153,
+        "resultBytes": 122,
+        "requestSha256": "094bfd917517fdb605b63c5a47e3d6c12857b6a9bfb17b55c94ff6a41f0e8932",
+        "expectedSha256": "a8ba625aa2b04d6bedce31176e0581056c2164d07c580f81d902f94ae6249ff6",
+        "expectedError": "INPUT_TOO_LARGE",
+        "elapsedMs": 108.745,
+        "exitCode": 0,
+        "procExit": null,
+        "memoryBytes": 2228224
+      }
+    ],
+    "limitations": [
+      "Node WASI proves adapter behavior, not production sandbox/fuel",
+      "Studio Host capture, transfer, save, permissions and lifecycle remain unverified"
+    ]
+  },
+  "fuelProof": {
+    "fixtureKind": "plugin-runtime",
+    "wasmBytes": 218589,
+    "wasmSha256": "97113b847130f981e388c19d1929bc5e17039f65e342b275048108c34602fd8a",
+    "wasmtimeVersion": "36.0.0",
+    "budget": {
+      "fuel": 10000000,
+      "deadlineSeconds": 5,
+      "memoryBytes": 67108864,
+      "guestStackBytes": 2097152
+    },
+    "engineProvenance": {
+      "pythonBindingVersion": "36.0.0",
+      "nativeEngineVersion": "36.0.2",
+      "sourceUrl": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.2/wasmtime-v36.0.2-x86_64-windows-c-api.zip",
+      "releaseArchiveSha256": "ae93e1949d169ac4412c735c08ecb4dee841023549d83f69c6e98cefca22e734",
+      "dllPath": "E:\\zi-devtools\\target\\wasmtime-36.0.2\\wasmtime\\win32-x86_64\\_wasmtime.dll",
+      "dllSha256": "e001d681b140a3b6a382f8cfa50bf1b5e81d809b6be11b77a84a3a96bee06e5b",
+      "limitations": [
+        "Official independent C-API engine, not Studio executable",
+        "Release archive verified and consumed in memory; no ZIP retained"
+      ]
+    },
+    "cases": [
+      {
+        "id": "inspect-object",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 100531,
+        "fuelRemaining": 9899469,
+        "elapsedMs": 1.492,
+        "memoryBytes": 2162688,
+        "requestBytes": 224,
+        "resultBytes": 314,
+        "requestSha256": "b5ae440131950749f286d5ad471e6191434f22cd5192180e8b1385e5715b26a3",
+        "expectedSha256": "22dd8d6024575168ff12cb44190a0d1978fc29f79bed3510a42e11098bb19465",
+        "expectedError": null
+      },
+      {
+        "id": "receive-object",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 69329,
+        "fuelRemaining": 9930671,
+        "elapsedMs": 0.71,
+        "memoryBytes": 2162688,
+        "requestBytes": 224,
+        "resultBytes": 211,
+        "requestSha256": "19df3f2d501c0b9f1865ab59159d10c4af7f7a6c7cad4264100d47124e05b035",
+        "expectedSha256": "cda8d57c7f1e779382912c2116010a631260baa7b12a3d996a6fea503e97dec4",
+        "expectedError": null
+      },
+      {
+        "id": "inspect-empty-object",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 44735,
+        "fuelRemaining": 9955265,
+        "elapsedMs": 0.603,
+        "memoryBytes": 2162688,
+        "requestBytes": 160,
+        "resultBytes": 147,
+        "requestSha256": "5c704e67f294c99ee2457aaeba81785373383b08ff4d4dd323ac32ed8597417c",
+        "expectedSha256": "d93251315d833e4030e3830a4c0b356a413b914acd23f32664d8b83f7f78bf50",
+        "expectedError": null
+      },
+      {
+        "id": "reject-array",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 27950,
+        "fuelRemaining": 9972050,
+        "elapsedMs": 0.685,
+        "memoryBytes": 2162688,
+        "requestBytes": 163,
+        "resultBytes": 128,
+        "requestSha256": "c7743d852bd840d0d70050df71ab8e3fca1619c0353133824a7305bf2034475d",
+        "expectedSha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da",
+        "expectedError": "INVALID_INPUT"
+      },
+      {
+        "id": "reject-string",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 27187,
+        "fuelRemaining": 9972813,
+        "elapsedMs": 0.673,
+        "memoryBytes": 2162688,
+        "requestBytes": 164,
+        "resultBytes": 128,
+        "requestSha256": "0136d05d88901bd4abe83f2a6b792ef970ad56f23f3bb47276c60b032e01a8dc",
+        "expectedSha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da",
+        "expectedError": "INVALID_INPUT"
+      },
+      {
+        "id": "reject-extra-input",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 27633,
+        "fuelRemaining": 9972367,
+        "elapsedMs": 0.659,
+        "memoryBytes": 2162688,
+        "requestBytes": 158,
+        "resultBytes": 119,
+        "requestSha256": "843f354ca1dcb27c6d748a3a3d83ef6e013ad1c552486543e9e7074679f901c5",
+        "expectedSha256": "d346e9bb18b3bb5dc73bae0b6a0ef86633035d5975d1c3633f8a3ed6331212d4",
+        "expectedError": "INVALID_INPUT"
+      },
+      {
+        "id": "reject-duplicate-key",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 30299,
+        "fuelRemaining": 9969701,
+        "elapsedMs": 0.587,
+        "memoryBytes": 2162688,
+        "requestBytes": 159,
+        "resultBytes": 119,
+        "requestSha256": "8d53fa76141a1e518ea0cc17065918a3caca29a5fda523be95e622b2cd9fb7bf",
+        "expectedSha256": "c121638e6e809c3d772db72acef3398393c18fed6c820cb04fb8d560a6899d89",
+        "expectedError": "INVALID_INPUT"
+      },
+      {
+        "id": "reject-value-over-8k",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 263977,
+        "fuelRemaining": 9736023,
+        "elapsedMs": 1.104,
+        "memoryBytes": 2228224,
+        "requestBytes": 8358,
+        "resultBytes": 127,
+        "requestSha256": "54c5af5711579d166365a70b6b88e05db5872b61942672724514d860882d0ca3",
+        "expectedSha256": "03c8afa625775354553182283335662c2556338387f5e84d01ab42d82f469e61",
+        "expectedError": "INPUT_TOO_LARGE"
+      },
+      {
+        "id": "reject-129-fields",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 563526,
+        "fuelRemaining": 9436474,
+        "elapsedMs": 0.783,
+        "memoryBytes": 2162688,
+        "requestBytes": 1358,
+        "resultBytes": 131,
+        "requestSha256": "473aea0d4dc65b93e04581804d27b6b1dffa6bce9ff4d963496679d8884adc3e",
+        "expectedSha256": "54b33dcaa051bb2a8657f094744c853e93e9adb304a0974d2083f31f2b5d1d15",
+        "expectedError": "INVALID_INPUT"
+      },
+      {
+        "id": "reject-envelope-over-48k",
+        "passBudget": true,
+        "trap": null,
+        "fuelUsed": 19283,
+        "fuelRemaining": 9980717,
+        "elapsedMs": 1.055,
+        "memoryBytes": 2228224,
+        "requestBytes": 49153,
+        "resultBytes": 122,
+        "requestSha256": "094bfd917517fdb605b63c5a47e3d6c12857b6a9bfb17b55c94ff6a41f0e8932",
+        "expectedSha256": "a8ba625aa2b04d6bedce31176e0581056c2164d07c580f81d902f94ae6249ff6",
+        "expectedError": "INPUT_TOO_LARGE"
+      }
+    ],
+    "failures": [],
+    "limitations": [
+      "Independent Wasmtime C-API; not Studio Host acceptance",
+      "No inherited environment or preopened directories; stdout redirected to runner files"
+    ]
+  },
+  "coldStartProof": {
+    "diagnosticOnly": false,
+    "verifierSha256": "8d0fcd35623de0218fb091574ab40a833fe258c234b7c8a72fbdb9b7fa46ee41",
+    "wasmSha256": "97113b847130f981e388c19d1929bc5e17039f65e342b275048108c34602fd8a",
+    "wasmBytes": 218589,
+    "engine": {
+      "pythonBindingVersion": "36.0.0",
+      "nativeEngineVersion": "36.0.2",
+      "sourceUrl": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.2/wasmtime-v36.0.2-x86_64-windows-c-api.zip",
+      "releaseArchiveSha256": "ae93e1949d169ac4412c735c08ecb4dee841023549d83f69c6e98cefca22e734",
+      "dllPath": "E:\\zi-devtools\\target\\wasmtime-36.0.2\\wasmtime\\win32-x86_64\\_wasmtime.dll",
+      "dllSha256": "e001d681b140a3b6a382f8cfa50bf1b5e81d809b6be11b77a84a3a96bee06e5b",
+      "limitations": [
+        "Official independent C-API engine, not Studio executable",
+        "Release archive verified and consumed in memory; no ZIP retained"
+      ]
+    },
+    "rows": [
+      {
+        "id": "inspect-object",
+        "pid": 62372,
+        "closed": true,
+        "elapsedMs": 309.715,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 100.716,
+        "compileMs": 35.457,
+        "instantiateMs": 5.677,
+        "executeMs": 1.077,
+        "fuelUsed": 100531,
+        "resultSha256": "22dd8d6024575168ff12cb44190a0d1978fc29f79bed3510a42e11098bb19465"
+      },
+      {
+        "id": "receive-object",
+        "pid": 7696,
+        "closed": true,
+        "elapsedMs": 330.63,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 94.008,
+        "compileMs": 41.33,
+        "instantiateMs": 5.602,
+        "executeMs": 0.487,
+        "fuelUsed": 69329,
+        "resultSha256": "cda8d57c7f1e779382912c2116010a631260baa7b12a3d996a6fea503e97dec4"
+      },
+      {
+        "id": "inspect-empty-object",
+        "pid": 52884,
+        "closed": true,
+        "elapsedMs": 308.536,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 98.955,
+        "compileMs": 39.194,
+        "instantiateMs": 5.918,
+        "executeMs": 0.439,
+        "fuelUsed": 44735,
+        "resultSha256": "d93251315d833e4030e3830a4c0b356a413b914acd23f32664d8b83f7f78bf50"
+      },
+      {
+        "id": "reject-array",
+        "pid": 52432,
+        "closed": true,
+        "elapsedMs": 303.358,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 91.634,
+        "compileMs": 45.591,
+        "instantiateMs": 5.35,
+        "executeMs": 0.83,
+        "fuelUsed": 27950,
+        "resultSha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da"
+      },
+      {
+        "id": "reject-string",
+        "pid": 53132,
+        "closed": true,
+        "elapsedMs": 320.264,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 94.004,
+        "compileMs": 45.813,
+        "instantiateMs": 5.056,
+        "executeMs": 1.147,
+        "fuelUsed": 27187,
+        "resultSha256": "4d5f5804bf6ce8bdbc72131baf2078f8807aa26d6ec9399e28e9fafe853361da"
+      },
+      {
+        "id": "reject-extra-input",
+        "pid": 64468,
+        "closed": true,
+        "elapsedMs": 344.282,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 99.875,
+        "compileMs": 40.657,
+        "instantiateMs": 5.754,
+        "executeMs": 0.367,
+        "fuelUsed": 27633,
+        "resultSha256": "d346e9bb18b3bb5dc73bae0b6a0ef86633035d5975d1c3633f8a3ed6331212d4"
+      },
+      {
+        "id": "reject-duplicate-key",
+        "pid": 60488,
+        "closed": true,
+        "elapsedMs": 475.68,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 98.882,
+        "compileMs": 39.498,
+        "instantiateMs": 5.137,
+        "executeMs": 0.373,
+        "fuelUsed": 30299,
+        "resultSha256": "c121638e6e809c3d772db72acef3398393c18fed6c820cb04fb8d560a6899d89"
+      },
+      {
+        "id": "reject-value-over-8k",
+        "pid": 41240,
+        "closed": true,
+        "elapsedMs": 336.248,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 98.722,
+        "compileMs": 45.209,
+        "instantiateMs": 31.984,
+        "executeMs": 0.897,
+        "fuelUsed": 263977,
+        "resultSha256": "03c8afa625775354553182283335662c2556338387f5e84d01ab42d82f469e61"
+      },
+      {
+        "id": "reject-129-fields",
+        "pid": 60260,
+        "closed": true,
+        "elapsedMs": 318.045,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 96.388,
+        "compileMs": 38.364,
+        "instantiateMs": 6.129,
+        "executeMs": 0.786,
+        "fuelUsed": 563526,
+        "resultSha256": "54b33dcaa051bb2a8657f094744c853e93e9adb304a0974d2083f31f2b5d1d15"
+      },
+      {
+        "id": "reject-envelope-over-48k",
+        "pid": 58552,
+        "closed": true,
+        "elapsedMs": 365.736,
+        "passed": true,
+        "exitCode": 0,
+        "engineSetupMs": 93.695,
+        "compileMs": 40.782,
+        "instantiateMs": 38.925,
+        "executeMs": 0.551,
+        "fuelUsed": 19283,
+        "resultSha256": "a8ba625aa2b04d6bedce31176e0581056c2164d07c580f81d902f94ae6249ff6"
+      }
+    ],
+    "remaining": 0,
+    "failures": [],
+    "limitations": [
+      "Fresh Python/C-API process, not Studio Windows executable startup or Worker request reconstruction",
+      "Same raw portable requests, no skipped cases promoted to Host passes",
+      "Five-second independent outer deadline; timing includes process scheduling and engine compilation; no larger budget",
+      "Stage tracing changes timing and is diagnostic only, not acceptance proof"
+    ]
+  },
+  "engineProvenance": {
+    "pythonBindingVersion": "36.0.0",
+    "nativeEngineVersion": "36.0.2",
+    "sourceUrl": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.2/wasmtime-v36.0.2-x86_64-windows-c-api.zip",
+    "releaseArchiveSha256": "ae93e1949d169ac4412c735c08ecb4dee841023549d83f69c6e98cefca22e734",
+    "dllPath": "E:\\zi-devtools\\target\\wasmtime-36.0.2\\wasmtime\\win32-x86_64\\_wasmtime.dll",
+    "dllSha256": "e001d681b140a3b6a382f8cfa50bf1b5e81d809b6be11b77a84a3a96bee06e5b",
+    "limitations": [
+      "Official independent C-API engine, not Studio executable",
+      "Release archive verified and consumed in memory; no ZIP retained"
+    ]
+  },
+  "limitations": [
+    "Unsigned directory only; no installer or signature.",
+    "Studio Host negotiation, capture store, receiver search/prepare/confirm, JSON save/readback, permissions and lifecycle are unverified.",
+    "Node WASI functional parity is not a production sandbox or fuel acceptance test."
+  ],
+  "directoryIndexEncoding": {
+    "hash": "SHA-256",
+    "encoding": "UTF-8",
+    "content": "files array in listed order",
+    "objectKeyOrder": [
+      "path",
+      "size",
+      "sha256"
+    ],
+    "ensureAscii": false,
+    "separators": [
+      ",",
+      ":"
+    ],
+    "trailingNewline": false
+  },
+  "receiptRevision": 1,
+  "revisesReceipt": "json-object-0.1.0-candidate-07-verification.json"
+}

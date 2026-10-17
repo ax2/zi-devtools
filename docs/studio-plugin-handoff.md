@@ -1,5 +1,76 @@
 # Studio 插件提供方交接
 
+## 2026-10-18：不可变目录修订与 JSON Object 收据
+
+不可变目录修订为 `release/plugin-candidates/devtools-catalog-2026-10-18-3c7c5aa8ad679a14/`，外部收据为同名 `-verification.json`。修订 ID 由源目录内容派生，不复用应用开发版本 `0.82.0-dev.105`；包内冻结两个源 JSON、Studio 对比结果、154 项逐工具包/操作/能力/范围映射，以及六个包的副本收据。源目录 SHA-256 分别为 `tools.json` `37353db759bad2df4320990a55b6c5d32b81058e75f3e98fc39646d1afd0499d` 和迁移映射 `8f67d99638646519e846d9391fd0fc7a4336460752e8cb3c4d7192c2e68d7a68`。修订 SHA-256 为 `3c7c5aa8ad679a141b1268654bc9ef085530d33b1e123b40e08c26df80042ea1`，索引 SHA-256 为 `ef23b73d4310d066ca73753830afeed404843d066de9e374f6363552e69fe2c3`；共 11 个文件、2,108,664 字节。
+
+Studio 的 dev.105 对比报告核对到 154 项，新增/删除均为 0，版本或状态变化 76 项、范围变化 70 项、发现信息变化 76 项；当前状态数为 implemented 92、in-progress 35、planned 27。六个包映射均保留各自 scope 与收据。JSON Object 0.1.0 的 candidate-07 原目录、原收据和 37 个包文件均未改动；新增规范化目录索引收据 `release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json`，其 SHA-256 为 `ff9909ae8b73d569e02eeb9b5c3c5d28730d9d6e8e46a636712a83ef24816b85`。新索引 SHA-256 为 `9479917a473acd40e1ef1b9f826c286de53ce2adcabbdc15b3bb72718fdcb3c1`；37 个文件、328,768 字节。迁移映射现在指向新收据。
+
+Studio 的通用只读 verifier 分别核对目录修订和 JSON Object 收据，均退出码 0，`directoryIndex.status=matched`。这只证明收据和文件字节匹配；目录仍 unsigned，`acceptedCapabilities=0`，不代表安装、运行时、Pi 或完整工具验收。快照来源工作树当时有未提交改动；本轮不对大范围既有改动做提交或回滚。完整验证与产物摘要见 [本轮档案](iterations/2026-10-18-studio-catalog-revision.md)。
+
+## 当前候选：JSON object result 插件 0.1.0
+
+`release/plugin-candidates/json-object-0.1.0-candidate-07` 声明 vendored `output.schema.v1@1.0.0-rc.1` 和 `result.json.v1@1.0.0-preview.1`，提供 JSON 对象摘要和对象接收能力。两个能力都声明 whole-output JSON Schema 并显式启用 `application/json` capture；Schema 覆盖冻结的完整 `contractVersion/ok/data/error` 输出，receiver 的 `value` 字段接受 object 类型。只有摘要能力注册为受 `pi.tools.register` 用户授权保护的 Pi 工具；接收能力不注册给 agent，只供 Host 在用户确认接力后调用。源 JSON 工具版本 `1.3.0` 增加对象摘要，独立程序版本保持 `0.82.0-dev.105`。
+
+候选共 37 文件、328,768 字节；原收据目录索引 SHA-256 `51e2e1c9892ef6aff9ef848735007d0bf1cefd7fbb5ada2e9020952458246f17`。原目录、原收据和包内容保留。因 Studio verifier 规范化索引采用 `path,size,sha256` 顺序，现另附修订收据 `release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json`，规范化索引 SHA-256 `9479917a473acd40e1ef1b9f826c286de53ce2adcabbdc15b3bb72718fdcb3c1`；新收据 SHA-256 `ff9909ae8b73d569e02eeb9b5c3c5d28730d9d6e8e46a636712a83ef24816b85`。10 条 actual native/WASI 原始请求逐字节一致，重复键、非对象、额外字段和输入边界失败用例通过；成功/失败均保留完整四字段外壳。Wasmtime 36.0.2 下 10/10 燃料用例通过，最高 563,526/10,000,000；10/10 全新进程冷启动通过，最慢 475.680 ms。已从候选目录调用所附 replay script，10 条 WASI 请求全部与预期字节匹配。
+
+候选未签名、未获 Studio Host/Pi 接受。结果捕获、对象接力的搜索/预览/确认、JSON 保存/回读、权限撤销和真实 Host 生命周期仍需接收方验收；`acceptedCapabilities` 保持 0。Studio Host 当前对 receiver input schema 的 `maxProperties` 关键字不兼容，Studio 正在补通用 schema 支持；保留提供方的有界限制，待 Host 支持后重跑验收。Candidate-01 是修复 vendored source metadata 时留下的无收据不完整打包尝试，不应安装；Candidate-02 至 Candidate-06 是较早完整包。本次交接使用 Candidate-07。
+
+## 当前候选：文本插件 0.4.1（目录扩展与单次解析）
+
+`release/text-plugin-0.4.1-candidate-02` 要求 `tool.directory.v1@1.0.0-preview.1`，七个稳定 capability ID 逐项声明分类、真实用途和中英文检索别名；计算输入/输出契约没有变化。包内包含 `verification/tool-directory-snapshot.json` 和 `MIGRATION.md`，包外收据 `release/text-plugin-0.4.1-candidate-02-verification.json` 列出逐文件 SHA-256、大小、目录索引摘要及 profile/schema/metadata 摘要。
+
+0.4.1 把插件兼容 JSON 解析从 RawValue 多次递归扫描改为单次 Visitor 遍历；重复键、64层深度及安全整数规则保持。模块 745,814 字节，SHA-256 `7cfcde63aaaa68353067ca1f7a99c8c6e4a6926166f541a6de03c7c814803767`。43 条 native/WASI 字节对照、View 两主题七能力检查、官方 Wasmtime 36.0.2 的 43 条10M fuel/64MiB预算和43个独立进程冷启动全部通过；最大 fuel 4,099,756，最慢冷启动681.396ms，所有子进程已关闭。包共112文件、1,032,175字节，目录索引 SHA-256 `45e2ec33d6c93a82bec8a97295c9adf191577da78f27d95e3996c58ca10aa358`。旧 0.4.0、0.3.0及其收据保留，不覆盖。
+
+包为 unsigned 目录，不是 `.zicode-plugin`，未由 Studio 安装或验收。Wasmtime测量不是Studio生产Worker、管道排空或Host计时验收。无获准签名密钥；Studio Host 的筛选、执行、Pi 授权、更新/撤权/卸载和真实安装截图仍待验收，`acceptedCapabilities` 不增加。
+
+Studio 的 profile/schema 快照和17项能力目录映射位于 `contracts/studio-tool-directory/1.0.0-preview.1/`。生成器拒绝缺项、额外项、非法分类、控制字符、超出 UTF-8 字节预算及 NFKC/小写/去空白后的别名碰撞。Inspect `0.1.1-candidate-02` 与 Trace `0.1.1-candidate-01` 已重新冻结该目录 profile；旧候选保留，实际 Studio Host/Pi/安装验收仍未完成。
+
+## 当前交付：格式与检查插件 0.1.1
+
+候选目录 `release/plugin-candidates/inspect-0.1.1-candidate-02`，包外收据 `release/plugin-candidates/inspect-0.1.1-candidate-02-verification.json`。共 612 个文件、2,343,823 字节；模块 623,155 字节，SHA-256 `1db3fc37df01cd3a8371320d4f897a7fdf750c87e6202b736ed6870f046b8f29`；目录索引 SHA-256 `62de924883f6f0b246ee74fb34eea530b540e6ad7ccd40e5f1018ad830b8d391`。包内包含目录 profile 快照及 schema/别名来源。
+
+覆盖颜色、YAML/JSON、IPv4 CIDR、JWT 内容和 Unicode 共 5 个工具、8 个既有操作，输入上限 8192 UTF-8 字节、序列化结果 48 KiB。121 条独立预期用例的 native/WASI 字节对照、Wasmtime 36.0.2 的 10M fuel/64MiB 内存预算、全新进程 5 秒冷启动和 JSON Schema 检查均通过；最大燃料 6,918,538，最大冷启动 442.297ms。两主题浏览器 View 实际调用 WASI 并验证全部 8 个操作及接力预览/取消；截图已检查。首次预算验证漏传 `--text-results` 时，通用报告解析器把文本结果当 JSON 解析而中断；按工具原有边界模式重跑后 121 项全部通过。
+
+候选为 unsigned 提供方目录，不是 `.zicode-plugin` 安装包。Studio Host 安装、生产 Worker 隔离、Pi 授权、更新/撤权/卸载仍待接收方验收；全目录 `acceptedCapabilities=0`。
+
+## 当前交付：格式与检查插件 0.1.2（tool.open.v1）
+
+新版候选目录 `release/plugin-candidates/inspect-0.1.2-candidate-01/`，包外逐文件收据为同名 `-verification.json`。该包在 schemaVersion 2 清单中精确要求 `tool.open.v1@=1.0.0-preview.1`，保留 `tool.directory.v1@=1.0.0-preview.1`，提供单一 `location: main` View 和原有 8 个能力。旧 `inspect-0.1.1-candidate-02` 保持原样。新版的 WASM 与 0.1.1 字节一致；本候选只改包清单/元数据、主 View 和验证资料，不重复改算法模块。
+
+`window.zicode.navigation.onOpenTool(({capabilityId}) => …)` 用精确 capability ID 映射对应操作选择框，并把焦点放回输入；不调用 `capabilities.invoke`、不改权限、不读写文件或启动服务。有效 ID 返回 `opened`，未知 ID 返回 `not_found`，内部 UI 不可用返回 `unsupported`。包外 verifier 在实际浏览器执行三类定位样例，并在亮/暗主题截图。慢回调样例用 4.5 秒延迟验证 4 秒 View 预算返回 `unsupported`，迟到 ACK 不覆盖已超时的状态；该延迟只在验收 fixture 中，不在产品 View 内。
+
+能力到界面操作采用精确映射，不根据标题或关键词猜测：
+
+| Capability ID | 主 View 操作 | 定位结果 |
+| --- | --- | --- |
+| `devtools.inspect.color.convert` | `color.convert` | 颜色转换 |
+| `devtools.inspect.yaml.to_json` | `yaml.to_json` | YAML 转 JSON |
+| `devtools.inspect.yaml.from_json` | `yaml.from_json` | JSON 转 YAML |
+| `devtools.inspect.cidr.inspect` | `cidr.inspect` | CIDR / IP 网段 |
+| `devtools.inspect.jwt.inspect` | `jwt.inspect` | JWT 检查 |
+| `devtools.inspect.unicode.inspect` | `unicode.inspect` | Unicode 检查 |
+| `devtools.inspect.unicode.nfc` | `unicode.nfc` | Unicode NFC 规范化 |
+| `devtools.inspect.unicode.nfkc` | `unicode.nfkc` | Unicode NFKC 规范化 |
+
+每个样例都断言 `capabilityInvocations=0`；定位只选择界面并聚焦输入，用户仍需检查输入并主动运行操作。
+
+本地 provider receipt 通过并不等于 Studio 接受。Studio 仍需验证 Host 当前通道/请求 ID、4/5 秒预算、迟到回执、View 销毁、撤权、卸载、跨工作区/场景切换和原生 UI；目录完整接受数保持 0。
+
+## 当前交付：Java / Django 堆栈插件 0.1.1
+
+候选目录 `release/plugin-candidates/trace-0.1.1-candidate-01`，包外收据同名 `-verification.json`。共 352 个文件、1,428,569 字节；模块 SHA-256 `bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e`；目录索引 SHA-256 `2e8b35249384757bc1c809bf971e2feccfc9396211a4efde7ca4f29fda9820c0`。本修订将 `tool.directory.v1@1.0.0-preview.1` 与逐能力分类/中英文别名纳入清单，重新验证 59 条结果 Schema；运行模块、View 和既有 59 条预算/冷启动证据均与收据绑定，fuel 上限使用 7,932,681/10,000,000，冷启动 59/59 通过。旧 `trace-0.1.0-candidate-01` 保持不变。此候选未签名、未获 Host/Pi 接受。
+
+## 当前交付：文本插件 0.3.0（SQL 部分覆盖）
+
+候选目录 `release/text-plugin-0.3.0-candidate-03`，包含 JSON 格式/压缩/校验、Base64 编解码、SHA-256 和 SQL 通用格式化。SQL 复用共享 `sqlformat` Rust 核心，但只暴露通用方言默认格式，不含桌面版方言、缩进和关键字大小写选项。43 条 native/WASI 字节对照及两主题 View 对 JSON 格式/压缩/校验、SQL、Base64 编解码和 SHA-256 七个操作逐项检查通过。候选未签名、Studio Host/Pi 未验收。
+
+## 历史交付：JSON完整范围候选 0.2.0
+
+JSON独立工具版本1.2.0包含格式化、压缩、校验三操作，映射到独立能力 `devtools.text.json.format`、`devtools.text.json.minify` 与 `devtools.text.json.validate`。候选使用已冻结的 `compute.wasi.v1@=1.0.0-rc.1`，最多8192 UTF-8字节，结果最多48 KiB；不声明任务生命周期、文件、网络或资源profile。插件兼容核心拒绝重复键、超过64层和不安全整数，Standalone默认行为不变。
+
+候选目录为 `release/text-plugin-0.2.0-candidate-04`，包ID `com.zicode.devtools.text`。旧 `0.1.0` 与早期 `0.2.0-candidate-01/02/03` 均保留且不覆盖。无签名私钥时仅生成unsigned目录及包外收据，记录文件清单/大小/SHA-256和验证结果。Studio安装、授权、PI注册、更新/回滚/撤权/卸载仍需接收方验收，`acceptedCapabilities` 不自动增加。
+
 ## 当前开发：JSON完整共享核心与查询多字段提案
 
 [JSON核心说明](json-plugin-design.md)：完整JSONPath子集和有序/无序差异提取zi-json-core，独立版复用；原1MiB输入、4096字节查询、128步、10000项、8MiB输出及重复键/宽整数/Pointer语义保留。修正usize造成的大索引跨平台差异，实际native64/WASI32固定fixture10条独立预期一致，5组核心兼容边界测试通过；这是算法fixture，不是通用WASI适配或Host协议执行。完整JSON核心回归840通过，优化构建11m09s和隔离服务2177ms通过；随后三项JSON实验适配的19条真实native/WASI字节/Schema、独立预算和冷启动通过，工作区844通过。[实验说明](../plugins/fields/README.md)明确无View/包/Host协商，不是五操作提案全实现。根dev105，两工具1.0.3，仍not_delivered。
@@ -8,7 +79,7 @@
 
 ## 当前交付：Java / Django 堆栈候选
 
-[完整交付说明](trace-plugin-handoff.md)：两项完整文本堆栈操作共用 zi-trace-core，源工具 1.0.3，根 dev105 保持。unsigned `release/trace-0.1.0-candidate-01` 已冻结，346 文件共 1,403,946 字节；最终模块 241,191 字节。59 条实际字节对照、Wasmtime 36.0.2 预算及全新进程冷启动全部通过，最慢 504.374ms，所有验证子进程关闭。最终 Schema、两主题公开 SDK + 实际 WASI View 检查通过；完整工作区测试 829 通过、0 失败、34 忽略，严格 Clippy 和原生优化构建/隔离服务启停通过。两项映射更新为提供方 candidate，实际 Host 安装/生命周期/Worker/Pi 未验收，完整接受仍为 0。
+[完整交付说明](trace-plugin-handoff.md)：两项完整文本堆栈操作共用 zi-trace-core，源工具 1.0.3，根 dev105 保持。当前 unsigned 目录 `release/plugin-candidates/trace-0.1.1-candidate-01` 为 352 文件、1,428,569 字节，包含目录搜索 profile；旧 `release/trace-0.1.0-candidate-01` 保留。59 条实际字节对照、Wasmtime 36.0.2 预算及全新进程冷启动全部通过，最慢 504.374ms，所有验证子进程关闭。最终 Schema、两主题公开 SDK + 实际 WASI View 检查通过；完整工作区测试 829 通过、0 失败、34 忽略，严格 Clippy 和原生优化构建/隔离服务启停通过。两项映射更新为提供方 candidate，实际 Host 安装/生命周期/Worker/Pi 未验收，完整接受仍为 0。
 
 [主 CI 37928511885](https://github.com/ax2/zi-devtools/actions/runs/37928511885) 对 c431fe9 已完成并通过。更正早期记录：37889396659 是增量更新工作流，不是主 CI；先前三次主 CI 被同一输出边界测试假设拦住，现已修复并通过，原失败证据保留。
 
@@ -40,9 +111,9 @@
 - 外层及错误枚举保持冻结 rc.1；`input.text` 最多 8192 UTF-8 字节，完整请求/序列化结果最多 48 KiB。模块 ≤2 MiB、10M fuel/5秒/64MiB/2MiB stack。场景 ID 在新候选中限定 1–128 字节；原文本包行为不变。
 - `fixtures/parity/`、`fixtures/budget/` 含逐条原始请求、预期结果和 SHA-256。独立预算重放使用附带 `verification/verify_diagnostics_fuel.py --text-results`（该开关保持完整字节比较，只跳过诊断报告 JSON 的二次解析），并绑定模块和官方引擎摘要；冷启动可用附带 `verify_diagnostics_cold.py`。独立验证工具不是产品运行依赖。
 - 独立桌面验证：完整 28 组工作区测试 818 通过、0 失败、34 原有跳过；fmt 和全特性严格 clippy 通过；复用原 release 目标目录优化构建 10m54s。新 `target/release/ZiDevTools.exe` 的隔离服务启停通过、健康响应正确、退出码0且端口释放。没有新增阶段完整运行目录、安装包、ZIP、tag 或正式 Release；本轮没有把 SDK fixture 当作原生 GUI 验收。
-- 当前 [完整映射](studio-plugin-migration.json)包含 154 工具：41 纯计算候选、50 等 Host 接口、63 独立版未完成；重叠整合仍为 0，`acceptedCapabilities=0`。9 工具各操作已记为提供方 candidate；生产 Worker 冷启动/管道隔离、安装/更新/回滚/撤权/卸载和 Pi 授权需接收方实际验证。
+- 当前 [完整映射](studio-plugin-migration.json)包含 154 工具：41 纯计算候选、51 等 Host 接口、62 独立版未完成；重叠整合仍为 0，`acceptedCapabilities=0`。32 个工具条目已映射到 6 个具体候选目录及其外部收据；生产 Worker 冷启动/管道隔离、安装/更新/回滚/撤权/卸载和 Pi 授权需接收方实际验证。此计数随 2026-10-18 JSON Object 收据修订更新。
 
-后续优先继续 YAML/JSON、IPv4 CIDR、JWT 检视、Unicode 的既有纯计算操作；双输入 JSON/文本差异、查询参数及数据工作台需要逐操作列出参数与完整范围后确定有界协议。图片/文件/桌面/服务能力保持明确 Host 接口需求，不以独立 EXE、共享数据库或本地 HTTP 绕过。以下为历史记录，数量和状态以本节及生成映射为准。
+YAML/JSON、IPv4 CIDR、JWT、Unicode 与文本转换的既有候选均已落目录并纳入映射。下一步优先补足多字段 JSON/文本差异适配的完整预算和真实Host协议协商；当前固定结果仍有冷启动超时或参数协议未协商，不能先标记候选交付。图片/文件/桌面/服务能力保持明确 Host 接口需求，不以独立 EXE、共享数据库或本地 HTTP 绕过。以下为历史记录，数量和状态以本节及生成映射为准。
 
 2026-10-07：接收到 Studio 会话的插件交付契约和优先接续要求。流程结果检查器检查点已完成；本轮已推进五项文本能力实际候选与完整目录迁移映射。
 
@@ -59,6 +130,12 @@
 [迁移映射](studio-plugin-migration.json)覆盖当前全部152项：32项纯计算迁移候选、58项等待Host接口、62项独立版整体未完成。重叠整合暂为0项，尚未确认Host已有同能力，避免推定。五项试点对应json/base64/sha256三项独立工具，全部pluginStatus仍not_delivered，acceptedCapabilities=0。脚本从tools.json同步工具版本/状态，CI执行 --check 防止漏项或陈旧映射。静态候选不代表整个界面/文件功能可直接迁移，需逐项抽核心和限定输入协议。
 
 快照核验脚本：`python scripts/verify_studio_contract.py`，只依赖本仓库。`.gitattributes`禁用该快照的换行转换，以保存发布方原始摘要。16向量和5 capability数量已核对，初次核对时尚未构建实际WASI、缺少wasm32-wasip1且未发现wasmtime CLI；后续已复用共享工具链补齐target并构建实际模块，见下方更新。
+
+## 2026-10-17：文本插件候选 0.3.0（SQL 部分覆盖）
+
+当前文本插件候选新增 `devtools.text.sql.format`，复用桌面版的纯 Rust `sqlformat` 核心，View 可切换 SQL/JSON 并通过本地 SDK 形状桥接调用实际 WASI。仅支持通用方言默认布局；桌面端 PostgreSQL/MySQL/SQLite/SQL Server 选择、缩进和关键字大小写设置不在候选范围，因此迁移表将 SQL 标记为部分覆盖。模块验证需固定为 43 条 native/WASI 字节一致用例；两主题 View 覆盖 SQL 格式化及 JSON 正反例。
+
+候选计划路径 `release/text-plugin-0.3.0-candidate-03`，包外收据同名 `-verification.json`。候选未签名，Studio Host/Pi/安装生命周期未验收，`acceptedCapabilities` 保持 0；Node 运行只证明功能一致，不证明 Host fuel 或沙箱安全。上一段记录的 0.2.0 JSON 候选保留为历史交付，不被覆盖。
 
 ## 2026-10-07：文本核心与实际模块
 

@@ -1,2 +1,7 @@
 contracts/studio-devtools/v1/** -text
 vendor/regex-automata/** -text
+docs/tools.json -text
+docs/studio-plugin-migration.json -text
+release/plugin-candidates/devtools-catalog-2026-10-18-3c7c5aa8ad679a14/** -text
+release/plugin-candidates/devtools-catalog-2026-10-18-3c7c5aa8ad679a14-verification.json -text
+release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json -text
