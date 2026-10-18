@@ -179,6 +179,23 @@ def receipt_for_scope(migration_row: dict, scope: dict) -> str | None:
     return None
 
 
+def package_receipt_path(
+    source_tool_ids: set[str], migration_by_id: dict[str, dict], candidate: str
+) -> str:
+    receipts = {
+        receipt
+        for source_id in source_tool_ids
+        for scope in migration_by_id[source_id].get("operationScopes", [])
+        if scope.get("candidateDirectory") == candidate
+        if (receipt := receipt_for_scope(migration_by_id[source_id], scope))
+    }
+    if len(receipts) != 1:
+        raise RuntimeError(
+            f"Expected exactly one explicit verification receipt for {candidate}; found {sorted(receipts)}"
+        )
+    return next(iter(receipts))
+
+
 def git_source_state() -> dict:
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
@@ -267,16 +284,7 @@ def main() -> None:
 
     package_records = []
     for (package_id, package_version, candidate), data in sorted(package_scopes.items()):
-        receipt_paths = sorted({
-            receipt_for_scope(migration_by_id[source_id], scope)
-            for source_id in data["sourceToolIds"]
-            for scope in migration_by_id[source_id].get("operationScopes", [])
-            if scope.get("candidateDirectory") == candidate
-        })
-        if len(receipt_paths) > 1:
-            raise RuntimeError(f"Conflicting package receipts for {candidate}: {receipt_paths}")
-        candidate_name = Path(candidate).name
-        receipt_path = receipt_paths[0] if receipt_paths else (Path(candidate).parent / f"{candidate_name}-verification.json").as_posix()
+        receipt_path = package_receipt_path(data["sourceToolIds"], migration_by_id, candidate)
         receipt_info = verify_package(candidate, receipt_path)
         if receipt_info["packageId"] != package_id or receipt_info["packageVersion"] != package_version:
             raise RuntimeError(f"Receipt package identity mismatch: {receipt_path}")
