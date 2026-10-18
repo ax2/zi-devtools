@@ -159,14 +159,14 @@
       "packageId": "com.zicode.devtools.text",
       "packageVersion": "0.4.1",
       "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-      "verificationReceipt": "release/text-plugin-0.4.1-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
       "directoryProfile": "tool.directory.v1@=1.0.0-preview.1",
       "candidatePackages": [
         {
           "packageId": "com.zicode.devtools.text",
           "packageVersion": "0.4.1",
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-          "verificationReceipt": "release/text-plugin-0.4.1-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "capabilities": [
             "devtools.text.json.format",
             "devtools.text.json.minify",
@@ -250,7 +250,7 @@
       "packageId": "com.zicode.devtools.text",
       "packageVersion": "0.4.1",
       "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-      "verificationReceipt": "release/text-plugin-0.4.1-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
       "directoryProfile": "tool.directory.v1@=1.0.0-preview.1"
     },
     {
@@ -282,7 +282,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -303,7 +303,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -311,7 +311,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -356,7 +356,7 @@
       "packageId": "com.zicode.devtools.text",
       "packageVersion": "0.4.1",
       "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-      "verificationReceipt": "release/text-plugin-0.4.1-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
       "directoryProfile": "tool.directory.v1@=1.0.0-preview.1"
     },
     {
@@ -433,7 +433,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -447,7 +447,7 @@
         "tool.open.v1": "=1.0.0-preview.1"
       },
       "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json"
+      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
     },
     {
       "sourceToolId": "regex",
@@ -507,7 +507,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -528,7 +528,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -549,7 +549,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -570,7 +570,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -578,7 +578,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -707,7 +707,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -721,7 +721,7 @@
         "tool.open.v1": "=1.0.0-preview.1"
       },
       "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json"
+      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
     },
     {
       "sourceToolId": "text-stats",
@@ -751,7 +751,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -759,7 +759,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -792,7 +792,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -813,7 +813,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -821,7 +821,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -854,7 +854,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -875,7 +875,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -883,7 +883,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -918,7 +918,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -939,7 +939,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -960,7 +960,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -981,7 +981,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -989,7 +989,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -1026,7 +1026,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -1051,7 +1051,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -1065,7 +1065,7 @@
         "tool.open.v1": "=1.0.0-preview.1"
       },
       "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json"
+      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
     },
     {
       "sourceToolId": "hex",
@@ -1096,7 +1096,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1117,7 +1117,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1125,7 +1125,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -1161,7 +1161,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1182,7 +1182,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1203,7 +1203,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1224,7 +1224,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1245,7 +1245,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1253,7 +1253,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -1285,7 +1285,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1293,7 +1293,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/transforms-0.1.0-candidate-02-verification.json",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
       "packageId": "com.zicode.devtools.transforms",
       "packageVersion": "0.1.0"
     },
@@ -1329,7 +1329,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -1343,7 +1343,7 @@
         "tool.open.v1": "=1.0.0-preview.1"
       },
       "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json"
+      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
     },
     {
       "sourceToolId": "data",
@@ -1763,7 +1763,7 @@
       "packageId": "com.zicode.devtools.text",
       "packageVersion": "0.4.1",
       "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-      "verificationReceipt": "release/text-plugin-0.4.1-candidate-02-verification.json"
+      "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json"
     },
     {
       "sourceToolId": "json-schema",
@@ -2072,7 +2072,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -2097,7 +2097,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -2122,7 +2122,7 @@
             "tool.open.v1": "=1.0.0-preview.1"
           },
           "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
           "runtimeVerification": "121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
           "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
@@ -2136,7 +2136,7 @@
         "tool.open.v1": "=1.0.0-preview.1"
       },
       "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json"
+      "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
     },
     {
       "sourceToolId": "escape-suite",
@@ -3544,7 +3544,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3552,7 +3552,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -3586,7 +3586,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3594,7 +3594,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -3649,7 +3649,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3657,7 +3657,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -3691,7 +3691,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3699,7 +3699,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -3733,7 +3733,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3741,7 +3741,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -3917,7 +3917,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3925,7 +3925,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -3959,7 +3959,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -3967,7 +3967,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -4001,7 +4001,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -4009,7 +4009,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -4043,7 +4043,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -4051,7 +4051,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -4085,7 +4085,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -4093,7 +4093,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },
@@ -4127,7 +4127,7 @@
             "output.schema.v1": "=1.0.0-rc.1"
           },
           "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
@@ -4135,7 +4135,7 @@
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
       "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
       "packageId": "com.zicode.devtools.diagnostics",
       "packageVersion": "0.1.3"
     },

@@ -155,6 +155,30 @@ def verify_package(candidate_path: str, receipt_path: str) -> dict:
     }
 
 
+def receipt_for_scope(migration_row: dict, scope: dict) -> str | None:
+    receipt = scope.get("verificationReceipt")
+    if receipt:
+        return receipt
+    package_id = scope.get("packageId")
+    package_version = scope.get("packageVersion")
+    candidate = scope.get("candidateDirectory")
+    for package in migration_row.get("candidatePackages", []):
+        if (
+            package.get("packageId") == package_id
+            and package.get("packageVersion") == package_version
+            and package.get("candidateDirectory") == candidate
+            and package.get("verificationReceipt")
+        ):
+            return package["verificationReceipt"]
+    if (
+        migration_row.get("packageId") == package_id
+        and migration_row.get("packageVersion") == package_version
+        and migration_row.get("candidateDirectory") == candidate
+    ):
+        return migration_row.get("verificationReceipt")
+    return None
+
+
 def git_source_state() -> dict:
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
@@ -223,7 +247,7 @@ def main() -> None:
                 "packageId": package_id,
                 "packageVersion": package_version,
                 "candidateDirectory": directory,
-                "verificationReceipt": scope.get("verificationReceipt"),
+                "verificationReceipt": receipt_for_scope(migration_row, scope),
                 "scopeKind": scope.get("scopeKind"),
                 "scope": scope.get("scope"),
                 "pluginStatus": scope.get("pluginStatus"),
@@ -244,10 +268,10 @@ def main() -> None:
     package_records = []
     for (package_id, package_version, candidate), data in sorted(package_scopes.items()):
         receipt_paths = sorted({
-            scope.get("verificationReceipt")
+            receipt_for_scope(migration_by_id[source_id], scope)
             for source_id in data["sourceToolIds"]
             for scope in migration_by_id[source_id].get("operationScopes", [])
-            if scope.get("candidateDirectory") == candidate and scope.get("verificationReceipt")
+            if scope.get("candidateDirectory") == candidate
         })
         if len(receipt_paths) > 1:
             raise RuntimeError(f"Conflicting package receipts for {candidate}: {receipt_paths}")

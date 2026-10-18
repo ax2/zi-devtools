@@ -1,0 +1,3037 @@
+{
+  "schemaVersion": 1,
+  "sourceCatalogVersion": "0.82.0-dev.105",
+  "sourceToolCount": 154,
+  "acceptedCapabilities": 0,
+  "receiptArtifacts": "each mapped provider receipt is copied into package-receipts/ and checked against its source SHA-256",
+  "tools": [
+    {
+      "sourceToolId": "advanced-calculator",
+      "title": "全能计算器",
+      "sourceVersion": "0.15.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "agent-claude",
+      "title": "Claude CLI 适配器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "agent-codex",
+      "title": "Codex CLI 适配器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "agent-replay",
+      "title": "Agent 记录查看器",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "agent-runner",
+      "title": "Agent 任务工作台",
+      "sourceVersion": "1.10.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "agent-scheduler",
+      "title": "定时任务与触发器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "anythingllm",
+      "title": "AnythingLLM 连接器",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "app-delta-update",
+      "title": "增量更新与回滚",
+      "sourceVersion": "0.2.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "app-update-check",
+      "title": "程序更新检查",
+      "sourceVersion": "0.8.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "artifact-hub",
+      "title": "类型化资料与结果",
+      "sourceVersion": "0.13.1",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "ascii-art",
+      "title": "ASCII Art 字符画",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
+    },
+    {
+      "sourceToolId": "ascii-codes",
+      "title": "ASCII 码表",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
+    },
+    {
+      "sourceToolId": "base64",
+      "title": "Base64",
+      "sourceVersion": "1.1.3",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.base64.encode",
+        "devtools.text.base64.decode"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "devtools.text.base64.encode",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_text_operation_within_plugin_budget",
+          "scope": "UTF-8文本编码为标准Base64。 输入上限8192 UTF-8字节，序列化结果上限48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
+        },
+        {
+          "operationId": "devtools.text.base64.decode",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_text_operation_within_plugin_budget",
+          "scope": "标准Base64解码并验证UTF-8结果。 输入上限8192 UTF-8字节，序列化结果上限48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
+        }
+      ],
+      "uncoveredScope": "文本插件0.4.1候选包含Base64/SHA；七项既有能力声明Studio目录分类、用途和中英文别名；43条native/WASI一致性、官方Wasmtime fuel/冷启动及两主题View已通过，Studio Host/Pi待验收。"
+    },
+    {
+      "sourceToolId": "browser-clipper",
+      "title": "网页与对话收集",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "calendar-planner",
+      "title": "万年历与日程",
+      "sourceVersion": "1.7.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "case-convert",
+      "title": "命名转换",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.case.camel",
+        "devtools.transforms.case.pascal",
+        "devtools.transforms.case.snake",
+        "devtools.transforms.case.kebab"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "case.camel",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "case.pascal",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "case.snake",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "case.kebab",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "celery-diagnostics",
+      "title": "Celery 任务故障分析",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.celery.report"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "celery.report",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "Celery任务日志导入分析；Broker/Worker操作另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "checksum-manifest",
+      "title": "校验清单",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "cidr",
+      "title": "IPv4 CIDR",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.cidr.inspect"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "cidr.inspect",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "IPv4 掩码、网络地址与可用范围",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        }
+      ],
+      "uncoveredScope": "共享纯Rust检查核心的全部既有操作均有界迁移；unsigned 0.1.2新候选增加tool.open.v1只定位UI、不执行能力，Studio Host/Pi待接收方验收。"
+    },
+    {
+      "sourceToolId": "clipboard-actions",
+      "title": "剪贴板动作",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "clipboard-workflows",
+      "title": "剪贴板数据工作流",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "clock-workbench",
+      "title": "全功能时钟",
+      "sourceVersion": "0.7.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "color",
+      "title": "颜色转换",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.color.convert"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "color.convert",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "HEX、RGB、HSL 颜色表示",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        }
+      ],
+      "uncoveredScope": "共享纯Rust检查核心的全部既有操作均有界迁移；unsigned 0.1.2新候选增加tool.open.v1只定位UI、不执行能力，Studio Host/Pi待接收方验收。"
+    },
+    {
+      "sourceToolId": "command-collections",
+      "title": "工作区与工具集合",
+      "sourceVersion": "0.3.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "cron",
+      "title": "Cron 表达式",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "crypto",
+      "title": "加密与签名实验台",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "csv-merge",
+      "title": "CSV 合并与关联",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "curl-import",
+      "title": "cURL 导入",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "data",
+      "title": "CSV / JSON 数据工作台",
+      "sourceVersion": "1.10.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "data-schema",
+      "title": "数据质量检查",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "data-sqlite-export",
+      "title": "表格另存 SQLite",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "data-transform",
+      "title": "数据列变换",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "diff",
+      "title": "文本差异对比",
+      "sourceVersion": "1.0.3",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "1.0.3已通过263功能/时钟、258原预算、512混合文本对照、869原生回归与优化构建/隔离服务；258项独立冷启动全部通过（最长3277.577ms）；View/Host待验收，固定矩阵不证明全部合法输入性能，插件未交付。"
+    },
+    {
+      "sourceToolId": "disk-inspector",
+      "title": "目录空间分析",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-checks",
+      "title": "Django 部署检查报告",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.checks"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "django.checks",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "检查输出导入分析；manage.py执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "django-drf",
+      "title": "DRF OpenAPI 契约对比",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.openapi"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "django.openapi",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "两份OpenAPI JSON差异；联网另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "django-environment",
+      "title": "Python / Django 环境诊断",
+      "sourceVersion": "1.1.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "django-migrations",
+      "title": "Django 迁移计划检查",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.migrations"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "django.migrations",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "django-sql",
+      "title": "Django SQL / N+1 分析",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.sql"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "django.sql",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "SQL查询日志JSON数组归一化与重复分析；执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "django-trace",
+      "title": "Django / Python 堆栈",
+      "sourceVersion": "1.0.3",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.trace.django.trace"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "django.trace",
+          "packageId": "com.zicode.devtools.trace",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/trace-0.1.0-candidate-01",
+          "verificationReceipt": "release/trace-0.1.0-candidate-01-verification.json",
+          "scopeKind": "complete_trace_operation_within_plugin_budget",
+          "scope": "离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。"
+    },
+    {
+      "sourceToolId": "django-urls",
+      "title": "Django URL / reverse 检查",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.django.urls"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "django.urls",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "URL导入列表检索；项目加载另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "docker-panel",
+      "title": "Docker 本地面板",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "duplicate-files",
+      "title": "重复文件检查",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "embedding-playground",
+      "title": "Embedding 工作台",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "encoding-detect",
+      "title": "文件编码转换",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "escape-suite",
+      "title": "转义与转码扩展",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "explorer-menu",
+      "title": "资源管理器统一右键入口",
+      "sourceVersion": "0.30.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "file-compare",
+      "title": "目录内容对比",
+      "sourceVersion": "1.2.7",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "file-intake",
+      "title": "文件拖放入口",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "file-rename",
+      "title": "批量重命名",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "file-search",
+      "title": "文件内容检索",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "files",
+      "title": "批量文件校验",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "git-workbench",
+      "title": "Git 工作区面板",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "global-launcher",
+      "title": "全局快捷启动器",
+      "sourceVersion": "1.6.8",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "hex",
+      "title": "UTF-8 / Hex",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.hex.encode",
+        "devtools.transforms.hex.decode"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "hex.encode",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "UTF-8 文本与十六进制字节互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "hex.decode",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "UTF-8 文本与十六进制字节互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "html-escape",
+      "title": "HTML 转义",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.html.escape",
+        "devtools.transforms.html.unescape"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "html.escape",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "HTML 特殊字符转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "html.unescape",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "HTML 特殊字符转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "http",
+      "title": "HTTP 请求调试",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "http-collections",
+      "title": "HTTP 集合与环境",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "image-batch",
+      "title": "图片批处理",
+      "sourceVersion": "1.4.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-crop-annotate",
+      "title": "图片裁剪与标注",
+      "sourceVersion": "1.5.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-metadata",
+      "title": "图片元数据检查与清理",
+      "sourceVersion": "1.4.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-tools",
+      "title": "图片工作台",
+      "sourceVersion": "1.7.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "image-workflow",
+      "title": "图片操作流程",
+      "sourceVersion": "0.12.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "integrations",
+      "title": "本机集成发现",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "java-dependencies",
+      "title": "Maven / Gradle 依赖冲突",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.dependencies"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "java.dependencies",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "Maven/Gradle依赖导入文本分析；构建执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-environment",
+      "title": "JDK / 构建环境诊断",
+      "sourceVersion": "1.1.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "java-gc-log",
+      "title": "Java GC 日志分析",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.gc"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "java.gc",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "GC日志导入文本分析；文件获取/进程采集另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-jfr",
+      "title": "JFR 录制报告浏览",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.jfr_json"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "java.jfr_json",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "JFR导入JSON分析；二进制读取/导出另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-thread-dump",
+      "title": "Java 线程转储分析",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.java.threads"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "java.threads",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "jstack/jcmd导入文本分析；进程采集另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "java-trace",
+      "title": "Java 异常链",
+      "sourceVersion": "1.0.3",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.trace.java.trace"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "java.trace",
+          "packageId": "com.zicode.devtools.trace",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/trace-0.1.0-candidate-01",
+          "verificationReceipt": "release/trace-0.1.0-candidate-01-verification.json",
+          "scopeKind": "complete_trace_operation_within_plugin_budget",
+          "scope": "离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。"
+    },
+    {
+      "sourceToolId": "json",
+      "title": "JSON",
+      "sourceVersion": "1.3.0",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.json.format",
+        "devtools.text.json.minify",
+        "devtools.text.json.validate",
+        "devtools.json.object.inspect",
+        "devtools.json.object.receive"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "devtools.text.json.format",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_standalone_json_action",
+          "scope": "格式化JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
+        },
+        {
+          "operationId": "devtools.text.json.minify",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_standalone_json_action",
+          "scope": "压缩JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
+        },
+        {
+          "operationId": "devtools.text.json.validate",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_standalone_json_action",
+          "scope": "校验JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
+        },
+        {
+          "operationId": "devtools.json.object.inspect",
+          "packageId": "com.zicode.devtools.json-object",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/json-object-0.1.0-candidate-07",
+          "verificationReceipt": "release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
+          "scopeKind": "structured_object_result",
+          "scope": "根值必须为 JSON object；输入对象最多 8 KiB、128 个根字段、64 层与 4096 节点，请求/结果最多 48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
+        },
+        {
+          "operationId": "devtools.json.object.receive",
+          "packageId": "com.zicode.devtools.json-object",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/json-object-0.1.0-candidate-07",
+          "verificationReceipt": "release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
+          "scopeKind": "object_receiver_for_confirmed_transfer",
+          "scope": "仅作为已捕获 JSON object 的显式接收端；保持对象类型，受 8 KiB 输入、128 字段、48 KiB envelope 限制。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
+        }
+      ],
+      "uncoveredScope": "JSON 格式化/压缩/校验仍由 Text 0.4.1 候选提供；对象摘要另由 JSON Object 0.1.0 候选声明 result.json.v1，对象接收能力用于显式接力。提供方字节一致验证已完成，Studio Host/Pi 和结果接力仍待接收方验收。"
+    },
+    {
+      "sourceToolId": "json-diff",
+      "title": "结构化 JSON 对比",
+      "sourceVersion": "1.0.4",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "完整JSON核心已共享；字段实验适配220项native/WASI、原预算及冷启动本次全部通过（最高842.455ms）；更大和复杂正则预算仍需完整验证，Host尚未验收。"
+    },
+    {
+      "sourceToolId": "json-path",
+      "title": "JSON 路径查询",
+      "sourceVersion": "1.0.3",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "完整JSON核心已共享；字段实验适配220项native/WASI、原预算及冷启动本次全部通过（最高842.455ms）；更大和复杂正则预算仍需完整验证，Host尚未验收。"
+    },
+    {
+      "sourceToolId": "json-schema",
+      "title": "JSON Schema 校验",
+      "sourceVersion": "0.2.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "jwt",
+      "title": "JWT 内容查看",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.jwt.inspect"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "jwt.inspect",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "查看 Header 与 Payload；不验证签名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        }
+      ],
+      "uncoveredScope": "共享纯Rust检查核心的全部既有操作均有界迁移；unsigned 0.1.2新候选增加tool.open.v1只定位UI、不执行能力，Studio Host/Pi待接收方验收。"
+    },
+    {
+      "sourceToolId": "jwt-verify",
+      "title": "JWT 本地验签",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "lines",
+      "title": "文本行处理",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.lines.deduplicate",
+        "devtools.transforms.lines.ascending",
+        "devtools.transforms.lines.descending",
+        "devtools.transforms.lines.nonempty",
+        "devtools.transforms.lines.trim"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "lines.deduplicate",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.ascending",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.descending",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.nonempty",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "lines.trim",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "log-viewer",
+      "title": "日志工作台",
+      "sourceVersion": "0.2.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "markdown",
+      "title": "Markdown 预览",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "mcp-connections",
+      "title": "MCP 连接管理",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-export",
+      "title": "MCP 客户端配置导出",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "mcp-inspector",
+      "title": "MCP 协议调试台",
+      "sourceVersion": "0.4.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-permissions",
+      "title": "MCP 工具权限",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "mcp-server",
+      "title": "Zi DevTools MCP Server",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "memo-library",
+      "title": "备忘资料库互通",
+      "sourceVersion": "0.4.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "memos",
+      "title": "备忘录",
+      "sourceVersion": "1.5.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "model-benchmark",
+      "title": "本机模型性能测试",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "model-chat",
+      "title": "多轮模型工作台",
+      "sourceVersion": "0.5.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "model-compare",
+      "title": "模型对比评测",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "model-profiles",
+      "title": "模型连接配置",
+      "sourceVersion": "0.2.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "network",
+      "title": "网络诊断",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "number",
+      "title": "进制转换",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.number.from2",
+        "devtools.transforms.number.from8",
+        "devtools.transforms.number.from10",
+        "devtools.transforms.number.from16"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "number.from2",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "number.from8",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "number.from10",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "number.from16",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "obsidian-vault",
+      "title": "Obsidian / Markdown 库",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "ocr-documents",
+      "title": "本地 OCR 文档助手",
+      "sourceVersion": "0.4.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "ollama-manager",
+      "title": "Ollama 模型管理",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "openapi",
+      "title": "OpenAPI 请求生成",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "operation-permissions",
+      "title": "授权写入与变更预览",
+      "sourceVersion": "0.4.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "parquet-workbench",
+      "title": "Parquet / Arrow 工作台",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "pdf-text",
+      "title": "PDF 文本提取",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "pipeline",
+      "title": "可组合数据管线",
+      "sourceVersion": "0.21.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "planner-interop",
+      "title": "日程进阶与互通",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-health",
+      "title": "插件健康诊断",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-market",
+      "title": "插件目录与安装源",
+      "sourceVersion": "0.5.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-sdk",
+      "title": "隔离进程插件 SDK",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-settings",
+      "title": "插件设置与凭据",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugin-updates",
+      "title": "插件版本与更新",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "plugins",
+      "title": "插件与连接器",
+      "sourceVersion": "1.15.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "prompt-library",
+      "title": "提示词模板库",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "qr",
+      "title": "二维码",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "rag-answer",
+      "title": "带引用的知识问答",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-eval",
+      "title": "RAG 质量评测",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-index",
+      "title": "增量知识索引",
+      "sourceVersion": "1.4.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-ingestion",
+      "title": "文档解析与分块",
+      "sourceVersion": "1.4.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-keyword-search",
+      "title": "本机关键词检索",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-search",
+      "title": "混合检索工作台",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-sources",
+      "title": "本地知识源管理",
+      "sourceVersion": "1.2.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "rag-vectors",
+      "title": "本机向量索引",
+      "sourceVersion": "1.0.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "random",
+      "title": "随机数据生成",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "recorder-tutorial",
+      "title": "教程录屏辅助",
+      "sourceVersion": "0.10.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "regex",
+      "title": "正则表达式",
+      "sourceVersion": "1.0.9",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "正则工具1.0.9为单个Unicode标量重复增加轻量识别，避开HIR展开解析的fuel开销；265项native/WASI功能和260项Wasmtime 10M fuel矩阵通过，Host未验收，更大复杂语法预算仍待验证。"
+    },
+    {
+      "sourceToolId": "regex-replace",
+      "title": "正则替换",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "screen-recorder",
+      "title": "屏幕录制",
+      "sourceVersion": "1.1.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-audio-gain",
+      "title": "录屏独立音量调节",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-audio-meter",
+      "title": "录屏实时音频电平",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-audio-mix",
+      "title": "双声源混录",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "screen-recorder-long-audio",
+      "title": "录屏长时音频稳定性",
+      "sourceVersion": "0.1.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "screen-recorder-multimonitor",
+      "title": "显示器选择录屏",
+      "sourceVersion": "0.1.1",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "screenshot-workbench",
+      "title": "截图与透明套索",
+      "sourceVersion": "0.15.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "services",
+      "title": "本地服务管理",
+      "sourceVersion": "1.8.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "sha256",
+      "title": "SHA-256 文本摘要",
+      "sourceVersion": "1.1.3",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.sha256"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "devtools.text.sha256",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_text_operation_within_plugin_budget",
+          "scope": "按原始UTF-8字节计算SHA-256。 输入上限8192 UTF-8字节，序列化结果上限48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
+        }
+      ],
+      "uncoveredScope": "文本插件0.4.1候选包含Base64/SHA；七项既有能力声明Studio目录分类、用途和中英文别名；43条native/WASI一致性、官方Wasmtime fuel/冷启动及两主题View已通过，Studio Host/Pi待验收。"
+    },
+    {
+      "sourceToolId": "spring-actuator",
+      "title": "Spring Actuator 只读诊断",
+      "sourceVersion": "1.1.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.spring-actuator.health",
+        "devtools.spring-actuator.info",
+        "devtools.spring-actuator.metrics",
+        "devtools.spring-actuator.summary"
+      ],
+      "operationScopes": [],
+      "uncoveredScope": "0.1.1仅有固定health/info/metrics HTTP View候选；Studio任务生命周期profile仍是未实现草案，provider schema/vectors待Studio复核；报告资源profile亦未发布。无正式包/收据、真实Pi到Host到View未验收，完整来源范围未交付。"
+    },
+    {
+      "sourceToolId": "spring-config",
+      "title": "Spring 配置对比",
+      "sourceVersion": "1.2.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.diagnostics.spring.config"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "spring.config",
+          "packageId": "com.zicode.devtools.diagnostics",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "sql-format",
+      "title": "SQL 格式化",
+      "sourceVersion": "0.3.1",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.text.sql.format"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "devtools.text.sql.format",
+          "packageId": "com.zicode.devtools.text",
+          "packageVersion": "0.4.1",
+          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+          "scopeKind": "partial_standalone_formatter",
+          "scope": "通用SQL词法模式和默认缩进/关键字大小写；不提供桌面工具的PostgreSQL/MySQL/SQLite/SQL Server方言选择。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收"
+        }
+      ],
+      "uncoveredScope": "共享纯Rust SQL格式化核心新增WASI通用方言操作；仅覆盖格式化单操作，不含桌面方言/缩进/大小写选择，Studio Host/Pi仍待接收方验收。"
+    },
+    {
+      "sourceToolId": "sqlite",
+      "title": "SQLite 浏览器",
+      "sourceVersion": "1.5.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "structured-output",
+      "title": "结构化输出验证",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "super-clipboard",
+      "title": "超级剪贴板",
+      "sourceVersion": "0.20.3",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "symbol-library",
+      "title": "特殊字符与表情",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "仅计算部分可提取；完整字符工具的主动复制、图片资源读取与TXT保存需分别协商Host授权，不用文字子集代替完整工具。"
+    },
+    {
+      "sourceToolId": "task-center",
+      "title": "后台任务中心",
+      "sourceVersion": "1.13.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "task-runtime",
+      "title": "统一后台运行管理",
+      "sourceVersion": "0.5.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "text-escape",
+      "title": "文本转义",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.string.escape",
+        "devtools.transforms.string.unescape"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "string.escape",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "JSON 字符串转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "string.unescape",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "JSON 字符串转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "text-flow",
+      "title": "文本 / 表格流程",
+      "sourceVersion": "1.13.0",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "text-stats",
+      "title": "文本统计",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.stats.inspect"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "stats.inspect",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "字符、字节、行数与词段统计",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "time-zone",
+      "title": "时区工作台",
+      "sourceVersion": "0.1.2",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "timestamp",
+      "title": "时间戳",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "tls-inspect",
+      "title": "TLS 证书检查",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "token-budget",
+      "title": "Token 与上下文预算",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "unicode",
+      "title": "Unicode 字符检查",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.unicode.inspect",
+        "devtools.inspect.unicode.nfc",
+        "devtools.inspect.unicode.nfkc"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "unicode.inspect",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "operationId": "unicode.nfc",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "operationId": "unicode.nfkc",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        }
+      ],
+      "uncoveredScope": "共享纯Rust检查核心的全部既有操作均有界迁移；unsigned 0.1.2新候选增加tool.open.v1只定位UI、不执行能力，Studio Host/Pi待接收方验收。"
+    },
+    {
+      "sourceToolId": "unified-shortcuts",
+      "title": "统一前缀快捷键",
+      "sourceVersion": "0.7.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "url",
+      "title": "URL 编码",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.url.encode",
+        "devtools.transforms.url.decode"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "url.encode",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "URL 参数百分号编码与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "url.decode",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "URL 参数百分号编码与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "url-inspect",
+      "title": "URL 解析",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.transforms.url.inspect"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "url.inspect",
+          "packageId": "com.zicode.devtools.transforms",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "解析协议、主机、路径和重复查询参数",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ],
+      "uncoveredScope": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+    },
+    {
+      "sourceToolId": "uuid",
+      "title": "UUID",
+      "sourceVersion": "1.0.1",
+      "sourceStatus": "implemented",
+      "migration": "await_host",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+    },
+    {
+      "sourceToolId": "workflow-builder",
+      "title": "可视化工具工作流",
+      "sourceVersion": "0.0.0",
+      "sourceStatus": "planned",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "workspace-sessions",
+      "title": "项目空间与工作实例",
+      "sourceVersion": "0.5.0",
+      "sourceStatus": "in-progress",
+      "migration": "standalone_incomplete",
+      "pluginStatus": "not_delivered",
+      "candidateCapabilities": [],
+      "operationScopes": [],
+      "uncoveredScope": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+    },
+    {
+      "sourceToolId": "yaml",
+      "title": "YAML / JSON",
+      "sourceVersion": "1.0.2",
+      "sourceStatus": "implemented",
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.inspect.yaml.to_json",
+        "devtools.inspect.yaml.from_json"
+      ],
+      "operationScopes": [
+        {
+          "operationId": "yaml.to_json",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "YAML 与 JSON 双向转换",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "operationId": "yaml.from_json",
+          "packageId": "com.zicode.devtools.inspect",
+          "packageVersion": "0.1.2",
+          "candidateDirectory": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "YAML 与 JSON 双向转换",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        }
+      ],
+      "uncoveredScope": "共享纯Rust检查核心的全部既有操作均有界迁移；unsigned 0.1.2新候选增加tool.open.v1只定位UI、不执行能力，Studio Host/Pi待接收方验收。"
+    }
+  ],
+  "packages": [
+    {
+      "path": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
+      "receiptPath": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "receiptSha256": "a2989a110f1736fb431b468dc3a376e2fc9344e3de4332dab344cbf2a4a9a8fb",
+      "packageId": "com.zicode.devtools.diagnostics",
+      "packageVersion": "0.1.3",
+      "fileCount": 503,
+      "totalBytes": 4287534,
+      "candidateTreeSha256": "411fbd621cd5449f8570ef2093b9015ce9c37f4edfb12c2c77171f7678e12e35",
+      "directoryIndexSha256": "3af52229241d54b13279028fe9fd4048fedee66fb5c46f9b9f288935e5c67628",
+      "directoryIndexStatus": "matched",
+      "signature": "unsigned-or-unverified",
+      "runtimeAccepted": false,
+      "sourceToolIds": [
+        "celery-diagnostics",
+        "django-checks",
+        "django-drf",
+        "django-migrations",
+        "django-sql",
+        "django-urls",
+        "java-dependencies",
+        "java-gc-log",
+        "java-jfr",
+        "java-thread-dump",
+        "spring-config"
+      ],
+      "capabilities": [
+        "devtools.diagnostics.celery.report",
+        "devtools.diagnostics.django.checks",
+        "devtools.diagnostics.django.migrations",
+        "devtools.diagnostics.django.openapi",
+        "devtools.diagnostics.django.sql",
+        "devtools.diagnostics.django.urls",
+        "devtools.diagnostics.java.dependencies",
+        "devtools.diagnostics.java.gc",
+        "devtools.diagnostics.java.jfr_json",
+        "devtools.diagnostics.java.threads",
+        "devtools.diagnostics.spring.config"
+      ],
+      "scopeRows": [
+        {
+          "sourceToolId": "celery-diagnostics",
+          "operationId": "celery.report",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "Celery任务日志导入分析；Broker/Worker操作另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "django-checks",
+          "operationId": "django.checks",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "检查输出导入分析；manage.py执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "django-drf",
+          "operationId": "django.openapi",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "两份OpenAPI JSON差异；联网另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "django-migrations",
+          "operationId": "django.migrations",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "django-sql",
+          "operationId": "django.sql",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "SQL查询日志JSON数组归一化与重复分析；执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "django-urls",
+          "operationId": "django.urls",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "URL导入列表检索；项目加载另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "java-dependencies",
+          "operationId": "java.dependencies",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "Maven/Gradle依赖导入文本分析；构建执行另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "java-gc-log",
+          "operationId": "java.gc",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "GC日志导入文本分析；文件获取/进程采集另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "java-jfr",
+          "operationId": "java.jfr_json",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "JFR导入JSON分析；二进制读取/导出另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "java-thread-dump",
+          "operationId": "java.threads",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "jstack/jcmd导入文本分析；进程采集另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        },
+        {
+          "sourceToolId": "spring-config",
+          "operationId": "spring.config",
+          "scopeKind": "completed_imported_report_subset",
+          "scope": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
+        }
+      ]
+    },
+    {
+      "path": "release/plugin-candidates/inspect-0.1.2-candidate-01",
+      "receiptPath": "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
+      "receiptSha256": "29afb75e81cea5e7606ad238708b6bef796809eb1df8ee9ab58e66b1b011c202",
+      "packageId": "com.zicode.devtools.inspect",
+      "packageVersion": "0.1.2",
+      "fileCount": 616,
+      "totalBytes": 2341254,
+      "candidateTreeSha256": "1d3af04bb9e35fa9594a673ff71058e56ffbb94e516f4086dba275472d1678ee",
+      "directoryIndexSha256": "1d3af04bb9e35fa9594a673ff71058e56ffbb94e516f4086dba275472d1678ee",
+      "directoryIndexStatus": "matched",
+      "signature": "unsigned-or-unverified",
+      "runtimeAccepted": false,
+      "sourceToolIds": [
+        "cidr",
+        "color",
+        "jwt",
+        "unicode",
+        "yaml"
+      ],
+      "capabilities": [
+        "devtools.inspect.cidr.inspect",
+        "devtools.inspect.color.convert",
+        "devtools.inspect.jwt.inspect",
+        "devtools.inspect.unicode.inspect",
+        "devtools.inspect.unicode.nfc",
+        "devtools.inspect.unicode.nfkc",
+        "devtools.inspect.yaml.from_json",
+        "devtools.inspect.yaml.to_json"
+      ],
+      "scopeRows": [
+        {
+          "sourceToolId": "cidr",
+          "operationId": "cidr.inspect",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "IPv4 掩码、网络地址与可用范围",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "color",
+          "operationId": "color.convert",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "HEX、RGB、HSL 颜色表示",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "jwt",
+          "operationId": "jwt.inspect",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "查看 Header 与 Payload；不验证签名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "unicode",
+          "operationId": "unicode.inspect",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "unicode",
+          "operationId": "unicode.nfc",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "unicode",
+          "operationId": "unicode.nfkc",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "Unicode 码点、UTF-8 字节、常见不可见字符标记与 NFC/NFKC 规范化",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "yaml",
+          "operationId": "yaml.from_json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "YAML 与 JSON 双向转换",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        },
+        {
+          "sourceToolId": "yaml",
+          "operationId": "yaml.to_json",
+          "scopeKind": "complete_inspection_operation_within_plugin_budget",
+          "scope": "YAML 与 JSON 双向转换",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留"
+        }
+      ]
+    },
+    {
+      "path": "release/plugin-candidates/json-object-0.1.0-candidate-07",
+      "receiptPath": "release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
+      "receiptSha256": "ff9909ae8b73d569e02eeb9b5c3c5d28730d9d6e8e46a636712a83ef24816b85",
+      "packageId": "com.zicode.devtools.json-object",
+      "packageVersion": "0.1.0",
+      "fileCount": 37,
+      "totalBytes": 328768,
+      "candidateTreeSha256": "2a7ffb740adb9df3406069a04a1250ec9239d22d8ef53350031bfbe3a1df2040",
+      "directoryIndexSha256": "9479917a473acd40e1ef1b9f826c286de53ce2adcabbdc15b3bb72718fdcb3c1",
+      "directoryIndexStatus": "matched",
+      "signature": "unsigned-or-unverified",
+      "runtimeAccepted": false,
+      "sourceToolIds": [
+        "json"
+      ],
+      "capabilities": [
+        "devtools.json.object.inspect",
+        "devtools.json.object.receive"
+      ],
+      "scopeRows": [
+        {
+          "sourceToolId": "json",
+          "operationId": "devtools.json.object.inspect",
+          "scopeKind": "structured_object_result",
+          "scope": "根值必须为 JSON object；输入对象最多 8 KiB、128 个根字段、64 层与 4096 节点，请求/结果最多 48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
+        },
+        {
+          "sourceToolId": "json",
+          "operationId": "devtools.json.object.receive",
+          "scopeKind": "object_receiver_for_confirmed_transfer",
+          "scope": "仅作为已捕获 JSON object 的显式接收端；保持对象类型，受 8 KiB 输入、128 字段、48 KiB envelope 限制。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
+        }
+      ]
+    },
+    {
+      "path": "release/text-plugin-0.4.1-candidate-02",
+      "receiptPath": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
+      "receiptSha256": "f9911bcb4a1e56e627b25605d7ee460e1ce32f082e1758928131256723bd8f02",
+      "packageId": "com.zicode.devtools.text",
+      "packageVersion": "0.4.1",
+      "fileCount": 112,
+      "totalBytes": 1032175,
+      "candidateTreeSha256": "7460f8c2b4844fc9349854e7c93f5bdf7938adcc2a4dd05aaa301b73ede285e6",
+      "directoryIndexSha256": "7c6b1a226526eb35eb0acc4a0d571652bc29049e9cf5bd8d18267c55a39dde9f",
+      "directoryIndexStatus": "matched",
+      "signature": "unsigned-or-unverified",
+      "runtimeAccepted": false,
+      "sourceToolIds": [
+        "base64",
+        "json",
+        "sha256",
+        "sql-format"
+      ],
+      "capabilities": [
+        "devtools.text.base64.decode",
+        "devtools.text.base64.encode",
+        "devtools.text.json.format",
+        "devtools.text.json.minify",
+        "devtools.text.json.validate",
+        "devtools.text.sha256",
+        "devtools.text.sql.format"
+      ],
+      "scopeRows": [
+        {
+          "sourceToolId": "base64",
+          "operationId": "devtools.text.base64.decode",
+          "scopeKind": "complete_text_operation_within_plugin_budget",
+          "scope": "标准Base64解码并验证UTF-8结果。 输入上限8192 UTF-8字节，序列化结果上限48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
+        },
+        {
+          "sourceToolId": "base64",
+          "operationId": "devtools.text.base64.encode",
+          "scopeKind": "complete_text_operation_within_plugin_budget",
+          "scope": "UTF-8文本编码为标准Base64。 输入上限8192 UTF-8字节，序列化结果上限48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
+        },
+        {
+          "sourceToolId": "json",
+          "operationId": "devtools.text.json.format",
+          "scopeKind": "complete_standalone_json_action",
+          "scope": "格式化JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
+        },
+        {
+          "sourceToolId": "json",
+          "operationId": "devtools.text.json.minify",
+          "scopeKind": "complete_standalone_json_action",
+          "scope": "压缩JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
+        },
+        {
+          "sourceToolId": "json",
+          "operationId": "devtools.text.json.validate",
+          "scopeKind": "complete_standalone_json_action",
+          "scope": "校验JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
+        },
+        {
+          "sourceToolId": "sha256",
+          "operationId": "devtools.text.sha256",
+          "scopeKind": "complete_text_operation_within_plugin_budget",
+          "scope": "按原始UTF-8字节计算SHA-256。 输入上限8192 UTF-8字节，序列化结果上限48 KiB。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
+        },
+        {
+          "sourceToolId": "sql-format",
+          "operationId": "devtools.text.sql.format",
+          "scopeKind": "partial_standalone_formatter",
+          "scope": "通用SQL词法模式和默认缩进/关键字大小写；不提供桌面工具的PostgreSQL/MySQL/SQLite/SQL Server方言选择。",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收"
+        }
+      ]
+    },
+    {
+      "path": "release/trace-0.1.0-candidate-01",
+      "receiptPath": "release/trace-0.1.0-candidate-01-verification.json",
+      "receiptSha256": "c2461ef801a5a47c3816e1c3720b574395c7f68ecd2fe93048876f108f75819d",
+      "packageId": "com.zicode.devtools.trace",
+      "packageVersion": "0.1.0",
+      "fileCount": 346,
+      "totalBytes": 1403946,
+      "candidateTreeSha256": "45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+      "directoryIndexSha256": "45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+      "directoryIndexStatus": "matched",
+      "signature": "unsigned-or-unverified",
+      "runtimeAccepted": false,
+      "sourceToolIds": [
+        "django-trace",
+        "java-trace"
+      ],
+      "capabilities": [
+        "devtools.trace.django.trace",
+        "devtools.trace.java.trace"
+      ],
+      "scopeRows": [
+        {
+          "sourceToolId": "django-trace",
+          "operationId": "django.trace",
+          "scopeKind": "complete_trace_operation_within_plugin_budget",
+          "scope": "离线整理标准 Python Traceback、异常链和 Django 规则提示；保留截断标记，不运行项目",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
+        },
+        {
+          "sourceToolId": "java-trace",
+          "operationId": "java.trace",
+          "scopeKind": "complete_trace_operation_within_plugin_budget",
+          "scope": "离线整理标准 Java 异常、cause/suppressed 层级与帧位置；不推断真实根因或展开省略帧",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
+        }
+      ]
+    },
+    {
+      "path": "release/transforms-0.1.0-candidate-02",
+      "receiptPath": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "receiptSha256": "a8d76696f037e0c932952e68e1b620144d8a24ae739889a820859be9c796975f",
+      "packageId": "com.zicode.devtools.transforms",
+      "packageVersion": "0.1.0",
+      "fileCount": 798,
+      "totalBytes": 3920494,
+      "candidateTreeSha256": "53474d18d37accfc9a5747979bb737ec023a9da34b6bf8644c3bbfb8d21c6de4",
+      "directoryIndexSha256": "53474d18d37accfc9a5747979bb737ec023a9da34b6bf8644c3bbfb8d21c6de4",
+      "directoryIndexStatus": "matched",
+      "signature": "unsigned-or-unverified",
+      "runtimeAccepted": false,
+      "sourceToolIds": [
+        "case-convert",
+        "hex",
+        "html-escape",
+        "lines",
+        "number",
+        "text-escape",
+        "text-stats",
+        "url",
+        "url-inspect"
+      ],
+      "capabilities": [
+        "devtools.transforms.case.camel",
+        "devtools.transforms.case.kebab",
+        "devtools.transforms.case.pascal",
+        "devtools.transforms.case.snake",
+        "devtools.transforms.hex.decode",
+        "devtools.transforms.hex.encode",
+        "devtools.transforms.html.escape",
+        "devtools.transforms.html.unescape",
+        "devtools.transforms.lines.ascending",
+        "devtools.transforms.lines.deduplicate",
+        "devtools.transforms.lines.descending",
+        "devtools.transforms.lines.nonempty",
+        "devtools.transforms.lines.trim",
+        "devtools.transforms.number.from10",
+        "devtools.transforms.number.from16",
+        "devtools.transforms.number.from2",
+        "devtools.transforms.number.from8",
+        "devtools.transforms.stats.inspect",
+        "devtools.transforms.string.escape",
+        "devtools.transforms.string.unescape",
+        "devtools.transforms.url.decode",
+        "devtools.transforms.url.encode",
+        "devtools.transforms.url.inspect"
+      ],
+      "scopeRows": [
+        {
+          "sourceToolId": "case-convert",
+          "operationId": "case.camel",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "case-convert",
+          "operationId": "case.kebab",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "case-convert",
+          "operationId": "case.pascal",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "case-convert",
+          "operationId": "case.snake",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "camel、Pascal、snake 与 kebab 命名",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "hex",
+          "operationId": "hex.decode",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "UTF-8 文本与十六进制字节互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "hex",
+          "operationId": "hex.encode",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "UTF-8 文本与十六进制字节互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "html-escape",
+          "operationId": "html.escape",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "HTML 特殊字符转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "html-escape",
+          "operationId": "html.unescape",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "HTML 特殊字符转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "lines",
+          "operationId": "lines.ascending",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "lines",
+          "operationId": "lines.deduplicate",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "lines",
+          "operationId": "lines.descending",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "lines",
+          "operationId": "lines.nonempty",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "lines",
+          "operationId": "lines.trim",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "稳定去重、排序、去空行与空白处理",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "number",
+          "operationId": "number.from10",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "number",
+          "operationId": "number.from16",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "number",
+          "operationId": "number.from2",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "number",
+          "operationId": "number.from8",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "二、八、十、十六进制互转",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "text-escape",
+          "operationId": "string.escape",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "JSON 字符串转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "text-escape",
+          "operationId": "string.unescape",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "JSON 字符串转义与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "text-stats",
+          "operationId": "stats.inspect",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "字符、字节、行数与词段统计",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "url",
+          "operationId": "url.decode",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "URL 参数百分号编码与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "url",
+          "operationId": "url.encode",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "URL 参数百分号编码与还原",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "sourceToolId": "url-inspect",
+          "operationId": "url.inspect",
+          "scopeKind": "complete_transform_operation_within_plugin_budget",
+          "scope": "解析协议、主机、路径和重复查询参数",
+          "pluginStatus": "candidate",
+          "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        }
+      ]
+    }
+  ]
+}

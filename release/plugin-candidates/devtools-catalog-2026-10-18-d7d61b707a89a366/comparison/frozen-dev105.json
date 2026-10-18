@@ -1,0 +1,1281 @@
+{
+  "catalogSha256": "37353db759bad2df4320990a55b6c5d32b81058e75f3e98fc39646d1afd0499d",
+  "matrixSha256": "15f075120ba339b10d0e35e817c8c11c446f419bd33c9f420c53d5bc2567cdee",
+  "baselineToolCount": 154,
+  "catalogToolCount": 154,
+  "statusCounts": {
+    "implemented": 92,
+    "in-progress": 35,
+    "planned": 27
+  },
+  "added": [],
+  "removed": [],
+  "versionStatusChanged": [
+    {
+      "id": "advanced-calculator",
+      "baselineVersion": "0.10.0",
+      "currentVersion": "0.15.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "agent-replay",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.1.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "agent-runner",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.10.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "artifact-hub",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.13.1",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "ascii-art",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.0.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "ascii-codes",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.0.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "browser-clipper",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.2.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "calendar-planner",
+      "baselineVersion": "1.4.0",
+      "currentVersion": "1.7.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "celery-diagnostics",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "clock-workbench",
+      "baselineVersion": "0.4.0",
+      "currentVersion": "0.7.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "command-collections",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.3.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "diff",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.0.3",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "disk-inspector",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.0.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-checks",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-drf",
+      "baselineVersion": "1.1.2",
+      "currentVersion": "1.3.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-environment",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.1.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-migrations",
+      "baselineVersion": "1.1.2",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-sql",
+      "baselineVersion": "1.1.2",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-trace",
+      "baselineVersion": "1.0.2",
+      "currentVersion": "1.0.3",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "django-urls",
+      "baselineVersion": "1.1.2",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "encoding-detect",
+      "baselineVersion": "1.1.0",
+      "currentVersion": "1.2.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "explorer-menu",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.30.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "file-compare",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.2.7",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "file-intake",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.3.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "file-rename",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.1.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "files",
+      "baselineVersion": "1.1.1",
+      "currentVersion": "1.2.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "global-launcher",
+      "baselineVersion": "1.4.0",
+      "currentVersion": "1.6.8",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "http",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.0.2",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "image-batch",
+      "baselineVersion": "1.3.0",
+      "currentVersion": "1.4.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "image-crop-annotate",
+      "baselineVersion": "1.4.0",
+      "currentVersion": "1.5.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "image-metadata",
+      "baselineVersion": "1.3.0",
+      "currentVersion": "1.4.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "image-tools",
+      "baselineVersion": "1.5.0",
+      "currentVersion": "1.7.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "image-workflow",
+      "baselineVersion": "0.7.0",
+      "currentVersion": "0.12.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "java-dependencies",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.3.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "java-environment",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.1.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "java-gc-log",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "java-jfr",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.3.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "java-thread-dump",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.3.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "java-trace",
+      "baselineVersion": "1.0.2",
+      "currentVersion": "1.0.3",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "json",
+      "baselineVersion": "1.1.3",
+      "currentVersion": "1.3.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "json-diff",
+      "baselineVersion": "1.0.2",
+      "currentVersion": "1.0.4",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "json-path",
+      "baselineVersion": "1.0.2",
+      "currentVersion": "1.0.3",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "json-schema",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.2.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "log-viewer",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.2.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "mcp-inspector",
+      "baselineVersion": "0.1.0",
+      "currentVersion": "0.4.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "memo-library",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.4.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "memos",
+      "baselineVersion": "1.3.0",
+      "currentVersion": "1.5.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "model-chat",
+      "baselineVersion": "0.1.0",
+      "currentVersion": "0.5.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "model-profiles",
+      "baselineVersion": "0.1.0",
+      "currentVersion": "0.2.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "network",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.1.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "ocr-documents",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.4.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "operation-permissions",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.4.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "pipeline",
+      "baselineVersion": "0.17.0",
+      "currentVersion": "0.21.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "planner-interop",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.1.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "plugin-market",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.5.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "plugin-updates",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.1.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "plugins",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.15.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "rag-index",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.4.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "rag-ingestion",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.4.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "rag-keyword-search",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.1.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "rag-sources",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.2.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "recorder-tutorial",
+      "baselineVersion": "0.2.0",
+      "currentVersion": "0.10.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "regex",
+      "baselineVersion": "1.0.2",
+      "currentVersion": "1.0.9",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "regex-replace",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.1.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "screenshot-workbench",
+      "baselineVersion": "0.4.5",
+      "currentVersion": "0.15.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "spring-actuator",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.1.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "spring-config",
+      "baselineVersion": "1.1.2",
+      "currentVersion": "1.2.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "sql-format",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.3.1",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "sqlite",
+      "baselineVersion": "1.1.0",
+      "currentVersion": "1.5.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "super-clipboard",
+      "baselineVersion": "0.5.0",
+      "currentVersion": "0.20.3",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "symbol-library",
+      "baselineVersion": "1.0.0",
+      "currentVersion": "1.0.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "task-center",
+      "baselineVersion": "1.1.0",
+      "currentVersion": "1.13.1",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "task-runtime",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.5.0",
+      "baselineStatus": "planned",
+      "currentStatus": "in-progress"
+    },
+    {
+      "id": "text-flow",
+      "baselineVersion": "1.6.1",
+      "currentVersion": "1.13.0",
+      "baselineStatus": "implemented",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "time-zone",
+      "baselineVersion": "0.0.0",
+      "currentVersion": "0.1.2",
+      "baselineStatus": "planned",
+      "currentStatus": "implemented"
+    },
+    {
+      "id": "workspace-sessions",
+      "baselineVersion": "0.4.0",
+      "currentVersion": "0.5.0",
+      "baselineStatus": "in-progress",
+      "currentStatus": "in-progress"
+    }
+  ],
+  "scopeChanged": [
+    {
+      "id": "advanced-calculator",
+      "baselineSha256": "f8e78aa9e55d07f07d773f7c2c868e3fc84e1e8776ec6affa94049785e312100",
+      "currentSha256": "105a49408275543e4eb11f666cfa7f35f5841e1d616229b57d385caae362aedc"
+    },
+    {
+      "id": "agent-replay",
+      "baselineSha256": "59c6e7a1585c96ca79c2237b49ad26c414eba6a26d69267478136e8da76bb43b",
+      "currentSha256": "1f383ed8b75598991ce3f2a71a35b3793e8bd9d7f78fc0ca399549a6b2e39a3a"
+    },
+    {
+      "id": "agent-runner",
+      "baselineSha256": "0a043d232881d5707bbfa79102f9511536e736880665516c14f9e2afe9c7facb",
+      "currentSha256": "58b1c653524368bd29df4e0678f84d39687695184bbbee13571f62e62b22eda3"
+    },
+    {
+      "id": "artifact-hub",
+      "baselineSha256": "9d44ad35b18327cd55d81bf830259b33b76cfc6a0eb338fd67f0453170ea37bb",
+      "currentSha256": "7b7d6476ddb9c7fdefa74dc24055efb33328dc10433525534762aa1c96b142aa"
+    },
+    {
+      "id": "base64",
+      "baselineSha256": "aa442b64bd6230fbe624935f9a34607cdb9e466c474cbae5a465721a793f0c50",
+      "currentSha256": "3b17a3a8fd0375bf8f5f1dbd03cbbfe524de5b96fc0f5222b92fdb235086ac51"
+    },
+    {
+      "id": "browser-clipper",
+      "baselineSha256": "11e04bc806a0f144116422c830547da8f1b6035dd1bbe46e1d52b659cb25c079",
+      "currentSha256": "e8021214d1a802124b938b1988e7219cd1231d7fc0ebb18072af2e9895dd9a05"
+    },
+    {
+      "id": "calendar-planner",
+      "baselineSha256": "83da78557ca098c614c23fb9e284c8a735470316f613dc84136e26835f7af706",
+      "currentSha256": "8afff4616912dffa28ceb09dc1f52a866bb6424287fda67231baf65d0c8a5c6b"
+    },
+    {
+      "id": "celery-diagnostics",
+      "baselineSha256": "992514bbf71a4684630866e474cbbacf089cb419ce3335317c9edb4e4bd65985",
+      "currentSha256": "9e71357d264da56152b56351e0b5cbd814acc269498b49d2b296663b9d366111"
+    },
+    {
+      "id": "clock-workbench",
+      "baselineSha256": "bcb817cd261b88465e0bbdda13f45d244dabc3981740c32d4c5a8dd627f18a96",
+      "currentSha256": "19cab4ab1f2eb269a74bb9aca19afbf685a9e814fd705a550aeab224d0c38b49"
+    },
+    {
+      "id": "command-collections",
+      "baselineSha256": "ff6499279f7cad413d96ad4b2bb1018881971d0bb591db8382be7e3d06348596",
+      "currentSha256": "d77a6a158e86556c50f4003944f80996eabe1076ae736b9b0f9adc8c320e0319"
+    },
+    {
+      "id": "disk-inspector",
+      "baselineSha256": "cfb57a32016d8b6e443131bd7a71efd63276de2a7f462a5b682466d020d00522",
+      "currentSha256": "e0b54e4760f276065b4078efee2b4b2b6423630e7197073e3feac24e548be2d9"
+    },
+    {
+      "id": "django-checks",
+      "baselineSha256": "c68a108f49b98726e93e592f14d7b07e6ac65bbe550091d0f208a18a5a46d6be",
+      "currentSha256": "2045923e2c3570a96c83c672ee277f5fb43c5ce16d6f2d9673fb7c448c804fc7"
+    },
+    {
+      "id": "django-drf",
+      "baselineSha256": "c3e13bae16fecce45cba97f2498c3b59036e073723920bd63ce1e256bc9bf41c",
+      "currentSha256": "aec6994aa6561fa511203dbfb370028b3e1df93897d774187c888357089e4b4c"
+    },
+    {
+      "id": "django-environment",
+      "baselineSha256": "d930eb18025859d7b4cd697d8b1bfad4e8fd92f22913acde31253b8020872bbf",
+      "currentSha256": "d95d5cc7b0f250032af8be541ad4fb3634be4a5ad6565e0157208b0c63f46058"
+    },
+    {
+      "id": "django-migrations",
+      "baselineSha256": "7b17027c9b4b16485243239326f33bf0240205247701d316274b6c6b128a4867",
+      "currentSha256": "e0664d11602aecf9dfd4672ccd4d7475417d99503c8feb419da402e0f644a336"
+    },
+    {
+      "id": "django-sql",
+      "baselineSha256": "2c77311a0af529cad3963a506d3a0127b947728f287d512f4dde81e6f1e497ef",
+      "currentSha256": "5846df78a625680b45c113cd82ad43b1c801a0da3ebaa2d35a279e4b8cd215f0"
+    },
+    {
+      "id": "django-urls",
+      "baselineSha256": "a74b92c60511a53a9ab1c40440c0af95d859ec2291447d9aec57f437b38ed5b2",
+      "currentSha256": "c7d1b8d2cbc9e472c5e3b1454d6d3aaaa06378201ae6bb3798dd3758cd31fbe8"
+    },
+    {
+      "id": "encoding-detect",
+      "baselineSha256": "b5965ad0c31d91e95a4fb582b9446b0de150eafe449dd94034df2cd50a27411e",
+      "currentSha256": "2973f63e8c6ca4e1584f4c572f801dbce677fbe7028946df5d7cb81ad7c5e9b0"
+    },
+    {
+      "id": "explorer-menu",
+      "baselineSha256": "a4a32d8af5dd45f5289570fe2936e5a22e8d24e2693d120c41f62b8b6f569fcb",
+      "currentSha256": "6309969c4b85723e97875a10738457b652f1970bfc845150c3c0531a1894526f"
+    },
+    {
+      "id": "file-compare",
+      "baselineSha256": "b7e5fdb4e738c57fc56269b1b6814c5248b7528a8df482fcc9794c1ba231615e",
+      "currentSha256": "8337ee645fc2e23485a22ab426be4978b00a4dc03ae1d0cfc4377e10fd4464a6"
+    },
+    {
+      "id": "file-intake",
+      "baselineSha256": "8b046e5f6a4310b10657d9426d6d99996e189af012dabee76b82b8703b5ee0a8",
+      "currentSha256": "8f2c5ea435f6053226b7fb076a3030f66af0299f934aca91c06c352a2dabb7b0"
+    },
+    {
+      "id": "file-rename",
+      "baselineSha256": "c60926aca7c3c3c54c57a470e608ea9dd461d84b582ebd6423ad89bcfae14150",
+      "currentSha256": "f6419b9431939b7665d3f7aef59628b6f863645b84ce3f117971f0a6319ea459"
+    },
+    {
+      "id": "files",
+      "baselineSha256": "9fd7ab18725149031e76ca797d44fb96a2b0a802bcf51d32afbab490eff86ecc",
+      "currentSha256": "c348cf2e797495f7dfb03740c32d9060830cb588c01ea75ff73d02d71ee7ca14"
+    },
+    {
+      "id": "global-launcher",
+      "baselineSha256": "a2d159dcef2b579bf5f432a6ce07bbec7bae057e2bd1d18edc18dd43ab980f10",
+      "currentSha256": "be459934faa88c0b7226549c1ec752b7f77376c7f5eb9057da56a88536746fde"
+    },
+    {
+      "id": "http",
+      "baselineSha256": "8a09bce01028f28235b8347d1f43efc453e92bbe8f34e36823d34301cbf6b105",
+      "currentSha256": "7b5063cf69d19cbaa0091c950abf702f18bb4a4809cae49e49ac927a53c0e918"
+    },
+    {
+      "id": "image-batch",
+      "baselineSha256": "dac5ca23147ab1e8f234b56f5fc9f504661fb4f73b857beeef7d43cfc614c72c",
+      "currentSha256": "6e58d5feaac2b0047d9987d63306b0726e3320c3976a0c2509e88fab6e138a03"
+    },
+    {
+      "id": "image-crop-annotate",
+      "baselineSha256": "cc06866abcffeed0a7f6cfc8a8c23c72acd59422092c425fec76b03d8eb3ca68",
+      "currentSha256": "4aa81cbdd56aeef9e97e52a7443aa7856b5ef716e7975cfb9064dc90c269be01"
+    },
+    {
+      "id": "image-metadata",
+      "baselineSha256": "960c5da97784b4cfd979633853a50a760ceecc8130f2687ac4c2f13bf9b7a07b",
+      "currentSha256": "cc57945eca492217ef709d894ef3730ee46f38a2c80395099fb1dd6ab609802a"
+    },
+    {
+      "id": "image-tools",
+      "baselineSha256": "30c0d5d5bd02f0c969b02887f004328ad336295d2ba9162f4589784eb5ad2e18",
+      "currentSha256": "534624350ba6d00573f40c5a2337e519d8f8950b7b637d1c289dec0ff9b2b1a9"
+    },
+    {
+      "id": "image-workflow",
+      "baselineSha256": "f3a856adfe693cda7d51ae0ee27a545cc2b6dcee02532170b84822836217548f",
+      "currentSha256": "9569d5952f87a322894f27f302bfca55ee57a33963094124a15e45fb47b331ac"
+    },
+    {
+      "id": "java-dependencies",
+      "baselineSha256": "dd54fb051b9b6eda0cb56e0c31993a8b21627bc0dd99561894dbd5e40e4f37e6",
+      "currentSha256": "ec229acd47c4d2891dfefe61b173cd444218860f26f7b0c3cb0507e2be7099da"
+    },
+    {
+      "id": "java-environment",
+      "baselineSha256": "93757bd3b912e4954fd403d127375c056d60ea67a35422e2462fc7dee6505efa",
+      "currentSha256": "01c6228785570ee5b60771b8f7e705d49af8eca08a7a1e75d21af6343ff7660f"
+    },
+    {
+      "id": "java-gc-log",
+      "baselineSha256": "7af2bedf6a3a130cc22616721f1d3282e6dfb576dd749d77936ca969cc3e8065",
+      "currentSha256": "046467cf32b95c3fa4b5aa75a6ae7edd6e2d8b3e6758fda8639bf559fa3d7aea"
+    },
+    {
+      "id": "java-jfr",
+      "baselineSha256": "15dd89effac87ade898eb2113484b12d55ce5fa79dda43ddf825a5654bb679ab",
+      "currentSha256": "3fc54028278b175bc1a36a36b9ce93b9a809b63eddf63b46b86c15cab8db659b"
+    },
+    {
+      "id": "java-thread-dump",
+      "baselineSha256": "b461f858a3e7a42df004b10919eb5a94e803be76fcbac6720cfc3fcd2d316013",
+      "currentSha256": "0d5c5484b38fbaee9ff38f0f510a0cc802e1d561dc5ef80a0403b8bca71e3c5c"
+    },
+    {
+      "id": "json",
+      "baselineSha256": "7f8b8afa05506f8d1f2ca87d1f426cafca2b693acd723697bccbda3b24def9c3",
+      "currentSha256": "81aed88fc8fde18c57f9a58789f587afd85ea0adafff9205c5203c5e48e85fa3"
+    },
+    {
+      "id": "json-schema",
+      "baselineSha256": "05e9666b01a2b02b12c557f2696312b424f05ddabce0c2127a280a6633ad7ed1",
+      "currentSha256": "89ef8b61075ce7c47a3eb469c5e04cce12c1d367a99bbb726f4bc1f199fe895b"
+    },
+    {
+      "id": "log-viewer",
+      "baselineSha256": "e9654d14a7d82acd1b824001e8219b090292ec3c1dcdc4f68d50858663122977",
+      "currentSha256": "7a025691d511872034eaf597d87f3b091a6441d930a714158e9ba82e5e4ff50f"
+    },
+    {
+      "id": "mcp-inspector",
+      "baselineSha256": "f7d57fb9c16e8b62f38dd554e2c550d7cf65056f11cad70fd71bdb299708c450",
+      "currentSha256": "03fa62aabb01eb268eaa5055676106e118dbc0d408c01bc0cff94fd86d31f6f0"
+    },
+    {
+      "id": "memo-library",
+      "baselineSha256": "ed3b3f52cb90ebda3bb67d3226efdd49a85acb3a5376057321e7ac0756587a96",
+      "currentSha256": "f57ab9366cc4f51982f7a3576e5dced50aa695b1c001abc02d2f3f05ea9b2237"
+    },
+    {
+      "id": "memos",
+      "baselineSha256": "0a74d20f0061af508adcb04f3b47c86e99bdf0fa5ca4d8127cb22382db312b1b",
+      "currentSha256": "7ba2cedafe4cc735f3fb46b4bdcaafcaa65608d0ed6893b564b173f636338cd2"
+    },
+    {
+      "id": "model-chat",
+      "baselineSha256": "ea0d9cd138d456ac706a1407cc2a928e45405f7a305bb745c6d5b227b7dcc6e0",
+      "currentSha256": "54257f952d96d8d399ff2f256eb014698cc79e3ef7d448fa7e605dbbd65c94f8"
+    },
+    {
+      "id": "model-profiles",
+      "baselineSha256": "e6e018b4e0c448d9431e4a5bd16590e96910ac509ca43cfbae877a1bd624c95f",
+      "currentSha256": "ce436bd5dc3c8ca1f3678a528046a0920f7e96e73fc3e82ae1c522bab544ffb4"
+    },
+    {
+      "id": "network",
+      "baselineSha256": "8e1a1d09f3bbd4cfe50f619ba4b3e3b511e212313bc2ad33af0eaba25abe2909",
+      "currentSha256": "30382f0d36cafb28cba1de6f0bc560eddb1f2ea868f2590d4194b566af634930"
+    },
+    {
+      "id": "ocr-documents",
+      "baselineSha256": "4d49951b525c275ad8964f0fa2d5ea6959080972dfa3cd6b7af551e79a3fb699",
+      "currentSha256": "39aea5db2d84188e55154d6d8d29707b5d7d11d6abebe197a2602d6ce46b35ac"
+    },
+    {
+      "id": "operation-permissions",
+      "baselineSha256": "f8f58eba9c5aa5becce7b6bee11f8fc92a713e337d5c195be06f337395550755",
+      "currentSha256": "07f0b40a5ec56d378d18e907709d5e906d930b487d38688fc96449be92fa98e1"
+    },
+    {
+      "id": "pipeline",
+      "baselineSha256": "ec2ae29772816ae156aae03c2fc50f20baabb358bfde3df624e5c81a6efd4745",
+      "currentSha256": "d8f0770092d8ce579d8aaabebd64388792d7c27b3bef617ac267e6846694e3a6"
+    },
+    {
+      "id": "planner-interop",
+      "baselineSha256": "21a3234367c61c5ef5db2e8aa33322b87c37e4f760098c575e05274a6a11f5ad",
+      "currentSha256": "eef48adcdbb6ba0a5eb9a1874569b554330b9cb99fc9f08ca31502c81ec5d4c9"
+    },
+    {
+      "id": "plugin-market",
+      "baselineSha256": "8b7c954f68a794238bce0c01e58633f5141b82e62478c59c54fc62ec2d9ed231",
+      "currentSha256": "634fea6c6ee211e441608d1d765174238f05905476526457ddd382a15638481d"
+    },
+    {
+      "id": "plugin-updates",
+      "baselineSha256": "3161bb94e3b9215228d4712c4fa3eb366ce775e551c2880ed76b07426a68ac12",
+      "currentSha256": "542cbd867835f0bded347a54b5be32b71733d5e83511e6013921ee7e08d95547"
+    },
+    {
+      "id": "plugins",
+      "baselineSha256": "16275e498e6a1e64a923f538816f98599526db0ff214ebecdefc6b8a7394959c",
+      "currentSha256": "1602b4ea8d2f759470d59e3778dca4b641f7a3a011fa62f8a6c0ad00168a2656"
+    },
+    {
+      "id": "rag-index",
+      "baselineSha256": "21284f97908e93b019c2283ee8fd0a764fe92a7d6e3c909f6015bc4596abb603",
+      "currentSha256": "ed48fb8ca2bdfd4c00c65bab3554ebcf394c2166c42d7ceb545eda1448998df6"
+    },
+    {
+      "id": "rag-ingestion",
+      "baselineSha256": "92b65c2b614ff07b77ccf3f7676e11d811bda8307b2b487e7d09760d727c36f3",
+      "currentSha256": "90e8791946475598597d9b0ba78e6c8c4f9aa4bfc30b98c0ad0679c8bdeba753"
+    },
+    {
+      "id": "rag-keyword-search",
+      "baselineSha256": "282e6f5402dec3ebd8b784b5f2bceb41e093d4f276012213491ac381325fb55b",
+      "currentSha256": "97bbea1793c73d68f530c6bc648f0706c1dd199a708fcab8a2caa5f4dcd0fce3"
+    },
+    {
+      "id": "rag-sources",
+      "baselineSha256": "78d98b8717a2cb7218a5632f674595942cd1004889e4c25e95a53a138ac3e9db",
+      "currentSha256": "6e074b690815f27384e9c11dce33955204106f1773e4a18d0bd60a425ec17fa4"
+    },
+    {
+      "id": "recorder-tutorial",
+      "baselineSha256": "3d07be38ba35e91dcd3dfe3a1a4f9fb8ec88e739ead2310644f642308fa27026",
+      "currentSha256": "5dfc4c4cb8f9be284987ba9ea89f6c10fba40525b48693b2cae9b3384bda7a39"
+    },
+    {
+      "id": "regex",
+      "baselineSha256": "9245afce78b255b6eb5bdb74d598c5d50cf365aaddac242ef4bc0ab534c794e0",
+      "currentSha256": "33dc46200af6e26b2f9052e5ffc400ceb98ed610ed35c734e1319bf719ee81e7"
+    },
+    {
+      "id": "regex-replace",
+      "baselineSha256": "0747834266242386b0e365da6769174633b0f8393d141db1b33d0fc454b2784c",
+      "currentSha256": "d8eb07b7a89a5e73a9ad03716e748170a71b150743fa4621338483f90474e317"
+    },
+    {
+      "id": "screenshot-workbench",
+      "baselineSha256": "ee00cb4a8caf9acefc5158c5430aad18e9c814d4118aa30679cf72a2783d6d37",
+      "currentSha256": "4b72ec36003cf96dc1e3101acf9efe7e33e7bb6f88292ffd62e1b23efa34ce05"
+    },
+    {
+      "id": "sha256",
+      "baselineSha256": "69f1c2dc8071298b5d48466d37de4085d80b37a044a03e868e8108ba5b7a8cfb",
+      "currentSha256": "5be132cf0ba72456f3c4571bd1e2e86400ff0d59619bc7fbc6ddb2573183f47e"
+    },
+    {
+      "id": "spring-actuator",
+      "baselineSha256": "d96b753c541c1f6300984916cc15843f7134869735b756064fb57f6a9b17ffbc",
+      "currentSha256": "1da2bfd9f65df1c5f78590e10543b1d9ad627cb6d7aa628535df3db1b5172e45"
+    },
+    {
+      "id": "spring-config",
+      "baselineSha256": "7980b8053efcd2007afcc608e7a90cf6757091769cd99404cc0fc0ff012aaec1",
+      "currentSha256": "df1c7174753f25d4f3b4b4146553bea16251e439ba623c81d0e2bccb9692c7b3"
+    },
+    {
+      "id": "sql-format",
+      "baselineSha256": "5d7015a59f59ad3bd6b26f1b98a8b153232df48ec965bf8cfe58468daf50a7b6",
+      "currentSha256": "4ae1dc81d6823544c86ad5b27596589024ba43fef76292d296c17731fed3dc94"
+    },
+    {
+      "id": "sqlite",
+      "baselineSha256": "b53eb68209a9ab29e17c700ea171bfe139af2e85ae6b493fd8e9dbef7ccf340e",
+      "currentSha256": "e77b728a40ff7c8c06999954ad7d212ed3bcc9b499fca72c27042b14a61cd1a0"
+    },
+    {
+      "id": "super-clipboard",
+      "baselineSha256": "56692b9c3d6d6bfe757060cd9d022bbaa237c7c45a9ee5f0c38613f87b8608b9",
+      "currentSha256": "421f85f917ff5b12c60ddec9990331124b8ef9216ebbc8de38982f3f83be7a78"
+    },
+    {
+      "id": "task-center",
+      "baselineSha256": "dd4590f9b316ecc3be317b9fb14caf7a8cb37018432e8827fc693c397028d530",
+      "currentSha256": "d893cfc1e3a63f9b704c551ed361f7c737226696007556646b14e9de76458363"
+    },
+    {
+      "id": "task-runtime",
+      "baselineSha256": "09d52188a5e3556e3c6826cc46f338d45aa482e374eef9b7e973260fa1902ba6",
+      "currentSha256": "02e738633795c05578a8e20a652842809f9638deab7b54a753fbcac60b50b7ee"
+    },
+    {
+      "id": "text-flow",
+      "baselineSha256": "c37542a800f673da010533e881054b84e66278861b2ee85bb0193e6ba0b8a5dc",
+      "currentSha256": "7ca34b0281b116a85bb690ac1c88a355569d53aae1634a97e4a4a51286511976"
+    },
+    {
+      "id": "time-zone",
+      "baselineSha256": "7325002074c6f50f704d34b015113c43026b9111d8b374f7b51e3179b9df69d1",
+      "currentSha256": "de701e32234c97bcbec9ec198c44a6751e3cdb85c19eb8593feda33f1311f563"
+    },
+    {
+      "id": "workspace-sessions",
+      "baselineSha256": "7e69b53a9763e79031f03507a9a058485f3264b91ac9e496b6ae8d0ce87b889b",
+      "currentSha256": "dfec30a97110383d33f84bbb09aceb4569ad2b541585797a0eda1912c4949e94"
+    }
+  ],
+  "discoveryChanged": [
+    {
+      "id": "agent-replay",
+      "baselineSha256": "b3e6380273efa4a774a10610154bf76c70ef8716cb9004e3fdbc122f721d9713",
+      "currentSha256": "577fbfff531594f42254df84c4e61aff3cc677632354f5087f9bd074040dc295"
+    },
+    {
+      "id": "agent-runner",
+      "baselineSha256": "35ce3517ab452932533246dde1a83d8fb861e2f2cbe5f98c11d5c374ba3acacb",
+      "currentSha256": "aa5f6d83c67da455f333c36733c527538ccff0b59e951378a28d8fd5e0e30d9a"
+    },
+    {
+      "id": "artifact-hub",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "d8f7f7af5b60f3f5753c45e06c910fd70e0114e8063d51fc03dcb8fde906997d"
+    },
+    {
+      "id": "base64",
+      "baselineSha256": "c1f54394dcd3655bfc30e7748118f04a638d6df462245e37b57cac1e85bc14a7",
+      "currentSha256": "12dcd3f08b12ac6e1b35f8d2d7c4057fc951d4ff1746e944697326e4e0478886"
+    },
+    {
+      "id": "calendar-planner",
+      "baselineSha256": "4c3a3c3e615584f8ce4655db2b2b381e7642a6acf40ed696e16aaa4213eee3fd",
+      "currentSha256": "77936a9605c47b7d2ecc74927e61620f82900ab9dfb31a8e48165b399067b7cd"
+    },
+    {
+      "id": "case-convert",
+      "baselineSha256": "a67b10d03096452e95d3adef5bb0662ba61498d4737ead3884aa6f42e30f7a8a",
+      "currentSha256": "f45b4845d4414dc17146f07797f67102ade755b59485ad418fe2964dabe30b55"
+    },
+    {
+      "id": "celery-diagnostics",
+      "baselineSha256": "dc0f7b4da56b7113453960b6803c7ebc819e030926af5ed74ba49297b7ce83ff",
+      "currentSha256": "e93d120c53559ee5b62d57ad1795bdcd058d87e95c00a55123cb7d29adb01c62"
+    },
+    {
+      "id": "checksum-manifest",
+      "baselineSha256": "08e3e46d718c72775444eeea84d866ee4bdd6c162d19423c18ce4b7dcad880e8",
+      "currentSha256": "4e2418df5d268cddaf7c87cfcf435daec7a0bae05a2ae35f60e641418f796115"
+    },
+    {
+      "id": "cidr",
+      "baselineSha256": "49f380d0932acf8d7d60df16b7e79b11abdb254da4021b17e0dafd53ce03f019",
+      "currentSha256": "37862bedb8e470a6c812453b92befb69baec3638acb2581d910b5fc0472a542c"
+    },
+    {
+      "id": "color",
+      "baselineSha256": "4567c39abc90e4cd9b82a32a60c3a7e39aaa12ebf8a18a693c070c7f6375cfdb",
+      "currentSha256": "4e3582c7cbbe029b6efd479f425ec8436f167d61bd81d3a69103088f015f405f"
+    },
+    {
+      "id": "cron",
+      "baselineSha256": "056b684f82b4139f7073b2d988ec3aaf9a81c672fe165c7fcfa1e70ee79f19b5",
+      "currentSha256": "35a9bf69c2452358735d9d818d85b2fb9c2e48f71b4b6048e10ecbfb16c41a13"
+    },
+    {
+      "id": "data-schema",
+      "baselineSha256": "50f95520ac0d08e21e0a0e2b6ed3466cbfe659eb4de6a56b037b8269442db163",
+      "currentSha256": "a4e3a73a0567729ea1c3ef079df05ee0d06d6a435912a747c4c8b9e39f759d4f"
+    },
+    {
+      "id": "django-checks",
+      "baselineSha256": "003e00f81b88b74532e928ba257629a383fb00bdfee4f2a8d8ddb39ec8d1d2ea",
+      "currentSha256": "153b2aaf17f263529bc6b520225db58e56e3cf824ddd8aff4d1d7a7259906c30"
+    },
+    {
+      "id": "django-drf",
+      "baselineSha256": "4576eea327dc0b41f0bc9c24ef06d6f4404d9c9fbb90a1a2a1beaac947f819ef",
+      "currentSha256": "60ba25f8c44fbf4f620d29a3f9772fd83c9c0ae8ffb3eda1466327f3795f5758"
+    },
+    {
+      "id": "django-environment",
+      "baselineSha256": "0a68ffb19a2b32103ed30dbc1d1662829ccfa8c3943e08e0036d1b4077c2e366",
+      "currentSha256": "81f7b6d5647dbf1186696bdfd9c7e6af97132173cc260c76d3c9d91cd1c13078"
+    },
+    {
+      "id": "django-migrations",
+      "baselineSha256": "9a7189bc2f6a79230fdf9c2ff0592338a8a42cd696c8c11bbfca7c00ece7cb6b",
+      "currentSha256": "3d6251a9786662c6b73be0eec8ffb1bcb8a0550de6a0c01410d77591175b816a"
+    },
+    {
+      "id": "django-sql",
+      "baselineSha256": "ca4b1017b924fc91ef38b781fc28b329fbf0322cd45ee578b29a79b17a8371b5",
+      "currentSha256": "136cfbd59535e8b9f83dfdbae5770dda2d616f87934d7bd4002672beb5256b7a"
+    },
+    {
+      "id": "django-urls",
+      "baselineSha256": "f96d26ce7cf8cf946eccb8a5a9360d2c1eb73ba4febcc66210d56a9661e6da86",
+      "currentSha256": "a5aea10d316da11f97e06476e0baaf30ba21e1bed56fd6e151a04ea74fe55274"
+    },
+    {
+      "id": "embedding-playground",
+      "baselineSha256": "7d6a063384b3fb6aa6a8217f0289ba4d0b67af2b88cae679323ee3b42a3b6bc6",
+      "currentSha256": "22f96dcd5f28a748fa60abb621310b4264a20429d15f02f740444e24b02f9574"
+    },
+    {
+      "id": "file-compare",
+      "baselineSha256": "39906d69e5ca030350627dfacf25f272976c2ed8df137f9cbe99c502ff8cc0e9",
+      "currentSha256": "8f29c30f61171b3561fe4748aae61216df3621c77436e12dc2f198bfff4fb2e6"
+    },
+    {
+      "id": "file-intake",
+      "baselineSha256": "b79e5992c30dfd18e9d80522511a112f256e7ae4a13a991bcd41524867715738",
+      "currentSha256": "d75d5444e2c2a9eac9f5b6fb10514a6187baaefe421421e4ef73bbef8c18d33c"
+    },
+    {
+      "id": "file-rename",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "5c013e3d8fe796e3b337b5e6db4b6da40ad5eb7182f5c06be9dc05c138828b05"
+    },
+    {
+      "id": "files",
+      "baselineSha256": "540c31b0ca261c79f3d49b822e70026f96f9bf1cf3e41a064460bbb78774ab3d",
+      "currentSha256": "dfdb2bd4fdb2ebf4299520feee9c61b3164bb78ab348e8c76e1359f9f1bd001a"
+    },
+    {
+      "id": "global-launcher",
+      "baselineSha256": "eb2177c1b13d2175c95ca6a2101955ae2a97f358a4ea00ee0bdec5146c9c341b",
+      "currentSha256": "810254fac672f745a64004975d294dc9203bcccbf00d823d484c201f5ad50a7b"
+    },
+    {
+      "id": "hex",
+      "baselineSha256": "4a6e4ba75753d1a035387439d17e1eb287236ed90c7cef0b35230a0225b03aba",
+      "currentSha256": "3a2f1fe1cf1b1c373da9d5e5ddb720b987aba584f32049e03313dad3e06a01b6"
+    },
+    {
+      "id": "html-escape",
+      "baselineSha256": "406eda635861259d71afbf9be5c5a35558dd12319aff263b59ef35821cdcf39d",
+      "currentSha256": "ed7765ad2818e7ca1d803c9041522b617edaac5e30f7b428f0ceb8be9fc13cd0"
+    },
+    {
+      "id": "http",
+      "baselineSha256": "39e82bb4226170d8ecc5fe0f598fc8315b2b837a3bbe576bb31e8662717b45a1",
+      "currentSha256": "208a4390711c17ac48675cef43a62f17d428d1320d7bfafbe7a08ad221e7c48e"
+    },
+    {
+      "id": "image-metadata",
+      "baselineSha256": "7d761b9bf2acbe20fe50e3510e51dec9d1edc6ce3853e274475dce82e1c88f26",
+      "currentSha256": "edebb8dd41b73daae64ab64c14eb6f7b5065a614a4ad97f6cef96362147c16f4"
+    },
+    {
+      "id": "integrations",
+      "baselineSha256": "022bac9232a2bc63e22d15b84313b8da2bd58a877f1676c0caab7910d0d60a90",
+      "currentSha256": "bc897d00feb8a89e6b47022dbbdaa51b2adb14dd1cf29625c956569ad1a16b3c"
+    },
+    {
+      "id": "java-dependencies",
+      "baselineSha256": "d25a10da6cc1415cf6381a4088e45578dbce4ab2e823bf46dc6305c48c6d256d",
+      "currentSha256": "be98a9466a6fc2eee33c3a763248793ca3adca53bd18fef00d52268326ac9643"
+    },
+    {
+      "id": "java-environment",
+      "baselineSha256": "4e61e8451db32c4ad4f7a4e5bc4ccda085d872c529483a9a6f25837e1e26ad02",
+      "currentSha256": "ab63f7a0e57ab13014e7cb6494a0f0edce3d8c6df5e633042f76b4f0c10df575"
+    },
+    {
+      "id": "java-gc-log",
+      "baselineSha256": "0a4e92220f2eadb435fa13e2025b7744078c108bf0ceda8a8534b4f0c5eb126d",
+      "currentSha256": "19c9e8b68202465afcafe493f876fbd4297843cfe8a62138671476da5671de65"
+    },
+    {
+      "id": "java-jfr",
+      "baselineSha256": "594dd7761c6ae16fd14c50de8d7459c1e0aacfa87fbbd6854490d03f19a17a76",
+      "currentSha256": "10aa7e8b9a2ab85e4bb6d30297f3517c1ce78859d51a64f1a720d74151d6eb22"
+    },
+    {
+      "id": "java-thread-dump",
+      "baselineSha256": "78370794dd470d281c1119842da64413ab44fbd92e691b05be17d2988f1e39af",
+      "currentSha256": "21420a002d181037c90f19b22414e8af2de54fe7ba9f8bb820b553001ee132db"
+    },
+    {
+      "id": "json",
+      "baselineSha256": "5a934e49442d51abdbf65f6e383761f387cf1b6f75991d24ed3e642f091204f9",
+      "currentSha256": "ccded5c40dfa9f0b22ed59a22d7516e69336891aa8bfbeb57fc8f5ac682b4307"
+    },
+    {
+      "id": "json-path",
+      "baselineSha256": "b63adea3ee778c0d9d67a31166983a18730022b52609a13b2324f2c2ec730bb8",
+      "currentSha256": "212d8b11e0cedf1cfbd486ab1c284bd9febedb82c24a00a658a41e90f20d9ea8"
+    },
+    {
+      "id": "json-schema",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "32252c95844238bf9d9f6f4a7e2a24f7e4d1cd1b7fb1a433800f3d8eb0af7f87"
+    },
+    {
+      "id": "jwt",
+      "baselineSha256": "00721138ba410c70586effcde52ed285c9f56618d6255e64a76ddc99d1958ec6",
+      "currentSha256": "a3cb7832f93108ee7b36a8fe0774d0ca516446c25be68d09001dfb072dfeda27"
+    },
+    {
+      "id": "lines",
+      "baselineSha256": "3be8f967fd35835931e3effbb82b13a9665369371c42c0652bc0b801410ea534",
+      "currentSha256": "5b28cdb9379598d7f03e2bd397ca3135e5d6b7c6f267110a521c747cd8fb0331"
+    },
+    {
+      "id": "log-viewer",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "fdf143bf7862482a2cbddbcf15900dfa42edf0bd5ef0156ab9ef0cffed2279dd"
+    },
+    {
+      "id": "mcp-export",
+      "baselineSha256": "aef95630f7ee18ce34c68a031913c46da9c3e819cd9037f26afccbda7ef24633",
+      "currentSha256": "0bc16924165ade88f76c22f974684e8b6062f9cf4a46965bb339204b6a1c166e"
+    },
+    {
+      "id": "mcp-server",
+      "baselineSha256": "e95b900b4116a64d39128cba956c55f92680fbf164dee3d26aa9be28f906a0d8",
+      "currentSha256": "852a13cc9a3dd7a614eecab17461707f2db5d469ae0f12afee99f82a18f5cc07"
+    },
+    {
+      "id": "network",
+      "baselineSha256": "06c1ebbf8b41609fa6de5d01ee9eaf04911377cfffa61a2ce6378a915bca6835",
+      "currentSha256": "4b74c98cdfbf6817b0a5502c8c597fac72922d4454786279aa2e47fbe5d20598"
+    },
+    {
+      "id": "number",
+      "baselineSha256": "5e999d66b6746e0b49c27d8d32bfefa02b2fbb0940a3f343ab426ea1cbdc9976",
+      "currentSha256": "5afce8b6c8db0629f8c8c89926512badfff83c4c1d0e15d4f24d4c25b98fdc06"
+    },
+    {
+      "id": "ocr-documents",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "27e419f3e46c50a7ae7146eb6bd6d030b9da0c815597c6e9c1cbe6a65a903dc2"
+    },
+    {
+      "id": "pipeline",
+      "baselineSha256": "825a2db66c40f0495469a9deafa43acd4911de01afd80ddbd433097276127fd6",
+      "currentSha256": "e13e8fec6e79d02525ebe11010e602d558f5e74db0e849c5234b79949469377a"
+    },
+    {
+      "id": "qr",
+      "baselineSha256": "59e3dae53b12908eeeaaf329ffec85fe2f976fd1a90b28f415ff849737e84e78",
+      "currentSha256": "ae8e2d7f6efb33d5b3155040a0b10a54e65d64fe720e166548196c89c160a047"
+    },
+    {
+      "id": "rag-eval",
+      "baselineSha256": "2683f97ee4c79fb91fa1a5dd3ca25af4f8a5fe08a49ea5eef9c924d640e01966",
+      "currentSha256": "0a59de84d6e00d1d12c1b1f2c9d53ac0bd36d3a6a47eeed159d5c7d19b6c22b6"
+    },
+    {
+      "id": "rag-index",
+      "baselineSha256": "206d3c09e1eb16450d5b76399cf7c63cb1316a58d9f193e1fed36e5aa70ac2d8",
+      "currentSha256": "b84f1240f8cd39effa9bdf3aa350f3a665b30737cf50162456d05bf2504fa109"
+    },
+    {
+      "id": "rag-ingestion",
+      "baselineSha256": "0222811e16b85935dfd4a67a992e832f971148f07dff9c48512f9ebacbd75497",
+      "currentSha256": "19035c87709d22e659c474207e5759772559b043c9d72d6e05fde5f9852933b8"
+    },
+    {
+      "id": "rag-keyword-search",
+      "baselineSha256": "5c3d37a1e6ffde0ad2dedf0873c30b0e2193d378586fd1fd58edb5cd4704c2cf",
+      "currentSha256": "0b387e3c90ddeedccb892508e469e097cb58290c8cde041ea8f9715bdd2757f5"
+    },
+    {
+      "id": "rag-search",
+      "baselineSha256": "2d6ac9c5ad0b6b835c0c826a1066859a0c45d70b2079c073cfe04ef39ff65933",
+      "currentSha256": "279cac8f6f23ea830fc648c3e7145df01573bbb6b4cfa758050b8a7e25b0b673"
+    },
+    {
+      "id": "rag-sources",
+      "baselineSha256": "735f6ec22944c4642f28006961c9eefc7009cf404e87251c0aaf71f0ae62b40f",
+      "currentSha256": "f5a7fb5da4b48432bf6819e894083c67964b63ffbe1dead60eb24509de51951c"
+    },
+    {
+      "id": "rag-vectors",
+      "baselineSha256": "e513530a899081c1f92ceb45fb52802622a38b4bb38953d19ec8ef9a25b9b445",
+      "currentSha256": "5cb1b8056db12cfd05410496f0d63c8d4ecf2184f7fe783a54efda82eaab8392"
+    },
+    {
+      "id": "random",
+      "baselineSha256": "82564233cd4eae2bbbb4a05a82c0461bb286d81e58fa2fc51457d57eb01807c7",
+      "currentSha256": "cbd0813f205dd440d234190d086e5b772acdc6d61850aaa10a89bfa75a0bebb2"
+    },
+    {
+      "id": "recorder-tutorial",
+      "baselineSha256": "e8943111b8716adfec7cd162fdbab54a3ae10dc1bd358095e8bba0163c210b1e",
+      "currentSha256": "89fd4effcd16f162b86319509b5a02512bebfe0e5c5b6a1abdc7e7542cb2d946"
+    },
+    {
+      "id": "regex",
+      "baselineSha256": "9f6fcc2864dbc0573ba2137d91247729f864ea107469d2ca3038a487e125e077",
+      "currentSha256": "fa829136fa1ee17da21e2d3f04264ee634004060c888d3296c325d68ad24317f"
+    },
+    {
+      "id": "regex-replace",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "ffecc0758fff10c34f1ba8d733d49cc69df399dc2801cbd79a0e76b69965f3ff"
+    },
+    {
+      "id": "screen-recorder-audio-gain",
+      "baselineSha256": "f69d42122063d9e0b738da5244709bec465d4f47c664e5eb9c7f0d833659b598",
+      "currentSha256": "8fd3a5709bbd4fe2c54e4f58c6f18789a11f1cc5fa4d9aaa9feabaf5fc9d74a8"
+    },
+    {
+      "id": "screen-recorder-audio-meter",
+      "baselineSha256": "00aa447caf8c545d6f37e12cb968d1a5a87c07a18799d2a691e24e399dd3226f",
+      "currentSha256": "1d3de9f0f2ab1e4d7d4ce422143d91e291d04096e0225e66c555bac6db5526f0"
+    },
+    {
+      "id": "screen-recorder-audio-mix",
+      "baselineSha256": "550a701212cb54535525de34874e6d8afb27803bab238aec50b66d3bb6cd7e0b",
+      "currentSha256": "852a88ed7d6f169d726879fc40a60a6c937db330774f754b931e65587378fcfe"
+    },
+    {
+      "id": "screen-recorder-multimonitor",
+      "baselineSha256": "5a55ad85a24ccf32dd4be51dcfaa668e25abd2c0ee329efb1cbf8a451f5d9847",
+      "currentSha256": "1e943de4499850eda307309b8f2a24b71fd2386936aa493cfdfb05a2f8467c1e"
+    },
+    {
+      "id": "sha256",
+      "baselineSha256": "9806cb269244372b99b972d0561194246f78e3fb5866a2638d3b3f22e0db4ccd",
+      "currentSha256": "3334830912e4762222ee83c97cbe5639c17aa11752f416c147a68b572a11ccd7"
+    },
+    {
+      "id": "spring-actuator",
+      "baselineSha256": "e6f29752b309edde748af28826dc61d12864f3fc6db4b1c98ddcf020e4d05948",
+      "currentSha256": "cfe61ed8df5c503670b2e4c3d4895b14d3517acef35f20ec13bf5dd5588f4d6f"
+    },
+    {
+      "id": "spring-config",
+      "baselineSha256": "250f7170cfb7fb1291fbd532b34bf71203ec792fb157dc96cbb91bb2bbee47f7",
+      "currentSha256": "7679ec9238e4645beb02ae69f5861041b5588ccf45636d40999de98148ce8650"
+    },
+    {
+      "id": "sql-format",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "4ef2e1122cd42c59219e6bcfe2eb5fb40a6de03475db6cc741e593a96412b478"
+    },
+    {
+      "id": "sqlite",
+      "baselineSha256": "b29e2176ad1ad8abae948f35c3eb62cc385016608ee20f43ed234a03755191a9",
+      "currentSha256": "5941827011137e324f8e0e904721c4266937a27f2ed0bb4fa1d612445e4c2efb"
+    },
+    {
+      "id": "task-center",
+      "baselineSha256": "429cf388c5b01583bef9bdf74ec16914c4f63c1bae6af0535409c677bf156959",
+      "currentSha256": "8bc7e5865a3c26db5c101b20078bc4cbf38e482ef97862d398028c1ea18edcda"
+    },
+    {
+      "id": "text-escape",
+      "baselineSha256": "e30ec66ec1291708ececa197d9568d2ced36606e70ac6d69fded2bfcc3210d74",
+      "currentSha256": "35c18da0969180ac590af2bd3da57288535df1f196b039273db6e139eb715f80"
+    },
+    {
+      "id": "text-stats",
+      "baselineSha256": "e02ce56d33ed59746aaac85b0e29e73f00a414574c1c98da7c7e79bde623531c",
+      "currentSha256": "d2113f31d3881829817d295693e4ab518dc00301d3af36a39a09c04ba711300e"
+    },
+    {
+      "id": "time-zone",
+      "baselineSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "currentSha256": "21df827321376368532a063c8eb32c98bde0e444bf77ba98f91049f0533859a4"
+    },
+    {
+      "id": "unicode",
+      "baselineSha256": "1478fb5ede954c6adcd9f6b1ccbfb0087b5421607d02f6a2374ed6bab311bc57",
+      "currentSha256": "5fb19894ba948630c6ee5f8721977a14d2d8df15cd88b0cde84a778006f721d7"
+    },
+    {
+      "id": "url",
+      "baselineSha256": "e7975fb9bdaff3c01e90ae92edf214ca29dba1fcb15d9c78e54d01a9b8eb90b6",
+      "currentSha256": "629718b6efc61226915058163ab10322d2987896714f58641df01494f476e03c"
+    },
+    {
+      "id": "url-inspect",
+      "baselineSha256": "17629965b72c2366d9326d96340f4aea513e9426bd0b2ca86305f0fedb8e6688",
+      "currentSha256": "fd729cff9b41bd3dfc91a6683eb178b68446ef9e9c7bc5f1dab40bbc35c4f8bd"
+    },
+    {
+      "id": "uuid",
+      "baselineSha256": "76fadffe466ccaac57852aed6a81f99fee66afe51f00bf8b006261362c974c00",
+      "currentSha256": "e0b287d267f21039f9ea6f3edc9bd2793141ca1214a2cf93d3ed19250590c858"
+    },
+    {
+      "id": "yaml",
+      "baselineSha256": "7e73f280069ef9742f5eb994a39ae783d7eb04b26a88660fcf792709d1c6fe83",
+      "currentSha256": "f5aaa0a37b8ca988e3d68440f232c9204895a07a23a20f58a86e8327530c9a80"
+    }
+  ]
+}

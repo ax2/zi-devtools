@@ -74,7 +74,7 @@ for tool in catalog["tools"]:
                          hostProfile="compute.wasi.v1@=1.0.0-rc.1", diagnosticsProfile="diagnostics.compute.wasi.v1.proposal",
                          diagnosticsSchemaVersion="2.0.0-rc.1", requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1"},
                          candidateDirectory="release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-                         verificationReceipt="release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification.json",
+                         verificationReceipt="release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
                          runtimeVerification="native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
                          viewVerification="public_sdk_fixture_actual_wasi_11_actions_two_viewports",
                          blockingReason="unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收")]
@@ -85,7 +85,7 @@ for tool in catalog["tools"]:
                              packageId="com.zicode.devtools.transforms", packageVersion="0.1.0",
                              limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
                              candidateDirectory="release/transforms-0.1.0-candidate-02",
-                             verificationReceipt="release/transforms-0.1.0-candidate-02-verification.json",
+                             verificationReceipt="release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
                              runtimeVerification="174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
                              viewVerification="public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
                              blockingReason="unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收")
@@ -97,7 +97,7 @@ for tool in catalog["tools"]:
                              limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
                              requiredProfiles={"tool.directory.v1": "=1.0.0-preview.1", "tool.open.v1": "=1.0.0-preview.1"},
                              candidateDirectory="release/plugin-candidates/inspect-0.1.2-candidate-01",
-                             verificationReceipt="release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json",
+                             verificationReceipt="release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json",
                              runtimeVerification="121_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
                              viewVerification="tool_open_v1_positive_unknown_slow_callback_actual_browser_light_dark; 8 actions map to selectors only",
                              blockingReason="unsigned 0.1.2新候选已完成提供方验证；tool.open.v1的Host安装/撤权/切场景仍待接收方验收，0.1.1冻结保留")
@@ -112,7 +112,7 @@ for row in rows:
         row["packageVersion"] = "0.1.2"
         row["requiredProfiles"] = {"tool.directory.v1": "=1.0.0-preview.1", "tool.open.v1": "=1.0.0-preview.1"}
         row["candidateDirectory"] = "release/plugin-candidates/inspect-0.1.2-candidate-01"
-        row["verificationReceipt"] = "release/plugin-candidates/inspect-0.1.2-candidate-01-verification.json"
+        row["verificationReceipt"] = "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
@@ -142,7 +142,7 @@ json_row["scopeComplete"] = True
 json_row["packageId"] = "com.zicode.devtools.text"
 json_row["packageVersion"] = "0.4.1"
 json_row["candidateDirectory"] = "release/text-plugin-0.4.1-candidate-02"
-json_row["verificationReceipt"] = "release/text-plugin-0.4.1-candidate-02-verification.json"
+json_row["verificationReceipt"] = "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json"
 json_row["directoryProfile"] = "tool.directory.v1@=1.0.0-preview.1"
 json_row["operationScopes"] = [dict(
     operationId=f"devtools.text.json.{operation}", title=title,
@@ -167,7 +167,7 @@ json_row["candidateCapabilities"] += [capability for capability, _, _ in json_ob
 json_row["candidatePackages"] = [
     dict(packageId="com.zicode.devtools.text", packageVersion="0.4.1",
          candidateDirectory="release/text-plugin-0.4.1-candidate-02",
-         verificationReceipt="release/text-plugin-0.4.1-candidate-02-verification.json",
+         verificationReceipt="release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
          capabilities=pilot["json"]),
     dict(packageId="com.zicode.devtools.json-object", packageVersion="0.1.0",
          candidateDirectory="release/plugin-candidates/json-object-0.1.0-candidate-07",
@@ -201,7 +201,7 @@ for source_id, operations in {
     tool_row["packageId"] = "com.zicode.devtools.text"
     tool_row["packageVersion"] = "0.4.1"
     tool_row["candidateDirectory"] = "release/text-plugin-0.4.1-candidate-02"
-    tool_row["verificationReceipt"] = "release/text-plugin-0.4.1-candidate-02-verification.json"
+    tool_row["verificationReceipt"] = "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json"
     tool_row["directoryProfile"] = "tool.directory.v1@=1.0.0-preview.1"
     tool_row["operationScopes"] = [dict(
         operationId=operation, title=title, scopeKind="complete_text_operation_within_plugin_budget",
@@ -223,7 +223,7 @@ sql_row["scopeComplete"] = False
 sql_row["packageId"] = "com.zicode.devtools.text"
 sql_row["packageVersion"] = "0.4.1"
 sql_row["candidateDirectory"] = "release/text-plugin-0.4.1-candidate-02"
-sql_row["verificationReceipt"] = "release/text-plugin-0.4.1-candidate-02-verification.json"
+sql_row["verificationReceipt"] = "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json"
 sql_row["operationScopes"] = [dict(
     operationId="devtools.text.sql.format", title="SQL 格式化 · 通用方言",
     scopeKind="partial_standalone_formatter", scope="通用SQL词法模式和默认缩进/关键字大小写；不提供桌面工具的PostgreSQL/MySQL/SQLite/SQL Server方言选择。",
@@ -386,6 +386,6 @@ path = ROOT / "docs/studio-plugin-migration.json"
 if args.check:
     assert path.read_text(encoding="utf-8") == output, "Run scripts/sync_studio_plugin_map.py"
 else:
-    path.write_text(output, encoding="utf-8")
+    path.write_bytes(output.encode("utf-8"))
 counts = {category: sum(row["migration"] == category for row in rows) for category in result["categories"]}
 print(f"Plugin migration: {len(rows)} catalog items, {counts}; accepted capabilities=0")

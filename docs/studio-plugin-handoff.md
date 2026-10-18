@@ -1,5 +1,13 @@
 # Studio 插件提供方交接
 
+## 2026-10-18：全部包收据索引规范化
+
+在上一份不可变目录修订基础上，为此前缺少 Studio 所需结构化索引编码的四个插件收据新增 revision-01，包目录与其逐文件内容均未改动；旧收据和旧目录保留。Inspect 0.1.2 已有的 revision-01 收据经 Studio 校验器复核后直接复用。迁移映射现为 6/6 个包收据目录索引全部 `matched`。
+
+最终不可变目录修订为 `release/plugin-candidates/devtools-catalog-2026-10-18-d7d61b707a89a366/`，外部收据 `release/plugin-candidates/devtools-catalog-2026-10-18-d7d61b707a89a366-verification.json`；修订 SHA-256 `d7d61b707a89a366a5382c9dca8f253043242eac8c8a873e6931b71ee4207689`，目录索引 SHA-256 `dee6a98d21de3c98d37db81c84928ffc6adec28b4859dbdbea5bf2bc5f1fe8ca`，共 11 文件、2,105,306 字节。它包含更新后的154工具迁移表及六份外部包收据副本；源目录 `tools.json` 仍为 `37353db759bad2df4320990a55b6c5d32b81058e75f3e98fc39646d1afd0499d`，迁移表 SHA-256 为 `613bddd0db2aef56ffd388e7e67bcdaed1085e8c24cc88b66a836922dc3d568d`。Studio 的目录快照 verifier 与六个包 verifier 均退出 0，文件和索引匹配。初次重打包时 Text 工具操作级映射缺收据路径，生成器错误回退到旧收据；现已从工具级候选包映射解析该收据，最终快照内六包状态全为 `matched`。迁移表生成器改为写入 UTF-8 LF 字节，避免 Windows 换行转换给提交差异检查带来伪尾随空格并保持可复制摘要稳定。
+
+四个新增/复用收据：diagnostics SHA-256 `a2989a110f1736fb431b468dc3a376e2fc9344e3de4332dab344cbf2a4a9a8fb`、inspect `29afb75e81cea5e7606ad238708b6bef796809eb1df8ee9ab58e66b1b011c202`、text `f9911bcb4a1e56e627b25605d7ee460e1ce32f082e1758928131256723bd8f02`、transforms `a8d76696f037e0c932952e68e1b620144d8a24ae739889a820859be9c796975f`。修订只增加可验证的收据元数据，不是插件包新版本、签名或运行验收；所有包仍 unsigned，`acceptedCapabilities=0`，Host/Pi/生命周期仍待 Studio 接收验收。完整过程见 [本轮记录](iterations/2026-10-18-studio-receipt-normalization.md)。
+
 ## 2026-10-18：不可变目录修订与 JSON Object 收据
 
 不可变目录修订为 `release/plugin-candidates/devtools-catalog-2026-10-18-3c7c5aa8ad679a14/`，外部收据为同名 `-verification.json`。修订 ID 由源目录内容派生，不复用应用开发版本 `0.82.0-dev.105`；包内冻结两个源 JSON、Studio 对比结果、154 项逐工具包/操作/能力/范围映射，以及六个包的副本收据。源目录 SHA-256 分别为 `tools.json` `37353db759bad2df4320990a55b6c5d32b81058e75f3e98fc39646d1afd0499d` 和迁移映射 `8f67d99638646519e846d9391fd0fc7a4336460752e8cb3c4d7192c2e68d7a68`。修订 SHA-256 为 `3c7c5aa8ad679a141b1268654bc9ef085530d33b1e123b40e08c26df80042ea1`，索引 SHA-256 为 `ef23b73d4310d066ca73753830afeed404843d066de9e374f6363552e69fe2c3`；共 11 个文件、2,108,664 字节。
