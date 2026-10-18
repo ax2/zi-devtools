@@ -34,6 +34,10 @@
 - 迁移表同步和 `--check` 通过；Studio 比较范围仍为154项、新增/删除0、版本/状态76、scope70、discovery76；状态分布92/35/27。
 - unsigned、runtime 未接受、full tool acceptance 未完成；`acceptedCapabilities=0`。这轮只完成文件/目录收据校验，不代表 Studio 安装、Worker 隔离、Pi 授权、Host UI 或工具功能验收。
 
+## 后续防错加固
+
+重新核对包映射明细时发现，Text 操作级条目省略 `verificationReceipt`，旧生成器会回退到默认旧收据。现由 `receipt_for_scope` 从工具级候选包映射解析包收据；快照生成要求每个包恰有一个显式收据，缺失或冲突立即失败，不再猜文件名。`scripts/tests/test_package_studio_catalog_revision.py` 新增 5 项解析/拒绝回归测试；脚本测试套件共 28 项通过，插件映射、目录同步和不可变覆盖保护验证通过。
+
 ## 遗留
 
 Studio 接收方仍需完成签名、Host/Pi、Worker、真实 UI、权限与生命周期验收。新快照是新的目录修订，不覆盖旧修订，也不改变桌面应用版本。
