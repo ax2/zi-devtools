@@ -1,0 +1,28 @@
+{
+  "toolId": "devtools.transforms.url.encode",
+  "toolVersion": "1.0.2",
+  "cases": [
+    {
+      "id": "studio-ocr-phrase",
+      "mimeType": "text/plain",
+      "text": "ZiCode OCR test 2026",
+      "sourceByteCount": 20,
+      "encodedText": "ZiCode%20OCR%20test%202026"
+    },
+    {
+      "id": "utf8-and-reserved-characters",
+      "mimeType": "text/plain",
+      "text": "中 +&",
+      "sourceByteCount": 6,
+      "encodedText": "%E4%B8%AD%20%2B%26"
+    },
+    {
+      "id": "limit-boundary",
+      "mimeType": "text/plain",
+      "pattern": "a",
+      "repeatBytes": 8192,
+      "sourceByteCount": 8192,
+      "encodedText": "a repeated 8192 times"
+    }
+  ]
+}

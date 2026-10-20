@@ -5,6 +5,7 @@ use tray_icon::{
     Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
+use unicode_normalization::UnicodeNormalization;
 
 use crate::recorder_ui::TrayRecordingStatus;
 use crate::{config::ServiceSpec, service::ServiceStatus, tools::ToolKind};
@@ -67,6 +68,28 @@ pub struct Navigation {
 impl Navigation {
     pub fn new(mut entries: Vec<TrayEntry>, preferences: &crate::preferences::Preferences) -> Self {
         entries.sort_by(|a, b| (&a.category, &a.title, &a.id).cmp(&(&b.category, &b.title, &b.id)));
+        let mut title_counts = HashMap::<String, usize>::new();
+        for entry in &entries {
+            *title_counts
+                .entry(normalized_menu_key(&entry.title))
+                .or_default() += 1;
+        }
+        let mut labels = HashMap::<String, usize>::new();
+        for entry in &mut entries {
+            if title_counts
+                .get(&normalized_menu_key(&entry.title))
+                .copied()
+                .unwrap_or_default()
+                > 1
+            {
+                entry.title = format!("{} · {}", entry.title, entry.category);
+            }
+            let occurrences = labels.entry(normalized_menu_key(&entry.title)).or_default();
+            *occurrences += 1;
+            if *occurrences > 1 {
+                entry.title = format!("{} · {}", entry.title, entry.id);
+            }
+        }
         let selected = |ids: &[String]| {
             let mut seen = std::collections::HashSet::new();
             ids.iter()
@@ -100,6 +123,15 @@ impl Navigation {
     }
 }
 
+fn normalized_menu_key(text: &str) -> String {
+    text.nfkc()
+        .collect::<String>()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 // Escape native menu mnemonic markers and keep untrusted plugin names on one line.
 fn menu_label(text: &str) -> String {
     let clean: String = text
@@ -107,7 +139,14 @@ fn menu_label(text: &str) -> String {
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
     let label = if clean.chars().count() > 36 {
-        format!("{}…", clean.chars().take(35).collect::<String>())
+        let chars: Vec<_> = clean.chars().collect();
+        let prefix = chars.iter().take(20).copied().collect::<String>();
+        let suffix = chars
+            .iter()
+            .skip(chars.len() - 15)
+            .copied()
+            .collect::<String>();
+        format!("{prefix}…{suffix}")
     } else {
         clean
     };
@@ -590,9 +629,92 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_tray_titles_are_disambiguated_in_all_shortcut_lists() {
+        let mut prefs = crate::preferences::Preferences::default();
+        prefs.favorites.extend(["a", "b", "c"].map(str::to_owned));
+        prefs.visit("a");
+        prefs.visit("b");
+        prefs.visit("c");
+        let model = Navigation::new(
+            vec![
+                TrayEntry {
+                    id: "a".into(),
+                    title: "JSON".into(),
+                    category: "数据".into(),
+                },
+                TrayEntry {
+                    id: "b".into(),
+                    title: "JSON".into(),
+                    category: "插件".into(),
+                },
+                TrayEntry {
+                    id: "c".into(),
+                    title: "JSON".into(),
+                    category: "插件".into(),
+                },
+            ],
+            &prefs,
+        );
+
+        let labels_by_id = |entries: &[TrayEntry]| {
+            let mut labels: Vec<_> = entries
+                .iter()
+                .map(|entry| (entry.id.clone(), entry.title.clone()))
+                .collect();
+            labels.sort();
+            labels
+        };
+        let expected = vec![
+            ("a".to_owned(), "JSON · 数据".to_owned()),
+            ("b".to_owned(), "JSON · 插件".to_owned()),
+            ("c".to_owned(), "JSON · 插件 · c".to_owned()),
+        ];
+        assert_eq!(labels_by_id(&model.entries), expected);
+        for shortcuts in [&model.favorites, &model.recent, &model.frequent] {
+            assert_eq!(labels_by_id(shortcuts), expected);
+        }
+    }
+
+    #[test]
+    fn tray_duplicate_detection_uses_search_normalization() {
+        let model = Navigation::new(
+            vec![
+                TrayEntry {
+                    id: "json-ascii".into(),
+                    title: "JSON".into(),
+                    category: "数据".into(),
+                },
+                TrayEntry {
+                    id: "json-fullwidth".into(),
+                    title: "ＪＳＯＮ".into(),
+                    category: "数据".into(),
+                },
+            ],
+            &crate::preferences::Preferences::default(),
+        );
+
+        let labels: std::collections::HashSet<_> = model
+            .entries
+            .iter()
+            .map(|entry| normalized_menu_key(&entry.title))
+            .collect();
+        assert_eq!(labels.len(), 2);
+        assert!(
+            model
+                .entries
+                .iter()
+                .all(|entry| entry.title.contains("· 数据"))
+        );
+    }
+
+    #[test]
     fn native_labels_escape_mnemonics_and_control_characters() {
         assert_eq!(menu_label("A&B\tC\nD"), "A&&B C D");
         assert_eq!(menu_label(&"长".repeat(50)).chars().count(), 36);
+        let long_qualified_title = format!("{} · 插件", "超长工具名".repeat(10));
+        let shortened = menu_label(&long_qualified_title);
+        assert_eq!(shortened.chars().count(), 36);
+        assert!(shortened.ends_with(" · 插件"));
     }
 
     #[cfg(windows)]

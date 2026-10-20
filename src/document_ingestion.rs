@@ -1,6 +1,7 @@
 //! Local, explicit document parsing and bounded chunk previews. No content is persisted.
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
+use image::{DynamicImage, ImageFormat, ImageReader, Limits};
 use quick_xml::{Reader, events::Event};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -18,6 +19,7 @@ const MAX_TEXT: usize = 4 * 1024 * 1024;
 const CHUNK_CHARS: usize = 800;
 const OVERLAP_CHARS: usize = 100;
 const MAX_CHUNKS: usize = 2_000;
+const MAX_IMAGE_PIXELS: u64 = 16_000_000;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Chunk {
@@ -108,22 +110,167 @@ fn parse_docx(bytes: &[u8]) -> Result<Vec<(String, String)>> {
     Ok(sections)
 }
 
-fn parse_pdf(bytes: &[u8]) -> Result<Vec<(String, String)>> {
+fn parse_pdf_with_recognizer(
+    bytes: &[u8],
+    mut recognize: impl FnMut(&[u8], u32, &[(u32, u32)]) -> Result<Vec<(u32, String)>>,
+) -> Result<Vec<(String, String)>> {
     let doc = lopdf::Document::load_mem(bytes).context("PDF 格式无效")?;
     ensure!(!doc.is_encrypted(), "PDF 已加密，无法解析");
     let pages = doc.get_pages();
     ensure!(pages.len() <= 200, "PDF 超过 200 页，请拆分后导入");
-    let mut sections = Vec::new();
-    for page in pages.keys() {
+    let expected_page_count = u32::try_from(pages.len()).context("PDF 页数超出平台范围")?;
+    let mut extracted = Vec::with_capacity(pages.len());
+    let mut scanned = Vec::new();
+    for (index, page) in pages.keys().enumerate() {
         let text = doc
             .extract_text(&[*page])
             .with_context(|| format!("PDF 第 {page} 页解析失败"))?;
+        if text.trim().is_empty() {
+            scanned.push((*page, index as u32));
+        }
+        extracted.push((*page, text));
+    }
+    if scanned.len() > crate::clipboard::MAX_PDF_OCR_PAGES {
+        bail!(
+            "PDF 有 {} 个扫描或空白页面，超过本机 OCR 的 50 页上限，请拆分后导入",
+            scanned.len()
+        );
+    }
+    let recognized = if scanned.is_empty() {
+        Vec::new()
+    } else {
+        recognize(bytes, expected_page_count, &scanned)?
+    };
+    let recognized: std::collections::HashMap<_, _> = recognized.into_iter().collect();
+    ensure!(
+        recognized.len() == scanned.len()
+            && scanned
+                .iter()
+                .all(|(page, _)| recognized.contains_key(page)),
+        "PDF OCR 未返回全部扫描页面的识别结果"
+    );
+    let mut sections = Vec::new();
+    for (page, text) in extracted {
+        let text = if text.trim().is_empty() {
+            recognized.get(&page).cloned().unwrap_or_default()
+        } else {
+            text
+        };
         push_section(&mut sections, format!("第 {page} 页"), text)?;
     }
     if sections.is_empty() {
-        bail!("PDF 未提取到文字；扫描件需要 OCR，当前版本尚不支持");
+        bail!("PDF 未识别到文字；请确认扫描件清晰且已安装对应的 Windows OCR 语言");
     }
     Ok(sections)
+}
+
+fn parse_pdf(bytes: &[u8], language_tag: Option<&str>) -> Result<Vec<(String, String)>> {
+    parse_pdf_with_recognizer(bytes, |bytes, expected_page_count, pages| {
+        #[cfg(windows)]
+        {
+            crate::clipboard::recognize_pdf_pages_with_language(
+                bytes,
+                expected_page_count,
+                pages,
+                language_tag,
+            )
+            .map_err(anyhow::Error::msg)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (bytes, expected_page_count, pages, language_tag);
+            bail!("扫描 PDF OCR 目前仅支持 Windows 内置 OCR")
+        }
+    })
+}
+
+fn decode_ocr_image(bytes: &[u8]) -> Result<DynamicImage> {
+    ensure!(bytes.len() as u64 <= MAX_FILE, "图片超过 16 MiB");
+    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
+    ensure!(
+        matches!(
+            reader.format(),
+            Some(ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::WebP)
+        ),
+        "本机文档 OCR 仅支持 PNG、JPEG 和 WebP 图片"
+    );
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(12_000);
+    limits.max_image_height = Some(12_000);
+    limits.max_alloc = Some(64 * 1024 * 1024);
+    reader.limits(limits.clone());
+    let (width, height) = reader.into_dimensions()?;
+    ensure!(
+        width > 0
+            && height > 0
+            && u64::from(width).saturating_mul(u64::from(height)) <= MAX_IMAGE_PIXELS,
+        "图片尺寸超过 1600 万像素"
+    );
+    let mut reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
+    reader.limits(limits);
+    reader.decode().context("图片解码失败")
+}
+
+fn parse_image_with(
+    bytes: &[u8],
+    language_tag: Option<&str>,
+    recognize: impl FnOnce(&DynamicImage, Option<&str>) -> Result<String>,
+) -> Result<Vec<(String, String)>> {
+    let image = decode_ocr_image(bytes)?;
+    let text = recognize(&image, language_tag).context("Windows 本机 OCR 未能处理所选图片")?;
+    ensure!(text.len() <= MAX_TEXT, "图片 OCR 正文超过 4 MiB");
+    let mut sections = Vec::new();
+    push_section(&mut sections, "图片 OCR".into(), text)?;
+    ensure!(!sections.is_empty(), "图片中没有识别到文字");
+    Ok(sections)
+}
+
+fn parse_image_with_language(
+    bytes: &[u8],
+    language_tag: Option<&str>,
+) -> Result<Vec<(String, String)>> {
+    #[cfg(windows)]
+    {
+        parse_image_with(bytes, language_tag, |image, language| {
+            crate::clipboard::recognize_image_with_language(image, language)
+                .map_err(anyhow::Error::msg)
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = language_tag;
+        let _ = decode_ocr_image(bytes)?;
+        bail!("图片 OCR 目前仅支持 Windows 内置 OCR")
+    }
+}
+
+/// Extract bounded, location-labelled text for an explicitly selected model-chat attachment.
+pub(crate) fn extract_chat_attachment(
+    bytes: &[u8],
+    extension: &str,
+    max_text_bytes: usize,
+) -> Result<String> {
+    ensure!(bytes.len() as u64 <= MAX_FILE, "文档附件超过 16 MiB");
+    ensure!(
+        max_text_bytes > 0 && max_text_bytes <= MAX_TEXT,
+        "文档摘录预算无效"
+    );
+    let sections = match extension {
+        "pdf" => parse_pdf(bytes, None)?,
+        "docx" => parse_docx(bytes)?,
+        _ => bail!("仅支持 PDF 与 DOCX 文档摘录"),
+    };
+    let mut text = String::new();
+    for (location, section) in sections {
+        let part = format!("[{location}]\n{section}\n\n");
+        ensure!(
+            text.len().saturating_add(part.len()) <= max_text_bytes,
+            "文档摘录超过单附件预算，请拆分文档"
+        );
+        text.push_str(&part);
+    }
+    ensure!(!text.trim().is_empty(), "文档未提取到可发送正文");
+    Ok(text.trim_end().to_owned())
 }
 
 fn parse_html(bytes: &[u8]) -> Result<Vec<(String, String)>> {
@@ -268,6 +415,14 @@ pub fn verified_source_path(source: &Source, file: &FileVersion) -> Result<PathB
 }
 
 pub fn ingest(source: &Source, file: &FileVersion) -> Result<Preview> {
+    ingest_with_ocr_language(source, file, None)
+}
+
+pub fn ingest_with_ocr_language(
+    source: &Source,
+    file: &FileVersion,
+    language_tag: Option<&str>,
+) -> Result<Preview> {
     let (_, bytes) = verified_source(source, file)?;
     let hash = file.sha256.clone();
     let ext = Path::new(&file.relative)
@@ -279,8 +434,9 @@ pub fn ingest(source: &Source, file: &FileVersion) -> Result<Preview> {
         "md" | "markdown" => parse_text(&bytes, true)?,
         "txt" => parse_text(&bytes, false)?,
         "html" | "htm" => parse_html(&bytes)?,
-        "pdf" => parse_pdf(&bytes)?,
+        "pdf" => parse_pdf(&bytes, language_tag)?,
         "docx" => parse_docx(&bytes)?,
+        "png" | "jpg" | "jpeg" | "webp" => parse_image_with_language(&bytes, language_tag)?,
         _ => bail!("不支持的文档类型"),
     };
     Ok(Preview {
@@ -289,6 +445,40 @@ pub fn ingest(source: &Source, file: &FileVersion) -> Result<Preview> {
         file_sha256: hash,
         chunks: chunks_from(sections)?,
     })
+}
+
+/// Reconstructs parsed sections from overlapping chunks and returns a portable Markdown export.
+pub fn export_markdown(preview: &Preview) -> Result<String> {
+    ensure!(!preview.chunks.is_empty(), "没有可导出的解析内容");
+    let mut output = format!(
+        "# 文档解析结果\n\n- 知识源：{}\n- 文件：{}\n- 原文件 SHA-256：{}\n",
+        preview.source, preview.relative, preview.file_sha256
+    );
+    let mut previous_location: Option<&str> = None;
+    for chunk in &preview.chunks {
+        let same_section = previous_location == Some(chunk.location.as_str());
+        if !same_section {
+            output.push_str(&format!("\n\n## {}\n\n", chunk.location));
+            previous_location = Some(&chunk.location);
+        }
+        let body = if same_section {
+            chunk.text.chars().skip(OVERLAP_CHARS).collect::<String>()
+        } else {
+            chunk.text.clone()
+        };
+        output.push_str(&body);
+    }
+    ensure!(
+        output.len() <= MAX_TEXT + 256 * 1024,
+        "Markdown 导出超过 4.25 MiB 上限"
+    );
+    Ok(output)
+}
+
+pub fn export_markdown_to_path(preview: &Preview, path: &Path) -> Result<PathBuf> {
+    let markdown = export_markdown(preview)?;
+    let not_cancelled = std::sync::atomic::AtomicBool::new(false);
+    crate::local_files::save_new_moved(path, markdown.as_bytes(), &not_cancelled)
 }
 
 #[derive(Default)]
@@ -300,9 +490,19 @@ pub struct State {
     selected_chunk: usize,
     chunk_page: usize,
     message: String,
+    ocr_language_tag: Option<String>,
+    #[cfg(windows)]
+    ocr_languages: Vec<crate::clipboard::RecognizerLanguage>,
+    #[cfg(windows)]
+    ocr_languages_rx:
+        Option<Receiver<std::result::Result<Vec<crate::clipboard::RecognizerLanguage>, String>>>,
 }
 
 impl State {
+    pub(crate) fn ocr_language_tag(&self) -> Option<&str> {
+        self.ocr_language_tag.as_deref()
+    }
+
     pub(crate) fn background_active(&self) -> bool {
         self.running.is_some()
     }
@@ -350,7 +550,44 @@ impl State {
         self.message = "解析完成：3 个分块".into();
     }
 
+    #[cfg(all(feature = "ui-preview", windows))]
+    pub fn preview_ocr_fixture(&mut self, sources: &[Source]) {
+        self.preview_fixture(sources);
+        self.selected_file = "scans/example.png".into();
+        self.preview = None;
+        self.ocr_language_tag = Some("en-US".into());
+        self.ocr_languages = vec![
+            crate::clipboard::RecognizerLanguage {
+                tag: "en-US".into(),
+                display_name: "English (United States)".into(),
+            },
+            crate::clipboard::RecognizerLanguage {
+                tag: "zh-CN".into(),
+                display_name: "中文（简体，中国）".into(),
+            },
+        ];
+        self.message = "示例：已选择 English (United States)，语言选项仅用于界面预览。".into();
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui, sources: &[Source]) {
+        #[cfg(windows)]
+        if let Some(rx) = &self.ocr_languages_rx {
+            match rx.try_recv() {
+                Ok(Ok(languages)) => {
+                    self.ocr_languages = languages;
+                    self.ocr_languages_rx = None;
+                }
+                Ok(Err(error)) => {
+                    self.message = error;
+                    self.ocr_languages_rx = None;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.message = "读取本机 OCR 语言任务意外结束".into();
+                    self.ocr_languages_rx = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
         if let Some(rx) = &self.running {
             match rx.try_recv() {
                 Ok(Ok(preview)) => {
@@ -421,22 +658,113 @@ impl State {
             ui.small("先在“本地知识源”添加并扫描目录或文件。");
         }
         let selected = source.zip(files.iter().find(|f| f.relative == self.selected_file));
+        let selected_is_image = Path::new(&self.selected_file)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                matches!(
+                    extension.to_ascii_lowercase().as_str(),
+                    "png" | "jpg" | "jpeg" | "webp"
+                )
+            });
+        if selected_is_image {
+            #[cfg(windows)]
+            {
+                ui.small("图片 OCR 在本机执行；可跟随 Windows 用户首选语言，或选择已安装的 OCR 语言。解析预览不保存正文，只有之后手动同步索引才会存入识别文本。");
+                let mut language_changed = false;
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(self.running.is_none(), |ui| {
+                        egui::ComboBox::from_id_salt("document-ingestion-ocr-language")
+                            .selected_text(
+                                self.ocr_language_tag
+                                    .as_deref()
+                                    .and_then(|tag| {
+                                        self.ocr_languages
+                                            .iter()
+                                            .find(|language| language.tag == tag)
+                                            .map(|language| language.display_name.as_str())
+                                    })
+                                    .or(self.ocr_language_tag.as_deref())
+                                    .unwrap_or("Windows 用户首选语言"),
+                            )
+                            .show_ui(ui, |ui| {
+                                language_changed |= ui
+                                    .selectable_value(
+                                        &mut self.ocr_language_tag,
+                                        None,
+                                        "Windows 用户首选语言",
+                                    )
+                                    .changed();
+                                for language in &self.ocr_languages {
+                                    language_changed |= ui
+                                        .selectable_value(
+                                            &mut self.ocr_language_tag,
+                                            Some(language.tag.clone()),
+                                            format!("{} ({})", language.display_name, language.tag),
+                                        )
+                                        .changed();
+                                }
+                            });
+                    });
+                    if ui
+                        .add_enabled(
+                            self.ocr_languages_rx.is_none() && self.running.is_none(),
+                            egui::Button::new(if self.ocr_languages.is_empty() {
+                                "读取已安装语言…"
+                            } else {
+                                "刷新语言列表"
+                            }),
+                        )
+                        .clicked()
+                    {
+                        let (tx, rx) = mpsc::channel();
+                        self.ocr_languages_rx = Some(rx);
+                        std::thread::spawn(move || {
+                            let _ = tx.send(crate::clipboard::available_ocr_languages());
+                        });
+                    }
+                    if self.ocr_languages_rx.is_some() {
+                        ui.spinner();
+                        ui.ctx()
+                            .request_repaint_after(std::time::Duration::from_millis(100));
+                    }
+                });
+                if language_changed {
+                    self.preview = None;
+                    self.message = "OCR 语言已更改，请重新识别图片。".into();
+                }
+                ui.small("语言选择只在本次应用运行期间生效；知识源扫描不启动 OCR。");
+            }
+            #[cfg(not(windows))]
+            ui.small("图片 OCR 目前仅支持 Windows 内置 OCR。");
+        }
+        #[cfg(windows)]
+        let ocr_languages_loading = self.ocr_languages_rx.is_some();
+        #[cfg(not(windows))]
+        let ocr_languages_loading = false;
         if ui
             .add_enabled(
-                self.running.is_none() && selected.is_some(),
-                egui::Button::new("解析并预览分块"),
+                self.running.is_none() && selected.is_some() && !ocr_languages_loading,
+                egui::Button::new(if selected_is_image {
+                    "本机 OCR 并预览分块"
+                } else {
+                    "解析并预览分块"
+                }),
             )
             .clicked()
             && let Some((source, file)) = selected
         {
             let (source, file) = (source.clone(), file.clone());
+            let ocr_language = self.ocr_language_tag.clone();
             let (tx, rx) = mpsc::channel();
             self.running = Some(rx);
             self.preview = None;
             self.message = "正在解析…".into();
             std::thread::spawn(move || {
-                let _ = tx
-                    .send(ingest(&source, &file).map_err(|e| format!("{}：{e:#}", file.relative)));
+                let _ = tx.send(
+                    ingest_with_ocr_language(&source, &file, ocr_language.as_deref())
+                        .map_err(|e| format!("{}：{e:#}", file.relative)),
+                );
             });
         }
         if self.running.is_some() {
@@ -456,6 +784,28 @@ impl State {
                 preview.chunks.len()
             ));
             ui.small(format!("原文件 SHA-256：{}", preview.file_sha256));
+            if ui.button("导出完整文本…").clicked() {
+                let suggested_name = Path::new(&preview.relative)
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .map(|name| format!("{name}-parsed.md"))
+                    .unwrap_or_else(|| "parsed-document.md".into());
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Markdown", &["md"])
+                    .set_file_name(suggested_name)
+                    .save_file()
+                {
+                    match export_markdown_to_path(preview, &path) {
+                        Ok(saved) => {
+                            self.message = format!(
+                                "已导出完整解析文本：{}",
+                                saved.file_name().unwrap_or_default().to_string_lossy()
+                            );
+                        }
+                        Err(error) => self.message = format!("导出失败：{error:#}"),
+                    }
+                }
+            }
             let pages = preview.chunks.len().div_ceil(20);
             self.chunk_page = self.chunk_page.min(pages.saturating_sub(1));
             ui.horizontal(|ui| {
@@ -503,6 +853,63 @@ impl State {
 mod tests {
     use super::*;
 
+    fn tiny_png() -> Vec<u8> {
+        let image = DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            8,
+            5,
+            image::Rgba([255, 255, 255, 255]),
+        ));
+        let mut bytes = Cursor::new(Vec::new());
+        image.write_to(&mut bytes, ImageFormat::Png).unwrap();
+        bytes.into_inner()
+    }
+
+    #[test]
+    fn image_ocr_decodes_only_bounded_formats_and_returns_location_labelled_text() {
+        let png = tiny_png();
+        let sections = parse_image_with(&png, Some("en-US"), |image, language| {
+            assert_eq!((image.width(), image.height()), (8, 5));
+            assert_eq!(language, Some("en-US"));
+            Ok("这是本机 OCR 的合成识别结果".into())
+        })
+        .unwrap();
+        assert_eq!(
+            sections,
+            vec![("图片 OCR".into(), "这是本机 OCR 的合成识别结果".into())]
+        );
+        assert!(parse_image_with(&png, None, |_, _| Ok(" \n\t".into())).is_err());
+        assert!(parse_image_with(&png, None, |_, _| Ok("x".repeat(MAX_TEXT + 1))).is_err());
+        assert!(decode_ocr_image(b"not an image").is_err());
+
+        let mut oversized = png;
+        oversized[16..20].copy_from_slice(&4_001_u32.to_be_bytes());
+        oversized[20..24].copy_from_slice(&4_000_u32.to_be_bytes());
+        assert!(decode_ocr_image(&oversized).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a Windows OCR language and a synthetic high-contrast PNG fixture"]
+    fn windows_ocr_ingestion_extracts_configured_fixture_text() {
+        let path = std::env::var_os("ZIDEVTOOLS_OCR_FIXTURE")
+            .expect("set ZIDEVTOOLS_OCR_FIXTURE to a synthetic high-contrast PNG");
+        let language = std::env::var("ZIDEVTOOLS_OCR_LANGUAGE").unwrap_or_else(|_| "en-US".into());
+        let expected =
+            std::env::var("ZIDEVTOOLS_OCR_EXPECTED_TEXT").unwrap_or_else(|_| "HELLO".into());
+        let bytes = std::fs::read(path).unwrap();
+        let sections = parse_image_with_language(&bytes, Some(&language)).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].0, "图片 OCR");
+        assert!(
+            sections[0]
+                .1
+                .to_ascii_uppercase()
+                .contains(&expected.to_ascii_uppercase()),
+            "recognized: {:?}",
+            sections[0].1
+        );
+    }
+
     #[test]
     fn parses_text_markdown_and_html_without_hidden_script() {
         let text = chunks_from(parse_text("甲乙\n\n丙丁".as_bytes(), false).unwrap()).unwrap();
@@ -544,10 +951,59 @@ mod tests {
                 ("段落 2".into(), "Second".into())
             ]
         );
+        let attachment = extract_chat_attachment(&bytes, "docx", 1024).unwrap();
+        assert!(attachment.contains("[段落 1]\nA & B"));
+        assert!(attachment.contains("[段落 2]\nSecond"));
+        assert!(extract_chat_attachment(&bytes, "docx", 8).is_err());
     }
 
     #[test]
     fn pdf_page_provenance() {
+        let bytes = pdf_fixture(&[Some("Hello PDF")]);
+        let sections =
+            parse_pdf_with_recognizer(&bytes, |_, _, _| panic!("text PDFs should not invoke OCR"))
+                .unwrap();
+        assert_eq!(sections[0].0, "第 1 页");
+        assert!(sections[0].1.contains("Hello PDF"));
+        let attachment = extract_chat_attachment(&bytes, "pdf", 1024).unwrap();
+        assert!(attachment.contains("[第 1 页]\nHello PDF"));
+        assert!(extract_chat_attachment(&bytes, "pdf", 8).is_err());
+    }
+
+    #[test]
+    fn scanned_pdf_pages_are_ocrd_and_keep_page_provenance() {
+        let bytes = pdf_fixture(&[Some("searchable page"), None, None]);
+        let sections = parse_pdf_with_recognizer(&bytes, |pdf, expected_count, pages| {
+            assert_eq!(pdf, bytes);
+            assert_eq!(expected_count, 3);
+            assert_eq!(pages, &[(2, 1), (3, 2)]);
+            Ok(vec![(2, "Recognized page two".into()), (3, String::new())])
+        })
+        .unwrap();
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0], ("第 1 页".into(), "searchable page".into()));
+        assert_eq!(
+            sections[1],
+            ("第 2 页".into(), "Recognized page two".into())
+        );
+        let incomplete =
+            parse_pdf_with_recognizer(&bytes, |_, _, _| Ok(vec![(2, "only one".into())]))
+                .unwrap_err();
+        assert!(incomplete.to_string().contains("未返回全部扫描页面"));
+    }
+
+    #[test]
+    fn scanned_pdf_page_budget_is_checked_before_ocr() {
+        let pages = vec![None; 51];
+        let bytes = pdf_fixture(&pages);
+        let error = parse_pdf_with_recognizer(&bytes, |_, _, _| {
+            panic!("over-budget PDF must not start OCR")
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("50 页上限"));
+    }
+
+    fn pdf_fixture(pages: &[Option<&str>]) -> Vec<u8> {
         use lopdf::{
             Document, Object, Stream,
             content::{Content, Operation},
@@ -560,26 +1016,207 @@ mod tests {
         );
         let resources_id =
             doc.add_object(dictionary! { "Font" => dictionary! { "F1" => font_id } });
-        let content = Content {
-            operations: vec![
-                Operation::new("BT", vec![]),
-                Operation::new("Tf", vec!["F1".into(), 12.into()]),
-                Operation::new("Tj", vec![Object::string_literal("Hello PDF")]),
-                Operation::new("ET", vec![]),
-            ],
-        };
-        let content_id = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
-        let page_id = doc.add_object(
-            dictionary! { "Type" => "Page", "Parent" => pages_id, "Contents" => content_id },
+        let mut kids = Vec::with_capacity(pages.len());
+        for text in pages {
+            let mut page = dictionary! { "Type" => "Page", "Parent" => pages_id };
+            if let Some(text) = text {
+                let content = Content {
+                    operations: vec![
+                        Operation::new("BT", vec![]),
+                        Operation::new("Tf", vec!["F1".into(), 12.into()]),
+                        Operation::new("Tj", vec![Object::string_literal(*text)]),
+                        Operation::new("ET", vec![]),
+                    ],
+                };
+                let content_id =
+                    doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+                page.set("Contents", content_id);
+            }
+            kids.push(doc.add_object(page).into());
+        }
+        doc.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages",
+                "Kids" => kids,
+                "Count" => pages.len() as i64,
+                "Resources" => resources_id,
+                "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()]
+            }),
         );
-        doc.objects.insert(pages_id, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1, "Resources" => resources_id, "MediaBox" => vec![0.into(),0.into(),595.into(),842.into()] }));
         let catalog_id = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
         doc.trailer.set("Root", catalog_id);
         let mut bytes = Vec::new();
         doc.save_to(&mut bytes).unwrap();
-        let sections = parse_pdf(&bytes).unwrap();
+        bytes
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires the en-US Windows OCR component"]
+    fn windows_ocr_recognizes_a_synthetic_scanned_pdf_page() {
+        let (bytes, jpeg) = scanned_pdf_fixture();
+        let image_text = parse_image_with_language(&jpeg, Some("en-US")).unwrap();
+        assert!(
+            image_text[0].1.to_ascii_uppercase().contains("HELLO"),
+            "direct image OCR recognized: {:?}",
+            image_text[0].1
+        );
+        let sections = parse_pdf(&bytes, Some("en-US")).unwrap();
+        assert_eq!(sections.len(), 1);
         assert_eq!(sections[0].0, "第 1 页");
-        assert!(sections[0].1.contains("Hello PDF"));
+        assert!(
+            sections[0].1.to_ascii_uppercase().contains("HELLO"),
+            "recognized: {:?}",
+            sections[0].1
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires zh-Hans-CN Windows OCR and a synthetic Chinese PNG fixture"]
+    fn windows_ocr_recognizes_a_configured_chinese_scanned_pdf_page() {
+        use image::codecs::jpeg::JpegEncoder;
+
+        let path = std::env::var_os("ZIDEVTOOLS_OCR_FIXTURE")
+            .expect("set ZIDEVTOOLS_OCR_FIXTURE to a synthetic high-contrast PNG");
+        let image = image::load_from_memory(&std::fs::read(path).unwrap())
+            .unwrap()
+            .to_rgb8();
+        let (width, height) = image.dimensions();
+        let mut jpeg = Cursor::new(Vec::new());
+        JpegEncoder::new_with_quality(&mut jpeg, 96)
+            .encode_image(&image::DynamicImage::ImageRgb8(image))
+            .unwrap();
+        let pdf = scanned_pdf_from_jpeg(&jpeg.into_inner(), width, height);
+        let language =
+            std::env::var("ZIDEVTOOLS_OCR_LANGUAGE").unwrap_or_else(|_| "zh-Hans-CN".into());
+        let expected =
+            std::env::var("ZIDEVTOOLS_OCR_EXPECTED_TEXT").unwrap_or_else(|_| "测试".into());
+
+        let sections = parse_pdf(&pdf, Some(&language)).unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].0, "第 1 页");
+        assert!(
+            sections[0].1.contains(&expected),
+            "recognized: {:?}",
+            sections[0].1
+        );
+    }
+
+    #[cfg(windows)]
+    fn scanned_pdf_fixture() -> (Vec<u8>, Vec<u8>) {
+        use image::codecs::jpeg::JpegEncoder;
+
+        let glyphs: [&[&str; 7]; 5] = [
+            &[
+                "#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#",
+            ],
+            &[
+                "#####", "#....", "#....", "####.", "#....", "#....", "#####",
+            ],
+            &[
+                "#....", "#....", "#....", "#....", "#....", "#....", "#####",
+            ],
+            &[
+                "#....", "#....", "#....", "#....", "#....", "#....", "#####",
+            ],
+            &[
+                ".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###.",
+            ],
+        ];
+        let scale = 14_u32;
+        let mut raster = image::RgbImage::from_pixel(900, 210, image::Rgb([255, 255, 255]));
+        for (letter, glyph) in glyphs.iter().enumerate() {
+            for (row, pattern) in glyph.iter().enumerate() {
+                for (column, pixel) in pattern.bytes().enumerate() {
+                    if pixel != b'#' {
+                        continue;
+                    }
+                    for y in 0..scale {
+                        for x in 0..scale {
+                            raster.put_pixel(
+                                80 + letter as u32 * 140 + column as u32 * scale + x,
+                                35 + row as u32 * scale + y,
+                                image::Rgb([0, 0, 0]),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        let mut jpeg = Cursor::new(Vec::new());
+        JpegEncoder::new_with_quality(&mut jpeg, 96)
+            .encode_image(&image::DynamicImage::ImageRgb8(raster))
+            .unwrap();
+        let jpeg_bytes = jpeg.into_inner();
+
+        let pdf = scanned_pdf_from_jpeg(&jpeg_bytes, 900, 210);
+        (pdf, jpeg_bytes)
+    }
+
+    #[cfg(windows)]
+    fn scanned_pdf_from_jpeg(jpeg_bytes: &[u8], width: u32, height: u32) -> Vec<u8> {
+        use lopdf::{
+            Document, Object, Stream,
+            content::{Content, Operation},
+            dictionary,
+        };
+
+        let mut doc = Document::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let page_height = (595_u32.saturating_mul(height) / width.max(1)).clamp(1, 842);
+        let image_id = doc.add_object(Stream::new(
+            dictionary! {
+                "Type" => "XObject",
+                "Subtype" => "Image",
+                "Width" => width as i64,
+                "Height" => height as i64,
+                "ColorSpace" => "DeviceRGB",
+                "BitsPerComponent" => 8,
+                "Filter" => "DCTDecode"
+            },
+            jpeg_bytes.to_vec(),
+        ));
+        let content = Content {
+            operations: vec![
+                Operation::new("q", vec![]),
+                Operation::new(
+                    "cm",
+                    vec![
+                        595.into(),
+                        0.into(),
+                        0.into(),
+                        page_height.into(),
+                        0.into(),
+                        0.into(),
+                    ],
+                ),
+                Operation::new("Do", vec![Object::Name(b"Im0".to_vec())]),
+                Operation::new("Q", vec![]),
+            ],
+        };
+        let content_id = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+        let page_id = doc.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => dictionary! { "XObject" => dictionary! { "Im0" => image_id } }
+        });
+        doc.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => "Pages",
+                "Kids" => vec![page_id.into()],
+                "Count" => 1,
+                "MediaBox" => vec![0.into(), 0.into(), 595.into(), page_height.into()]
+            }),
+        );
+        let catalog_id = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        doc.trailer.set("Root", catalog_id);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        bytes
     }
 
     #[test]
@@ -593,6 +1230,69 @@ mod tests {
             result[0].text.chars().skip(700).collect::<String>(),
             result[1].text.chars().take(100).collect::<String>()
         );
+    }
+
+    #[test]
+    fn markdown_export_reconstructs_source_without_chunk_overlap() {
+        let original = format!("{}尾段，保留中文与 Latin.", "Rust OCR 文本。".repeat(90));
+        let chunks = chunks_from(vec![
+            ("第 1 页".into(), original.clone()),
+            ("第 2 页".into(), "第二页正文".into()),
+        ])
+        .unwrap();
+        let preview = Preview {
+            source: "本机资料".into(),
+            relative: "scans/sample.pdf".into(),
+            file_sha256: "ab".repeat(32),
+            chunks,
+        };
+
+        let markdown = export_markdown(&preview).unwrap();
+        let first_page = markdown
+            .split("## 第 1 页\n\n")
+            .nth(1)
+            .unwrap()
+            .split("\n\n## 第 2 页")
+            .next()
+            .unwrap();
+        assert_eq!(first_page, original);
+        assert!(markdown.ends_with("## 第 2 页\n\n第二页正文"));
+        assert!(markdown.contains("scans/sample.pdf"));
+        assert!(!markdown.contains("E:\\"));
+        assert!(
+            export_markdown(&Preview {
+                chunks: Vec::new(),
+                ..preview
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn markdown_export_publishes_without_overwriting_existing_files() {
+        let root =
+            std::env::temp_dir().join(format!("zi-ingestion-export-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("parsed.md");
+        let preview = Preview {
+            source: "来源".into(),
+            relative: "scan.png".into(),
+            file_sha256: "cd".repeat(32),
+            chunks: vec![Chunk {
+                location: "图片 OCR".into(),
+                ordinal: 1,
+                text: "识别正文".into(),
+                sha256: digest("识别正文".as_bytes()),
+            }],
+        };
+        let saved = export_markdown_to_path(&preview, &path).unwrap();
+        assert_eq!(saved.file_name(), path.file_name());
+        let expected = export_markdown(&preview).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+        assert!(export_markdown_to_path(&preview, &path).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), expected);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

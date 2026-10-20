@@ -6,7 +6,7 @@
 
 左侧选择“Java / Django 诊断”，或在首页“Java 与 JVM”“Python 与 Django”分类中找到工具。Ctrl K 搜索名称、ID 或关键词，Enter 打开；Ctrl Enter 执行。工具可以单独收藏、进入最近/常用，并从托盘“开发工具”直达。
 
-每个工具保留自己的会话输入和报告。离开页面不会丢失正在处理的结果，完成后显示提示。文本可粘贴或从 UTF-8 文件导入；报告可复制或保存到新文件，默认不覆盖已有文件。输入、报告与凭据不自动落盘；显式保存的报告可能包含业务信息，分享前脱敏。
+每个工具保留自己的会话输入和报告。离开页面不会丢失正在处理的结果，完成后显示提示。文本可粘贴或从 UTF-8 文件导入；报告可复制或保存到新文件，默认不覆盖已有文件。输入、报告与凭据不自动落盘；显式保存的报告可能包含业务信息，分享前脱敏。JSON 报告同时记录生成工具版本与不含个人信息的便携运行环境指纹。后台运行、完成、失败或取消状态也会出现在任务中心；任务卡片只显示工具名称和通用状态，不包含输入、报告正文或令牌。JDK、Python 环境探测与 JFR 文件转换可从任务中心取消；HTTP 请求与本地文本分析使用固定超时或有界输入，不显示取消按钮。
 
 通用限制：2 MiB / 20,000 行输入，报告最多 8 MiB；复杂依赖图和等待图另有限额，超限会明确报错，不悄悄截断为成功结果。
 
@@ -22,13 +22,15 @@
 
 由用户在目标环境明确执行，例如 `jcmd <PID> Thread.print`，将文本导入。工具显示线程状态分布、帧、已持有的监视器锁、等待关系与循环涉及的线程索引。
 
-支持标准平台线程文本；不支持虚拟线程 JSON，也不完整解析 ownable synchronizers。单次 WAITING/BLOCKED 不是死锁或线程池耗尽的证明。`explicitJvmDeadlockReport` 只在原文 JVM 明确报告死锁时为 true；`cycleThreadIndices` 是解析得到的等待环线索。最多 4096 线程、10000 等待边；复杂图需缩小范围。
+除标准 jstack / `jcmd Thread.print` 文本外，也可导入 `jcmd <PID> Thread.dump_to_file -format=json <file>` 输出。JSON 解析保留 JDK 线程容器的名称、父容器、owner、线程 ID、名称、可用状态、时间戳和栈帧；整体上限仍为 2 MiB / 20,000 行 / 4,096 线程。JDK 21 的 JSON 条目可能不提供 `virtual` 与 `state` 字段，这些值会标为未知；仅当输入带布尔 `virtual` 字段时才计数为虚拟/平台线程。容器关系不会被误当成线程锁等待关系。
+
+JSON 转储不是一致的 stop-the-world 快照，也不提供 JVM 死锁检测；报告不会从 WAITING/BLOCKED、容器 owner 或栈帧推断死锁。JSON 未提供传统文本中的完整监视器锁等待关系。文本模式仍可展示已解析的监视器锁、等待环线索和原文 JVM 明确报告；`explicitJvmDeadlockReport` 只在原文 JVM 明确报告死锁时为 true，`cycleThreadIndices` 是文本解析得到的等待环线索。文本最多 4096 线程、10000 等待边；复杂图需缩小范围。
 
 ### Maven / Gradle 依赖
 
 输入示例来源：`mvn dependency:tree -Dverbose`、`gradle dependencies`、`gradle dependencyInsight --dependency <name>`。这些命令可能加载项目插件，应在可信项目中由用户自行运行；Zi DevTools 不执行它们。
 
-首版支持常规 Maven 坐标/树、Gradle `group:artifact:version -> selected`、约束 `(c)`、重复子树 `(*)` 和 FAILED 标记。依赖报告保留输入行号、版本选择与路径。dependencyInsight 只提取坐标，不重建反向依赖树。多个 configuration/scope 的版本差异不能直接等同运行时冲突。
+首版支持常规 Maven 坐标/树、Gradle `group:artifact:version -> selected`、约束 `(c)`、重复子树 `(*)` 和 FAILED 标记。依赖报告保留输入行号、版本选择与路径。Gradle dependencyInsight 含 `Selection reasons:` 且树连接符可识别时，会将报告中的反向依赖路径整理为配置/项目到目标依赖的顺序，并保留目标请求与选中版本；每份报告最多128条路径、每条最多64层，超限会标记 `truncated`；不猜测报告未打印的关系，未带这些标记时只报告普通坐标条目。多个 configuration/scope 的版本差异不能直接等同运行时冲突。
 
 ### GC 日志
 
@@ -43,7 +45,7 @@
 1. 粘贴或读取 `jfr print --json` 输出，最多 8 MiB / 20000 事件。
 2. 选择可信 JDK 的 `jfr.exe` 和 ≤64 MiB `.jfr` 文件，点击“转换 .jfr 并分析”。固定读取 `jdk.ExecutionSample`、`jdk.GarbageCollection`、`jdk.JavaMonitorEnter`、`jdk.ThreadPark` 四类事件，输出最多 8 MiB、30 秒超时。
 
-报告包含事件数量、时间线、可解析的 ISO 时长，以及 ExecutionSample 顶层帧热点。热点是样本计数，不是 CPU 百分比；没有完整调用树、火焰图或 JMC 的所有能力。所选 JDK 是可选外部解析器，不随核心程序捆绑。
+报告包含事件数量、时间线、可解析的 ISO 时长、ExecutionSample 顶层帧热点，以及按调用路径合并的有界 root-to-leaf 采样调用树。树节点的 inclusiveSamples 表示经过该节点的样本数，不是 CPU 百分比；每份报告最多 256 个节点、每条栈最多 128 层，采样栈缺失或超过上限时会标记 truncated。该树不是完整火焰图，也不替代 JMC。所选 JDK 是可选外部解析器，不随核心程序捆绑。
 
 ### Spring 配置差异
 
@@ -100,9 +102,9 @@ python manage.py shell -c "exec(open('C:/tools/zi-devtools/scripts/export_django
 
 ### DRF OpenAPI
 
-左右输入旧版与新版 OpenAPI 3.x JSON，例如由项目已有 schema 生成器导出的文件。比较端点移除/新增、operation 字段与共享 components。端点移除标记为破坏性；required/type/enum 等变化提示可能不兼容。
+左右输入旧版与新版 OpenAPI 3.x JSON，例如由项目已有 schema 生成器导出的文件。比较端点移除/新增、operation 字段与共享 components。端点移除标记为破坏性；required/type/enum 等变化提示可能不兼容。同文档 JSON Pointer Schema `$ref` 会在有界预算内传播到引用端点和组件；递归边、无法解析的本地引用及外部引用会在 `referenceAnalysis` 单独列出。
 
-不支持 Swagger 2，不展开外部/循环 `$ref`；共享组件差异单独显示，需复核引用处。数组按整体比较，顺序变化也可能产生差异。不执行 API、不验证运行时权限或数据库行为。
+OpenAPI 3.0 的 `$ref` 相邻字段按旧版 Reference Object 规则忽略；3.1 及以上按 Schema Object 规则保留，并以 `allOf` 表达目标与相邻约束。每份输入最多解析 4096 次引用、50000 个节点、2 MiB 展开文本、64 层及 256 条引用诊断；触及上限会设置 `referenceAnalysis.*.truncated`。不支持 Swagger 2，不读取外部文档或锚点，也不解析 Path Item、Response、Parameter 等非 Schema Reference Object。数组按整体比较，顺序变化也可能产生差异。不执行 API、不验证运行时权限或数据库行为。
 
 ### 部署检查
 
@@ -120,7 +122,7 @@ python manage.py shell -c "exec(open('C:/tools/zi-devtools/scripts/export_django
 
 本轮以临时 Java 21 程序验证真实线程死锁、GC 与 JFR，以独立 Django 5.1.6 + SQLite 夹具验证迁移、SQL、URL 和部署检查；未连接用户业务数据库。另验证 Python 3.13、Python 3.14 和无 Django 的临时 venv。Actuator 使用本地 HTTP 夹具验证 GET、Bearer 与 503 health 行为，未声称连接真实 Spring 服务。Maven/Gradle、OpenAPI、Spring 配置、Celery 以支持格式夹具验证，没有声称已运行相应项目。
 
-后续增强包括虚拟线程、更多依赖/GC 方言、完整 JFR 调用树、自动引用追踪和更丰富的规则。当前状态只覆盖本文首版范围，不等于完整 APM、IDE 或自主 Agent。
+后续增强包括虚拟线程、更多依赖/GC 方言、完整火焰图与 JMC 深度分析、OpenAPI 非 Schema 引用及完整 JSON Schema 方言和更丰富的规则。当前状态只覆盖本文首版范围，不等于完整 APM、IDE 或自主 Agent。
 
 ## 开发者复验
 

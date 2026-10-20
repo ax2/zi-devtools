@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/http-get-result.schema.json",
+  "title": "service.http.get.v1 View result",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "status"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "operation": {"const": "http.get"},
+        "status": {"const": "declined"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "result"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "operation": {"const": "http.get"},
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "status", "contentType", "data", "byteLength"],
+          "properties": {
+            "endpoint": {"enum": ["health", "info", "metrics"]},
+            "status": {"type": "integer", "minimum": 200, "maximum": 503},
+            "contentType": {"type": "string", "maxLength": 256},
+            "data": {"type": ["object", "array", "string", "number", "boolean", "null"]},
+            "byteLength": {"type": "integer", "minimum": 0, "maximum": 1048576}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"result": {"properties": {"endpoint": {"enum": ["info", "metrics"]}}}}},
+          "then": {"properties": {"result": {"properties": {"status": {"maximum": 299}}}}}
+        },
+        {
+          "if": {"properties": {"result": {"properties": {"endpoint": {"const": "health"}}}}},
+          "then": {"properties": {"result": {"properties": {"status": {"anyOf": [{"maximum": 299}, {"const": 503}]}}}}}
+        }
+      ]
+    }
+  ]
+}

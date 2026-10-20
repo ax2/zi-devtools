@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/studio-model-generation-preview/1.0.0-preview.1/input.schema.json",
+  "title": "Studio model.generate.v1 preview input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["modelRef", "goal", "materials", "maxOutputTokens", "deadlineMs"],
+  "properties": {
+    "modelRef": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "x-host-utf8-bytes-maximum": 2048
+    },
+    "materials": {
+      "type": "array",
+      "maxItems": 32,
+      "x-host-utf8-aggregate-bytes-maximum": 32768,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sourceId", "displayName", "sourceKind", "trust", "text"],
+        "properties": {
+          "sourceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "sourceKind": { "enum": ["user_text", "tool_handoff", "clipboard_text", "explicit_file_selection"] },
+          "trust": { "enum": ["user_authored", "tool_output", "untrusted_user_material"] },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "maxOutputTokens": { "type": "integer", "minimum": 1, "maximum": 4096 },
+    "deadlineMs": { "type": "integer", "minimum": 1000, "maximum": 120000 }
+  }
+}

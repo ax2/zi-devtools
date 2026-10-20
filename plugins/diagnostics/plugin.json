@@ -1,10 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "com.zicode.devtools.diagnostics",
   "name": "ZiDevTools Diagnostics",
   "displayName": "ZiDevTools 诊断报告",
-  "description": "Imported Java/Django/Celery reports; provider diagnostics schema proposal, not Host-accepted.",
-  "version": "0.1.2",
+  "description": "Imported Java/Django/Celery reports with tool/runtime provenance; diagnostics schema v2 remains a provider proposal.",
+  "version": "0.1.4",
   "publisher": "zicode",
   "license": "MIT",
   "engines": {
@@ -51,8 +51,8 @@
         "title": "Java 线程转储分析",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.threads.input.schema.json",
+          "title": "Java 线程转储分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -63,14 +63,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Java 线程堆栈分析",
+            "JVM thread dump analyzer"
+          ],
+          "description": "仅分析用户提供的报告文本。导入jstack/jcmd文本或Thread.dump_to_file JSON分析，不采集进程"
         }
       },
       {
@@ -78,8 +166,8 @@
         "title": "Maven / Gradle 依赖冲突",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.dependencies.input.schema.json",
+          "title": "Maven / Gradle 依赖冲突 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -90,14 +178,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Maven Gradle 依赖分析",
+            "Java dependency conflict analyzer"
+          ],
+          "description": "仅分析用户提供的报告文本。导入Maven/Gradle依赖文本，不执行构建"
         }
       },
       {
@@ -105,8 +281,8 @@
         "title": "Java GC 日志分析",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.gc.input.schema.json",
+          "title": "Java GC 日志分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -117,14 +293,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "JVM 垃圾回收日志",
+            "Java garbage collection log analyzer"
+          ],
+          "description": "仅分析用户提供的报告文本。导入GC文本分析，不读取磁盘或采集进程"
         }
       },
       {
@@ -132,8 +396,8 @@
         "title": "JFR 录制报告浏览",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.jfr_json.input.schema.json",
+          "title": "JFR 录制报告浏览 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -144,14 +408,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "JFR 性能记录分析",
+            "Java Flight Recorder viewer"
+          ],
+          "description": "仅分析用户提供的报告文本。导入JFR JSON，不读取二进制JFR或启动JDK"
         }
       },
       {
@@ -159,8 +511,8 @@
         "title": "Spring 配置对比",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/spring.config.input.schema.json",
+          "title": "Spring 配置对比 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -179,6 +531,100 @@
               "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Spring 配置差异",
+            "Spring configuration diff"
+          ],
+          "description": "仅分析用户提供的报告文本。导入两份JSON/YAML配置差异/脱敏，不请求Actuator"
         }
       },
       {
@@ -186,8 +632,8 @@
         "title": "Django 迁移计划检查",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.migrations.input.schema.json",
+          "title": "Django 迁移计划检查 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -206,6 +652,100 @@
               "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Django 迁移冲突检查",
+            "Django migration plan checker"
+          ],
+          "description": "仅分析用户提供的报告文本。导入迁移计划及SQL分析，不访问数据库或执行迁移"
         }
       },
       {
@@ -213,8 +753,8 @@
         "title": "Django SQL / N+1 分析",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.sql.input.schema.json",
+          "title": "Django SQL / N+1 分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -225,14 +765,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Django ORM 查询分析",
+            "Django SQL N+1 analyzer"
+          ],
+          "description": "仅分析用户提供的报告文本。导入SQL查询日志JSON数组归一化/重复分析，不执行SQL"
         }
       },
       {
@@ -240,8 +868,8 @@
         "title": "Django URL / reverse 检查",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.urls.input.schema.json",
+          "title": "Django URL / reverse 检查 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -260,6 +888,100 @@
               "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Django 路由反向解析",
+            "Django URL reverse checker"
+          ],
+          "description": "仅分析用户提供的报告文本。导入URL列表及检索，不加载Django项目"
         }
       },
       {
@@ -267,8 +989,8 @@
         "title": "DRF OpenAPI 契约对比",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.openapi.input.schema.json",
+          "title": "DRF OpenAPI 契约对比 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -287,6 +1009,100 @@
               "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Django REST Framework 契约",
+            "DRF OpenAPI contract diff"
+          ],
+          "description": "仅分析用户提供的报告文本。导入两份OpenAPI JSON差异，不调用远程API"
         }
       },
       {
@@ -294,8 +1110,8 @@
         "title": "Django 部署检查报告",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.checks.input.schema.json",
+          "title": "Django 部署检查报告 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -306,14 +1122,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Django 部署配置检查",
+            "Django deployment check report"
+          ],
+          "description": "仅分析用户提供的报告文本。导入检查输出，不运行manage.py"
         }
       },
       {
@@ -321,8 +1225,8 @@
         "title": "Celery 任务故障分析",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/celery.report.input.schema.json",
+          "title": "Celery 任务故障分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -333,14 +1237,102 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/result.schema.json",
+          "title": "Diagnostics v2 compute result envelope; report text is validated separately",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": true
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "text"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contractVersion",
+                "ok",
+                "data",
+                "error"
+              ],
+              "properties": {
+                "contractVersion": {
+                  "const": "1.0.0-rc.1"
+                },
+                "ok": {
+                  "const": false
+                },
+                "data": {
+                  "type": "null"
+                },
+                "error": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "INVALID_INPUT",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_OPERATION",
+                        "INVALID_REPORT",
+                        "OUTPUT_TOO_LARGE"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 240
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "maxResultBytes": 49152,
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Celery 异步任务诊断",
+            "Celery task failure analyzer"
+          ],
+          "description": "仅分析用户提供的报告文本。导入Celery任务日志文本分析，不连接Broker"
         }
       }
     ],
@@ -348,12 +1340,12 @@
       {
         "name": "devtools_diagnostics_java_threads",
         "title": "Java 线程转储分析",
-        "description": "导入jstack/jcmd文本分析，不采集进程",
+        "description": "导入jstack/jcmd文本或Thread.dump_to_file JSON分析，不采集进程",
         "capability": "devtools.diagnostics.java.threads",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.threads.input.schema.json",
+          "title": "Java 线程转储分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -364,12 +1356,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -381,8 +1367,8 @@
         "capability": "devtools.diagnostics.java.dependencies",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.dependencies.input.schema.json",
+          "title": "Maven / Gradle 依赖冲突 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -393,12 +1379,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -410,8 +1390,8 @@
         "capability": "devtools.diagnostics.java.gc",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.gc.input.schema.json",
+          "title": "Java GC 日志分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -422,12 +1402,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -439,8 +1413,8 @@
         "capability": "devtools.diagnostics.java.jfr_json",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/java.jfr_json.input.schema.json",
+          "title": "JFR 录制报告浏览 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -451,12 +1425,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -468,8 +1436,8 @@
         "capability": "devtools.diagnostics.spring.config",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/spring.config.input.schema.json",
+          "title": "Spring 配置对比 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -497,8 +1465,8 @@
         "capability": "devtools.diagnostics.django.migrations",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.migrations.input.schema.json",
+          "title": "Django 迁移计划检查 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -526,8 +1494,8 @@
         "capability": "devtools.diagnostics.django.sql",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.sql.input.schema.json",
+          "title": "Django SQL / N+1 分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -538,12 +1506,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -555,8 +1517,8 @@
         "capability": "devtools.diagnostics.django.urls",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.urls.input.schema.json",
+          "title": "Django URL / reverse 检查 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -584,8 +1546,8 @@
         "capability": "devtools.diagnostics.django.openapi",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.openapi.input.schema.json",
+          "title": "DRF OpenAPI 契约对比 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -613,8 +1575,8 @@
         "capability": "devtools.diagnostics.django.checks",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.checks.input.schema.json",
+          "title": "Django 部署检查报告 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -625,12 +1587,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -642,8 +1598,8 @@
         "capability": "devtools.diagnostics.celery.report",
         "inputSchema": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "$id": "https://devtools.zicode.com/contracts/diagnostics/v1/input.schema.json",
-          "title": "Imported diagnostic reports input",
+          "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/celery.report.input.schema.json",
+          "title": "Celery 任务故障分析 input",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -654,12 +1610,6 @@
               "type": "string",
               "maxLength": 8192,
               "description": "Runtime additionally limits UTF-8 bytes to 8192."
-            },
-            "secondary": {
-              "type": "string",
-              "maxLength": 8192,
-              "default": "",
-              "description": "Optional second report; runtime additionally limits UTF-8 bytes to 8192."
             }
           }
         }
@@ -674,5 +1624,10 @@
         "reason": "显式授权后允许当前场景的 AI 分析已提供的诊断报告"
       }
     ]
+  },
+  "requiredProfiles": {
+    "compute.wasi.v1": "=1.0.0-rc.1",
+    "output.schema.v1": "=1.0.0-rc.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
   }
 }

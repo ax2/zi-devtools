@@ -32,6 +32,7 @@ if args.fixtures:
     saved=json.loads((args.fixtures/'fuel-proof.json').read_text(encoding='utf-8'))
     cases=[]
     for case in saved['cases']:
+        assert case['id'] not in portable, 'Duplicate fixture IDs'
         request=(args.fixtures/case['requestFile']).read_bytes()
         expected=(args.fixtures/case['expectedFile']).read_bytes()
         assert hashlib.sha256(request).hexdigest()==case['requestSha256']
@@ -40,7 +41,7 @@ if args.fixtures:
         cases.append((case['id'],request,case['checks'],case['expectedError']))
 else:
     from diagnostics_vectors import cases
-assert args.native or args.fixtures, 'Native adapter or validated portable expectations required'
+assert args.native or args.fixtures or args.serializer_boundary, 'Native adapter or validated portable expectations required'
 if args.serializer_boundary:
     cases=[]
     for kind,prefix in [('ascii',''),('utf8','中'),('escaped','中\0"\\')]:
@@ -50,6 +51,7 @@ if args.serializer_boundary:
             envelope=json.loads(json.dumps(value))
             envelope['data']['text']+='a'*(size-overhead)
             cases.append((f'serializer-{kind}-{size}',envelope,{},'OUTPUT_TOO_LARGE' if size>49152 else None))
+assert len({case[0] for case in cases}) == len(cases), 'Duplicate fixture IDs'
 args.output.mkdir(parents=True, exist_ok=True)
 config = wasmtime.Config()
 config.consume_fuel = True
@@ -102,6 +104,14 @@ for index, (name, value, checks, error) in enumerate(cases):
         assert not native.stderr
         expected=native.stdout
         if portable:assert expected==portable[name]
+    elif args.serializer_boundary:
+        if len(data) <= 48*1024:
+            expected=data
+        else:
+            expected=json.dumps(
+                dict(contractVersion='1.0.0-rc.1',ok=False,data=None,
+                     error=dict(code='OUTPUT_TOO_LARGE',message='完整结果超过48 KiB，请缩小输入范围')),
+                ensure_ascii=False,separators=(',',':')).encode()
     else:expected=portable[name]
     envelope = json.loads(expected)
     assert len(expected) <= 48*1024
@@ -110,7 +120,7 @@ for index, (name, value, checks, error) in enumerate(cases):
     else:
         assert envelope['ok'] and envelope['error'] is None, (name, envelope)
         report = {} if args.serializer_boundary or args.text_results else json.loads(envelope['data']['text'])
-        for path, wanted in checks.items():
+        for path, wanted in (checks or {}).items():
             actual = report
             for part in path.split('/'):
                 actual = actual[int(part)] if isinstance(actual, list) else actual[part]

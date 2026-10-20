@@ -22,6 +22,79 @@ pub(super) fn fixture() -> PathBuf {
 }
 
 #[test]
+fn memo_tags_validate_search_and_remain_compatible_with_older_records() {
+    let mut memo = Item::new(None);
+    memo.title = "带标签的备忘".into();
+    memo.tags = parse_tags(" 工作, 研究项目 ,, ").unwrap();
+    assert_eq!(memo.tags, ["工作", "研究项目"]);
+    memo.validate().unwrap();
+
+    let path = fixture();
+    store::save(&path, memo.clone()).unwrap();
+    let loaded = store::load(&path).unwrap();
+    assert_eq!(loaded[0].tags, memo.tags);
+    assert_eq!(loaded[0].title, memo.title);
+    let backup = backup::Document::new(loaded.clone()).unwrap();
+    let backup: backup::Document =
+        serde_json::from_slice(&serde_json::to_vec(&backup).unwrap()).unwrap();
+    assert_eq!(backup.records[0].tags, memo.tags);
+
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state.query = "研究".into();
+    assert_eq!(state.listed_indices(), [0]);
+    state.query = "missing-tag".into();
+    assert!(state.listed_indices().is_empty());
+    let mut unsaved = Item::new(None);
+    unsaved.title = "用户标签保存验证".into();
+    state.edit(unsaved);
+    state.tags_text = "本地, 归档".into();
+    assert!(
+        state.has_unsaved(),
+        "tag-only edits must receive exit protection"
+    );
+    state.save_draft();
+    wait_state(&mut state);
+    let saved = state
+        .items
+        .iter()
+        .find(|item| item.title == "用户标签保存验证")
+        .unwrap();
+    assert_eq!(saved.tags, ["本地", "归档"]);
+    state.tags_text = "work, WORK".into();
+    state.save_draft();
+    assert!(state.error, "invalid duplicate tags must reject save");
+    assert_eq!(store::load(&path).unwrap().len(), 2);
+    let mut tagged_event = event();
+    tagged_event.tags = vec!["客户会议".into()];
+    let start = tagged_event.schedule.as_ref().unwrap().start.date();
+    assert_eq!(
+        agenda::rows(&[tagged_event.clone()], start, 1, "客户", false).len(),
+        1
+    );
+    assert!(agenda::rows(&[tagged_event], start, 1, "无匹配", false).is_empty());
+
+    let mut legacy = serde_json::to_value(&memo).unwrap();
+    legacy.as_object_mut().unwrap().remove("tags");
+    let legacy: Item = serde_json::from_value(legacy).unwrap();
+    assert!(legacy.tags.is_empty());
+    legacy.validate().unwrap();
+
+    assert!(parse_tags("work, WORK").is_err());
+    assert!(parse_tags("bad#tag").is_err());
+    assert!(
+        parse_tags(
+            &(0..17)
+                .map(|n| format!("tag{n}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+        .is_err()
+    );
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn monthly_repeat_skips_or_clamps_without_losing_original_day() {
     let mut s = event().schedule.unwrap();
     s.start = date("2027-01-31 09:00");
@@ -615,6 +688,31 @@ fn global_poll_delivers_once_suppresses_trash_and_recovers_after_restart() {
 }
 
 #[test]
+fn shared_tick_time_is_used_for_calendar_due_decisions() {
+    let path = fixture();
+    let tick_time = Local::now() + Duration::minutes(5);
+    let mut item = event();
+    let schedule = item.schedule.as_mut().unwrap();
+    schedule.start = tick_time.naive_local();
+    schedule.minutes = 0;
+    store::save(&path, item).unwrap();
+
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    assert!(!state.alarm_open);
+
+    let monotonic = Instant::now();
+    state.last_tick = monotonic - std::time::Duration::from_secs(2);
+    assert!(state.poll_at(&egui::Context::default(), monotonic, tick_time));
+    assert!(state.alarm_open);
+    assert_eq!(state.alarms.len(), 1);
+
+    drop(state);
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn incoming_result_is_explicit_unsaved_bounded_and_never_overwrites_edits() {
     let path = fixture();
     let mut state = State::new(path.clone());
@@ -848,6 +946,153 @@ fn text_file_import_preserves_markdown_unicode_and_line_endings() {
     assert!(files::read_note(&unsupported).is_err());
     std::fs::remove_file(source).unwrap();
     std::fs::remove_file(unsupported).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_text_import_previews_bounded_files_and_commits_atomically() {
+    let root = std::env::temp_dir().join(format!("zi-planner-batch-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let first = root.join("第一份.md");
+    let second = root.join("第二份.txt");
+    std::fs::write(&first, "# 第一份\r\n中文").unwrap();
+    std::fs::write(&second, "第二份 😀").unwrap();
+    let (incoming, bytes) = files::read_notes(&[first.clone(), second.clone()]).unwrap();
+    assert_eq!(incoming.len(), 2);
+    assert_eq!(incoming[0].title, "第一份");
+    assert_eq!(incoming[1].title, "第二份");
+    assert_eq!(
+        bytes,
+        incoming.iter().map(|item| item.body.len()).sum::<usize>()
+    );
+
+    let large_paths = (0..9)
+        .map(|index| {
+            let candidate = root.join(format!("large-{index}.txt"));
+            std::fs::write(&candidate, vec![b'x'; MAX_BODY]).unwrap();
+            candidate
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        files::read_notes(&large_paths).is_err(),
+        "the 1 MiB batch limit must be enforced"
+    );
+    for candidate in &large_paths {
+        std::fs::remove_file(candidate).unwrap();
+    }
+
+    let path = root.join("planner.sqlite3");
+    let imported = store::insert_batch(&path, &[], &incoming).unwrap();
+    assert_eq!(imported.len(), 2);
+    assert!(imported.iter().all(|item| item.revision == 1));
+    assert_eq!(store::load(&path).unwrap(), imported);
+
+    let stale = store::load(&path).unwrap();
+    let mut changed = stale[0].clone();
+    changed.body.push_str(" · 外部修改");
+    store::save(&path, changed).unwrap();
+    let third = Item::new(None);
+    assert!(store::insert_batch(&path, &stale, &[third]).is_err());
+    assert_eq!(store::load(&path).unwrap().len(), 2);
+    assert!(files::read_notes(&vec![first.clone(); 33]).is_err());
+
+    std::fs::remove_file(first).unwrap();
+    std::fs::remove_file(second).unwrap();
+    std::fs::remove_file(path).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_file_import_ui_requires_explicit_confirmation() {
+    let path = fixture();
+    let root = path.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(&root).unwrap();
+    let first = root.join("第一条.md");
+    let second = root.join("第二条.txt");
+    std::fs::write(&first, "第一份正文").unwrap();
+    std::fs::write(&second, "第二份正文").unwrap();
+
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state
+        .import_files(vec![first.clone(), second.clone()])
+        .unwrap();
+    wait_state(&mut state);
+    assert!(matches!(
+        state.backup_review,
+        Some(backup::Review::Import(_))
+    ));
+    assert!(!path.exists(), "reading files must not write the database");
+
+    state.confirm_batch_import().unwrap();
+    wait_state(&mut state);
+    assert!(!state.error);
+    assert_eq!(state.items.len(), 2);
+    assert_eq!(store::load(&path).unwrap().len(), 2);
+    assert_eq!(
+        state
+            .items
+            .iter()
+            .map(|item| item.body.as_str())
+            .collect::<HashSet<_>>(),
+        HashSet::from(["第一份正文", "第二份正文"])
+    );
+    assert_eq!(
+        std::fs::read_to_string(&first).unwrap(),
+        "第一份正文",
+        "source files must remain unchanged"
+    );
+
+    std::fs::remove_file(first).unwrap();
+    std::fs::remove_file(second).unwrap();
+    std::fs::remove_file(path).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_file_export_previews_filtered_memos_and_writes_new_folder() {
+    let root = std::env::temp_dir().join(format!("zi-planner-export-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("planner.sqlite3");
+    let mut first = Item::new(None);
+    first.title = "Project:计划/一".into();
+    first.body = "# UTF-8 😀\r\n保留原始正文".into();
+    store::save(&path, first.clone()).unwrap();
+    let mut second = Item::new(None);
+    second.title = "另一条".into();
+    second.body = "不应导出".into();
+    store::save(&path, second).unwrap();
+
+    let mut state = State::new(path.clone());
+    wait_state(&mut state);
+    state.query = "Project".into();
+    state.review_batch_export().unwrap();
+    let filename = match state.backup_review.as_ref().unwrap() {
+        backup::Review::BatchExport(review) => {
+            assert_eq!(review.records.len(), 1);
+            review.records[0].filename.clone()
+        }
+        _ => panic!("batch export preview expected"),
+    };
+    state.export_batch(root.clone()).unwrap();
+    wait_state(&mut state);
+    assert!(!state.error);
+    let output = std::fs::read_dir(&root)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|candidate| {
+            candidate
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("Zi-备忘导出-"))
+        })
+        .expect("successful export publishes a new directory");
+    assert_eq!(
+        std::fs::read_to_string(output.join(&filename)).unwrap(),
+        "# UTF-8 😀\r\n保留原始正文"
+    );
+    assert_eq!(store::load(&path).unwrap().len(), 2);
+    assert!(state.message.contains("已导出 1 条备忘"));
     std::fs::remove_dir_all(root).unwrap();
 }
 

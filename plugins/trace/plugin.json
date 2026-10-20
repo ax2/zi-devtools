@@ -1,10 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "com.zicode.devtools.trace",
   "name": "ZiDevTools Trace",
   "displayName": "ZiDevTools 堆栈分析",
   "description": "Pasted Java and Python trace analysis; development build, not Host acceptance.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "zicode",
   "license": "MIT",
   "engines": {
@@ -52,6 +52,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Java stack trace",
+            "Java exception chain",
+            "Java 堆栈分析",
+            "Java 异常链"
+          ],
+          "description": "Analyze pasted Java printStackTrace text and show exception and frame clues; findings are not confirmed causes."
         }
       },
       {
@@ -69,6 +79,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "code",
+          "aliases": [
+            "Django traceback",
+            "Python stack trace",
+            "Django 堆栈分析",
+            "Python 异常追踪"
+          ],
+          "description": "Analyze pasted Python or Django traceback text; paths remain text and the project is not executed."
         }
       }
     ],
@@ -121,5 +141,8 @@
         "reason": "显式授权后允许当前场景的 AI 使用文本工具"
       }
     ]
+  },
+  "requiredProfiles": {
+    "tool.directory.v1": "=1.0.0-preview.1"
   }
 }

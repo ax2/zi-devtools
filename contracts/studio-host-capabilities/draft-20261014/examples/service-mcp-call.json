@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "operation": "mcp.tool.call",
+  "input": {
+    "runId": "run-17",
+    "serverRef": "connected-server-ref",
+    "toolName": "read_status",
+    "toolSchemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "arguments": {
+      "scope": "current-project"
+    },
+    "consentId": "one-time-consent-from-host-review",
+    "deadlineMs": 10000
+  }
+}

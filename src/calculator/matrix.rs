@@ -89,8 +89,9 @@ impl Matrix {
         if cells.iter().any(|v| match v {
             Value::Exact(_, d) => *d <= 0,
             Value::Approx(x) => !x.is_finite(),
+            Value::Complex(_, _) => true,
         }) {
-            return Err("矩阵包含无效数值".into());
+            return Err("矩阵仅支持有效实数，不支持复数".into());
         }
         Ok(Self { rows, cols, cells })
     }
@@ -133,6 +134,7 @@ impl Matrix {
         let zero = |v| match v {
             Value::Exact(n, _) => n == 0,
             Value::Approx(x) => x == 0.0,
+            Value::Complex(_, _) => false,
         };
         (col..self.rows)
             .filter(|r| !zero(self.get(*r, col)))
@@ -387,6 +389,11 @@ mod tests {
         );
         assert!(Matrix::new(9, 1, vec![Value::Exact(1, 1); 9]).is_err());
         assert!(Matrix::new(1, 1, vec![Value::Approx(f64::NAN)]).is_err());
+        assert!(
+            Matrix::new(1, 1, vec![Value::Complex(1.0, 2.0)])
+                .unwrap_err()
+                .contains("不支持复数")
+        );
     }
     #[test]
     fn approximate_solution_retains_marker_and_residual() {

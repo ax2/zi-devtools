@@ -168,6 +168,8 @@ for name, pattern in [
 for name,pattern in [('dead-outer','(?:a{1000000}){0}'),('zero','a{0}')]:
  add('regex-compile-bound-'+name,request('regex.matches',dict(text='',pattern=pattern)),success('#1 字节 0..0: \n'))
 add('regex-large-valid-repeat',request('regex.matches',dict(text='',pattern='a{200000}')),success('没有匹配'))
+add('regex-large-valid-repeat-300k',request('regex.matches',dict(text='',pattern='a{300000}')),success('没有匹配'))
+add('regex-large-valid-repeat-unicode-100k',request('regex.matches',dict(text='',pattern='中{100000}')),success('没有匹配'))
 for name,pattern,text,report in [
  ('ascii', '(?:ab){2}', 'zababab', '#1 字节 1..5: abab\n'),
  ('unicode', '(?:中🙂){2}', '甲中🙂中🙂乙', '#1 字节 3..17: 中🙂中🙂\n'),

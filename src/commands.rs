@@ -9,6 +9,7 @@ pub enum Action {
     RecordPause,
     RecordStop,
     RecordZoom,
+    RecordFocus,
     RecordEffectsOff,
     ScreenshotCapture,
 }
@@ -59,6 +60,12 @@ pub fn controls() -> Vec<Command> {
             "开关录屏鼠标聚焦放大",
             "R Z",
             Action::RecordZoom,
+        ),
+        (
+            "recorder:focus",
+            "聚焦放大到当前鼠标位置",
+            "R F",
+            Action::RecordFocus,
         ),
         (
             "recorder:effects-off",
@@ -283,6 +290,7 @@ mod tests {
         );
         assert_eq!(resolved_id(&commands, "S C"), Some("screenshot:capture"));
         assert_eq!(resolved_id(&commands, "R Z"), Some("recorder:zoom"));
+        assert_eq!(resolved_id(&commands, "R F"), Some("recorder:focus"));
         assert_eq!(resolved_id(&commands, "R X"), Some("recorder:effects-off"));
         assert_eq!(resolve(&commands, "J"), Match::Invalid);
         let mut ids = std::collections::HashSet::new();

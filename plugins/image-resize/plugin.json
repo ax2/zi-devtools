@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "id": "com.zicode.devtools.image",
+  "name": "ZiDevTools Image Resize",
+  "displayName": "ZiDevTools 图片缩放",
+  "description": "对用户明确选择的一张 PNG、JPEG 或 WebP 图片进行有界缩放并生成派生图片。",
+  "version": "0.2.0",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "requiredProfiles": {
+    "resource.wasi.image.resize.v1": "=1.0.0-preview.1",
+    "output.schema.v1": "=1.0.0-rc.1",
+    "resource.output.types.v1": "=1.0.0-preview.1",
+    "resource.input.types.v1": "=1.0.0-preview.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
+  },
+  "activationEvents": [
+    "onCapability:devtools.image.resize"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm",
+    "resourceInputProfile": "resource.wasi.input.draft2",
+    "resourceOutputProfile": "resource.wasi.output.draft1"
+  },
+  "contributes": {
+    "activities": [],
+    "views": [],
+    "capabilities": [
+      {
+        "id": "devtools.image.resize",
+        "title": "缩放图片",
+        "description": "只处理当前调用中用户确认提供的单张图片，不访问路径或网络。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "maxWidth": {
+              "type": "integer",
+              "title": "最大宽度（1–4096像素）",
+              "default": 1600,
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "format": {
+              "type": "string",
+              "title": "输出格式（PNG/WebP无损）",
+              "enum": [
+                "png",
+                "jpeg",
+                "webp"
+              ],
+              "default": "webp"
+            },
+            "quality": {
+              "type": "integer",
+              "title": "JPEG质量（35–95；仅JPEG生效）",
+              "default": 82,
+              "minimum": 35,
+              "maximum": 95
+            }
+          },
+          "required": [
+            "maxWidth",
+            "format",
+            "quality"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "sourceWidth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "sourceHeight": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "mimeType": {
+              "type": "string",
+              "enum": [
+                "image/png",
+                "image/jpeg",
+                "image/webp"
+              ]
+            },
+            "byteLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 33554432
+            }
+          },
+          "required": [
+            "ok",
+            "sourceWidth",
+            "sourceHeight",
+            "width",
+            "height",
+            "mimeType",
+            "byteLength"
+          ],
+          "additionalProperties": false
+        },
+        "maxResultBytes": 1024,
+        "executionProfile": "resource.wasi.image.resize.v1",
+        "resourceInputMimeTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/webp"
+        ],
+        "directory": {
+          "categoryId": "media",
+          "aliases": [
+            "图片缩放",
+            "调整图片大小",
+            "image resize",
+            "resize PNG JPEG WebP"
+          ],
+          "description": "缩放用户授权的一张图片并生成派生资源；PNG/WebP无损，质量设置仅影响JPEG。"
+        }
+      }
+    ],
+    "commands": [],
+    "piTools": []
+  },
+  "permissions": {
+    "required": [
+      {
+        "name": "resource.read",
+        "reason": "每次调用都需要用户明确选择并授权一张图片，只读取该资源的有界快照。"
+      }
+    ],
+    "optional": []
+  }
+}

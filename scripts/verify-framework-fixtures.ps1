@@ -22,6 +22,8 @@ try {
     Start-Sleep -Seconds 2
     & (Join-Path $JavaHome 'bin/jcmd.exe') $fixtureProcess.Id 'Thread.print' | Set-Content -Encoding utf8 (Join-Path $fixtureRoot 'threads.txt')
     if ($LASTEXITCODE -ne 0) { throw 'Disposable thread dump failed' }
+    & (Join-Path $JavaHome 'bin/jcmd.exe') $fixtureProcess.Id 'Thread.dump_to_file' '-format=json' (Join-Path $fixtureRoot 'threads.json')
+    if ($LASTEXITCODE -ne 0) { throw 'Disposable JSON thread dump failed' }
     if (!$fixtureProcess.WaitForExit(12000)) { throw 'Disposable Java fixture timed out' }
     if ($fixtureProcess.ExitCode -ne 0) { throw 'Disposable Java fixture failed' }
 } finally {

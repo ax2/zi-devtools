@@ -46,7 +46,7 @@ impl Operation {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Proposal {
     pub(super) data: Dataset,
@@ -55,7 +55,7 @@ pub(super) struct Proposal {
     pub(super) description: String,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct State {
     column: usize,
@@ -569,7 +569,7 @@ mod tests {
         assert_eq!(original.headers[0], "a");
         let large = Dataset {
             headers: vec!["x".into()],
-            rows: vec![vec![Value::Null]; 3000],
+            rows: vec![vec![Value::Null]; 3000].into(),
         };
         assert!(propose(&large, 0, Operation::FillNull, &"x".repeat(4096)).is_err());
         assert!(large.rows[0][0].is_null());

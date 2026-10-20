@@ -11,6 +11,7 @@ impl State {
         *self = Self::default();
         self.plot_mode = true;
         self.date_mode = false;
+        self.time_zone_mode = false;
         self.expression = "preserve_price=19.90".into();
         self.variables = BTreeMap::from([
             ("ans".into(), Value::Exact(7, 1)),

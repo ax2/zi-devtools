@@ -46,6 +46,7 @@ pub(crate) struct State {
     name: String,
     run: Option<Run>,
     selected: usize,
+    ocr_handoff: bool,
     texture: Option<egui::TextureHandle>,
     receiver: Option<mpsc::Receiver<Result<Reply, String>>>,
     cancel: Arc<AtomicBool>,
@@ -64,6 +65,29 @@ impl Default for State {
     }
 }
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_common_handoff_fixture(&mut self) {
+        let image = Arc::new(DynamicImage::ImageRgba8(image::RgbaImage::from_fn(
+            64,
+            48,
+            |x, y| image::Rgba([x as u8, y as u8, 192, if x % 2 == 0 { 128 } else { 255 }]),
+        )));
+        self.origins = vec![relay::origin("screenshot-workbench").unwrap()];
+        self.run = Some(Run {
+            outputs: vec![core::Output {
+                image,
+                encoded: None,
+                report: None,
+                report_label: "",
+                label: "裁剪结果",
+            }],
+            ..Run::default()
+        });
+        self.selected = 0;
+        self.ocr_handoff = false;
+        self.import = None;
+    }
+
     fn with_memory(memory: super::memory::Pool) -> Self {
         Self {
             definition: Definition::default(),
@@ -72,6 +96,7 @@ impl State {
             name: String::new(),
             run: None,
             selected: 0,
+            ocr_handoff: false,
             texture: None,
             receiver: None,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -113,6 +138,29 @@ impl State {
             },
             Step::Info { version: 1 },
         ];
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_ocr_fixture(&mut self) {
+        self.preview_fixture();
+        self.definition.steps = vec![Step::Ocr { version: 1 }];
+        let image = self.source.as_ref().unwrap().clone();
+        self.run = Some(Run {
+            outputs: vec![core::Output {
+                image,
+                encoded: None,
+                report: Some(
+                    "识别结果仅用于界面布局预览，不来自 Windows OCR 引擎。\n本机图片文字识别已完成，可检查后复制。"
+                        .into(),
+                ),
+                report_label: "本机 OCR 识别文字",
+                label: "本机 OCR",
+            }],
+            ..Run::default()
+        });
+        self.selected = 0;
+        self.ocr_handoff = false;
+        self.texture = None;
+        self.message = "合成识别文字仅用于布局预览；不会调用 OCR 或保存结果".into();
     }
     #[cfg(feature = "ui-preview")]
     pub(super) fn preview_definition(&self) -> Vec<u8> {
@@ -184,6 +232,7 @@ impl State {
         self.run = None;
         self.texture = None;
         self.selected = 0;
+        self.ocr_handoff = false;
     }
     fn launch(
         &mut self,
@@ -193,6 +242,9 @@ impl State {
     ) {
         if self.busy() {
             return;
+        }
+        if matches!(kind, Kind::Run) {
+            self.ocr_handoff = false;
         }
         self.revision = self.revision.wrapping_add(1);
         self.job.begin();
@@ -270,6 +322,7 @@ impl State {
                     format!("已完成 {} 步；未自动保存", run.outputs.len())
                 };
                 self.selected = run.outputs.len().saturating_sub(1);
+                self.ocr_handoff = false;
                 self.texture = None;
                 self.run = Some(run);
             }
@@ -301,6 +354,36 @@ impl State {
     fn task_snapshot(&self) -> Option<crate::tasks::Row> {
         self.job.snapshot("image-workflow", self.kind.label(), true)
     }
+    pub(super) fn handoff_text(&self) -> Option<(String, &str)> {
+        if !self.ocr_handoff || self.busy() || self.import.is_some() {
+            return None;
+        }
+        let out = self.run.as_ref()?.outputs.get(self.selected)?;
+        if out.report_label != "本机 OCR 识别文字" {
+            return None;
+        }
+        let report = out.report.as_deref()?;
+        if report.trim().is_empty() {
+            return None;
+        }
+        Some(("图片流程本机 OCR 结果".into(), report))
+    }
+    pub(super) fn handoff_image(&self) -> Option<relay::ImageMaterial> {
+        if self.busy() || self.import.is_some() {
+            return None;
+        }
+        let out = self.run.as_ref()?.outputs.get(self.selected)?;
+        let mut origins = self.origins.clone();
+        origins.push(relay::origin("image-workflow").ok()?);
+        Some(relay::ImageMaterial {
+            image: out.image.clone(),
+            origins,
+            kind: out.label,
+        })
+    }
+    pub(super) fn clear_handoff_selection(&mut self) {
+        self.ocr_handoff = false;
+    }
     pub(super) fn relay_source(&self) -> Option<(relay::Source, Vec<relay::Origin>, &'static str)> {
         if self.busy() || self.import.is_some() {
             return None;
@@ -320,6 +403,8 @@ impl State {
         ui.heading("图片流程");
         ui.label("每一步作用于上一步实际图片；报告作为附加结果保留。流程文件只保存步骤，不保存图片或权限。");
         let busy = self.busy();
+        let mut select_ocr_handoff = false;
+        let mut clear_ocr_handoff = false;
         ui.add_enabled_ui(!busy && self.import.is_none(), |ui| {
             ui.horizontal_wrapped(|ui| {
                 if ui.button("选择输入图片…").clicked()
@@ -487,6 +572,9 @@ impl State {
                                 Step::Info { .. } => {
                                     ui.small("实际尺寸、透明通道与已有编码字节");
                                 }
+                                Step::Ocr { .. } => {
+                                    ui.small("使用 Windows 用户首选语言；只保留在本次运行结果中");
+                                }
                             }
                             if ui.add_enabled(index > 0, egui::Button::new("↑")).clicked() {
                                 up = Some(index);
@@ -524,6 +612,7 @@ impl State {
                             quality: 80,
                         },
                         Step::Info { version: 1 },
+                        Step::Ocr { version: 1 },
                     ] {
                         if ui.button(format!("+ {}", step.label())).clicked() {
                             self.definition.steps.push(step);
@@ -578,6 +667,7 @@ impl State {
                     });
                     if response.changed() {
                         self.texture = None;
+                        self.ocr_handoff = false;
                     }
                 }
             });
@@ -602,9 +692,33 @@ impl State {
                 let ratio = (ui.available_width() / size.x).min(220.0 / size.y).min(1.0);
                 ui.image((texture.id(), size * ratio));
                 if let Some(report) = &out.report {
-                    egui::CollapsingHeader::new("信息报告JSON").show(ui, |ui| {
-                        ui.monospace(report);
-                    });
+                    if out.report_label == "本机 OCR 识别文字" {
+                        ui.label(format!("识别结果 · {} 字符", report.chars().count()));
+                        egui::ScrollArea::vertical()
+                            .max_height(160.0)
+                            .show(ui, |ui| {
+                                let preview: String = report.chars().take(4000).collect();
+                                ui.monospace(preview);
+                                if report.chars().count() > 4000 {
+                                    ui.small("预览最多显示前4000字；复制按钮提供完整结果");
+                                }
+                            });
+                        if ui.button("复制识别文字").clicked() {
+                            ui.ctx().copy_text(report.clone());
+                            self.message = "已复制 OCR 识别文字；流程未自动保存结果".into();
+                        }
+                        if self.ocr_handoff {
+                            clear_ocr_handoff = ui.button("取消 OCR 接力选择").clicked();
+                            ui.small("当前顶部接力栏将发送这份识别结果；确认后才会填入目标工具。");
+                        } else {
+                            select_ocr_handoff = ui.button("设为当前接力来源…").clicked();
+                            ui.small("选择后可通过顶部统一接力栏发送，不会自动执行或保存。");
+                        }
+                    } else {
+                        egui::CollapsingHeader::new(out.report_label).show(ui, |ui| {
+                            ui.monospace(report);
+                        });
+                    }
                 }
                 let encoded = out.encoded.clone();
                 if ui
@@ -637,6 +751,14 @@ impl State {
                     }
                 }
             }
+        }
+        if select_ocr_handoff {
+            self.ocr_handoff = true;
+            self.message = "已选择图片流程 OCR 结果；请使用顶部接力栏选择目标".into();
+        }
+        if clear_ocr_handoff {
+            self.ocr_handoff = false;
+            self.message = "已取消 OCR 接力选择".into();
         }
         ui.small("最多16步；累计保留结果≤256MiB。PNG/WebP无损，JPEG质量可调。改步骤后旧结果失效；另存不覆盖已有文件。");
     }

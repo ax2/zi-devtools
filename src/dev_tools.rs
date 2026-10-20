@@ -39,8 +39,11 @@ pub struct HttpTab {
     pub headers: String,
     pub body: String,
     pub output: String,
+    pub response: Option<HttpResponse>,
+    pub handoff_body_only: bool,
     pub busy: bool,
     pub message: String,
+    pub job: crate::tasks::Job,
 }
 
 impl HttpTab {
@@ -53,8 +56,11 @@ impl HttpTab {
             headers: String::new(),
             body: String::new(),
             output: String::new(),
+            response: None,
+            handoff_body_only: false,
             busy: false,
             message: String::new(),
+            job: crate::tasks::Job::default(),
         }
     }
 }
@@ -131,10 +137,31 @@ impl HttpWorkbenchState {
     }
 
     pub fn close_selected(&mut self) {
-        if self.tabs.len() > 1 {
+        if self.tabs.len() > 1 && !self.tabs[self.selected].busy {
             self.tabs.remove(self.selected);
             self.selected = self.selected.min(self.tabs.len() - 1);
         }
+    }
+
+    pub fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
+        self.tabs
+            .iter()
+            .filter_map(|tab| {
+                let mut row = tab.job.snapshot("http-request", "HTTP 请求", false)?;
+                row.instance = Some(tab.id.to_string());
+                row.instance_name = Some(format!("请求 #{}", tab.id));
+                Some(row)
+            })
+            .collect()
+    }
+
+    pub fn select_task_tab(&mut self, tab_id: u64) -> bool {
+        let Some(index) = self.tabs.iter().position(|tab| tab.id == tab_id) else {
+            return false;
+        };
+        self.selected = index;
+        self.pane = HttpPane::Request;
+        true
     }
 
     pub fn add_site(&mut self) -> Result<()> {
@@ -230,6 +257,60 @@ pub struct HttpRequestSpec {
     pub body: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HttpResponse {
+    pub status: String,
+    pub content_type: String,
+    pub duration_ms: u128,
+    pub body: String,
+    pub body_handoff_available: bool,
+    pub truncated: bool,
+}
+
+impl HttpResponse {
+    pub fn complete_text(&self) -> String {
+        format!(
+            "HTTP {}\n耗时 {} ms\nContent-Type: {}\n重定向不会自动跟随\n\n{}{}",
+            self.status,
+            self.duration_ms,
+            self.content_type,
+            self.body,
+            if self.truncated {
+                "\n\n[响应预览已截断，仅显示前 256 KiB]"
+            } else {
+                ""
+            }
+        )
+    }
+}
+
+fn body_is_bounded_text(content_type: &str, bytes: &[u8]) -> bool {
+    if std::str::from_utf8(bytes).is_err() {
+        return false;
+    }
+    let media_type = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    media_type.starts_with("text/")
+        || media_type == "application/json"
+        || media_type.ends_with("+json")
+        || media_type == "application/xml"
+        || media_type.ends_with("+xml")
+        || matches!(
+            media_type.as_str(),
+            "application/x-www-form-urlencoded"
+                | "application/javascript"
+                | "application/ecmascript"
+                | "application/graphql"
+                | "application/yaml"
+                | "application/x-yaml"
+                | "application/toml"
+        )
+}
+
 fn is_loopback_url(url: &Url) -> bool {
     let Some(host) = url.host_str() else {
         return false;
@@ -248,7 +329,7 @@ fn is_loopback_url(url: &Url) -> bool {
             })
 }
 
-pub fn execute_http(spec: &HttpRequestSpec) -> Result<String> {
+pub fn execute_http(spec: &HttpRequestSpec) -> Result<HttpResponse> {
     if spec.url.len() > 2_048 || spec.headers.len() > 8_192 || spec.body.len() > 1024 * 1024 {
         return Err(anyhow!("URL、请求头或请求体超过大小限制"));
     }
@@ -302,16 +383,15 @@ pub fn execute_http(spec: &HttpRequestSpec) -> Result<String> {
         .read_to_end(&mut bytes)?;
     let truncated = bytes.len() > 256 * 1024;
     bytes.truncate(256 * 1024);
-    Ok(format!(
-        "HTTP {status}\n耗时 {} ms\nContent-Type: {content_type}\n重定向不会自动跟随\n\n{}{}",
-        started.elapsed().as_millis(),
-        String::from_utf8_lossy(&bytes),
-        if truncated {
-            "\n\n[响应预览已截断，仅显示前 256 KiB]"
-        } else {
-            ""
-        }
-    ))
+    let body_handoff_available = body_is_bounded_text(&content_type, &bytes);
+    Ok(HttpResponse {
+        status: status.to_string(),
+        content_type,
+        duration_ms: started.elapsed().as_millis(),
+        body: String::from_utf8_lossy(&bytes).into_owned(),
+        body_handoff_available,
+        truncated,
+    })
 }
 
 pub fn compare_text(before: &str, after: &str) -> Result<String> {
@@ -334,6 +414,54 @@ mod tests {
     }
 
     #[test]
+    fn http_task_snapshots_exclude_request_content_and_busy_tabs_cannot_close() {
+        let mut state = HttpWorkbenchState::load(PathBuf::new());
+        state.tabs[0].name = "private label should stay out".into();
+        state.tabs[0].url = "https://example.invalid/path?token=secret".into();
+        state.tabs[0].headers = "Authorization: Bearer secret".into();
+        state.tabs[0].body = "private request body".into();
+        state.tabs[0].busy = true;
+        state.tabs[0].job.begin();
+        state.add_tab();
+        state.selected = 0;
+        state.close_selected();
+        assert_eq!(state.tabs.len(), 2, "busy request tab must be retained");
+        assert!(state.select_task_tab(2));
+        assert_eq!(state.selected, 1);
+        assert!(matches!(state.pane, HttpPane::Request));
+        assert!(!state.select_task_tab(u64::MAX));
+
+        let running = state.task_snapshots();
+        assert_eq!(running.len(), 1);
+        assert_eq!(running[0].key, "http-request");
+        assert_eq!(running[0].instance_name.as_deref(), Some("请求 #1"));
+        assert!(running[0].phase.active());
+        assert!(!running[0].cancellable);
+        let visible = format!(
+            "{} {} {}",
+            running[0].title,
+            running[0].instance_name.as_deref().unwrap(),
+            running[0].summary
+        );
+        for private_value in [
+            "private label",
+            "example.invalid",
+            "token=secret",
+            "Bearer secret",
+            "private request body",
+        ] {
+            assert!(!visible.contains(private_value));
+        }
+
+        state.tabs[0]
+            .job
+            .finish(crate::tasks::Phase::Done, "HTTP 200 · 12 ms");
+        let completed = state.task_snapshots();
+        assert_eq!(completed[0].phase, crate::tasks::Phase::Done);
+        assert_eq!(completed[0].summary, "HTTP 200 · 12 ms");
+    }
+
+    #[test]
     fn sends_http_request_to_local_fixture() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -349,8 +477,14 @@ mod tests {
         });
         server.join().unwrap();
         let result = result.unwrap();
-        assert!(result.contains("HTTP 200 OK"));
-        assert!(result.ends_with("ok"));
+        assert_eq!(result.status, "200 OK");
+        assert_eq!(result.content_type, "text/plain");
+        assert_eq!(result.body, "ok");
+        assert!(result.body_handoff_available);
+        assert!(!result.truncated);
+        let full = result.complete_text();
+        assert!(full.contains("HTTP 200 OK"));
+        assert!(full.ends_with("ok"));
         assert!(
             execute_http(&HttpRequestSpec {
                 method: "GET".to_owned(),
@@ -360,6 +494,52 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn http_response_keeps_a_separate_bounded_body_for_typed_handoff() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let mut stream = crate::http_test_support::accept_get(listener);
+            let body = vec![b'x'; 256 * 1024 + 1];
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .unwrap();
+            stream.write_all(&body).unwrap();
+        });
+        let response = execute_http(&HttpRequestSpec {
+            method: "GET".into(),
+            url: format!("http://127.0.0.1:{port}/large"),
+            headers: String::new(),
+            body: String::new(),
+        })
+        .unwrap();
+        server.join().unwrap();
+
+        assert_eq!(response.content_type, "application/json");
+        assert_eq!(response.body.len(), 256 * 1024);
+        assert!(response.body_handoff_available);
+        assert!(response.truncated);
+        assert!(response.complete_text().contains("响应预览已截断"));
+    }
+
+    #[test]
+    fn http_body_handoff_requires_a_text_media_type_and_valid_utf8() {
+        assert!(body_is_bounded_text(
+            "Application/Problem+Json; charset=utf-8",
+            br#"{"ok":true}"#
+        ));
+        assert!(body_is_bounded_text("text/plain", "你好".as_bytes()));
+        assert!(!body_is_bounded_text(
+            "application/octet-stream",
+            b"plain-looking"
+        ));
+        assert!(!body_is_bounded_text("application/json", &[0xff, 0xfe]));
+        assert!(!body_is_bounded_text("未提供", b"plain text"));
     }
 
     #[test]

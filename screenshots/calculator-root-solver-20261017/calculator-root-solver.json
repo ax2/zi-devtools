@@ -1,0 +1,13 @@
+{
+  "tool": "全能计算器",
+  "toolVersion": "0.14.0",
+  "scenario": "f(x)=x^2-2, bracket [1,2], tolerance 1e-10",
+  "expectedRoot": "sqrt(2)",
+  "converged": true,
+  "iterations": 35,
+  "residual": "5.077339e-11",
+  "numericHandoff": "one approximate f64 value; stale or nonconverged results rejected",
+  "worksheetSchema": 8,
+  "restoreBehavior": "inputs restored; derived result not restored or recomputed",
+  "screenshot": "calculator-root-solver-light.png"
+}

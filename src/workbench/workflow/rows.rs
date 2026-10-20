@@ -253,7 +253,7 @@ pub(super) fn propose(
     };
     let mut result = Dataset {
         headers: data.headers.clone(),
-        rows: Vec::with_capacity(indices.len()),
+        rows: Vec::with_capacity(indices.len()).into(),
     };
     for i in indices {
         check_cancel(cancel)?;

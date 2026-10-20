@@ -201,18 +201,10 @@ impl State {
                 ui.label(&self.transfer);
             }
             ui.weak(format!("更新及恢复副本：{}", p.directory.display()));
-            egui::CollapsingHeader::new(format!("工具变化（{}项）", p.changes.len())).show(
-                ui,
-                |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(180.0)
-                        .show(ui, |ui| {
-                            for row in &p.changes {
-                                ui.label(row);
-                            }
-                        });
-                },
-            );
+            egui::CollapsingHeader::new(format!("工具版本与目录变化（{}项）", p.changes.len()))
+                .show(ui, |ui| {
+                    super::signed::changes_ui(ui, &p.changes, 180.0);
+                });
             ui.checkbox(
                 &mut self.confirm,
                 if self.restore {
@@ -301,7 +293,10 @@ impl State {
                 version: "0.83.0".into(),
                 old_version: env!("CARGO_PKG_VERSION").into(),
                 bytes: 30_000_000,
-                changes: vec!["程序更新检查 · 0.5.0 → 0.6.0".into()],
+                changes: super::signed::ToolChangeSummary {
+                    updated: vec!["程序更新检查 · 0.5.0 → 0.6.0".into()],
+                    ..Default::default()
+                },
             }));
         }
     }

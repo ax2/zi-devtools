@@ -346,6 +346,7 @@ impl State {
         ensure!(!self.busy() && !self.items.is_empty(), "请先完成检查或处理");
         ensure!(self.items.len() <= MAX_BATCH, "报告条目超限");
         let origin = super::relay::origin("image-batch")?;
+        let generated_by = crate::tool_provenance::current_for_tool("image-batch")?;
         let items = self.items.iter().map(|item| serde_json::json!({
             "sourceName":item.source.file_name().map(|v|v.to_string_lossy()),
             "outputName":item.target.file_name().map(|v|v.to_string_lossy()),
@@ -354,7 +355,7 @@ impl State {
             "status": if item.conflict {"conflict"} else if item.saved_bytes.is_some() {"saved"} else if item.failed {"failed"} else {"not_processed"}
         })).collect::<Vec<_>>();
         let text = serde_json::to_string_pretty(&serde_json::json!({
-            "schemaVersion":1,"material":"image-batch-report","phase":self.phase,
+            "schemaVersion":2,"material":"image-batch-report","generatedBy":generated_by,"phase":self.phase,
             "origin":{"toolId":origin.id,"version":origin.version,"utc":origin.utc},
             "settings":{"format":self.format.extension(),"maxWidth":self.max_width,"jpegQuality":if self.format==Format::Jpeg {Some(self.jpeg_quality)} else {None}},
             "counts":{"total":items.len(),"saved":self.items.iter().filter(|i|i.saved_bytes.is_some()).count(),"failed":self.items.iter().filter(|i|i.failed).count(),"conflict":self.items.iter().filter(|i|i.conflict).count(),"notProcessed":self.items.iter().filter(|i|!i.conflict && !i.failed && i.saved_bytes.is_none()).count()},
@@ -1039,6 +1040,14 @@ mod tests {
         };
         let preflight = state.build_report().unwrap();
         let value: serde_json::Value = serde_json::from_str(&preflight).unwrap();
+        assert_eq!(value["schemaVersion"], 2);
+        assert_eq!(value["generatedBy"]["toolId"], "image-batch");
+        let provenance = crate::tool_provenance::current_for_tool("image-batch").unwrap();
+        assert_eq!(
+            value["generatedBy"]["toolVersion"].as_str(),
+            Some(provenance.tool_version.as_str())
+        );
+        assert_eq!(value["generatedBy"]["runtimeFingerprint"]["schema"], 1);
         assert_eq!(value["phase"], "preflight");
         assert_eq!(value["counts"]["saved"], 0);
         assert!(value["items"][0]["outputBytes"].is_null());

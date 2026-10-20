@@ -159,3 +159,69 @@ fn empty_capture_fast_path_matches_engine_including_dead_and_nested_groups() {
         );
     }
 }
+
+#[test]
+fn replacement_preview_expands_captures_and_preserves_unicode_offsets() {
+    let preview =
+        preview_replacements(r"(?P<name>\p{L}+)-(\d+)", "甲zi-7🙂乙-42", "${name}:$2").unwrap();
+    assert_eq!(preview.matches, 2);
+    assert_eq!(preview.output, "甲zi:7🙂乙:42");
+
+    let escaped_dollar = preview_replacements(r"(a)", "a", "$$-$1-${1}").unwrap();
+    assert_eq!(escaped_dollar.output, "$-a-a");
+    assert_eq!(escaped_dollar.matches, 1);
+
+    let expression = regex::Regex::new(r"(?P<foo>a)(b)?").unwrap();
+    let captures = expression.captures("a").unwrap();
+    for template in [
+        "$foo/$1/${2}/$99",
+        "$2x $$ $",
+        "${missing} ${foo}",
+        "${incomplete",
+    ] {
+        let mut expected = String::new();
+        captures.expand(template, &mut expected);
+        assert_eq!(
+            preview_replacements(r"(?P<foo>a)(b)?", "a", template)
+                .unwrap()
+                .output,
+            expected
+        );
+    }
+}
+
+#[test]
+fn replacement_preview_handles_empty_matches_no_match_and_limits() {
+    let empty = preview_replacements("a*", "aba", "_").unwrap();
+    assert_eq!(
+        empty,
+        ReplacePreview {
+            output: "_b_".into(),
+            matches: 2
+        }
+    );
+
+    let untouched = preview_replacements("z", "中a", "x").unwrap();
+    assert_eq!(
+        untouched,
+        ReplacePreview {
+            output: "中a".into(),
+            matches: 0
+        }
+    );
+
+    let exact_matches = preview_replacements("x", &"x".repeat(1000), "").unwrap();
+    assert_eq!(exact_matches.matches, 1000);
+    assert!(exact_matches.output.is_empty());
+    let exact_output = "x".repeat(2 * 1024 * 1024);
+    let exact_limit = preview_replacements("x+", &exact_output, "$0").unwrap();
+    assert_eq!(exact_limit.output, exact_output);
+    assert_eq!(exact_limit.matches, 1);
+
+    assert!(preview_replacements("(", "text", "x").is_err());
+    assert!(preview_replacements(".", &"x".repeat(1001), "").is_err());
+    assert!(preview_replacements("x", &"x".repeat(512), &"r".repeat(4097)).is_err());
+    assert!(preview_replacements("x+", &"x".repeat(1024 * 1024 + 1), "$0$0").is_err());
+    assert!(preview_replacements(".", "x", &"r".repeat(64 * 1024 + 1)).is_err());
+    assert!(preview_replacements(".", &"x".repeat(2 * 1024 * 1024 + 1), "").is_err());
+}

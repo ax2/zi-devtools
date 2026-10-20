@@ -1,10 +1,10 @@
 //! Typed, bounded in-memory image relay. No temporary files or implicit encoding.
 use super::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Origin {
-    pub id: String,
-    pub version: String,
-    pub utc: String,
+pub struct Origin {
+    pub(crate) id: String,
+    pub(crate) version: String,
+    pub(crate) utc: String,
 }
 #[derive(Clone)]
 pub(crate) enum Source {
@@ -22,6 +22,7 @@ pub(crate) enum Target {
     Convert,
     Edit,
     Workflow,
+    TextFlow,
 }
 impl Target {
     pub fn label(self) -> &'static str {
@@ -29,6 +30,7 @@ impl Target {
             Self::Convert => "图片转换",
             Self::Edit => "裁剪与标注",
             Self::Workflow => "图片流程",
+            Self::TextFlow => "文本操作流程",
         }
     }
 }
@@ -37,6 +39,21 @@ pub(crate) struct Prepared {
     pub thumbnail: egui::ColorImage,
     pub origins: Vec<Origin>,
     pub kind: &'static str,
+}
+#[derive(Clone, Debug)]
+pub struct ImageMaterial {
+    pub(crate) image: Arc<DynamicImage>,
+    pub(crate) origins: Vec<Origin>,
+    pub(crate) kind: &'static str,
+}
+impl From<&Prepared> for ImageMaterial {
+    fn from(value: &Prepared) -> Self {
+        Self {
+            image: value.image.clone(),
+            origins: value.origins.clone(),
+            kind: value.kind,
+        }
+    }
 }
 fn check(image: &DynamicImage) -> Result<()> {
     ensure!(
@@ -325,6 +342,26 @@ impl State {
         self.relay = Some(Transfer::start(ctx, source, origins, id));
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_relay_ready(&self) -> bool {
+        self.relay
+            .as_ref()
+            .is_some_and(|transfer| transfer.prepared.is_some() && !transfer.busy())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_relay_check(&self) {
+        let transfer = self.relay.as_ref().expect("image relay modal remains open");
+        assert!(transfer.target == Target::TextFlow);
+        assert!(transfer.prepared.is_some() && !transfer.busy());
+        assert!(self.pending_text_flow_image.is_none());
+        assert!(self.screenshot.relay_source().is_some());
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_relay_source_retained(&self) {
+        assert!(self.relay.is_none());
+        assert!(self.pending_text_flow_image.is_none());
+        assert!(self.screenshot.relay_source().is_some());
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_relay_smoke(&mut self, ctx: &egui::Context, phase: u8) -> bool {
         if phase == 0 {
             self.preview_relay_fixture(ctx);
@@ -517,6 +554,21 @@ impl State {
             .as_ref()
             .is_some_and(|transfer| !transfer.cancelled)
     }
+    pub(super) fn start_screenshot_annotation(&mut self, ctx: &egui::Context) -> bool {
+        if self.relay.is_some() {
+            return false;
+        }
+        let Some((source, origins, id)) = self.relay_source() else {
+            return false;
+        };
+        if id != "screenshot-workbench" {
+            return false;
+        }
+        let mut transfer = Transfer::start(ctx, source, origins, id);
+        transfer.target = Target::Edit;
+        self.relay = Some(transfer);
+        true
+    }
     pub(super) fn relay_source(&self) -> Option<(Source, Vec<Origin>, &'static str)> {
         match self.mode {
             Mode::Single if self.pending.is_none() => self
@@ -556,6 +608,7 @@ impl State {
             ),
             Target::Edit => self.editor.relay_target_state(),
             Target::Workflow => self.workflow.target_state(),
+            Target::TextFlow => (false, false),
         }
     }
     fn apply_relay(&mut self, ctx: &egui::Context) -> Result<()> {
@@ -636,6 +689,14 @@ impl State {
                 )?;
                 self.relay_route = Some("image-workflow");
                 self.mode = Mode::Workflow;
+            }
+            Target::TextFlow => {
+                self.workflow
+                    .memory_pool()
+                    .share(&prepared.image, super::memory::pixels(&prepared.image))
+                    .map_err(anyhow::Error::msg)?;
+                self.pending_text_flow_image = Some(ImageMaterial::from(prepared));
+                self.relay_route = Some("text-flow");
             }
         }
         self.relay = None;
@@ -731,14 +792,14 @@ impl State {
                 });
             });
             ui.horizontal_wrapped(|ui| {
-                for target in [Target::Convert, Target::Edit, Target::Workflow] {
+                for target in [Target::Convert, Target::Edit, Target::Workflow, Target::TextFlow] {
                     if !matches!(
                         (transfer.source_id, target),
                         ("image-tools", Target::Convert) | ("image-crop-annotate", Target::Edit)
                     ) {
                         let response=ui.selectable_value(&mut transfer.target,target,target.label());
                         #[cfg(feature="ui-preview")]
-                        ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new(match target {Target::Edit=>"image-relay-edit",Target::Convert=>"image-relay-convert",Target::Workflow=>"image-relay-workflow"}),response.rect));
+                        ui.ctx().data_mut(|d|d.insert_temp(egui::Id::new(match target {Target::Edit=>"image-relay-edit",Target::Convert=>"image-relay-convert",Target::Workflow=>"image-relay-workflow",Target::TextFlow=>"image-relay-text-flow"}),response.rect));
                         if response.changed() {transfer.replace=false;}
                     }
                 }
@@ -761,11 +822,16 @@ impl State {
                     }
                 });
             }
+            if transfer.target == Target::TextFlow {
+                ui.label("确认后在数据工作台创建新的文本操作流程实例");
+                ui.small("仅接收受限的内存像素与来源链；不会自动运行、编码、保存或联网。首次运行 image.info 后可继续串接文本和 JSON 操作。");
+            }
             let destination_state = self.workflow.relay_destination_state(&transfer.workflow_destination, transfer.source_instance.as_deref());
             let (busy, has_work) = match transfer.target {
                 Target::Convert => converter_state,
                 Target::Edit => editor_state,
                 Target::Workflow => match &destination_state { Ok(value) => *value, Err(_) => (true, false) },
+                Target::TextFlow => (false, false),
             };
             if transfer.target == Target::Workflow { if let Err(error) = &destination_state { ui.label(error.to_string()); } }
             if busy {
@@ -836,6 +902,41 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "ui-preview")]
+    #[test]
+    fn screenshot_annotation_shortcut_starts_confirmable_editor_relay() {
+        let ctx = egui::Context::default();
+        let mut state = State::default();
+        state.screenshot.preview_fixture(&ctx);
+        state.mode = Mode::Screenshot;
+        let source = state.screenshot.relay_source().unwrap();
+        assert!(state.start_screenshot_annotation(&ctx));
+
+        let transfer = state.relay.as_mut().unwrap();
+        assert!(matches!(transfer.target, Target::Edit));
+        assert_eq!(transfer.source_id, "screenshot-workbench");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while transfer.prepared.is_none() && transfer.busy() && std::time::Instant::now() < deadline
+        {
+            transfer.poll(&ctx);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let prepared = transfer
+            .prepared
+            .as_ref()
+            .expect("prepared screenshot relay");
+        assert_eq!(prepared.image.dimensions(), source.dimensions());
+        assert!(
+            prepared
+                .image
+                .to_rgba8()
+                .pixels()
+                .any(|pixel| pixel[3] == 0)
+        );
+        assert!(state.screenshot.relay_source().is_some());
+        assert_eq!(state.editor.relay_target_state(), (false, false));
+    }
+
     #[test]
     fn workflow_target_requires_replacement_and_receives_without_running() {
         let ctx = egui::Context::default();
@@ -870,6 +971,41 @@ mod tests {
         assert_eq!(state.mode, Mode::Workflow);
         assert_eq!(state.workflow.target_state(), (false, true));
         assert!(state.workflow.relay_source().is_none());
+        assert!(!state.background_active());
+    }
+    #[test]
+    fn text_flow_target_returns_bounded_image_material_only_after_confirmation() {
+        let ctx = egui::Context::default();
+        let source = Arc::new(DynamicImage::new_rgba8(24, 16));
+        let prepared = prepare(
+            Source::Image(source.clone()),
+            Vec::new(),
+            "screenshot-workbench",
+        )
+        .unwrap();
+        let mut state = State {
+            relay: Some(Transfer {
+                source_id: "screenshot-workbench",
+                target: Target::TextFlow,
+                workflow_destination: workflow::Destination::default(),
+                source_instance: None,
+                replace: false,
+                cancelled: false,
+                error: String::new(),
+                prepared: Some(prepared),
+                texture: None,
+                receiver: None,
+                cancel_work: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            }),
+            ..State::default()
+        };
+        assert_eq!(state.target_state(Target::TextFlow), (false, false));
+        state.apply_relay(&ctx).unwrap();
+        assert!(state.relay.is_none());
+        let material = state.take_text_flow_image().unwrap();
+        assert!(Arc::ptr_eq(&material.image, &source));
+        assert_eq!(material.image.dimensions(), (24, 16));
+        assert_eq!(material.origins.last().unwrap().id, "screenshot-workbench");
         assert!(!state.background_active());
     }
     #[test]

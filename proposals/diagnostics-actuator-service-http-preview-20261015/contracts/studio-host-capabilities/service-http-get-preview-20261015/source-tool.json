@@ -1,0 +1,6 @@
+{
+  "id": "spring-actuator",
+  "tool_version": "1.1.1",
+  "name": "Spring Actuator 只读诊断",
+  "scope": "显式选择基础地址和 health/info/metrics GET；支持 503 health JSON，不跟随重定向、不读取 env/configprops；异步状态进入后台任务中心；只显示通用摘要，详细报告留在工作台。 导出 JSON 报告包含工具版本与便携运行环境指纹。"
+}

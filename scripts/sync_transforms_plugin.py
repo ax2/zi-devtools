@@ -4,6 +4,7 @@ import copy
 import json
 import re
 from pathlib import Path
+from tool_directory import apply_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -16,7 +17,7 @@ assert len(actions) == 23 and len({a['id'] for a in actions}) == len(actions)
 versions = {t['id']: t['tool_version'] for t in json.loads((ROOT / 'docs/tools.json').read_text(encoding='utf-8'))['tools']}
 manifest = json.loads((ROOT / 'contracts/studio-devtools/v1/plugin.example.json').read_text(encoding='utf-8'))
 manifest.update(id='com.zicode.devtools.transforms', name='ZiDevTools Transforms', displayName='ZiDevTools 文本转换',
-                description='Grouped bounded text transformations; no host resources, files or network.', version='0.1.0')
+                description='Grouped bounded text transformations; no host resources, files or network.', version='0.1.1')
 manifest['activationEvents'] = ['onView:devtools.transforms.main'] + ['onCapability:devtools.transforms.' + a['id'] for a in actions]
 schema = dict(type='object', properties=dict(text=dict(type='string', maxLength=8192)), required=['text'], additionalProperties=False)
 manifest['contributes'] = dict(
@@ -26,6 +27,7 @@ manifest['contributes'] = dict(
     piTools=[dict(name='devtools_transforms_' + a['id'].replace('.', '_'), title=a['title'],
                   description=f"Run bounded local {a['title']} on explicitly supplied UTF-8 text, at most 8192 bytes. No file or network access.",
                   capability='devtools.transforms.' + a['id'], inputSchema=copy.deepcopy(schema)) for a in actions])
+apply_manifest(manifest)
 catalog = dict(contract='zicode.devtools-plugin/1.0.0-rc.1', packageId=manifest['id'], packageVersion=manifest['version'],
                source=dict(revision='REPLACE_WITH_PROVIDER_SOURCE_REVISION', dirty=True),
                tools=[dict(sourceToolId=a['sourceToolId'], toolId='devtools.transforms.' + a['id'],

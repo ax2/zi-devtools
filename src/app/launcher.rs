@@ -1,19 +1,146 @@
 use super::*;
+pub(super) mod keyboard;
+#[cfg(feature = "ui-preview")]
+mod preview;
 mod workflows;
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+
+fn filter_category(entries: &mut Vec<ToolEntry>, category: &str) {
+    if category != "全部分类" {
+        entries.retain(|entry| entry.category == category);
+    }
+}
+
+pub(super) fn filter_collection(
+    entries: &mut Vec<ToolEntry>,
+    collection: &crate::preferences::ToolCollection,
+    preserve_relevance: bool,
+) {
+    entries.retain(|entry| collection.tool_ids.contains(&entry.id));
+    if !preserve_relevance {
+        entries.sort_by_key(|entry| {
+            collection
+                .tool_ids
+                .iter()
+                .position(|id| id == &entry.id)
+                .unwrap_or(usize::MAX)
+        });
+    }
+}
+
+pub(super) fn sort_by_usage(
+    entries: &mut [ToolEntry],
+    usage: &std::collections::BTreeMap<String, u32>,
+    recent: &[String],
+) {
+    entries.sort_by_key(|entry| {
+        (
+            std::cmp::Reverse(usage.get(&entry.id).copied().unwrap_or(0)),
+            recent
+                .iter()
+                .position(|id| id == &entry.id)
+                .unwrap_or(usize::MAX),
+        )
+    });
+}
+
+#[cfg(test)]
+mod category_tests {
+    use super::*;
+
+    #[test]
+    fn quick_panel_category_filter_keeps_only_matching_tools_and_all_mode_is_unchanged() {
+        let all = super::super::registry::catalog();
+        let mut selected = all.to_vec();
+        filter_category(&mut selected, "文件与系统");
+        assert!(!selected.is_empty());
+        assert!(selected.iter().all(|entry| entry.category == "文件与系统"));
+        assert!(!selected.iter().any(|entry| entry.id == "json"));
+
+        let mut unchanged = all.to_vec();
+        filter_category(&mut unchanged, "全部分类");
+        assert_eq!(unchanged.len(), all.len());
+    }
+
+    #[test]
+    fn quick_panel_collection_filter_keeps_the_curated_order() {
+        let mut entries = super::super::registry::catalog().to_vec();
+        let collection = crate::preferences::ToolCollection {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "任务常用".into(),
+            tool_ids: vec!["uuid".into(), "json".into()],
+        };
+        filter_collection(&mut entries, &collection, false);
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            ["uuid", "json"]
+        );
+        let mut matching = vec![
+            super::super::registry::catalog()
+                .iter()
+                .find(|entry| entry.id == "json")
+                .unwrap()
+                .clone(),
+            super::super::registry::catalog()
+                .iter()
+                .find(|entry| entry.id == "uuid")
+                .unwrap()
+                .clone(),
+        ];
+        filter_collection(&mut matching, &collection, true);
+        assert_eq!(
+            matching
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            ["json", "uuid"]
+        );
+    }
+
+    #[test]
+    fn frequent_tools_use_recent_visit_to_break_usage_ties() {
+        let catalog = super::super::registry::catalog();
+        let mut entries = ["json", "uuid", "base64"]
+            .into_iter()
+            .map(|id| catalog.iter().find(|entry| entry.id == id).unwrap().clone())
+            .collect::<Vec<_>>();
+        let usage = std::collections::BTreeMap::from([
+            ("json".to_owned(), 8),
+            ("uuid".to_owned(), 8),
+            ("base64".to_owned(), 3),
+        ]);
+        let recent = vec!["uuid".to_owned(), "json".to_owned()];
+
+        sort_by_usage(&mut entries, &usage, &recent);
+
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            ["uuid", "json", "base64"]
+        );
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Scope {
     #[default]
     All,
     Tools,
     Workflows,
     Favorites,
+    Instances,
 }
 impl Scope {
-    pub const ALL: [(Self, &'static str, egui::Key); 4] = [
+    pub const ALL: [(Self, &'static str, egui::Key); 5] = [
         (Self::All, "全部", egui::Key::Num1),
         (Self::Tools, "工具", egui::Key::Num2),
         (Self::Workflows, "流程", egui::Key::Num3),
         (Self::Favorites, "收藏", egui::Key::Num4),
+        (Self::Instances, "工作实例", egui::Key::Num5),
     ];
 }
 pub(super) struct Results {
@@ -21,6 +148,7 @@ pub(super) struct Results {
     pub workflows: crate::workbench::sessions::WorkflowMatches,
     pub saved: Vec<usize>,
     pub recent: Vec<usize>,
+    pub instances: Vec<crate::instance_navigation::Entry>,
 }
 pub(super) enum Choice {
     Tool(String),
@@ -30,7 +158,7 @@ pub(super) enum Choice {
 
 impl DevToolsApp {
     pub(super) fn launcher_results(&mut self, query: &str) -> Results {
-        let mut tools = if self.launcher_scope == Scope::Workflows {
+        let mut tools = if matches!(self.launcher_scope, Scope::Workflows | Scope::Instances) {
             Vec::new()
         } else {
             self.entries(query)
@@ -49,7 +177,7 @@ impl DevToolsApp {
         } else {
             Default::default()
         };
-        let saved = if self.launcher_scope == Scope::Tools {
+        let saved = if matches!(self.launcher_scope, Scope::Tools | Scope::Instances) {
             Vec::new()
         } else {
             self.preferences
@@ -83,6 +211,11 @@ impl DevToolsApp {
             workflows,
             saved,
             recent,
+            instances: if matches!(self.launcher_scope, Scope::All | Scope::Instances) {
+                self.instance_results(query)
+            } else {
+                Vec::new()
+            },
         }
     }
     pub(super) fn open_search_choice(&mut self, choice: Choice) {
@@ -132,9 +265,11 @@ impl DevToolsApp {
 
 impl DevToolsApp {
     pub(super) fn open_quick(&mut self, ctx: &egui::Context) {
+        self.instance_search.quick = Default::default();
         self.quick_context = false;
         self.prefix.active = false;
         self.quick_open = true;
+        self.quick_keyboard = Default::default();
         self.quick_active.store(true, Ordering::Release);
         self.quick_focus = true;
         self.quick_had_focus = false;
@@ -158,6 +293,7 @@ impl DevToolsApp {
     }
 
     pub(super) fn open_tray_context(&mut self, ctx: &egui::Context) {
+        self.instance_search.quick = Default::default();
         self.open_quick(ctx);
         self.quick_context = true;
         if self.preferences.recent.is_empty()
@@ -509,11 +645,12 @@ impl DevToolsApp {
         let mut show_main = false;
         let mut workflow_chosen = None;
         let mut workflow_search = false;
-        let original_colors = self.colors;
+        let mut instance_chosen = None;
         let contextual = self.quick_context;
         let system_theme = ctx
             .input(|i| i.raw.system_theme)
             .unwrap_or(egui::Theme::Light);
+        let original_colors = self.colors;
         if self.quick_context {
             self.colors = palette(if system_theme == egui::Theme::Dark {
                 Theme::Dark
@@ -521,7 +658,10 @@ impl DevToolsApp {
                 Theme::Light
             });
         }
-        ctx.show_viewport_immediate(id, builder, |panel, _| {
+        let panel_bg = self.colors.bg;
+        let panel_surface = self.colors.surface;
+        let panel_width = self.quick_size.x;
+        ctx.show_viewport_immediate(id, builder, |panel, viewport_class| {
             #[cfg(feature = "ui-preview")]
             if let Some((_, frame)) = self.preview_tray_workflow.as_mut() {
                 if *frame == 40 {
@@ -537,11 +677,13 @@ impl DevToolsApp {
                 }
                 *frame += 1;
             }
+            let keyboard_allowed = self.quick_keyboard.allow_shortcuts(panel);
             let focused = panel.input(|i| i.viewport().focused.unwrap_or(false));
             if focused {
                 self.quick_had_focus = true;
             }
-            if panel.input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape))
+            if panel.input(|i| i.viewport().close_requested())
+                || (keyboard_allowed && keyboard::consume_plain(panel, egui::Key::Escape))
                 || (self.quick_had_focus
                     && self.quick_opened.elapsed() > Duration::from_millis(300)
                     && !focused
@@ -550,327 +692,528 @@ impl DevToolsApp {
             {
                 self.quick_open = false;
             }
-            egui::CentralPanel::default()
-                .frame(
-                    egui::Frame::new()
-                        .fill(self.colors.bg)
-                        .inner_margin(20.0)
-                        .stroke(egui::Stroke::new(1.0, self.colors.surface)),
-                )
-                .show(panel, |ui| {
-                    if self.quick_context {
-                        ui.style_mut().visuals = if system_theme == egui::Theme::Dark {
-                            egui::Visuals::dark()
+            let mut panel_contents = |ui: &mut egui::Ui| {
+                if self.quick_context {
+                    ui.style_mut().visuals = if system_theme == egui::Theme::Dark {
+                        egui::Visuals::dark()
+                    } else {
+                        egui::Visuals::light()
+                    };
+                    ui.style_mut().visuals.override_text_color = Some(self.colors.text);
+                    ui.style_mut().visuals.selection.bg_fill = self.colors.accent;
+                    ui.style_mut().visuals.selection.stroke =
+                        egui::Stroke::new(1.0, Color32::WHITE);
+                    ui.style_mut().spacing.button_padding = egui::vec2(10.0, 6.0);
+                    ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 8.0);
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = self.colors.card;
+                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill = self.colors.surface;
+                }
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Zi").size(28.0).color(self.colors.accent));
+                    ui.vertical(|ui| {
+                        ui.strong(if self.quick_context {
+                            "托盘快捷菜单"
                         } else {
-                            egui::Visuals::light()
-                        };
-                        ui.style_mut().visuals.override_text_color = Some(self.colors.text);
-                        ui.style_mut().visuals.selection.bg_fill = self.colors.accent;
-                        ui.style_mut().visuals.selection.stroke =
-                            egui::Stroke::new(1.0, Color32::WHITE);
-                        ui.style_mut().spacing.button_padding = egui::vec2(10.0, 6.0);
-                        ui.style_mut().spacing.item_spacing = egui::vec2(8.0, 8.0);
-                        ui.style_mut().visuals.widgets.inactive.weak_bg_fill = self.colors.card;
-                        ui.style_mut().visuals.widgets.hovered.weak_bg_fill = self.colors.surface;
-                    }
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Zi").size(28.0).color(self.colors.accent));
-                        ui.vertical(|ui| {
-                            ui.strong(if self.quick_context {
-                                "托盘快捷菜单"
-                            } else {
-                                "工具速启"
-                            });
-                            ui.small("搜索 · 收藏 · 最近 · 流程 · 服务");
+                            "工具速启"
                         });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("×").on_hover_text("收起 · Esc").clicked() {
-                                self.quick_open = false;
+                        ui.small("搜索 · 收藏 · 实例 · 流程 · 服务");
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("×").on_hover_text("收起 · Esc").clicked() {
+                            self.quick_open = false;
+                        }
+                        if ui.small_button("工作台 ↗").clicked() {
+                            show_main = true;
+                        }
+                    });
+                });
+                if self.quick_context {
+                    self.tray_panel_actions(ui, &mut show_main);
+                }
+                ui.add_space(14.0);
+                self.quick_recorder_controls(ui);
+                if self.prefix.active {
+                    if self.quick_focus {
+                        panel.send_viewport_cmd(egui::ViewportCommand::Focus);
+                        panel.memory_mut(|memory| {
+                            if let Some(id) = memory.focused() {
+                                memory.surrender_focus(id);
                             }
-                            if ui.small_button("工作台 ↗").clicked() {
+                        });
+                        self.quick_focus = false;
+                    }
+                    chosen = self.prefix_ui(ui, panel);
+                    return;
+                }
+                if ui.small_button("前缀快捷指令 →").clicked() {
+                    self.prefix.open();
+                    self.quick_focus = true;
+                    return;
+                }
+                let response = ui.add_sized(
+                    [ui.available_width(), 38.0],
+                    egui::TextEdit::singleline(&mut self.launcher_query)
+                        .hint_text("搜索工具、流程、实例、用途…"),
+                );
+                let mut scroll_selection = response.changed() || self.quick_focus;
+                if response.changed() {
+                    self.launcher_index = 0;
+                }
+                if self.quick_focus {
+                    response.request_focus();
+                    panel.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    self.quick_focus = false;
+                }
+                ui.add_space(8.0);
+                ui.horizontal_wrapped(|ui| {
+                    for tab in [
+                        "收藏",
+                        "最近",
+                        "常用",
+                        "集合",
+                        "全部",
+                        "流程",
+                        "工作实例",
+                        "服务",
+                    ] {
+                        let tab_color = if self.quick_tab == tab {
+                            Color32::WHITE
+                        } else {
+                            self.colors.text
+                        };
+                        if ui
+                            .selectable_value(
+                                &mut self.quick_tab,
+                                tab.into(),
+                                RichText::new(tab).color(tab_color),
+                            )
+                            .clicked()
+                        {
+                            self.launcher_index = 0;
+                        }
+                    }
+                });
+                if self.quick_tab == "服务" {
+                    self.tray_services(ui, &mut show_main);
+                    return;
+                }
+                if self.quick_tab == "集合" {
+                    if self.preferences.tool_collections.is_empty() {
+                        ui.horizontal(|ui| {
+                            ui.label("还没有工具集合。");
+                            if ui.small_button("去工具库创建 →").clicked() {
+                                self.page = Page::Library;
+                                self.quick_open = false;
                                 show_main = true;
                             }
                         });
-                    });
-                    if self.quick_context {
-                        self.tray_panel_actions(ui, &mut show_main);
+                    } else {
+                        if !self
+                            .preferences
+                            .tool_collections
+                            .iter()
+                            .any(|collection| collection.id == self.quick_collection_id)
+                        {
+                            self.quick_collection_id =
+                                self.preferences.tool_collections[0].id.clone();
+                        }
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("集合").color(self.colors.muted));
+                            egui::ComboBox::from_id_salt("quick-panel-collection")
+                                .selected_text(
+                                    self.preferences
+                                        .tool_collections
+                                        .iter()
+                                        .find(|collection| {
+                                            collection.id == self.quick_collection_id
+                                        })
+                                        .map_or("选择集合", |collection| {
+                                            collection.name.as_str()
+                                        }),
+                                )
+                                .width(ui.available_width().min(240.0))
+                                .show_ui(ui, |ui| {
+                                    for collection in &self.preferences.tool_collections {
+                                        ui.selectable_value(
+                                            &mut self.quick_collection_id,
+                                            collection.id.clone(),
+                                            format!(
+                                                "{} · {}",
+                                                collection.name,
+                                                collection.tool_ids.len()
+                                            ),
+                                        );
+                                    }
+                                });
+                        });
                     }
-                    ui.add_space(14.0);
-                    self.quick_recorder_controls(ui);
-                    if self.prefix.active {
-                        if self.quick_focus {
-                            panel.send_viewport_cmd(egui::ViewportCommand::Focus);
-                            panel.memory_mut(|memory| {
-                                if let Some(id) = memory.focused() {
-                                    memory.surrender_focus(id);
+                }
+                if !matches!(self.quick_tab.as_str(), "流程" | "工作实例") {
+                    let mut categories = self
+                        .entries("")
+                        .into_iter()
+                        .map(|entry| entry.category)
+                        .collect::<Vec<_>>();
+                    categories.sort();
+                    categories.dedup();
+                    if self.quick_category != "全部分类"
+                        && !categories
+                            .iter()
+                            .any(|category| category == &self.quick_category)
+                    {
+                        self.quick_category = "全部分类".into();
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("分类").color(self.colors.muted));
+                        egui::ComboBox::from_id_salt("quick-panel-category")
+                            .selected_text(&self.quick_category)
+                            .width(ui.available_width().min(240.0))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.quick_category,
+                                    "全部分类".into(),
+                                    "全部分类",
+                                );
+                                for category in &categories {
+                                    ui.selectable_value(
+                                        &mut self.quick_category,
+                                        category.clone(),
+                                        category,
+                                    );
                                 }
                             });
-                            self.quick_focus = false;
-                        }
-                        chosen = self.prefix_ui(ui, panel);
-                        return;
-                    }
-                    if ui.small_button("前缀快捷指令 →").clicked() {
-                        self.prefix.open();
-                        self.quick_focus = true;
-                        return;
-                    }
-                    let response = ui.add_sized(
-                        [ui.available_width(), 38.0],
-                        egui::TextEdit::singleline(&mut self.launcher_query)
-                            .hint_text("搜索工具、流程、用途、关键词…"),
-                    );
-                    let mut scroll_selection = response.changed() || self.quick_focus;
-                    if response.changed() {
-                        self.launcher_index = 0;
-                    }
-                    if self.quick_focus {
-                        response.request_focus();
-                        panel.send_viewport_cmd(egui::ViewportCommand::Focus);
-                        self.quick_focus = false;
-                    }
-                    ui.add_space(8.0);
-                    ui.horizontal_wrapped(|ui| {
-                        for tab in ["收藏", "最近", "常用", "全部", "流程", "服务"] {
-                            let tab_color = if self.quick_tab == tab {
-                                Color32::WHITE
-                            } else {
-                                self.colors.text
-                            };
-                            if ui
-                                .selectable_value(
-                                    &mut self.quick_tab,
-                                    tab.into(),
-                                    RichText::new(tab).color(tab_color),
-                                )
-                                .clicked()
-                            {
-                                self.launcher_index = 0;
-                            }
-                        }
                     });
-                    if self.quick_tab == "服务" {
-                        self.tray_services(ui, &mut show_main);
-                        return;
+                    if self.quick_category != "全部分类" {
+                        ui.small("当前分类只筛选工具；流程入口请切换到“流程”搜索。");
                     }
-                    let mut entries = self.entries(&self.launcher_query);
-                    if self.quick_tab == "流程" {
+                }
+                let mut entries = self.entries(&self.launcher_query);
+                if self.quick_tab == "流程" {
+                    entries.clear();
+                }
+                let mut workflow_rows =
+                    workflows::shortcuts(&self.preferences, &self.quick_tab, &self.launcher_query);
+                let instances = if matches!(self.quick_tab.as_str(), "全部" | "工作实例") {
+                    self.instance_results(&self.launcher_query)
+                } else {
+                    Vec::new()
+                };
+                if self.quick_tab == "工作实例" {
+                    entries.clear();
+                    workflow_rows.entries.clear();
+                    workflow_rows.total = 0;
+                }
+                if self.quick_tab == "常用" {
+                    entries.retain(|e| self.preferences.usage.get(&e.id).copied().unwrap_or(0) > 0);
+                    sort_by_usage(
+                        &mut entries,
+                        &self.preferences.usage,
+                        &self.preferences.recent,
+                    );
+                } else if self.quick_tab == "收藏" {
+                    entries.retain(|e| self.preferences.favorites.contains(&e.id));
+                    entries.sort_by_key(|e| {
+                        self.preferences.favorites.iter().position(|id| id == &e.id)
+                    });
+                } else if self.quick_tab == "最近" {
+                    entries.retain(|e| self.preferences.recent.contains(&e.id));
+                    entries
+                        .sort_by_key(|e| self.preferences.recent.iter().position(|id| id == &e.id));
+                } else if self.quick_tab == "集合" {
+                    if let Some(collection) = self
+                        .preferences
+                        .tool_collections
+                        .iter()
+                        .find(|collection| collection.id == self.quick_collection_id)
+                    {
+                        filter_collection(
+                            &mut entries,
+                            collection,
+                            !self.launcher_query.trim().is_empty(),
+                        );
+                    } else {
                         entries.clear();
                     }
-                    let workflow_rows = workflows::shortcuts(
-                        &self.preferences,
-                        &self.quick_tab,
-                        &self.launcher_query,
-                    );
-                    if self.quick_tab == "常用" {
-                        entries.retain(|e| {
-                            self.preferences.usage.get(&e.id).copied().unwrap_or(0) > 0
-                        });
-                        entries.sort_by_key(|e| {
-                            std::cmp::Reverse(
-                                self.preferences.usage.get(&e.id).copied().unwrap_or(0),
-                            )
-                        });
-                    } else if self.quick_tab == "收藏" {
-                        entries.retain(|e| self.preferences.favorites.contains(&e.id));
-                        entries.sort_by_key(|e| {
-                            self.preferences.favorites.iter().position(|id| id == &e.id)
-                        });
-                    } else if self.quick_tab == "最近" {
-                        entries.retain(|e| self.preferences.recent.contains(&e.id));
-                        entries.sort_by_key(|e| {
-                            self.preferences.recent.iter().position(|id| id == &e.id)
-                        });
-                    }
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new(format!(
-                            "{} 个工具 · {} 条流程入口",
-                            entries.len(),
-                            workflow_rows.total
-                        ))
-                        .small()
-                        .color(self.colors.muted),
-                    );
-                    let arrow_down = panel
-                        .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
-                    let arrow_up = panel
-                        .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp));
-                    if arrow_down {
-                        self.launcher_index = self.launcher_index.saturating_add(1);
-                    }
-                    if arrow_up {
-                        self.launcher_index = self.launcher_index.saturating_sub(1);
-                    }
-                    scroll_selection |= arrow_down || arrow_up;
-                    self.launcher_index = self
-                        .launcher_index
-                        .min((entries.len() + workflow_rows.entries.len()).saturating_sub(1));
-                    egui::ScrollArea::vertical()
-                        .id_salt("quick-results")
-                        .max_height(
-                            (ui.available_height()
-                                - if workflow_rows.total > 0 || self.quick_tab == "流程" {
-                                    160.0
-                                } else {
-                                    112.0
-                                })
-                            .max(40.0),
-                        )
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            if entries.is_empty() && workflow_rows.entries.is_empty() {
-                                ui.add_space(24.0);
-                                ui.strong("这里还没有匹配的工具或流程");
-                                ui.label("切换“全部”或输入关键词。点击 ☆ 添加收藏。");
-                            }
-                            for (index, (entry, kind)) in workflow_rows.entries.iter().enumerate() {
-                                let selected = index == self.launcher_index;
-                                let name = if entry.name.chars().count() > 22 {
-                                    format!("{}…", entry.name.chars().take(22).collect::<String>())
-                                } else {
-                                    entry.name.clone()
-                                };
-                                let button = ui
-                                    .add_sized(
-                                        [ui.available_width(), 54.0],
-                                        egui::Button::new(
-                                            RichText::new(format!(
-                                                "{} · {}步\n{} · 载入后确认",
-                                                name, entry.steps, kind
-                                            ))
-                                            .color(
-                                                if selected {
-                                                    Color32::WHITE
-                                                } else {
-                                                    self.colors.text
-                                                },
-                                            ),
-                                        )
-                                        .selected(selected),
-                                    )
-                                    .on_hover_text(&entry.name);
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(
-                                            entry
-                                                .path
-                                                .file_name()
-                                                .unwrap_or_default()
-                                                .to_string_lossy(),
-                                        )
-                                        .size(12.0)
-                                        .color(self.colors.muted),
-                                    )
-                                    .truncate(),
-                                )
-                                .on_hover_text(entry.path.display().to_string());
-                                if selected && scroll_selection {
-                                    button.scroll_to_me(Some(egui::Align::Center));
-                                }
-                                if button.clicked() {
-                                    workflow_chosen = Some(entry.clone());
-                                }
-                                ui.add_space(6.0);
-                            }
-                            for (index, entry) in entries.iter().enumerate() {
-                                let index = index + workflow_rows.entries.len();
-                                ui.push_id(&entry.id, |ui| {
-                                    let selected = index == self.launcher_index;
-                                    egui::Frame::new()
-                                        .fill(if selected {
-                                            self.colors.surface
-                                        } else {
-                                            self.colors.card
-                                        })
-                                        .corner_radius(9)
-                                        .inner_margin(10.0)
-                                        .show(ui, |ui| {
-                                            ui.horizontal(|ui| {
-                                                let favorite =
-                                                    self.preferences.favorites.contains(&entry.id);
-                                                if ui
-                                                    .small_button(if favorite {
-                                                        "★"
-                                                    } else {
-                                                        "☆"
-                                                    })
-                                                    .on_hover_text("收藏 / 取消收藏")
-                                                    .clicked()
-                                                {
-                                                    self.toggle_favorite(&entry.id);
-                                                }
-                                                let button = ui.add_sized(
-                                                    [ui.available_width(), 40.0],
-                                                    egui::Button::new(format!(
-                                                        "{}\n{}",
-                                                        entry.title, entry.category
-                                                    ))
-                                                    .frame(false),
-                                                );
-                                                if selected && scroll_selection {
-                                                    button.scroll_to_me(Some(egui::Align::Center));
-                                                }
-                                                if button.clicked() {
-                                                    chosen = Some(entry.id.clone());
-                                                }
-                                            });
-                                        });
-                                    ui.add_space(6.0);
-                                });
-                            }
-                        });
-                    if panel.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-                        if let Some((entry, _)) = workflow_rows.entries.get(self.launcher_index) {
-                            workflow_chosen = Some(entry.clone());
-                        } else if let Some(entry) = entries.get(
-                            self.launcher_index
-                                .saturating_sub(workflow_rows.entries.len()),
-                        ) {
-                            chosen = Some(entry.id.clone());
-                        }
-                    }
-                    if workflow_rows.total > 0 || self.quick_tab == "流程" {
-                        if ui.button("全部流程搜索 ↗").clicked() {
-                            workflow_search = true;
-                        }
-                        if workflow_rows.total > workflow_rows.entries.len() {
-                            ui.small("收藏与最近各显示最多6条；完整列表请打开流程搜索。");
-                        }
-                    }
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        if ui.button("拖入文件 / 导入…").clicked() {
-                            chosen = Some("file-intake".into());
-                        }
-                        if !self.quick_context
-                            && ui
-                                .small_button(if self.theme == Theme::Dark {
-                                    "亮主题"
-                                } else {
-                                    "暗主题"
-                                })
-                                .clicked()
+                }
+                if self.quick_tab != "流程" {
+                    filter_category(&mut entries, &self.quick_category);
+                }
+                ui.add_space(8.0);
+                ui.label(
+                    RichText::new(format!(
+                        "{} 个工具 · {} 条流程 · {} 个实例",
+                        entries.len(),
+                        workflow_rows.total,
+                        instances.len()
+                    ))
+                    .small()
+                    .color(self.colors.muted),
+                );
+                let instance_offset = entries.len() + workflow_rows.entries.len();
+                let keys = workflow_rows
+                    .entries
+                    .iter()
+                    .map(|(e, kind)| format!("workflow:{kind}:{:?}", e.path))
+                    .chain(entries.iter().map(|e| format!("tool:{}", e.id)))
+                    .chain(instances.iter().map(|e| e.key.token()))
+                    .collect();
+                self.instance_search.quick.reconcile(
+                    format!(
+                        "quick:{}:{}:{}:{}",
+                        self.quick_tab,
+                        self.quick_category,
+                        self.quick_collection_id,
+                        self.launcher_query
+                    ),
+                    keys,
+                    &mut self.launcher_index,
+                );
+                keyboard::preserve_guarded_focus(
+                    panel,
+                    &response,
+                    keyboard_allowed
+                        && instance_offset + instances.len() > 0
+                        && self.instance_search.quick.armed,
+                );
+                let arrow_down =
+                    keyboard_allowed && keyboard::consume_plain(panel, egui::Key::ArrowDown);
+                let arrow_up =
+                    keyboard_allowed && keyboard::consume_plain(panel, egui::Key::ArrowUp);
+                if arrow_down {
+                    self.launcher_index = self.launcher_index.saturating_add(1);
+                }
+                if arrow_up {
+                    self.launcher_index = self.launcher_index.saturating_sub(1);
+                }
+                scroll_selection |= arrow_down || arrow_up;
+                if arrow_down || arrow_up {
+                    self.instance_search.quick.armed = true;
+                }
+                self.launcher_index = self
+                    .launcher_index
+                    .min((instance_offset + instances.len()).saturating_sub(1));
+                egui::ScrollArea::vertical()
+                    .id_salt("quick-results")
+                    .max_height(
+                        (ui.available_height()
+                            - if workflow_rows.total > 0 || self.quick_tab == "流程" {
+                                160.0
+                            } else {
+                                112.0
+                            })
+                        .max(40.0),
+                    )
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if entries.is_empty()
+                            && workflow_rows.entries.is_empty()
+                            && instances.is_empty()
                         {
-                            self.set_theme(
-                                panel,
-                                if self.theme == Theme::Dark {
-                                    Theme::Light
-                                } else {
-                                    Theme::Dark
-                                },
-                            );
+                            ui.add_space(24.0);
+                            ui.strong("这里还没有匹配的工具或流程");
+                            ui.label("切换“全部”或输入关键词。点击 ☆ 添加收藏。");
+                        }
+                        for (index, (entry, kind)) in workflow_rows.entries.iter().enumerate() {
+                            let selected =
+                                self.instance_search.quick.armed && index == self.launcher_index;
+                            let name = if entry.name.chars().count() > 22 {
+                                format!("{}…", entry.name.chars().take(22).collect::<String>())
+                            } else {
+                                entry.name.clone()
+                            };
+                            let button = ui
+                                .add_sized(
+                                    [ui.available_width(), 54.0],
+                                    egui::Button::new(
+                                        RichText::new(format!(
+                                            "{} · {}步\n{} · 载入后确认",
+                                            name, entry.steps, kind
+                                        ))
+                                        .color(
+                                            if selected {
+                                                Color32::WHITE
+                                            } else {
+                                                self.colors.text
+                                            },
+                                        ),
+                                    )
+                                    .selected(selected),
+                                )
+                                .on_hover_text(&entry.name);
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(
+                                        entry
+                                            .path
+                                            .file_name()
+                                            .unwrap_or_default()
+                                            .to_string_lossy(),
+                                    )
+                                    .size(12.0)
+                                    .color(self.colors.muted),
+                                )
+                                .truncate(),
+                            )
+                            .on_hover_text(entry.path.display().to_string());
+                            if selected && scroll_selection {
+                                button.scroll_to_me(Some(egui::Align::Center));
+                            }
+                            if button.clicked() {
+                                workflow_chosen = Some(entry.clone());
+                            }
+                            ui.add_space(6.0);
+                        }
+                        for (index, entry) in entries.iter().enumerate() {
+                            let index = index + workflow_rows.entries.len();
+                            ui.push_id(&entry.id, |ui| {
+                                let selected = self.instance_search.quick.armed
+                                    && index == self.launcher_index;
+                                egui::Frame::new()
+                                    .fill(if selected {
+                                        self.colors.surface
+                                    } else {
+                                        self.colors.card
+                                    })
+                                    .corner_radius(9)
+                                    .inner_margin(10.0)
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            let favorite =
+                                                self.preferences.favorites.contains(&entry.id);
+                                            if ui
+                                                .small_button(if favorite { "★" } else { "☆" })
+                                                .on_hover_text("收藏 / 取消收藏")
+                                                .clicked()
+                                            {
+                                                self.toggle_favorite(&entry.id);
+                                            }
+                                            let button = ui.add_sized(
+                                                [ui.available_width(), 40.0],
+                                                egui::Button::new(format!(
+                                                    "{}\n{}",
+                                                    entry.title, entry.category
+                                                ))
+                                                .frame(false),
+                                            );
+                                            if selected && scroll_selection {
+                                                button.scroll_to_me(Some(egui::Align::Center));
+                                            }
+                                            if button.clicked() {
+                                                chosen = Some(entry.id.clone());
+                                            }
+                                        });
+                                    });
+                                ui.add_space(6.0);
+                            });
+                        }
+                        for (offset, entry) in instances.iter().enumerate() {
+                            if self.instance_row(
+                                ui,
+                                entry,
+                                self.instance_search.quick.armed
+                                    && instance_offset + offset == self.launcher_index,
+                                scroll_selection,
+                            ) {
+                                instance_chosen = Some(entry.key.clone());
+                            }
                         }
                     });
-                    let running = self.statuses.iter().filter(|s| s.managed).count();
-                    if ui
-                        .small_button(format!("服务：{running} 个托管运行  →"))
-                        .clicked()
+                if !self.instance_search.quick.armed {
+                    ui.small("原选中项已关闭或不再匹配；请重新选择。");
+                }
+                if keyboard_allowed
+                    && keyboard::consume_plain(panel, egui::Key::Enter)
+                    && self.instance_search.quick.armed
+                {
+                    if let Some(entry) = instances
+                        .get(self.launcher_index.saturating_sub(instance_offset))
+                        .filter(|_| self.launcher_index >= instance_offset)
                     {
-                        chosen = Some("services".into());
+                        instance_chosen = Some(entry.key.clone());
+                    } else if let Some((entry, _)) = workflow_rows.entries.get(self.launcher_index)
+                    {
+                        workflow_chosen = Some(entry.clone());
+                    } else if let Some(entry) = entries.get(
+                        self.launcher_index
+                            .saturating_sub(workflow_rows.entries.len()),
+                    ) {
+                        chosen = Some(entry.id.clone());
                     }
-                    ui.small("↑ ↓ 选择   Enter 打开   Esc 收起");
+                }
+                if workflow_rows.total > 0 || self.quick_tab == "流程" {
+                    if ui.button("全部流程搜索 ↗").clicked() {
+                        workflow_search = true;
+                    }
+                    if workflow_rows.total > workflow_rows.entries.len() {
+                        ui.small("收藏与最近各显示最多6条；完整列表请打开流程搜索。");
+                    }
+                }
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button("拖入文件 / 导入…").clicked() {
+                        chosen = Some("file-intake".into());
+                    }
+                    if !self.quick_context
+                        && ui
+                            .small_button(if self.theme == Theme::Dark {
+                                "亮主题"
+                            } else {
+                                "暗主题"
+                            })
+                            .clicked()
+                    {
+                        self.set_theme(
+                            panel,
+                            if self.theme == Theme::Dark {
+                                Theme::Light
+                            } else {
+                                Theme::Dark
+                            },
+                        );
+                    }
                 });
+                let running = self.statuses.iter().filter(|s| s.managed).count();
+                if ui
+                    .small_button(format!("服务：{running} 个托管运行  →"))
+                    .clicked()
+                {
+                    chosen = Some("services".into());
+                }
+                ui.small("↑ ↓ 选择   Enter 打开   Esc 收起");
+            };
+            match viewport_class {
+                egui::ViewportClass::Embedded => {
+                    egui::Window::new("快捷面板")
+                        .id(egui::Id::new("embedded-quick-panel"))
+                        .title_bar(false)
+                        .collapsible(false)
+                        .resizable(false)
+                        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-12.0, -12.0))
+                        .fixed_size(egui::vec2(
+                            panel_width.min((panel.screen_rect().width() - 64.0).max(240.0)),
+                            height.min((panel.screen_rect().height() - 64.0).max(240.0)),
+                        ))
+                        .frame(
+                            egui::Frame::new()
+                                .fill(panel_bg)
+                                .inner_margin(20.0)
+                                .stroke(egui::Stroke::new(1.0, panel_surface)),
+                        )
+                        .show(panel, &mut panel_contents);
+                }
+                egui::ViewportClass::Root
+                | egui::ViewportClass::Immediate
+                | egui::ViewportClass::Deferred => {
+                    egui::CentralPanel::default()
+                        .frame(
+                            egui::Frame::new()
+                                .fill(panel_bg)
+                                .inner_margin(20.0)
+                                .stroke(egui::Stroke::new(1.0, panel_surface)),
+                        )
+                        .show(panel, panel_contents);
+                }
+            }
             self.receive_drop(panel);
             #[cfg(feature = "ui-preview")]
             {
@@ -884,6 +1227,11 @@ impl DevToolsApp {
             && let Some(entry) = self.entries("").into_iter().find(|e| e.id == id)
         {
             self.open_entry(&entry);
+            show_main = true;
+        }
+        if let Some(key) = instance_chosen
+            && self.open_instance_result(ctx, &key)
+        {
             show_main = true;
         }
         if show_main {

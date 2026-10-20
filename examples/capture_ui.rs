@@ -9,7 +9,7 @@ use std::{
 use zi_devtools::app::DevToolsApp;
 use zi_devtools::recorder::{self, AudioGains, AudioMode, Event, Region, Session};
 
-const NAMES: [&str; 466] = [
+const NAMES: [&str; 557] = [
     "home-dark",
     "home-light",
     "yaml-dark",
@@ -476,6 +476,97 @@ const NAMES: [&str; 466] = [
     "explorer-plan-light",
     "explorer-confirm-dark",
     "explorer-confirm-light",
+    "clipboard-groups-dark",
+    "clipboard-groups-light",
+    "clipboard-bulk-dark",
+    "clipboard-bulk-light",
+    "clipboard-file-references-dark",
+    "clipboard-file-references-light",
+    "clipboard-html-dark",
+    "clipboard-html-light",
+    "clipboard-rtf-dark",
+    "clipboard-rtf-light",
+    "clipboard-ocr-dark",
+    "clipboard-ocr-light",
+    "image-workflow-ocr-dark",
+    "image-workflow-ocr-light",
+    "clipboard-provenance-handoff-dark",
+    "clipboard-provenance-handoff-light",
+    "clipboard-ocr-region-dark",
+    "clipboard-ocr-region-light",
+    "clipboard-ocr-language-dark",
+    "clipboard-ocr-language-light",
+    "plugin-update-dark",
+    "plugin-update-light",
+    "plugin-catalog-dark",
+    "plugin-catalog-light",
+    "http-response-body-dark",
+    "http-response-body-light",
+    "http-response-binary-dark",
+    "http-response-binary-light",
+    "plugin-alias-en-dark",
+    "plugin-alias-en-light",
+    "plugin-alias-zh-dark",
+    "plugin-alias-zh-light",
+    "plugin-alias-review-dark",
+    "plugin-alias-review-light",
+    "plugin-alias-preview-dark",
+    "plugin-alias-preview-light",
+    "tool-collections-library-dark",
+    "tool-collections-library-light",
+    "tool-version-history-open-dark",
+    "tool-version-history-open-light",
+    "tool-version-history-scroll-dark",
+    "tool-version-history-scroll-light",
+    "tool-version-history-small-dark",
+    "tool-version-history-small-light",
+    "tool-version-history-small-open-dark",
+    "tool-version-history-small-open-light",
+    "tool-version-history-small-scroll-dark",
+    "tool-version-history-small-scroll-light",
+    "tool-version-search-dark",
+    "tool-version-search-light",
+    "tool-version-history-search-dark",
+    "tool-version-history-search-light",
+    "tool-version-change-search-dark",
+    "tool-version-change-search-light",
+    "calculator-complex-dark",
+    "calculator-complex-light",
+    "workflow-step-inspection-dark",
+    "workflow-step-inspection-light",
+    "artifact-trash-dark",
+    "artifact-trash-light",
+    "artifact-version-diff-dark",
+    "catalog-current-version-search",
+    "memo-tags-dark",
+    "memo-batch-import-light",
+    "memo-batch-export-dark",
+    "knowledge-capture-light",
+    "knowledge-capture-followup-dark",
+    "knowledge-sources-light",
+    "knowledge-index-dark",
+    "calculator-root-solver-light",
+    "sql-formatter-dark",
+    "sql-formatter-light",
+    "file-rename-dark",
+    "file-rename-light",
+    "json-schema-dark",
+    "json-schema-light",
+    "time-zone-dark",
+    "time-zone-light",
+    "recorder-teleprompter-dark",
+    "recorder-teleprompter-light",
+    "calculator-time-zone-dark",
+    "calculator-time-zone-light",
+    "log-viewer-dark",
+    "log-viewer-light",
+    "workspace-autosave-dark",
+    "workspace-autosave-light",
+    "tasks-cancel-all-dark",
+    "tasks-cancel-all-light",
+    "tasks-local-history-dark",
+    "tasks-local-history-light",
+    "agent-call-approval-dark",
 ];
 
 struct Capture {
@@ -497,6 +588,7 @@ struct Capture {
     sqlite_input_frame: Option<usize>,
     workflow_input_frame: Option<usize>,
     comparison_opened_at: Option<Instant>,
+    copy_fixture_root: Option<PathBuf>,
 }
 impl Capture {
     fn pointer_click_waiting(&self) -> bool {
@@ -514,6 +606,232 @@ impl Capture {
 impl eframe::App for Capture {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         input.events.push(egui::Event::PointerGone);
+        if std::env::args().nth(3).as_deref() == Some("task-center-http-open-smoke") {
+            let pressed = match self.quick_smoke_phase {
+                0 if self.frames >= 2 => Some(true),
+                1 => Some(false),
+                _ => None,
+            };
+            if let Some(pressed) = pressed {
+                let rect = _ctx.data(|data| {
+                    data.get_temp::<egui::Rect>(egui::Id::new("task-center-http-open-1"))
+                });
+                let pos = rect
+                    .filter(|rect| rect.is_positive())
+                    .unwrap_or_else(|| panic!("HTTP request task open button was not rendered"))
+                    .center();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                self.quick_smoke_phase += 1;
+            }
+        }
+        if matches!(
+            std::env::args().nth(3).as_deref(),
+            Some("task-center-network-open-smoke" | "task-center-network-tcp-open-smoke")
+        ) {
+            let pressed = match self.quick_smoke_phase {
+                0 if self.frames >= 2 => Some(true),
+                1 => Some(false),
+                _ => None,
+            };
+            if let Some(pressed) = pressed {
+                let rect = _ctx.data(|data| {
+                    data.get_temp::<egui::Rect>(egui::Id::new("task-center-network-open"))
+                });
+                let pos = rect
+                    .filter(|rect| rect.is_positive())
+                    .unwrap_or_else(|| {
+                        panic!("network diagnostic task open button was not rendered")
+                    })
+                    .center();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                self.quick_smoke_phase += 1;
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("artifact-trash-smoke") {
+            let pressed = match self.quick_smoke_phase {
+                0 if self.frames >= 2 => Some(true),
+                1 => Some(false),
+                _ => None,
+            };
+            if let Some(pressed) = pressed {
+                let rect = _ctx.data(|data| {
+                    data.get_temp::<egui::Rect>(egui::Id::new("artifact-trash-restore"))
+                });
+                let pos = rect
+                    .filter(|rect| rect.is_positive())
+                    .unwrap_or_else(|| panic!("artifact trash restore button was not rendered"))
+                    .center();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                self.quick_smoke_phase += 1;
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("artifact-version-diff-smoke") {
+            let pressed = match self.quick_smoke_phase {
+                0 if self.frames >= 2 => Some(true),
+                1 => Some(false),
+                _ => None,
+            };
+            if let Some(pressed) = pressed {
+                let rect = _ctx.data(|data| {
+                    data.get_temp::<egui::Rect>(egui::Id::new("artifact-version-compare"))
+                });
+                let pos = rect
+                    .filter(|rect| rect.is_positive())
+                    .unwrap_or_else(|| panic!("artifact version compare button was not rendered"))
+                    .center();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                self.quick_smoke_phase += 1;
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("artifact-version-diff-smoke") {
+            return;
+        }
+        if std::env::args().nth(3).as_deref() == Some("artifact-trash-smoke") {
+            return;
+        }
+        if std::env::args().nth(3).as_deref() == Some("directory-copy-smoke") {
+            let (position_index, pressed) = match self.quick_smoke_phase {
+                0 if self.frames >= 2 => (Some(0), Some(true)),
+                1 => (Some(0), Some(false)),
+                2 if self
+                    .app
+                    .preview_directory_copy_state(std::path::Path::new("nested/copy-me.txt"))
+                    .0
+                    && self.frames >= 5 =>
+                {
+                    (Some(1), Some(true))
+                }
+                3 => (Some(1), Some(false)),
+                4 if self
+                    .app
+                    .preview_directory_copy_state(std::path::Path::new("nested/copy-me.txt"))
+                    .1
+                    && !self
+                        .app
+                        .preview_directory_copy_state(std::path::Path::new("nested/copy-me.txt"))
+                        .2 =>
+                {
+                    (Some(2), Some(true))
+                }
+                5 => (Some(2), Some(false)),
+                _ => (None, None),
+            };
+            if let (Some(index), Some(pressed)) = (position_index, pressed) {
+                let position = self
+                    .app
+                    .preview_directory_copy_position(index)
+                    .unwrap_or_else(|| {
+                        panic!("directory copy UI control {index} was not rendered")
+                    });
+                input.events.push(egui::Event::PointerMoved(position));
+                input.events.push(egui::Event::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                self.quick_smoke_phase += 1;
+            }
+        }
+        if std::env::args().nth(3).as_deref() == Some("time-zone-smoke") {
+            let target = match self.quick_smoke_phase {
+                0 if self.frames >= 2 => Some(("time-zone-later-choice", true)),
+                1 => Some(("time-zone-later-choice", false)),
+                2 => Some(("time-zone-convert-button", true)),
+                3 => Some(("time-zone-convert-button", false)),
+                _ => None,
+            };
+            if let Some((id, pressed)) = target {
+                let rect = _ctx.data(|data| data.get_temp::<egui::Rect>(egui::Id::new(id)));
+                let pos = rect
+                    .filter(|rect| rect.is_positive())
+                    .unwrap_or_else(|| panic!("time-zone UI control {id} was not rendered"))
+                    .center();
+                input.events.push(egui::Event::PointerMoved(pos));
+                input.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                println!(
+                    "time-zone synthetic click: {id}, pressed={pressed}, phase={}, rect={rect:?}, pos={pos:?}",
+                    self.quick_smoke_phase,
+                );
+                self.quick_smoke_phase += 1;
+            }
+        }
+        if (504..=507).contains(&self.scene) && matches!(self.frames, 1 | 2) {
+            let position = egui::pos2(1157.0, 307.0);
+            input.events.push(egui::Event::PointerMoved(position));
+            input.events.push(egui::Event::PointerButton {
+                pos: position,
+                button: egui::PointerButton::Primary,
+                pressed: self.frames == 1,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if (510..=513).contains(&self.scene) && matches!(self.frames, 4 | 5) {
+            let position = egui::pos2(856.0, 353.0);
+            input.events.push(egui::Event::PointerMoved(position));
+            input.events.push(egui::Event::PointerButton {
+                pos: position,
+                button: egui::PointerButton::Primary,
+                pressed: self.frames == 4,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if (512..=513).contains(&self.scene) && self.frames == 7 {
+            let position = egui::pos2(600.0, 250.0);
+            input.events.push(egui::Event::PointerMoved(position));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -360.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if (506..=507).contains(&self.scene) && self.frames == 4 {
+            let position = egui::pos2(800.0, 470.0);
+            input.events.push(egui::Event::PointerMoved(position));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -360.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if (476..=479).contains(&self.scene) && self.frames == 8 {
+            let position = egui::pos2(1050.0, 800.0);
+            input.events.push(egui::Event::PointerMoved(position));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -3600.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if std::env::args()
             .nth(3)
             .is_some_and(|mode| mode.starts_with("planner-compare"))
@@ -1428,7 +1746,7 @@ impl eframe::App for Capture {
                 modifiers: egui::Modifiers::NONE,
             });
         }
-        if std::env::args().nth(3).as_deref() == Some("handoff-discovery-smoke")
+        if std::env::args().nth(3).as_deref() == Some("clipboard-json-records-handoff-smoke")
             && matches!(self.frames, 20 | 21 | 35 | 36)
         {
             let pos = self
@@ -1439,6 +1757,19 @@ impl eframe::App for Capture {
                 pos,
                 button: egui::PointerButton::Primary,
                 pressed: matches!(self.frames, 20 | 35),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if std::env::args().nth(3).as_deref() == Some("file-rename-execution-smoke")
+            && matches!(self.frames, 20 | 21 | 45 | 46)
+        {
+            let undo = self.frames >= 45;
+            let pos = self.app.preview_file_rename_action_position(undo);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: matches!(self.frames, 20 | 45),
                 modifiers: egui::Modifiers::NONE,
             });
         }
@@ -1811,6 +2142,637 @@ impl eframe::App for Capture {
     }
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let smoke_mode = std::env::args().nth(3);
+        if smoke_mode.as_deref() == Some("task-center-http-open-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "HTTP request task routing smoke timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 76, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if self.quick_smoke_phase >= 2 {
+                assert!(
+                    self.app.preview_http_task_routed(1),
+                    "opening the task row must return to its own HTTP request tab"
+                );
+                println!(
+                    "PASS HTTP request task routing: task card click opened HTTP page and selected request tab #1"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if matches!(
+            smoke_mode.as_deref(),
+            Some("task-center-network-open-smoke" | "task-center-network-tcp-open-smoke")
+        ) {
+            let tcp = smoke_mode.as_deref() == Some("task-center-network-tcp-open-smoke");
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "network diagnostic task routing smoke timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 76, self.fixture.clone());
+                if tcp {
+                    self.app.preview_network_tcp_task_history();
+                }
+            }
+            self.app.update(ctx, frame);
+            if self.quick_smoke_phase >= 2 {
+                assert!(
+                    self.app.preview_network_task_routed(tcp),
+                    "opening the network task row must return to its recorded diagnostic pane"
+                );
+                println!(
+                    "PASS network task routing: task card click opened the recorded diagnostic pane"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("artifact-trash-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "artifact trash UI smoke timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 524, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if self.quick_smoke_phase >= 2 {
+                assert_eq!(
+                    self.app.preview_artifact_trash_state(),
+                    (false, false, 1, 1, 0),
+                    "restoring must return to the normal list with the source record intact"
+                );
+                if !self.pending {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                    self.pending = true;
+                }
+                if let Some(image) = ctx.input(|input| {
+                    input.events.iter().find_map(|event| match event {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                }) {
+                    let pixels: Vec<u8> = image
+                        .pixels
+                        .iter()
+                        .flat_map(|pixel| pixel.to_array())
+                        .collect();
+                    image::save_buffer(
+                        self.folder.join("artifact-trash-restored.png"),
+                        &pixels,
+                        image.size[0] as u32,
+                        image.size[1] as u32,
+                        image::ColorType::Rgba8,
+                    )
+                    .expect("save artifact trash UI screenshot");
+                    fs::write(
+                        self.folder.join("artifact-trash-smoke.json"),
+                        serde_json::to_vec_pretty(&serde_json::json!({
+                            "mouseEvents": true,
+                            "restoreRemovedTrashEntry": true,
+                            "normalListRetainsEntry": true,
+                            "permanentDeleteWasNotInvoked": true,
+                            "screenshot": "artifact-trash-restored.png"
+                        }))
+                        .unwrap(),
+                    )
+                    .unwrap();
+                    println!(
+                        "PASS artifact trash UI: real button restore removed the trash marker and preserved the source record"
+                    );
+                    std::process::exit(0);
+                }
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("memo-tags-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "memo tags visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 528, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("memo-tags.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save memo tags UI screenshot");
+                println!(
+                    "PASS memo tags visual: saved tagged memo editor and searchable tags list"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("memo-bulk-import-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "memo bulk import visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 529, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("memo-bulk-import.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save memo bulk import UI screenshot");
+                println!(
+                    "PASS memo bulk import visual: saved bounded preview and explicit-confirmation UI"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("memo-bulk-export-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "memo bulk export visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 530, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("memo-bulk-export.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save memo bulk export UI screenshot");
+                println!(
+                    "PASS memo bulk export visual: saved filtered export preview and new-folder destination instructions"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("memo-knowledge-handoff-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "memo knowledge handoff visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 531, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("memo-knowledge-handoff.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save memo knowledge handoff UI screenshot");
+                println!(
+                    "PASS memo knowledge handoff visual: saved editor with explicit knowledge-capture action"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("knowledge-capture-followup-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "knowledge capture follow-up visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 532, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("knowledge-capture-followup.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save knowledge capture follow-up UI screenshot");
+                println!(
+                    "PASS knowledge capture follow-up visual: saved explicit bounded-source scan action"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("knowledge-index-followup-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "knowledge index follow-up visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 533, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("knowledge-index-followup.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save knowledge index follow-up UI screenshot");
+                println!(
+                    "PASS knowledge index follow-up visual: saved post-scan explicit navigation and index-write boundary"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("knowledge-search-followup-visual") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "knowledge search follow-up visual capture timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 534, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            if let Some(image) = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
+            }) {
+                let pixels: Vec<u8> = image
+                    .pixels
+                    .iter()
+                    .flat_map(|pixel| pixel.to_array())
+                    .collect();
+                image::save_buffer(
+                    self.folder.join("knowledge-search-followup.png"),
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
+                )
+                .expect("save knowledge search follow-up UI screenshot");
+                println!(
+                    "PASS knowledge search follow-up visual: saved post-sync explicit search navigation"
+                );
+                std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("artifact-version-diff-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "artifact version comparison UI smoke timed out"
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 526, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if self.quick_smoke_phase >= 2 {
+                assert_eq!(
+                    self.app.preview_artifact_version_diff_state(),
+                    Some((1, 2, true)),
+                    "the UI comparison must show the selected and current revisions"
+                );
+                if !self.pending {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                    self.pending = true;
+                }
+                if let Some(image) = ctx.input(|input| {
+                    input.events.iter().find_map(|event| match event {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                }) {
+                    let pixels: Vec<u8> = image
+                        .pixels
+                        .iter()
+                        .flat_map(|pixel| pixel.to_array())
+                        .collect();
+                    image::save_buffer(
+                        self.folder.join("artifact-version-diff.png"),
+                        &pixels,
+                        image.size[0] as u32,
+                        image.size[1] as u32,
+                        image::ColorType::Rgba8,
+                    )
+                    .expect("save artifact version comparison screenshot");
+                    fs::write(
+                        self.folder.join("artifact-version-diff-smoke.json"),
+                        serde_json::to_vec_pretty(&serde_json::json!({
+                            "mouseEvents": true,
+                            "selectedRevision": 1,
+                            "currentRevision": 2,
+                            "diffContainsChangedLine": true,
+                            "comparisonIsReadOnly": true,
+                            "screenshot": "artifact-version-diff.png"
+                        }))
+                        .unwrap(),
+                    )
+                    .unwrap();
+                    println!(
+                        "PASS artifact version comparison UI: real button opened a read-only diff from v1 to v2"
+                    );
+                    std::process::exit(0);
+                }
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("time-zone-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(20),
+                "time-zone UI interaction smoke timed out at phase {} with state {:?}",
+                self.quick_smoke_phase,
+                self.app.preview_time_zone_ui_state()
+            );
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 542, self.fixture.clone());
+            }
+            self.app.update(ctx, frame);
+            if let Some((choice, utc)) = self.app.preview_time_zone_choice_and_utc() {
+                assert_eq!(choice, zi_devtools::time_zone::AmbiguousChoice::Later);
+                assert_eq!(utc, "2026-11-01T06:30:00+00:00");
+                if !self.pending {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                    self.pending = true;
+                }
+                if let Some(image) = ctx.input(|input| {
+                    input.events.iter().find_map(|event| match event {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                }) {
+                    let bytes: Vec<u8> = image
+                        .pixels
+                        .iter()
+                        .flat_map(|pixel| pixel.to_array())
+                        .collect();
+                    image::save_buffer(
+                        self.folder.join("time-zone-smoke.png"),
+                        &bytes,
+                        image.size[0] as u32,
+                        image.size[1] as u32,
+                        image::ColorType::Rgba8,
+                    )
+                    .expect("save time-zone interaction screenshot");
+                    fs::write(
+                        self.folder.join("time-zone-smoke.json"),
+                        serde_json::to_vec_pretty(&serde_json::json!({
+                            "mouseEvents": true,
+                            "selectedChoice": "later",
+                            "expectedUtc": "2026-11-01T06:30:00+00:00",
+                            "actualUtc": utc,
+                            "sourceOffset": "-05:00",
+                            "screenshot": "time-zone-smoke.png"
+                        }))
+                        .unwrap(),
+                    )
+                    .unwrap();
+                    println!(
+                        "PASS time-zone UI: mouse selected later DST occurrence and converted it"
+                    );
+                    std::process::exit(0);
+                }
+            }
+            self.frames += 1;
+            ctx.request_repaint();
+            return;
+        }
+        if smoke_mode.as_deref() == Some("directory-copy-smoke") {
+            assert!(
+                self.started.elapsed() < Duration::from_secs(30),
+                "directory copy UI smoke timed out"
+            );
+            if self.frames == 0 {
+                self.copy_fixture_root = Some(
+                    self.folder
+                        .join(format!("directory-copy-fixture-{}", uuid::Uuid::new_v4())),
+                );
+            }
+            let fixture_root = self
+                .copy_fixture_root
+                .as_ref()
+                .expect("temporary directory fixture root");
+            let left = fixture_root.join("left");
+            let right = fixture_root.join("right");
+            let destination = fixture_root.join("output");
+            let relative = std::path::Path::new("nested/copy-me.txt");
+            if self.frames == 0 {
+                fs::create_dir_all(left.join("nested")).unwrap();
+                fs::create_dir_all(right.join("nested")).unwrap();
+                fs::create_dir_all(&destination).unwrap();
+                fs::write(left.join(relative), b"left source selected through the UI").unwrap();
+                fs::write(right.join(relative), b"different right source").unwrap();
+                self.app
+                    .preview_directory_copy_fixture(ctx, &left, &right, &destination)
+                    .expect("compare isolated temporary directory fixture");
+            }
+            self.app.update(ctx, frame);
+            let (selected, plan_ready, busy, copied) =
+                self.app.preview_directory_copy_state(relative);
+            assert!(
+                selected || self.quick_smoke_phase < 2,
+                "the difference checkbox did not select the source file"
+            );
+            assert!(
+                plan_ready || busy || self.quick_smoke_phase < 4,
+                "the UI did not create a copy preview"
+            );
+            assert!(
+                copied || busy || self.quick_smoke_phase < 6,
+                "the UI did not report the explicit copy"
+            );
+            if copied {
+                assert_eq!(
+                    fs::read(destination.join(relative)).unwrap(),
+                    b"left source selected through the UI"
+                );
+                assert_eq!(
+                    fs::read(left.join(relative)).unwrap(),
+                    b"left source selected through the UI"
+                );
+                if !self.pending {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                    self.pending = true;
+                }
+                let screenshot = ctx.input(|input| {
+                    input.events.iter().find_map(|event| match event {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                });
+                if let Some(image) = screenshot {
+                    let bytes_rgba: Vec<u8> = image
+                        .pixels
+                        .iter()
+                        .flat_map(|pixel| pixel.to_array())
+                        .collect();
+                    image::save_buffer(
+                        self.folder.join("directory-copy-smoke.png"),
+                        &bytes_rgba,
+                        image.size[0] as u32,
+                        image.size[1] as u32,
+                        image::ColorType::Rgba8,
+                    )
+                    .expect("save directory copy UI result screenshot");
+                    let proof = serde_json::json!({
+                        "mouseEvents": true,
+                        "selectedDifference": selected,
+                        "previewCreatedBeforeWrite": plan_ready,
+                        "confirmedExecutionReported": copied,
+                        "newDirectoryCreated": destination.join("nested").is_dir(),
+                        "destinationMatchesSelectedLeftSource": true,
+                        "sourcePreserved": true,
+                        "screenshot": "directory-copy-smoke.png"
+                    });
+                    fs::write(
+                        self.folder.join("directory-copy-smoke.json"),
+                        serde_json::to_vec_pretty(&proof).unwrap(),
+                    )
+                    .unwrap();
+                    println!(
+                        "PASS directory copy UI: mouse selection → preview without writes → explicit copy; source preserved"
+                    );
+                    std::process::exit(0);
+                }
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(30));
+            return;
+        }
         if smoke_mode.as_deref() == Some("disk-inspector-folder-smoke") {
             assert!(
                 self.started.elapsed() < Duration::from_secs(20),
@@ -2555,17 +3517,57 @@ impl eframe::App for Capture {
             assert!(self.started.elapsed() < Duration::from_secs(30));
             self.app.preview_tray_scene(ctx, &self.folder, self.scene);
             self.app.update(ctx, frame);
-            let path = self.folder.join(if self.scene % 2 == 1 {
+            let filename = if self.scene >= 504 {
+                if self.scene % 2 == 1 {
+                    "tray-collection-light.png"
+                } else {
+                    "tray-collection-dark.png"
+                }
+            } else if self.scene >= 502 {
+                if self.scene % 2 == 1 {
+                    "tray-category-light.png"
+                } else {
+                    "tray-category-dark.png"
+                }
+            } else if self.scene % 2 == 1 {
                 "tray-panel-light.png"
             } else {
                 "tray-panel-dark.png"
+            };
+            let path = self.folder.join(filename);
+            if self.frames == 0 {
+                match fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        panic!("remove stale tray screenshot {}: {error}", path.display())
+                    }
+                }
+            }
+            if self.app.preview_panel_rendered() && !self.pending {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.pending = true;
+            }
+            let screenshot = ctx.input(|input| {
+                input.events.iter().find_map(|event| match event {
+                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                    _ => None,
+                })
             });
-            if self.app.preview_panel_rendered() {
-                fs::write(
-                    self.folder.join(format!("tray-ready-{}", self.scene)),
-                    b"ready",
+            if let Some(image) = screenshot {
+                let pixels = image
+                    .pixels
+                    .iter()
+                    .flat_map(|p| p.to_array())
+                    .collect::<Vec<_>>();
+                image::save_buffer(
+                    &path,
+                    &pixels,
+                    image.size[0] as u32,
+                    image.size[1] as u32,
+                    image::ColorType::Rgba8,
                 )
-                .unwrap();
+                .expect("save tray panel screenshot");
             }
             if path.exists() {
                 println!(
@@ -3227,15 +4229,35 @@ impl eframe::App for Capture {
             ctx.request_repaint_after(Duration::from_millis(60));
             return;
         }
-        if smoke_mode.as_deref() == Some("handoff-discovery-smoke") {
+        if smoke_mode.as_deref() == Some("clipboard-json-records-handoff-smoke") {
             if self.frames == 0 {
-                self.app.preview_handoff_discovery_smoke(0);
+                self.app.preview_clipboard_json_records_handoff_smoke(0);
                 ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
             }
             self.app.update(ctx, frame);
             if self.frames >= 65 {
-                self.app.preview_handoff_discovery_smoke(1);
+                self.app.preview_clipboard_json_records_handoff_smoke(1);
                 std::process::exit(0);
+            }
+            self.frames += 1;
+            ctx.request_repaint_after(Duration::from_millis(60));
+            return;
+        }
+        if smoke_mode.as_deref() == Some("file-rename-execution-smoke") {
+            if self.frames == 0 {
+                self.app.preview_scene(ctx, 538, self.fixture.clone());
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(980.0, 760.0)));
+            }
+            self.app.update(ctx, frame);
+            if self.frames == 22 {
+                self.app.preview_file_rename_execution_assert(1);
+            }
+            if self.frames == 46 {
+                self.app.preview_file_rename_execution_assert(2);
+                std::process::exit(0);
+            }
+            if self.frames > 60 {
+                panic!("file rename execution smoke timed out");
             }
             self.frames += 1;
             ctx.request_repaint_after(Duration::from_millis(60));
@@ -4088,7 +5110,29 @@ impl eframe::App for Capture {
                 "Captured {}: {}x{}",
                 NAMES[self.scene], image.size[0], image.size[1]
             );
-            if std::env::args().nth(3).as_deref() == Some("single") {
+            if std::env::args().nth(3).as_deref() == Some("teleprompter-affinity-smoke")
+                && !self.folder.join("teleprompter-affinity-proof.txt").exists()
+            {
+                self.frames += 1;
+                assert!(
+                    self.frames < 120,
+                    "teleprompter did not confirm capture exclusion within 6 seconds"
+                );
+                ctx.request_repaint_after(Duration::from_millis(50));
+                return;
+            }
+            if std::env::args().nth(3).as_deref() == Some("teleprompter-affinity-smoke") {
+                assert!(
+                    self.folder
+                        .join("teleprompter-affinity-proof.txt")
+                        .is_file(),
+                    "native teleprompter window did not confirm capture exclusion"
+                );
+            }
+            if matches!(
+                std::env::args().nth(3).as_deref(),
+                Some("single" | "teleprompter-affinity-smoke")
+            ) {
                 std::process::exit(0);
             }
             self.scene += 1;
@@ -4173,7 +5217,12 @@ impl eframe::App for Capture {
         if self.frames == 0 {
             self.app
                 .preview_scene(ctx, self.scene, self.fixture.clone());
-            let size = if (444..=459).contains(&self.scene)
+            let size = if (484..=485).contains(&self.scene) {
+                egui::vec2(1280.0, 1500.0)
+            } else if (552..=555).contains(&self.scene) {
+                egui::vec2(1280.0, 1180.0)
+            } else if (508..=513).contains(&self.scene)
+                || (444..=459).contains(&self.scene)
                 || (308..=309).contains(&self.scene)
                 || (312..=313).contains(&self.scene)
                 || (318..=319).contains(&self.scene)
@@ -4205,17 +5254,25 @@ impl eframe::App for Capture {
                 || (252..=253).contains(&self.scene)
                 || (136..=137).contains(&self.scene)
                 || (148..=152).contains(&self.scene)
+                || self.scene == 556
                 || (153..=154).contains(&self.scene)
                 || (400..=403).contains(&self.scene)
                 || (432..=433).contains(&self.scene)
                 || (436..=437).contains(&self.scene)
                 || (440..=441).contains(&self.scene)
                 || (406..=407).contains(&self.scene)
+                || (390..=391).contains(&self.scene)
+                || (466..=467).contains(&self.scene)
+                || (470..=473).contains(&self.scene)
+                || (478..=479).contains(&self.scene)
+                || (486..=487).contains(&self.scene)
                 || matches!(self.scene, 410 | 411 | 414 | 415 | 418 | 419 | 422 | 423)
                 || (280..=281).contains(&self.scene)
                 || (276..=277).contains(&self.scene)
             {
                 egui::vec2(1280.0, 1180.0)
+            } else if (468..=469).contains(&self.scene) {
+                egui::vec2(1280.0, 1380.0)
             } else if matches!(
                 self.scene,
                 412 | 413
@@ -4414,7 +5471,16 @@ fn main() -> Result<(), eframe::Error> {
     }
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("Zi DevTools — UI preview fixture")
-        .with_inner_size([1280.0, 900.0]);
+        .with_inner_size(
+            if matches!(
+                std::env::args().nth(2).as_deref(),
+                Some("348" | "349" | "556")
+            ) {
+                [1280.0, 1020.0]
+            } else {
+                [1280.0, 900.0]
+            },
+        );
     if std::env::args().nth(3).as_deref() == Some("recorder-dynamic-smoke") {
         viewport = viewport.with_position([0.0, 0.0]);
     }
@@ -4448,6 +5514,7 @@ fn main() -> Result<(), eframe::Error> {
                 sqlite_input_frame: None,
                 workflow_input_frame: None,
                 comparison_opened_at: None,
+                copy_fixture_root: None,
             }))
         }),
     )

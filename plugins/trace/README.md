@@ -1,6 +1,8 @@
 # Java / Django 堆栈分析插件（提供方候选说明）
 
-`com.zicode.devtools.trace/0.1.0` 使用同仓 `zi-trace-core`，独立桌面程序直接调用同一个核心。根程序仍为 `0.82.0-dev.105`，两项源工具为 `1.0.3`。冻结交付以独立 release 候选目录及其外部 verification 为准；unsigned候选不代表实际Studio接受，也不等于整个154项工具迁移完成。
+`com.zicode.devtools.trace/0.1.1` 使用同仓 `zi-trace-core`，独立桌面程序直接调用同一个核心。此修订增加 Studio `tool.directory.v1@1.0.0-preview.1` 分类、用途说明和中英文检索别名，不改变两项计算能力。根程序仍为 `0.82.0-dev.105`，两项源工具为 `1.0.3`。冻结交付以独立 release 候选目录及其外部 verification 为准；unsigned候选不代表实际Studio接受，也不等于整个154项工具迁移完成。
+
+当前目录元数据候选为 `release/plugin-candidates/trace-0.1.1-candidate-01`；旧 `release/trace-0.1.0-candidate-01` 仅作历史交付保留。
 
 | 操作 | 完整既有范围 |
 | --- | --- |

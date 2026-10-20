@@ -1,0 +1,9 @@
+{
+  "confirmedExecutionReported": true,
+  "destinationMatchesSelectedLeftSource": true,
+  "mouseEvents": true,
+  "previewCreatedBeforeWrite": true,
+  "screenshot": "directory-copy-smoke.png",
+  "selectedDifference": true,
+  "sourcePreserved": true
+}

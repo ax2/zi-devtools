@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/events.request.schema.json",
+  "title": "plugin.task.lifecycle.v1 event replay request proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef", "afterSequence", "limit"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256},
+    "afterSequence": {"type": "integer", "minimum": 0},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 256}
+  }
+}

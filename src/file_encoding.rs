@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MAX_INPUT: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_INPUT: usize = 8 * 1024 * 1024;
 const MAX_OUTPUT: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

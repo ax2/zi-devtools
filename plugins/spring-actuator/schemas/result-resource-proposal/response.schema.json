@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/result-resource-proposal/response.schema.json",
+  "title": "result.resource.create.v1 response proposal",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "status", "saved"],
+      "properties": {"schemaVersion":{"const":1},"operation":{"const":"resource.create"},"status":{"const":"declined"},"saved":{"const":false}}
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "status", "saved", "resourceRef"],
+      "properties": {"schemaVersion":{"const":1},"operation":{"const":"resource.create"},"status":{"const":"saved"},"saved":{"const":true},"resourceRef":{"type":"string","minLength":1,"maxLength":256}}
+    }
+  ]
+}

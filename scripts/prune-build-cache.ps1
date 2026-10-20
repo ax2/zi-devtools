@@ -15,6 +15,7 @@ function Assert-NoLinks([string]$path) {
 function Assert-Idle {
     $busy=@(Get-CimInstance Win32_Process | Where-Object {
         if($_.ExecutablePath -and $_.ExecutablePath.StartsWith($targetRoot+'\',[StringComparison]::OrdinalIgnoreCase)){return $true}
+        if($_.Name -match '^pythonw?\.exe$' -and $_.CommandLine -match '(?i)explorer_(msi_actions|production_msi)_smoke\.py'){return $true}
         if($_.Name -notmatch '^(cargo|rustc|rustdoc|wix|light|candle)\.exe$'){return $false}
         $command=([string]$_.CommandLine).Replace('/','\')
         # Only exempt Cargo with an explicit absolute manifest in another project.
@@ -57,7 +58,7 @@ try {
         $relative=[string]$row.relative
         $path=[IO.Path]::GetFullPath((Join-Path $projectRoot $relative))
         if(-not $path.StartsWith($targetRoot+'\',[StringComparison]::OrdinalIgnoreCase) -or -not $seen.Add($path)){throw "Invalid/duplicate target: $relative"}
-        $allowedDir=$relative -match '^target[\\/]debug[\\/](incremental|\.fingerprint)[\\/][A-Za-z0-9_-]+$' -or $relative -in @('target/plugin-size','target/wasm32-wasip1/plugin-size')
+        $allowedDir=$relative -match '^target[\\/]debug[\\/](incremental|\.fingerprint)[\\/][A-Za-z0-9_-]+$' -or $relative -match '^target[\\/]zi-msi-(menu|production)-[A-Za-z0-9_-]+$' -or $relative -in @('target/plugin-size','target/wasm32-wasip1/plugin-size')
         $allowedFile=$relative -match '^target[\\/]debug[\\/](deps|examples)[\\/][A-Za-z0-9_.-]+$'
         $item=Get-Item -LiteralPath $path -Force
         if(($row.kind -eq 'directory' -and (-not $allowedDir -or -not $item.PSIsContainer)) -or ($row.kind -eq 'file' -and (-not $allowedFile -or $item.PSIsContainer)) -or $row.kind -notin @('file','directory')){throw "Target type/scope rejected: $relative"}

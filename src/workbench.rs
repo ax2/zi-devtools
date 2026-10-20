@@ -26,6 +26,66 @@ use std::{
     },
 };
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SharedRows<T>(Arc<Vec<T>>);
+
+impl<T> Default for SharedRows<T> {
+    fn default() -> Self {
+        Self(Arc::new(Vec::new()))
+    }
+}
+
+impl<T> From<Vec<T>> for SharedRows<T> {
+    fn from(rows: Vec<T>) -> Self {
+        Self(Arc::new(rows))
+    }
+}
+
+impl<T> FromIterator<T> for SharedRows<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self(Arc::new(iter.into_iter().collect()))
+    }
+}
+
+impl<T> std::ops::Deref for SharedRows<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: Clone> std::ops::DerefMut for SharedRows<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
+impl<'a, T> IntoIterator for &'a SharedRows<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T: Clone> IntoIterator for &'a mut SharedRows<T> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+impl<T: PartialEq> PartialEq<Vec<T>> for SharedRows<T> {
+    fn eq(&self, other: &Vec<T>) -> bool {
+        self.0.as_ref() == other
+    }
+}
+
 const INPUT_LIMIT: usize = 2 * 1024 * 1024;
 const ROW_LIMIT: usize = 10_000;
 const COLUMN_LIMIT: usize = 128;
@@ -41,9 +101,26 @@ pub enum DataFormat {
 #[serde(deny_unknown_fields)]
 pub struct Dataset {
     pub headers: Vec<String>,
-    pub rows: Vec<Vec<Value>>,
+    pub rows: SharedRows<Vec<Value>>,
 }
 impl Dataset {
+    pub(crate) fn numeric_snapshot(&self) -> Result<crate::calculator::exchange::NumericTable> {
+        anyhow::ensure!(
+            (1..=8).contains(&self.rows.len()) && (1..=8).contains(&self.headers.len()),
+            "直接发送计算器需完整的1–8行、1–8列数值表"
+        );
+        let view = (0..self.rows.len()).collect::<Vec<_>>();
+        let columns = (0..self.headers.len()).collect::<Vec<_>>();
+        numeric::select(
+            self,
+            &view,
+            0,
+            self.rows.len(),
+            &columns,
+            numeric::TextMode::Exact,
+        )
+    }
+
     pub(crate) fn trim_text_columns(&self, cancel: &AtomicBool) -> Result<Self> {
         let mut current = self.clone();
         for column in 0..self.headers.len() {
@@ -52,8 +129,14 @@ impl Dataset {
         }
         Ok(current)
     }
-    pub(crate) fn from_parts(headers: Vec<String>, rows: Vec<Vec<Value>>) -> Result<Self> {
-        let data = Self { headers, rows };
+    pub(crate) fn from_parts(
+        headers: Vec<String>,
+        rows: impl Into<SharedRows<Vec<Value>>>,
+    ) -> Result<Self> {
+        let data = Self {
+            headers,
+            rows: rows.into(),
+        };
         data.validate_saved()?;
         Ok(data)
     }
@@ -108,7 +191,10 @@ impl Dataset {
                         record.with_context(|| format!("CSV 第 {} 条数据记录无效", i + 1))?;
                     rows.push(record.iter().map(|s| Value::String(s.to_owned())).collect());
                 }
-                Self { headers, rows }
+                Self {
+                    headers,
+                    rows: rows.into(),
+                }
             }
             DataFormat::Json => {
                 let value: Value = serde_json::from_str(input.trim_start_matches('\u{feff}'))?;
@@ -135,7 +221,7 @@ impl Dataset {
                     names.extend(object.keys().cloned());
                 }
                 let headers = names.into_iter().collect::<Vec<_>>();
-                let rows = items
+                let rows: Vec<Vec<Value>> = items
                     .iter()
                     .map(|item| {
                         headers
@@ -144,7 +230,10 @@ impl Dataset {
                             .collect()
                     })
                     .collect();
-                Self { headers, rows }
+                Self {
+                    headers,
+                    rows: rows.into(),
+                }
             }
         };
         if data.headers.is_empty() || data.headers.len() > COLUMN_LIMIT {
@@ -241,6 +330,8 @@ pub fn save_new_file(path: &str, content: &str) -> Result<()> {
 #[serde(deny_unknown_fields)]
 pub struct DataState {
     #[serde(skip)]
+    table_first: bool,
+    #[serde(skip)]
     active_tool: String,
     #[serde(default)]
     text_flow: crate::text_flow::State,
@@ -272,6 +363,15 @@ pub struct DataState {
     numeric_selector: numeric::Selector,
 }
 impl DataState {
+    pub(crate) fn focus_received_table(&mut self) {
+        self.table_first = true;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_text_flow_image_input_check(&self) {
+        assert_eq!(self.active_tool_id(), "text-flow");
+        self.text_flow.preview_image_input_check();
+    }
+
     pub fn primary_label(&self) -> Option<&'static str> {
         match self.active_tool_id() {
             "data" => Some("解析数据"),
@@ -386,8 +486,8 @@ impl DataState {
         self.text_flow.preview_check();
     }
     #[cfg(feature = "ui-preview")]
-    pub fn preview_text_flow_table_check(&self, review: bool) {
-        self.text_flow.preview_table_check(review);
+    pub fn preview_text_flow_table_check(&self) {
+        self.text_flow.preview_table_check();
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_table_received(&self) {
@@ -424,11 +524,34 @@ impl DataState {
     pub fn preview_text_flow_file_check(&self, path: &std::path::Path, phase: u8) {
         self.text_flow.preview_file_check(path, phase);
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_file_flow_output_ready(&self) -> bool {
+        self.text_flow.preview_file_output_ready()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_file_flow_report_selected(&self) -> bool {
+        self.text_flow.preview_file_report_selected()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_file_flow_output_choice_position(&self, path: &std::path::Path) -> egui::Pos2 {
+        self.text_flow.preview_file_output_choice_position(path)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_file_flow_output_selected(&self, path: &std::path::Path) -> bool {
+        self.text_flow.preview_file_output_selected(path)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_file_flow_output_position(&self) -> egui::Pos2 {
+        self.text_flow.preview_file_output_position()
+    }
     pub fn take_text_flow_send(&mut self) -> Option<String> {
         self.text_flow.take_send()
     }
     pub fn take_text_flow_table(&mut self) -> Option<Dataset> {
         self.text_flow.take_table_send()
+    }
+    pub fn take_text_flow_file(&mut self) -> Option<crate::material_files::FileMaterial> {
+        self.text_flow.take_file_send()
     }
     pub fn text_flow_transfer_failed(&mut self, message: String) {
         self.text_flow.transfer_failed(message);
@@ -584,13 +707,26 @@ impl DataState {
             title,
             "CSV / TSV、JSON 对象数组或列结构 JSON · 筛选、排序与导出",
         );
-        if view == "data" {
+        if view == "data" && !self.table_first {
             self.input_ui(ui);
         } else {
-            egui::CollapsingHeader::new("共享表格输入")
-                .id_salt("shared-table-input")
-                .default_open(self.dataset.is_none())
-                .show(ui, |ui| self.input_ui(ui));
+            let input = egui::CollapsingHeader::new(if view == "data" {
+                "原始表格输入（可展开编辑）"
+            } else {
+                "共享表格输入"
+            })
+            .id_salt("shared-table-input")
+            .default_open(self.dataset.is_none())
+            .show(ui, |ui| self.input_ui(ui));
+            #[cfg(feature = "ui-preview")]
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(
+                    egui::Id::new("received-table-input-expanded"),
+                    input.body_returned.is_some(),
+                )
+            });
+            #[cfg(not(feature = "ui-preview"))]
+            let _ = input;
         }
         match view.as_str() {
             "data-transform" => self.transform_ui(ui),
@@ -988,6 +1124,20 @@ pub struct FileDigest {
     pub sha256: String,
     pub sha512: String,
 }
+impl FileDigest {
+    fn report_json(&self) -> Result<String> {
+        let generated_by = crate::tool_provenance::current_for_tool("files")?;
+        Ok(serde_json::to_string_pretty(&serde_json::json!({
+            "schemaVersion": 2,
+            "material": "file-integrity-report",
+            "generatedBy": generated_by,
+            "fileName": self.path.file_name().unwrap_or_default().to_string_lossy(),
+            "bytes": self.bytes,
+            "sha256": self.sha256,
+            "sha512": self.sha512
+        }))?)
+    }
+}
 pub fn hash_file(
     path: PathBuf,
     cancel: &AtomicBool,
@@ -1191,9 +1341,13 @@ impl FileState {
                 Some((self.index as f32 + self.progress) / self.total.max(1) as f32);
         }
     }
-    pub fn cancel_task(&mut self) {
+    pub fn cancel_task(&mut self, generation: u64) -> bool {
+        if self.job.generation() != generation || self.receiver.is_none() {
+            return false;
+        }
         self.cancel.store(true, Ordering::Relaxed);
         self.job.cancelling();
+        true
     }
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         heading(
@@ -1242,7 +1396,7 @@ impl FileState {
                     .add_enabled(self.receiver.is_some(), egui::Button::new("取消任务"))
                     .clicked()
                 {
-                    self.cancel_task();
+                    self.cancel_task(self.job.generation());
                 }
                 ui.label(
                     RichText::new("每批最多 64 个文件；文件内容不会上传")
@@ -1295,12 +1449,15 @@ impl FileState {
                                 #[cfg(feature="ui-preview")]
                                 ui.ctx().data_mut(|data| data.insert_temp(egui::Id::new(("file-report", i)), report.rect));
                                 if report.clicked() {
-                                    self.report = serde_json::to_string_pretty(&serde_json::json!({
-                                        "format_version": 1,
-                                        "file_name": path.file_name().unwrap_or_default().to_string_lossy(),
-                                        "bytes": d.bytes, "sha256": d.sha256, "sha512": d.sha512
-                                    })).unwrap();
-                                    self.message = "已选择报告输出，可通过顶部入口发送到其他工具；报告不包含完整路径".into();
+                                    match d.report_json() {
+                                        Ok(report) => {
+                                            self.report = report;
+                                            self.message = "已选择 v2 校验报告，可通过顶部入口发送到其他工具；包含工具来源版本，不包含完整路径".into();
+                                        }
+                                        Err(error) => {
+                                            self.message = format!("无法生成校验报告：{error:#}");
+                                        }
+                                    }
                                 }
                                 let source = ui.add_enabled(self.file_transfer.is_none(), egui::Button::new("原文件 → 编码检查…"));
                                 #[cfg(feature="ui-preview")]
@@ -1377,6 +1534,23 @@ fn primary(ui: &egui::Ui, text: &str) -> egui::Button<'static> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn shared_dataset_rows_copy_on_write_and_keep_the_existing_json_shape() {
+        let original = Dataset::parse("name\nsource", DataFormat::Csv, b',').unwrap();
+        let mut snapshot = original.clone();
+        assert!(Arc::ptr_eq(&original.rows.0, &snapshot.rows.0));
+
+        snapshot.rows[0][0] = Value::from("snapshot");
+        assert_eq!(original.rows[0][0], "source");
+        assert_eq!(snapshot.rows[0][0], "snapshot");
+        assert!(!Arc::ptr_eq(&original.rows.0, &snapshot.rows.0));
+        assert_eq!(
+            serde_json::to_string(&original).unwrap(),
+            r#"{"headers":["name"],"rows":[["source"]]}"#
+        );
+    }
+
     #[test]
     fn background_parse_is_received_without_rendering_tool_page() {
         let mut state = DataState::default();
@@ -1425,6 +1599,34 @@ mod tests {
         assert_eq!(files.job.phase, Phase::Done);
         assert_eq!(files.job.progress, Some(1.0));
         assert_eq!(files.results[0].1.as_ref().unwrap().bytes, 3);
+        fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn file_hash_report_v2_tracks_tool_provenance_without_full_path() {
+        let path = std::env::temp_dir().join(format!("zi-report-{}.bin", uuid::Uuid::new_v4()));
+        fs::write(&path, b"portable report").unwrap();
+        let digest = hash_file(path.clone(), &AtomicBool::new(false), |_, _| {}).unwrap();
+        let report = digest.report_json().unwrap();
+        let value: Value = serde_json::from_str(&report).unwrap();
+        assert_eq!(value["schemaVersion"], 2);
+        assert_eq!(value["material"], "file-integrity-report");
+        assert_eq!(value["generatedBy"]["toolId"], "files");
+        let provenance = crate::tool_provenance::current_for_tool("files").unwrap();
+        assert_eq!(
+            value["generatedBy"]["toolVersion"].as_str(),
+            Some(provenance.tool_version.as_str())
+        );
+        assert_eq!(
+            value["fileName"],
+            path.file_name().unwrap().to_string_lossy().as_ref()
+        );
+        assert_eq!(value["bytes"], b"portable report".len());
+        assert_eq!(value["sha256"], digest.sha256);
+        assert_eq!(value["sha512"], digest.sha512);
+        let fingerprint: crate::tool_provenance::RuntimeFingerprint =
+            serde_json::from_value(value["generatedBy"]["runtimeFingerprint"].clone()).unwrap();
+        fingerprint.validate().unwrap();
+        assert!(!report.contains(&path.to_string_lossy().to_string()));
         fs::remove_file(path).unwrap();
     }
     #[test]
@@ -1520,5 +1722,25 @@ mod tests {
         assert!(save_new_file(p.to_str().unwrap(), "replace").is_err());
         assert_eq!(fs::read(&p).unwrap(), b"abc");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn file_task_cancellation_rejects_stale_generation() {
+        let mut state = FileState::default();
+        let (_first_tx, first_rx) = mpsc::channel();
+        state.receiver = Some(first_rx);
+        state.job.begin();
+        let stale = state.job.generation();
+
+        let (_second_tx, second_rx) = mpsc::channel();
+        state.receiver = Some(second_rx);
+        state.job.begin();
+        let current = state.job.generation();
+        assert_ne!(stale, current);
+        assert!(!state.cancel_task(stale));
+        assert!(!state.cancel.load(Ordering::Relaxed));
+        assert!(state.cancel_task(current));
+        assert!(state.cancel.load(Ordering::Relaxed));
+        assert_eq!(state.job.phase, Phase::Cancelling);
     }
 }

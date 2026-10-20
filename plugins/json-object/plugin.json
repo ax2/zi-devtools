@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 2,
+  "id": "com.zicode.devtools.json-object",
+  "name": "ZiDevTools JSON Object",
+  "displayName": "ZiDevTools JSON 对象工具",
+  "description": "生成有界 JSON 对象摘要，并提供可接收对象值的本地能力。",
+  "version": "0.1.1",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "requiredProfiles": {
+    "output.schema.v1": "=1.0.0-rc.1",
+    "result.json.v1": "=1.0.0-preview.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
+  },
+  "activationEvents": [
+    "onCapability:devtools.json.object.inspect",
+    "onCapability:devtools.json.object.receive"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm"
+  },
+  "contributes": {
+    "activities": [],
+    "views": [],
+    "capabilities": [
+      {
+        "id": "devtools.json.object.inspect",
+        "title": "JSON 对象摘要",
+        "description": "原样保留 JSON object，并返回字段类型、层级和 UTF-8 字节统计。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "object",
+              "maxProperties": 128
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "contractVersion": {
+              "type": "string",
+              "const": "1.0.0-rc.1"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "error": {
+              "type": "null"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "object"
+                },
+                "keyCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128
+                },
+                "keys": {
+                  "type": "array",
+                  "maxItems": 128,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "valueTypes": {
+                  "type": "object",
+                  "maxProperties": 128,
+                  "additionalProperties": {
+                    "enum": [
+                      "null",
+                      "boolean",
+                      "integer",
+                      "number",
+                      "string",
+                      "object",
+                      "array"
+                    ]
+                  }
+                },
+                "maxDepth": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                },
+                "serializedBytes": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 8192
+                }
+              },
+              "required": [
+                "value",
+                "keyCount",
+                "keys",
+                "valueTypes",
+                "maxDepth",
+                "serializedBytes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "contractVersion",
+            "ok",
+            "data",
+            "error"
+          ],
+          "additionalProperties": false
+        },
+        "resultCaptureMimeType": "application/json",
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "JSON 对象摘要",
+            "JSON object summary",
+            "对象字段类型"
+          ],
+          "description": "分析显式提供的JSON对象，保留对象值并统计字段类型、深度和字节；不读取文件、不自动保存结果。"
+        }
+      },
+      {
+        "id": "devtools.json.object.receive",
+        "title": "接收 JSON 对象",
+        "description": "接受显式映射的 object 字段并返回其原样对象值。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "object",
+              "maxProperties": 128
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "contractVersion": {
+              "type": "string",
+              "const": "1.0.0-rc.1"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "error": {
+              "type": "null"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "receivedValue": {
+                  "type": "object"
+                },
+                "rootKeyCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 128
+                },
+                "rootKeys": {
+                  "type": "array",
+                  "maxItems": 128,
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "receivedValue",
+                "rootKeyCount",
+                "rootKeys"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "contractVersion",
+            "ok",
+            "data",
+            "error"
+          ],
+          "additionalProperties": false
+        },
+        "resultCaptureMimeType": "application/json",
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "接收 JSON 对象",
+            "receive JSON object",
+            "结构化结果接力"
+          ],
+          "description": "接收用户明确选择接力的JSON对象并返回有界摘要；接力确认与授权由Host负责，不读取文件、不自动保存。"
+        }
+      }
+    ],
+    "piTools": [
+      {
+        "name": "devtools_json_object_inspect",
+        "title": "JSON 对象摘要",
+        "description": "Analyze one explicitly supplied JSON object locally. Does not read files or use the network.",
+        "capability": "devtools.json.object.inspect",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "object",
+              "maxProperties": 128
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "name": "pi.tools.register",
+        "reason": "用户显式授权后，允许当前场景的 AI 调用 JSON object 摘要能力；对象接收端不注册为 AI 工具。"
+      }
+    ]
+  }
+}

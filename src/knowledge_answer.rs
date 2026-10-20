@@ -395,10 +395,12 @@ fn model_tool(endpoint: &str, protocol: Protocol) -> Result<PluginTool> {
     Ok(PluginTool {
         id: "knowledge-answer".into(),
         version: None,
+        version_history: Vec::new(),
         name: "本机知识问答".into(),
         description: String::new(),
         category: "知识与检索".into(),
         keywords: Vec::new(),
+        aliases: Vec::new(),
         sample: String::new(),
         model: String::new(),
         adapter: Adapter::Http {

@@ -116,6 +116,59 @@ pub(super) fn save_returning(path: &Path, mut item: Item) -> Result<Item> {
     Ok(item)
 }
 
+/// Insert a user-reviewed batch of new memos atomically against its preview snapshot.
+pub(super) fn insert_batch(path: &Path, expected: &[Item], incoming: &[Item]) -> Result<Vec<Item>> {
+    ensure!(!incoming.is_empty(), "没有可导入的备忘");
+    ensure!(incoming.len() <= 32, "一次最多导入 32 个文件");
+    backup::validate_records(expected)?;
+    let mut seen = HashSet::new();
+    let mut records = incoming.to_vec();
+    let now = Local::now().timestamp();
+    for item in &mut records {
+        item.validate()?;
+        ensure!(
+            item.revision == 0 && item.schedule.is_none() && !item.trash,
+            "批量导入只接受新的备忘草稿"
+        );
+        ensure!(seen.insert(item.id.clone()), "导入文件包含重复记录标识");
+        item.revision = 1;
+        item.updated = now;
+    }
+    let mut conn = connect(path, true)?;
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let current = load_connection(&tx)?;
+    let mut before: Vec<_> = expected.iter().collect();
+    let mut actual: Vec<_> = current.iter().collect();
+    before.sort_by_key(|item| &item.id);
+    actual.sort_by_key(|item| &item.id);
+    ensure!(
+        actual == before,
+        "本机记录在预览后发生变化，本次没有导入；请重新预览"
+    );
+    let existing: HashSet<_> = current.iter().map(|item| item.id.as_str()).collect();
+    ensure!(
+        records
+            .iter()
+            .all(|item| !existing.contains(item.id.as_str())),
+        "导入标识与本机记录冲突，请重新选择文件"
+    );
+    let combined = current
+        .iter()
+        .cloned()
+        .chain(records.iter().cloned())
+        .collect::<Vec<_>>();
+    backup::validate_records(&combined)?;
+    for item in &records {
+        tx.execute(
+            "INSERT INTO records(id,revision,payload) VALUES(?1,?2,?3)",
+            params![item.id, item.revision, serde_json::to_string(item)?],
+        )?;
+    }
+    let result = load_connection(&tx)?;
+    tx.commit()?;
+    Ok(result)
+}
+
 /// Delete only the reviewed snapshot; a conflicting row rolls back the whole batch.
 pub(super) fn purge(path: &Path, reviewed: &[Item]) -> Result<Vec<Item>> {
     ensure!(

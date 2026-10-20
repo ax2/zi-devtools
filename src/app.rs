@@ -1,12 +1,19 @@
 mod commands;
+#[cfg(feature = "ui-preview")]
+mod entry_preview;
 mod explorer;
 mod file_materials;
+#[cfg(feature = "ui-preview")]
+mod file_rename_preview;
 mod handoff;
+mod history;
+mod instance_search;
 #[cfg(feature = "ui-preview")]
 mod launch_preview;
 mod launcher;
 mod navigation;
 mod registry;
+mod scheduler;
 mod service_batch;
 mod service_editor;
 mod service_logs;
@@ -15,6 +22,8 @@ mod service_preview;
 mod services;
 mod task_center;
 
+#[cfg(feature = "ui-preview")]
+use handoff::Transfer;
 use registry::{Page, ToolEntry, catalog};
 
 #[cfg(feature = "ui-preview")]
@@ -22,6 +31,7 @@ use crate::tools::run_tool;
 #[cfg(feature = "ui-preview")]
 use std::path::Path;
 use std::{
+    cell::RefCell,
     fs,
     path::PathBuf,
     sync::{
@@ -40,8 +50,8 @@ use sysinfo::{ProcessesToUpdate, System};
 use crate::{
     config::load_config,
     dev_tools::{
-        DiffState, HTTP_METHODS, HttpPane, HttpRequestSpec, HttpWorkbenchState, compare_text,
-        default_http_storage_path, execute_http,
+        DiffState, HTTP_METHODS, HttpPane, HttpRequestSpec, HttpResponse, HttpWorkbenchState,
+        compare_text, default_http_storage_path, execute_http,
     },
     network_tools::{NetworkPane, NetworkState, resolve_host, test_tcp},
     preferences::{self, Preferences},
@@ -165,13 +175,17 @@ enum BackgroundEvent {
     RestoreFinished(String),
     NavigateTool(TrayTool),
     TrayNavigate(TrayAction),
-    NetworkResult(u64, Result<String, String>),
+    NetworkResult {
+        request_id: u64,
+        duration_ms: u128,
+        result: Result<String, String>,
+    },
     HttpResult {
         tab_id: u64,
         method: String,
         url: String,
         duration_ms: u128,
-        result: Result<String, String>,
+        result: Result<HttpResponse, String>,
     },
 }
 
@@ -186,7 +200,6 @@ pub struct DevToolsApp {
     #[cfg(feature = "ui-preview")]
     preview_service_rows: usize,
     #[cfg(feature = "ui-preview")]
-    preview_tray_capture: Option<PathBuf>,
     #[cfg(feature = "ui-preview")]
     preview_tray_workflow: Option<(PathBuf, usize)>,
     #[cfg(feature = "ui-preview")]
@@ -202,12 +215,20 @@ pub struct DevToolsApp {
     quick_had_focus: bool,
     quick_opened: Instant,
     quick_tab: String,
+    quick_category: String,
+    quick_collection_id: String,
     quick_context: bool,
     quick_position: Option<egui::Pos2>,
     quick_size: egui::Vec2,
     intake: crate::intake::State,
     explorer_audit: explorer::Audit,
     tasks: crate::tasks::Center,
+    task_history_local: Vec<crate::task_history::Record>,
+    task_history_load_error: Option<String>,
+    task_history_clear_confirm: bool,
+    task_query: String,
+    task_filter: crate::tasks::ViewFilter,
+    task_cancel_all_pending: bool,
     handoff: Option<handoff::Transfer>,
     tray: Option<TrayController>,
     page: Page,
@@ -248,6 +269,7 @@ pub struct DevToolsApp {
     calculator: crate::calculator::State,
     clipboard: crate::clipboard::State,
     clock: crate::clock::State,
+    time_zone: crate::time_zone::State,
     updates: crate::updates::State,
     portable_update: crate::updates::portable_ui::State,
     msi_update: crate::updates::msi_ui::State,
@@ -278,16 +300,25 @@ pub struct DevToolsApp {
     #[cfg(feature = "ui-preview")]
     workflow_recent_button: Option<egui::Rect>,
     launcher_index: usize,
+    navigation_history: history::State,
+    instance_search: instance_search::State,
+    library_scroll_offset: f32,
+    library_scroll_restore: Option<f32>,
+    launcher_keyboard: launcher::keyboard::Guard,
+    quick_keyboard: launcher::keyboard::Guard,
     launcher_scope: launcher::Scope,
     #[cfg(feature = "ui-preview")]
-    launcher_scope_buttons: [Option<egui::Rect>; 4],
+    launcher_scope_buttons: [Option<egui::Rect>; 5],
     toast: Option<(String, Instant)>,
     data_state: crate::workbench::sessions::Workspace,
+    artifact_hub: crate::artifact_hub::State,
     planner: crate::planner::State,
+    reminder_center_open: bool,
     planner_active: Arc<AtomicBool>,
     file_state: FileState,
     clear_tool_confirm: bool,
     plugins: crate::plugin_ui::PluginState,
+    plugin_entry_cache: RefCell<PluginEntryCache>,
     mcp: crate::mcp_ui::McpState,
     agent: crate::agent_ui::State,
     agent_records: crate::agent_record_ui::State,
@@ -295,6 +326,8 @@ pub struct DevToolsApp {
     images: crate::image_tools::State,
     markdown: crate::markdown_preview::State,
     file_encoding: crate::file_encoding::State,
+    file_rename: crate::file_rename::State,
+    log_viewer: crate::log_viewer::State,
     checksum_manifest: crate::checksum_manifest::State,
     disk_inspector: crate::disk_inspector::State,
     duplicate_finder: crate::duplicate_finder::State,
@@ -318,9 +351,86 @@ pub struct DevToolsApp {
     home_filter: String,
     home_category: String,
     home_query_key: (String, String, String),
+    collection_name_draft: String,
+    collection_rename_draft: String,
+    collection_rename_target: String,
+    collection_delete_pending: Option<String>,
+    collection_import_preview: Option<crate::preferences::ToolCollectionImportPreview>,
+}
+
+#[derive(Default)]
+struct PluginEntryCache {
+    catalog_key: Vec<(String, String, bool)>,
+    entries: Vec<ToolEntry>,
 }
 
 impl DevToolsApp {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_directory_copy_fixture(
+        &mut self,
+        ctx: &egui::Context,
+        left: &std::path::Path,
+        right: &std::path::Path,
+        destination: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        self.preview_scene(ctx, 165, std::path::PathBuf::from("directory-copy-smoke"));
+        self.directory_compare
+            .preview_copy_fixture(left, right, destination)
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_directory_copy_position(&self, index: usize) -> Option<egui::Pos2> {
+        self.directory_compare.preview_copy_position(index)
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_directory_copy_state(
+        &self,
+        relative: &std::path::Path,
+    ) -> (bool, bool, bool, bool) {
+        self.directory_compare.preview_copy_state(relative)
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_http_task_routed(&self, tab_id: u64) -> bool {
+        self.page == Page::Http
+            && self
+                .http_state
+                .tabs
+                .get(self.http_state.selected)
+                .is_some_and(|tab| tab.id == tab_id)
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_network_task_routed(&self, tcp: bool) -> bool {
+        self.page == Page::Network
+            && self.network_state.pane == self.network_state.task_pane
+            && matches!(self.network_state.pane, NetworkPane::Tcp) == tcp
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_network_tcp_task_history(&mut self) {
+        self.network_state.pane = NetworkPane::Dns;
+        self.network_state.task_pane = NetworkPane::Tcp;
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_artifact_trash_state(&self) -> (bool, bool, usize, usize, usize) {
+        self.artifact_hub.preview_trash_state()
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_artifact_version_diff_fixture(&mut self) {
+        self.artifact_hub
+            .preview_version_diff_fixture()
+            .expect("seed temporary artifact version comparison fixture");
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_artifact_version_diff_state(&self) -> Option<(i64, i64, bool)> {
+        self.artifact_hub.preview_version_diff_state()
+    }
+
     #[cfg(all(windows, feature = "ui-preview"))]
     pub fn preview_explorer_maintenance_finished(&self) -> bool {
         self.explorer_audit.fixture_finished()
@@ -640,8 +750,9 @@ impl DevToolsApp {
     pub fn preview_reminder_click_assert(&self) {
         assert_eq!(self.page, Page::Calendar);
         assert!(self.planner.preview_reminder_opened());
+        assert!(self.reminder_center_open && !self.clock.notices.is_empty());
         println!(
-            "PASS reminder UI click: opens exact calendar event from Home without acknowledging reminder"
+            "PASS shared reminder center: opens exact calendar event from Home while preserving the independent clock reminder"
         );
     }
     #[cfg(feature = "ui-preview")]
@@ -860,6 +971,10 @@ impl DevToolsApp {
         self.data_state.preview_text_flow_position(index)
     }
     #[cfg(feature = "ui-preview")]
+    pub fn preview_text_flow_table_apply_position(&self) -> egui::Pos2 {
+        self.handoff.as_ref().unwrap().preview_apply_position()
+    }
+    #[cfg(feature = "ui-preview")]
     pub fn preview_text_flow_check(&self, sent: bool) {
         assert_eq!(self.data_state.active_tool_id(), "text-flow");
         assert_eq!(
@@ -884,12 +999,15 @@ impl DevToolsApp {
     pub fn preview_text_flow_table_check(&self, phase: u8) {
         self.data_state.instances[0]
             .state
-            .preview_text_flow_table_check(phase == 1);
+            .preview_text_flow_table_check();
         assert_eq!(
             self.data_state.instances[0].state.input,
             "original table draft"
         );
-        assert!(self.handoff.is_none());
+        assert_eq!(self.handoff.is_some(), phase == 1);
+        if phase == 1 {
+            assert!(self.handoff.as_ref().unwrap().preview_typed_table_ready());
+        }
         assert_eq!(
             self.data_state.instances.len(),
             if phase == 3 { 2 } else { 1 }
@@ -923,6 +1041,15 @@ impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_output_check(&self, phase: u8) -> bool {
         self.data_state.preview_workflow_output_check(phase)
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_step_output_check(&self, phase: u8, target: &Path) {
+        self.data_state
+            .preview_workflow_step_output_check(phase, target);
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_step_send_position(&self) -> egui::Pos2 {
+        self.data_state.preview_workflow_step_send_position()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_output_reload(&mut self, path: &Path, phase: u8) {
@@ -1245,6 +1372,281 @@ impl DevToolsApp {
         self.home_category = "全部分类".into();
         self.preferences.favorites = vec!["data".into(), "files".into(), "json".into()];
         match scene {
+            544..=545 => {
+                self.page = Page::Recorder;
+                self.recorder.preview_teleprompter_fixture();
+            }
+            546..=547 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_time_zone_fixture();
+                self.time_zone.preview_fixture();
+            }
+            548..=549 => {
+                self.page = Page::LogViewer;
+                self.log_viewer
+                    .preview_fixture(fixture.parent().unwrap_or(&fixture));
+            }
+            550..=551 => {
+                self.page = Page::Data;
+                self.data_state.preview_autosave_fixture(scene == 550);
+            }
+            536..=537 => {
+                self.page = Page::SmallTools;
+                self.tool_state.select(ToolKind::SqlFormat);
+                self.tool_state.input = ToolKind::SqlFormat.sample().into();
+                self.tool_state.pattern = "postgresql".into();
+                self.tool_state.sql_indent = crate::sql_formatter::IndentStyle::FourSpaces;
+                self.tool_state.sql_keyword_case = crate::sql_formatter::KeywordCase::Uppercase;
+                let result = self.tool_state.run(0);
+                self.tool_state.apply_result(result);
+                assert!(self.tool_state.message.is_empty());
+                assert!(self.tool_state.output.contains("LEFT JOIN"));
+            }
+            538..=539 => {
+                self.page = Page::FileRename;
+                self.file_rename
+                    .preview_fixture(fixture.parent().unwrap_or(&fixture));
+            }
+            540..=541 => {
+                self.page = Page::EncodingTools;
+                self.tool_state.select(ToolKind::JsonSchema);
+                self.tool_state.input = ToolKind::JsonSchema.sample().into();
+                let schema_dir = fixture.parent().unwrap_or(&fixture);
+                let schema_path = schema_dir.join("person.schema.json");
+                fs::write(
+                    &schema_path,
+                    "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"type\": \"object\",\n  \"required\": [\"name\", \"version\"],\n  \"properties\": {\n    \"name\": {\"type\": \"string\", \"minLength\": 1},\n    \"version\": {\"type\": \"integer\", \"minimum\": 1},\n    \"local\": {\"type\": \"boolean\"}\n  },\n  \"additionalProperties\": false\n}\n",
+                )
+                .expect("seed JSON Schema preview fixture");
+                self.tool_state
+                    .load_schema_file(&schema_path)
+                    .expect("load JSON Schema preview fixture");
+                let result = self.tool_state.run(0);
+                self.tool_state.apply_result(result);
+                assert!(self.tool_state.message.is_empty());
+                assert!(self.tool_state.output.contains("校验通过"));
+            }
+            542..=543 => self.page = Page::TimeZone,
+            531 => {
+                self.page = Page::Notes;
+                self.planner.preview(false, false);
+                self.preview_planner_editor();
+            }
+            532 => {
+                self.page = Page::KnowledgeCapture;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_capture
+                    .preview_saved_followup_fixture(self.knowledge_sources.sources());
+            }
+            533 => {
+                self.page = Page::KnowledgeSources;
+                self.knowledge_sources.preview_fixture();
+            }
+            534 => {
+                self.page = Page::KnowledgeIndex;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_index
+                    .preview_fixture(self.knowledge_sources.sources());
+            }
+            535 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_root_fixture();
+            }
+            524..=525 => {
+                self.page = Page::Artifacts;
+                self.artifact_hub
+                    .preview_trash_fixture()
+                    .expect("seed temporary artifact trash fixture");
+            }
+            526 => {
+                self.page = Page::Artifacts;
+                self.preview_artifact_version_diff_fixture();
+            }
+            528 => {
+                self.page = Page::Notes;
+                self.planner.preview_tags();
+            }
+            529 => {
+                self.page = Page::Notes;
+                self.planner.preview_batch_import();
+            }
+            530 => {
+                self.page = Page::Notes;
+                self.planner.preview_batch_export();
+            }
+            518..=519 => {
+                self.page = Page::Library;
+                self.library_query = "sqlformat".into();
+                let change = self
+                    .library_entries()
+                    .into_iter()
+                    .find(|entry| entry.id == "sql-format")
+                    .expect("version history text search returns the SQL formatter");
+                assert_eq!(change.match_hint(&self.library_query), "版本历史匹配");
+            }
+            520..=521 => {
+                self.page = Page::Calculator;
+                self.calculator.preview_complex_fixture();
+            }
+            522..=523 => {
+                self.page = Page::Data;
+                self.data_state.preview_workflow_step_inspection();
+            }
+            516..=517 => {
+                self.page = Page::Library;
+                self.library_query = "0.2.0".into();
+                let historical = self
+                    .library_entries()
+                    .into_iter()
+                    .find(|entry| entry.id == "sql-format")
+                    .expect("historical version search returns the SQL formatter");
+                assert_eq!(historical.match_hint(&self.library_query), "历史版本匹配");
+            }
+            514..=515 => {
+                self.page = Page::Library;
+                self.library_query = "0.3.0".into();
+                let exact = self
+                    .library_entries()
+                    .into_iter()
+                    .find(|entry| entry.id == "sql-format")
+                    .expect("version search returns the SQL formatter");
+                assert_eq!(exact.match_hint(&self.library_query), "版本匹配");
+            }
+            502..=513 => {
+                let collection_id =
+                    uuid::Uuid::from_u128(0x5a1c_21e0_0000_4000_8000_0000_0000_0001).to_string();
+                self.preferences.tool_collections = vec![crate::preferences::ToolCollection {
+                    id: collection_id.clone(),
+                    name: "Java / Django 排查".into(),
+                    tool_ids: vec![
+                        "java-trace".into(),
+                        "django-trace".into(),
+                        "mcp-inspector".into(),
+                    ],
+                }];
+                self.page = Page::Library;
+                self.home_filter = format!("集合:{collection_id}");
+            }
+            500..=501 => {
+                self.page = Page::Plugins;
+                self.plugins.preview_alias_manifest();
+            }
+            498..=499 => {
+                let bytes = include_bytes!("../plugins-examples/local-text.json");
+                if self.plugins.store.packages.is_empty() {
+                    self.plugins.store.install(bytes).unwrap();
+                }
+                self.plugins.store.set_enabled("local-text", true).unwrap();
+                self.page = Page::Plugins;
+                self.plugins.selected = None;
+            }
+            494..=497 => {
+                let bytes = include_bytes!("../plugins-examples/local-text.json");
+                if self.plugins.store.packages.is_empty() {
+                    self.plugins.store.install(bytes).unwrap();
+                }
+                self.plugins.store.set_enabled("local-text", true).unwrap();
+                self.page = Page::Library;
+                self.open_launcher();
+                self.launcher_query = if scene < 496 {
+                    "remove duplicate lines".into()
+                } else {
+                    "删除重复行".into()
+                };
+                let results = self.launcher_results(&self.launcher_query.clone());
+                assert_eq!(
+                    results.tools.first().map(|entry| entry.id.as_str()),
+                    Some("plugin:local-text/deduplicate")
+                );
+            }
+            490..=493 => {
+                self.page = Page::Http;
+                self.http_state.pane = HttpPane::Request;
+                self.http_state.selected = 0;
+                if let Some(tab) = self.http_state.tabs.first_mut() {
+                    let textual = scene < 492;
+                    tab.name = if textual {
+                        "JSON 响应示例"
+                    } else {
+                        "二进制响应示例"
+                    }
+                    .into();
+                    tab.method = "GET".into();
+                    tab.url = "http://127.0.0.1:8080/api/example".into();
+                    let response = HttpResponse {
+                        status: "200 OK".into(),
+                        content_type: if textual {
+                            "application/json; charset=utf-8"
+                        } else {
+                            "application/octet-stream"
+                        }
+                        .into(),
+                        duration_ms: 12,
+                        body: if textual {
+                            "{\n  \"ok\": true,\n  \"items\": [1, 2, 3]\n}"
+                        } else {
+                            "[二进制正文预览不能作为文本接力]"
+                        }
+                        .into(),
+                        body_handoff_available: textual,
+                        truncated: false,
+                    };
+                    tab.output = response.complete_text();
+                    tab.response = Some(response);
+                    tab.handoff_body_only = textual;
+                    tab.busy = false;
+                }
+            }
+            488..=489 => {
+                self.page = Page::Plugins;
+                self.plugins.preview_catalog();
+            }
+            486..=487 => {
+                self.page = Page::Plugins;
+                self.plugins.preview_update();
+            }
+            484..=485 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_ocr_language_fixture(ctx);
+            }
+            482..=483 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_ocr_region_fixture(ctx);
+            }
+            480..=481 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_provenance_handoff_fixture();
+                let (source, text) = self.handoff_source().unwrap();
+                self.handoff = Some(Transfer::new(source, text).unwrap());
+            }
+            478..=479 => {
+                self.page = Page::Images;
+                self.images.preview_image_workflow_ocr_fixture();
+            }
+            476..=477 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_ocr_fixture(ctx);
+            }
+            474..=475 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_rtf_fixture();
+            }
+            472..=473 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_html_fixture();
+            }
+            470..=471 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_file_reference_fixture();
+            }
+            468..=469 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_template_fixture();
+            }
+            466..=467 => {
+                self.page = Page::Clipboard;
+                self.clipboard.preview_grouped_fixture();
+            }
             464..=465 => {
                 self.page = Page::Settings;
                 ctx.data_mut(|data| data.insert_temp(egui::Id::new("preview-explorer-only"), true));
@@ -1433,7 +1835,7 @@ impl DevToolsApp {
                 self.data_state
                     .preview_sqlite_export(fixture.parent().unwrap().join("本地资料.sqlite"));
             }
-            288..=289 => self.preview_handoff_discovery_smoke(0),
+            288..=289 => self.preview_clipboard_json_records_handoff_smoke(0),
             286..=287 => self.preview_event_handoff_scene(),
             282..=285 => {
                 self.page = Page::Calendar;
@@ -1538,6 +1940,10 @@ impl DevToolsApp {
                 };
                 self.planner
                     .preview(scene >= 200, (202..=203).contains(&scene));
+                if (202..=203).contains(&scene) {
+                    self.clock.preview_reminder();
+                    self.reminder_center_open = true;
+                }
                 if scene >= 206 {
                     self.planner.preview_focus_editor();
                 }
@@ -1566,7 +1972,7 @@ impl DevToolsApp {
                 self.navigate(Page::EncodingTools, Some(ToolKind::Yaml));
                 self.tool_state.input = ToolKind::Yaml.sample().into();
                 self.tool_state.output =
-                    run_tool(ToolKind::Yaml, 0, &self.tool_state.input, "", 10).unwrap();
+                    run_tool(ToolKind::Yaml, 0, &self.tool_state.input, "", None, 10).unwrap();
             }
             4 | 5 => {
                 self.page = Page::Data;
@@ -1595,11 +2001,13 @@ impl DevToolsApp {
                 );
                 self.tool_state.input = kind.sample().into();
                 self.tool_state.pattern = kind.secondary_sample().into();
+                self.tool_state.replacement = kind.replacement_sample().into();
                 self.tool_state.output = run_tool(
                     kind,
                     0,
                     &self.tool_state.input,
                     &self.tool_state.pattern,
+                    Some(&self.tool_state.replacement),
                     10,
                 )
                 .unwrap();
@@ -1706,6 +2114,15 @@ impl DevToolsApp {
                 self.page = Page::KnowledgeSources;
                 self.knowledge_sources.preview_fixture();
             }
+            #[cfg(windows)]
+            120 | 121 => {
+                self.page = Page::DocumentIngestion;
+                self.knowledge_sources.preview_fixture();
+                self.knowledge_sources.preview_add_ocr_image();
+                self.document_ingestion
+                    .preview_ocr_fixture(self.knowledge_sources.sources());
+            }
+            #[cfg(not(windows))]
             120 | 121 => {
                 self.page = Page::DocumentIngestion;
                 self.knowledge_sources.preview_fixture();
@@ -1759,6 +2176,10 @@ impl DevToolsApp {
             152 => {
                 self.page = Page::Agent;
                 self.agent.preview_record_export();
+            }
+            556 => {
+                self.page = Page::Agent;
+                self.agent.preview_tool_approval_fixture();
             }
             153 | 154 => {
                 self.page = Page::AgentRecords;
@@ -1845,9 +2266,16 @@ impl DevToolsApp {
                     self.plugins.preview_prompt_editor();
                 }
             }
-            76 | 77 => {
+            76 | 77 | 552 | 553 | 554 | 555 => {
                 self.page = Page::Tasks;
-                self.preview_tasks();
+                if (552..=553).contains(&scene) {
+                    self.preview_tasks();
+                    self.preview_task_cancel_confirmation();
+                } else if scene >= 554 {
+                    self.preview_task_history();
+                } else {
+                    self.preview_tasks();
+                }
             }
             74 | 75 => {
                 self.page = Page::Data;
@@ -1865,7 +2293,7 @@ impl DevToolsApp {
                 self.navigate(Page::EncodingTools, Some(ToolKind::Json));
                 self.tool_state.input = "[{\"name\":\"示例\",\"count\":3}]".into();
                 self.tool_state.output =
-                    run_tool(ToolKind::Json, 0, &self.tool_state.input, "", 10).unwrap();
+                    run_tool(ToolKind::Json, 0, &self.tool_state.input, "", None, 10).unwrap();
                 self.handoff =
                     Some(handoff::Transfer::new("JSON".into(), &self.tool_state.output).unwrap());
             }
@@ -1913,7 +2341,8 @@ impl DevToolsApp {
                 };
                 self.navigate(Page::SmallTools, Some(kind));
                 self.tool_state.input = kind.sample().into();
-                self.tool_state.output = run_tool(kind, 0, &self.tool_state.input, "", 10).unwrap();
+                self.tool_state.output =
+                    run_tool(kind, 0, &self.tool_state.input, "", None, 10).unwrap();
             }
             31 => {
                 self.page = Page::Library;
@@ -1956,6 +2385,24 @@ impl DevToolsApp {
                 self.launcher_query = "json".into();
             }
         }
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_time_zone_choice_and_utc(
+        &self,
+    ) -> Option<(crate::time_zone::AmbiguousChoice, String)> {
+        self.time_zone.preview_choice_and_utc()
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_time_zone_ui_state(
+        &self,
+    ) -> (
+        Option<crate::time_zone::AmbiguousChoice>,
+        Option<String>,
+        String,
+    ) {
+        self.time_zone.preview_ui_state()
     }
 
     #[cfg(feature = "ui-preview")]
@@ -2419,6 +2866,12 @@ impl DevToolsApp {
         let clipboard =
             crate::clipboard::State::new(preferences_path.with_file_name("clipboard-policy.json"));
         let preferences = Preferences::load(&preferences_path);
+        let (task_history_local, task_history_load_error) = match crate::task_history::load(
+            &preferences_path.with_file_name("task-history.sqlite3"),
+        ) {
+            Ok(records) => (records, None),
+            Err(error) => (Vec::new(), Some(format!("本机任务历史读取失败：{error:#}"))),
+        };
         let theme = if preferences.light {
             Theme::Light
         } else {
@@ -2497,7 +2950,6 @@ impl DevToolsApp {
             #[cfg(feature = "ui-preview")]
             preview_service_rows: 0,
             #[cfg(feature = "ui-preview")]
-            preview_tray_capture: None,
             #[cfg(feature = "ui-preview")]
             preview_tray_workflow: None,
             #[cfg(feature = "ui-preview")]
@@ -2505,7 +2957,7 @@ impl DevToolsApp {
             hotkey, hotkey_edit, hotkey_status: "正在注册快捷键…".into(),
             recorder_hotkeys, recorder_hotkey_status: "正在注册录屏快捷键…".into(),
             quick_active,
-            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_context: false, quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), explorer_audit: Default::default(), tasks: Default::default(), handoff: None,
+            quick_open: false, quick_focus: false, quick_had_focus: false, quick_opened: Instant::now(), quick_tab: "收藏".into(), quick_category: "全部分类".into(), quick_collection_id: String::new(), quick_context: false, quick_position: None, quick_size: egui::vec2(460.0,620.0), intake: Default::default(), explorer_audit: Default::default(), tasks: Default::default(), task_history_local, task_history_load_error, task_history_clear_confirm: false, task_query: String::new(), task_filter: Default::default(), task_cancel_all_pending: false, handoff: None,
             manager,
             tray,
             page: Page::Home,
@@ -2556,6 +3008,7 @@ impl DevToolsApp {
             quit_requested: false,
             workspace_exit_confirm: false,
             planner: crate::planner::State::new(preferences_path.with_file_name("planner.sqlite3")),
+            reminder_center_open: false,
             planner_active,
             tray_bridge_stop,
             tray_exit_requested,
@@ -2566,14 +3019,22 @@ impl DevToolsApp {
             tool_search: String::new(), library_query: String::new(), launcher_query: String::new(), launcher_open: false,
             launcher_focus: false, launcher_index: 0, toast: None,
             launcher_scope: Default::default(),
+            navigation_history: Default::default(),
+            instance_search: Default::default(),
+            library_scroll_offset: 0.0,
+            library_scroll_restore: None,
+            launcher_keyboard: Default::default(),
+            quick_keyboard: Default::default(),
             #[cfg(feature = "ui-preview")]
-            launcher_scope_buttons: [None; 4],
+            launcher_scope_buttons: [None; 5],
             #[cfg(feature = "ui-preview")]
             workflow_bookmark_button: None,
             #[cfg(feature = "ui-preview")]
             workflow_recent_button: None,
             data_state: crate::workbench::sessions::Workspace::new(preferences_path.with_file_name("workspace.sqlite3")), file_state: FileState::default(), clear_tool_confirm:false,
+            artifact_hub: crate::artifact_hub::State::new(preferences_path.with_file_name("artifacts.sqlite3")),
             plugins: crate::plugin_ui::PluginState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("plugins")),
+            plugin_entry_cache: RefCell::default(),
             mcp: crate::mcp_ui::McpState::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
             agent: crate::agent_ui::State::new(preferences_path.parent().unwrap_or(std::path::Path::new(".")).join("mcp-permissions.json")),
             agent_records: crate::agent_record_ui::State::default(),
@@ -2581,6 +3042,8 @@ impl DevToolsApp {
             images: Default::default(),
             markdown: Default::default(),
             file_encoding: Default::default(),
+            file_rename: Default::default(),
+            log_viewer: Default::default(),
             checksum_manifest: Default::default(),
             disk_inspector: Default::default(),
             duplicate_finder: Default::default(),
@@ -2594,6 +3057,7 @@ impl DevToolsApp {
             msi_update: Default::default(),
             delta_update: Default::default(),
             clock: crate::clock::State::new(preferences_path.with_file_name("clock.json"),cc.egui_ctx.clone()),
+            time_zone: Default::default(),
             prefix: Default::default(),
             symbols: Default::default(),
             ascii_art: Default::default(),
@@ -2607,7 +3071,7 @@ impl DevToolsApp {
             embedding: Default::default(),
             knowledge_capture: Default::default(),
             knowledge_eval: crate::knowledge_eval::State::new(crate::knowledge_index::default_path(), crate::vector_index::default_path()),
-            integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_query_key: Default::default(),
+            integrations: Default::default(), frameworks: Default::default(), home_filter: "全部".into(), home_category: "全部分类".into(), home_query_key: Default::default(), collection_name_draft: String::new(), collection_rename_draft: String::new(), collection_rename_target: String::new(), collection_delete_pending: None, collection_import_preview: None,
         };
         if restore_services {
             app.spawn_restore();
@@ -2909,9 +3373,25 @@ impl DevToolsApp {
                         self.visit(tool.id());
                     }
                 },
-                BackgroundEvent::NetworkResult(request_id, result) => {
+                BackgroundEvent::NetworkResult {
+                    request_id,
+                    duration_ms,
+                    result,
+                } => {
                     if self.network_state.request_id == request_id {
                         self.network_state.busy = false;
+                        let (phase, summary) = if result.is_ok() {
+                            (
+                                crate::tasks::Phase::Done,
+                                format!("检查完成 · {duration_ms} ms"),
+                            )
+                        } else {
+                            (
+                                crate::tasks::Phase::Failed,
+                                format!("检查失败 · {duration_ms} ms"),
+                            )
+                        };
+                        self.network_state.job.finish(phase, summary);
                         self.network_state.output = result.unwrap_or_else(|error| error);
                     }
                 }
@@ -2922,16 +3402,32 @@ impl DevToolsApp {
                     duration_ms,
                     result,
                 } => {
-                    let status = match &result {
-                        Ok(output) => output.lines().next().unwrap_or("HTTP 响应").to_owned(),
-                        Err(_) => "请求失败".to_owned(),
+                    let (status, phase, task_summary) = match &result {
+                        Ok(response) => {
+                            let status = format!("HTTP {}", response.status);
+                            (
+                                status.clone(),
+                                crate::tasks::Phase::Done,
+                                format!("{status} · {duration_ms} ms"),
+                            )
+                        }
+                        Err(_) => (
+                            "请求失败".to_owned(),
+                            crate::tasks::Phase::Failed,
+                            format!("请求失败 · {duration_ms} ms"),
+                        ),
                     };
                     if let Some(tab) = self.http_state.tabs.iter_mut().find(|tab| tab.id == tab_id)
                     {
                         tab.busy = false;
+                        tab.job.finish(phase, task_summary);
                         match result {
-                            Ok(output) => {
-                                tab.output = output;
+                            Ok(response) => {
+                                tab.output = response.complete_text();
+                                if !response.body_handoff_available {
+                                    tab.handoff_body_only = false;
+                                }
+                                tab.response = Some(response);
                                 tab.message.clear();
                             }
                             Err(error) => tab.message = error,
@@ -3005,12 +3501,25 @@ impl DevToolsApp {
     }
 
     fn open_launcher(&mut self) {
+        self.instance_search.main = Default::default();
+        self.launcher_keyboard = Default::default();
         self.launcher_open = true;
         self.launcher_focus = true;
         self.launcher_query.clear();
         self.launcher_index = 0;
     }
     fn navigate(&mut self, page: Page, kind: Option<ToolKind>) {
+        let id = kind.map(|k| k.id().to_owned()).or_else(|| {
+            catalog()
+                .iter()
+                .find(|e| e.page == page && e.kind.is_none())
+                .map(|e| e.id.clone())
+        });
+        self.navigate_with_visit(page, kind, id.as_deref());
+    }
+    fn navigate_with_visit(&mut self, page: Page, kind: Option<ToolKind>, tool_id: Option<&str>) {
+        self.observe_navigation();
+        self.navigation_history.route_hint = tool_id.map(|id| (page, id.into()));
         self.page = page;
         if matches!(page, Page::Notes | Page::Calendar) {
             self.planner.calendar = page == Page::Calendar;
@@ -3020,14 +3529,8 @@ impl DevToolsApp {
             self.tool_state.select(kind);
         }
         self.launcher_open = false;
-        let id = kind.map(|k| k.id().to_owned()).or_else(|| {
-            catalog()
-                .iter()
-                .find(|e| e.page == page && e.kind.is_none())
-                .map(|e| e.id.clone())
-        });
-        if let Some(id) = id {
-            self.visit(&id);
+        if let Some(id) = tool_id {
+            self.visit(id);
         }
     }
     fn toggle_favorite(&mut self, id: &str) {
@@ -3126,14 +3629,18 @@ impl DevToolsApp {
     }
 
     fn entries(&self, query: &str) -> Vec<ToolEntry> {
-        let plugins: Vec<_> = self
-            .plugins
-            .store
-            .tool_refs()
-            .map(|(id, tool)| ToolEntry::plugin(id, tool))
-            .collect();
+        let mut cache = self.plugin_entry_cache.borrow_mut();
+        if cache.catalog_key.as_slice() != self.plugins.store.tool_search_key() {
+            cache.entries = self
+                .plugins
+                .store
+                .tool_refs()
+                .map(|(id, tool)| ToolEntry::plugin(id, tool))
+                .collect();
+            cache.catalog_key = self.plugins.store.tool_search_key().to_vec();
+        }
         registry::ranked(
-            catalog().iter().chain(plugins.iter()),
+            catalog().iter().chain(cache.entries.iter()),
             query,
             &self.preferences,
         )
@@ -3145,6 +3652,11 @@ impl DevToolsApp {
         }
     }
     fn open_entry(&mut self, e: &ToolEntry) {
+        self.observe_navigation();
+        self.navigation_history.route_hint = Some((e.page, e.id.clone()));
+        if e.page == Page::Images {
+            self.images.select_entry(&e.id);
+        }
         if e.page == Page::Data {
             self.data_state.set_active_tool(&e.id);
         }
@@ -3154,18 +3666,8 @@ impl DevToolsApp {
         if matches!(e.page, Page::Notes | Page::Calendar) {
             self.planner.calendar = e.page == Page::Calendar;
         }
-        if e.id == "screenshot-workbench" {
-            self.images.show_screenshot();
-        } else if e.id == "recorder-tutorial" {
+        if e.id == "recorder-tutorial" {
             self.recorder.show_tutorial();
-        } else if e.id == "image-crop-annotate" {
-            self.images.show_editor();
-        } else if e.id == "image-metadata" {
-            self.images.show_metadata();
-        } else if e.id == "image-batch" {
-            self.images.show_batch();
-        } else if e.id == "image-workflow" {
-            self.images.show_workflow();
         } else if e.id == "csv-merge" {
             self.data_state.show_join();
         } else if e.id == "data-transform" {
@@ -3204,11 +3706,13 @@ impl DevToolsApp {
         if !self.launcher_open {
             return;
         }
+        let keyboard_allowed = self.launcher_keyboard.allow_shortcuts(ctx);
         let mut open = true;
         let mut chosen = None;
         let mut bookmark_action = None;
         let mut forget_recent = None;
-        egui::Window::new("快速打开工具与流程")
+        let mut instance_chosen = None;
+        egui::Window::new("快速打开工具、流程与实例")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -3218,7 +3722,7 @@ impl DevToolsApp {
                 let response = ui.add_sized(
                     [ui.available_width(), 38.0],
                     egui::TextEdit::singleline(&mut self.launcher_query)
-                        .hint_text("工具用途或流程名称，例如 压缩图片、每日清洗…")
+                        .hint_text("搜索工具、流程或当前实例名称…")
                         .char_limit(160),
                 );
                 let mut scroll_selection = self.launcher_focus;
@@ -3237,7 +3741,7 @@ impl DevToolsApp {
                             .on_hover_text(format!("Ctrl+{}切换；保留搜索词", index + 1));
                         #[cfg(feature = "ui-preview")]
                         { self.launcher_scope_buttons[index] = Some(_tab.rect.intersect(ui.clip_rect())); }
-                        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, key)) {
+                        if keyboard_allowed && ctx.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, key)) {
                             self.launcher_scope = scope;
                         }
                     }
@@ -3248,27 +3752,38 @@ impl DevToolsApp {
                     scroll_selection = true;
                 }
                 let query = self.launcher_query.to_lowercase();
-                let launcher::Results {tools: entries, workflows, saved, recent} = self.launcher_results(&query);
-                let count = saved.len() + recent.len() + entries.len() + workflows.entries.len();
+                let launcher::Results {tools: entries, workflows, saved, recent, instances} = self.launcher_results(&query);
+                let instance_offset = saved.len() + recent.len() + entries.len() + workflows.entries.len();
+                let count = instance_offset + instances.len();
+                let keys = saved.iter().map(|i| format!("saved:{:?}",self.preferences.workflow_favorites[*i].path))
+                    .chain(recent.iter().map(|i| format!("recent:{:?}",self.preferences.workflow_recent[*i].path)))
+                    .chain(entries.iter().map(|e| format!("tool:{}",e.id)))
+                    .chain(workflows.entries.iter().map(|w| format!("workflow:{}:{:?}",w.instance_id,w.file_name)))
+                    .chain(instances.iter().map(|e|e.key.token())).collect();
+                self.instance_search.main.reconcile(format!("main:{:?}:{}",self.launcher_scope,self.launcher_query),keys,&mut self.launcher_index);
+                launcher::keyboard::preserve_guarded_focus(ctx, &response, keyboard_allowed && count > 0 && self.instance_search.main.armed);
                 if self.preferences.workflow_history_pending() {
                     ui.colored_label(self.colors.amber, "最近载入记录尚未保存，保留在当前窗口并稍后重试。");
                 }
-                ui.label(RichText::new(format!("工具 {} · 收藏流程 {} · 最近载入 {} · 已检查流程 {}", entries.len(), saved.len(), recent.len(), workflows.total))
-                    .size(12.0).color(self.colors.muted));
+                let summary = if self.launcher_scope == launcher::Scope::Instances {format!("当前工作实例 {} · 切换保留输入、结果和后台任务",instances.len())} else {format!("工具 {} · 收藏流程 {} · 最近载入 {} · 已检查流程 {} · 工作实例 {}", entries.len(), saved.len(), recent.len(), workflows.total, instances.len())};
+                ui.label(RichText::new(summary).size(12.0).color(self.colors.muted));
                 if count == 0 {
                     ui.label(match self.launcher_scope {
                         launcher::Scope::Tools => "没有匹配的工具；可简化关键词或切换到全部。",
+                        launcher::Scope::Instances => "没有匹配的当前工作实例；可按实例名称、数据或图片搜索。",
                         launcher::Scope::Favorites => "没有匹配的收藏；可在工具库收藏工具，或在流程搜索结果旁点☆。",
                         _ => "没有匹配的工具或流程；可在数据工作台选择或刷新流程文件夹，也可切换搜索范围。",
                     });
                 } else {
-                    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown))
+                    if keyboard_allowed && launcher::keyboard::consume_plain(ctx, egui::Key::ArrowDown)
                     {
                         scroll_selection = true;
+                        self.instance_search.main.armed = true;
                         self.launcher_index = (self.launcher_index + 1).min(count - 1);
                     }
-                    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
+                    if keyboard_allowed && launcher::keyboard::consume_plain(ctx, egui::Key::ArrowUp) {
                         scroll_selection = true;
+                        self.instance_search.main.armed = true;
                         self.launcher_index = self.launcher_index.saturating_sub(1);
                     }
                     self.launcher_index = self.launcher_index.min(count - 1);
@@ -3280,7 +3795,7 @@ impl DevToolsApp {
                                 let response = ui
                                     .horizontal(|ui| {
                                         let response = ui.selectable_label(
-                                            index == self.launcher_index,
+                                            self.instance_search.main.armed && index == self.launcher_index,
                                             format!(
                                                 "{} · 收藏流程 · {}步",
                                                 workflow.name, workflow.steps
@@ -3329,7 +3844,7 @@ impl DevToolsApp {
                                 let entry = &self.preferences.workflow_recent[*index];
                                 let row_index = saved.len() + offset;
                                 let response = ui.horizontal(|ui| {
-                                    let response = ui.selectable_label(row_index == self.launcher_index,
+                                    let response = ui.selectable_label(self.instance_search.main.armed && row_index == self.launcher_index,
                                         format!("{} · 最近载入 · {}步", entry.name, entry.steps));
                                     let remove = ui.small_button("×").on_hover_text("移除最近记录；保留原文件和当前数据");
                                     #[cfg(feature = "ui-preview")]
@@ -3346,7 +3861,7 @@ impl DevToolsApp {
                             for (i, e) in entries.iter().enumerate() {
                                 let i = saved.len() + recent.len() + i;
                                 let response = ui.selectable_label(
-                                    i == self.launcher_index,
+                                    self.instance_search.main.armed && i == self.launcher_index,
                                     format!("{}   ·   {}   ·   {}", e.title, e.category, e.badge()),
                                 );
                                 ui.add(
@@ -3359,7 +3874,7 @@ impl DevToolsApp {
                                 )
                                 .on_hover_text(&e.description);
                                 if !query.is_empty() {
-                                    ui.small(e.match_hint(&query));
+                                    ui.small(e.match_detail(&query));
                                 }
                                 ui.add_space(6.0);
                                 if scroll_selection && i == self.launcher_index {
@@ -3374,7 +3889,7 @@ impl DevToolsApp {
                                 let response = ui
                                     .horizontal(|ui| {
                                         let response = ui.selectable_label(
-                                            index == self.launcher_index,
+                                            self.instance_search.main.armed && index == self.launcher_index,
                                             format!(
                                                 "{} · 已保存流程 · {}步",
                                                 workflow.name, workflow.steps
@@ -3423,15 +3938,24 @@ impl DevToolsApp {
                                     chosen = Some(launcher::Choice::Workflow(workflow.clone()));
                                 }
                             }
+                            for (offset, entry) in instances.iter().enumerate() {
+                                let index = instance_offset + offset;
+                                if self.instance_row(ui, entry, self.instance_search.main.armed && index == self.launcher_index, scroll_selection) {
+                                    instance_chosen = Some(entry.key.clone());
+                                }
+                            }
                         });
+                    if !self.instance_search.main.armed {ui.small("原选中项已关闭或不再匹配；请用方向键或鼠标重新选择。");}
                     if workflows.total > workflows.entries.len() {
                         ui.small(format!(
                             "流程匹配{}条，仅显示前100条；请细化名称或文件名。",
                             workflows.total
                         ));
                     }
-                    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-                        chosen = Some(if let Some(index) = saved.get(self.launcher_index) {
+                    if keyboard_allowed && launcher::keyboard::consume_plain(ctx, egui::Key::Enter) && self.instance_search.main.armed {
+                        if let Some(entry) = instances.get(self.launcher_index.saturating_sub(instance_offset)).filter(|_|self.launcher_index >= instance_offset) {
+                            instance_chosen = Some(entry.key.clone());
+                        } else { chosen = Some(if let Some(index) = saved.get(self.launcher_index) {
                             launcher::Choice::SavedWorkflow(
                                 self.preferences.workflow_favorites[*index].clone(),
                             )
@@ -3445,18 +3969,22 @@ impl DevToolsApp {
                                     [self.launcher_index - saved.len() - recent.len() - entries.len()]
                                 .clone(),
                             )
-                        });
+                        }); }
                     }
                 }
                 ui.separator();
                 ui.label(
-                    RichText::new("↑ ↓ 选择     Enter 打开     Esc 关闭     Ctrl 1–4 切换范围")
+                    RichText::new("↑ ↓ 选择     Enter 打开     Esc 关闭     Ctrl 1–5 切换范围")
                         .small()
                         .weak(),
                 );
             });
-        if !open || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        if !open || (keyboard_allowed && launcher::keyboard::consume_plain(ctx, egui::Key::Escape))
+        {
             self.launcher_open = false;
+        }
+        if let Some(key) = instance_chosen {
+            self.open_instance_result(ctx, &key);
         }
         if let Some(choice) = chosen {
             self.open_search_choice(choice);
@@ -3577,10 +4105,14 @@ impl DevToolsApp {
                             self.tool_state.pattern =
                                 self.tool_state.selected.secondary_sample().into();
                         }
+                        if self.tool_state.replacement.is_empty() {
+                            self.tool_state.replacement =
+                                self.tool_state.selected.replacement_sample().into();
+                        }
                     }
                     if ui
                         .add_enabled(
-                            !self.tool_state.input.is_empty() || self.tool_state.has_result() || !self.tool_state.message.is_empty(),
+                            !self.tool_state.input.is_empty() || !self.tool_state.replacement.is_empty() || self.tool_state.has_result() || !self.tool_state.message.is_empty(),
                             egui::Button::new("清空").small(),
                         )
                         .clicked()
@@ -3588,7 +4120,14 @@ impl DevToolsApp {
                         self.clear_tool_confirm = true;
                     }
                 });
-                let paired_text = self.tool_state.has_plugin_mode() && ui.available_width() >= 520.0;
+                let paired_text = if matches!(
+                    self.tool_state.selected,
+                    ToolKind::SqlFormat | ToolKind::JsonSchema
+                ) {
+                    ui.available_width() >= 820.0
+                } else {
+                    self.tool_state.has_plugin_mode() && ui.available_width() >= 520.0
+                };
                 if paired_text {
                     ui.add_space(6.0);
                 } else {
@@ -3678,14 +4217,145 @@ impl DevToolsApp {
                         }
                     }
                     _ => {
+                        if self.tool_state.selected == ToolKind::SqlFormat {
+                            let mut dialect_changed = false;
+                            let mut format_changed = false;
+                            ui.horizontal(|ui| {
+                                ui.label("SQL 方言");
+                                egui::ComboBox::from_id_salt("sql-format-dialect")
+                                    .selected_text(match self.tool_state.pattern.as_str() {
+                                        "generic" => "通用 SQL",
+                                        "mysql" => "MySQL",
+                                        "sqlite" => "SQLite",
+                                        "sqlserver" => "SQL Server / T-SQL",
+                                        _ => "PostgreSQL",
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        for (id, label) in [
+                                            ("generic", "通用 SQL"),
+                                            ("postgresql", "PostgreSQL"),
+                                            ("mysql", "MySQL"),
+                                            ("sqlite", "SQLite"),
+                                            ("sqlserver", "SQL Server / T-SQL"),
+                                        ] {
+                                            dialect_changed |= ui
+                                                .selectable_value(
+                                                    &mut self.tool_state.pattern,
+                                                    id.to_owned(),
+                                                    label,
+                                                )
+                                                .changed();
+                                        }
+                                    });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("缩进");
+                                egui::ComboBox::from_id_salt("sql-format-indent")
+                                    .selected_text(match self.tool_state.sql_indent {
+                                        crate::sql_formatter::IndentStyle::TwoSpaces => "2 空格",
+                                        crate::sql_formatter::IndentStyle::FourSpaces => "4 空格",
+                                        crate::sql_formatter::IndentStyle::Tabs => "Tab",
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        for (style, label) in [
+                                            (crate::sql_formatter::IndentStyle::TwoSpaces, "2 空格"),
+                                            (crate::sql_formatter::IndentStyle::FourSpaces, "4 空格"),
+                                            (crate::sql_formatter::IndentStyle::Tabs, "Tab"),
+                                        ] {
+                                            format_changed |= ui
+                                                .selectable_value(
+                                                    &mut self.tool_state.sql_indent,
+                                                    style,
+                                                    label,
+                                                )
+                                                .changed();
+                                        }
+                                    });
+                                ui.label("关键字");
+                                egui::ComboBox::from_id_salt("sql-format-keyword-case")
+                                    .selected_text(match self.tool_state.sql_keyword_case {
+                                        crate::sql_formatter::KeywordCase::Uppercase => "大写",
+                                        crate::sql_formatter::KeywordCase::Lowercase => "小写",
+                                        crate::sql_formatter::KeywordCase::Preserve => "保留原样",
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        for (case, label) in [
+                                            (crate::sql_formatter::KeywordCase::Uppercase, "大写"),
+                                            (crate::sql_formatter::KeywordCase::Lowercase, "小写"),
+                                            (crate::sql_formatter::KeywordCase::Preserve, "保留原样"),
+                                        ] {
+                                            format_changed |= ui
+                                                .selectable_value(
+                                                    &mut self.tool_state.sql_keyword_case,
+                                                    case,
+                                                    label,
+                                                )
+                                                .changed();
+                                        }
+                                    });
+                            });
+                            if dialect_changed || format_changed {
+                                self.tool_state.clear_result();
+                            }
+                            ui.add_space(8.0);
+                        }
                         if let Some(label) = self.tool_state.selected.option_label()
                             && self.tool_state.selected != ToolKind::JsonDiff
                         {
-                            ui.label(label);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(label);
+                                if self.tool_state.selected == ToolKind::JsonSchema
+                                    && ui.button("选择 Schema 文件…").clicked()
+                                    && let Some(path) = rfd::FileDialog::new()
+                                        .add_filter("JSON Schema", &["json", "schema"])
+                                        .pick_file()
+                                {
+                                    if let Err(error) = self.tool_state.load_schema_file(&path) {
+                                        self.tool_state.message = error.to_string();
+                                    }
+                                }
+                                if self.tool_state.selected == ToolKind::JsonSchema
+                                    && self.tool_state.schema_file.is_some()
+                                    && ui.button("清除文件基址").clicked()
+                                {
+                                    self.tool_state.clear_schema_file_source();
+                                }
+                            });
+                            if let Some(path) = self.tool_state.schema_file.as_deref() {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "已选本机 Schema：{} · 仅按需读取同目录内引用文件",
+                                        path.file_name()
+                                            .unwrap_or_default()
+                                            .to_string_lossy()
+                                    ))
+                                    .small()
+                                    .color(p.muted),
+                                );
+                            }
+                            if self.tool_state.selected == ToolKind::JsonSchema {
+                                ui.add_sized(
+                                    [ui.available_width(), 88.0],
+                                    egui::TextEdit::multiline(&mut self.tool_state.pattern)
+                                        .font(egui::TextStyle::Monospace)
+                                        .hint_text("粘贴 JSON Schema 文档或先选择本机 Schema 文件…"),
+                                );
+                            } else {
+                                ui.add_sized(
+                                    [ui.available_width(), 32.0],
+                                    egui::TextEdit::singleline(&mut self.tool_state.pattern)
+                                        .font(egui::TextStyle::Monospace),
+                                );
+                            }
+                            ui.add_space(8.0);
+                        }
+                        if self.tool_state.selected == ToolKind::RegexReplace {
+                            ui.label("替换为 · 支持 $1、${name}、$$");
                             ui.add_sized(
                                 [ui.available_width(), 32.0],
-                                egui::TextEdit::singleline(&mut self.tool_state.pattern)
-                                    .font(egui::TextStyle::Monospace),
+                                egui::TextEdit::singleline(&mut self.tool_state.replacement)
+                                    .font(egui::TextStyle::Monospace)
+                                    .hint_text("例如：$1=$2"),
                             );
                             ui.add_space(8.0);
                         }
@@ -3801,6 +4471,9 @@ impl DevToolsApp {
                 std::mem::swap(&mut self.tool_state.input, &mut self.tool_state.output);
             }
         });
+        if let Some(summary) = &self.tool_state.result_summary {
+            ui.label(RichText::new(summary).small().color(p.muted));
+        }
         if !self.tool_state.message.is_empty() {
             ui.label(RichText::new(&self.tool_state.message).color(p.red));
             return;
@@ -3901,7 +4574,16 @@ impl DevToolsApp {
             if ui.small_button("＋ 新建").clicked() {
                 let _ = self.http_state.add_tab();
             }
-            if ui.small_button("× 关闭当前").clicked() {
+            let can_close = self
+                .http_state
+                .tabs
+                .get(self.http_state.selected)
+                .is_some_and(|tab| !tab.busy);
+            if ui
+                .add_enabled(can_close, egui::Button::new("× 关闭当前"))
+                .on_hover_text("请求运行期间不能关闭标签；完成后可正常关闭")
+                .clicked()
+            {
                 self.http_state.close_selected();
             }
         });
@@ -3986,6 +4668,7 @@ impl DevToolsApp {
             .clicked()
         {
             tab.busy = true;
+            tab.job.begin();
             tab.message.clear();
             let tab_id = tab.id;
             let spec = HttpRequestSpec {
@@ -4016,6 +4699,44 @@ impl DevToolsApp {
             ui.label("响应预览（最多 256 KiB）");
             if ui.small_button("复制响应").clicked() {
                 ctx.copy_text(tab.output.clone());
+            }
+            if tab
+                .response
+                .as_ref()
+                .is_some_and(|response| !response.body.is_empty())
+                && ui.small_button("复制正文").clicked()
+            {
+                if let Some(response) = &tab.response {
+                    ctx.copy_text(response.body.clone());
+                }
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label("接力内容：");
+            ui.radio_value(&mut tab.handoff_body_only, false, "完整响应");
+            if let Some(response) = &tab.response {
+                let body_choice = ui.add_enabled(
+                    response.body_handoff_available,
+                    egui::RadioButton::new(tab.handoff_body_only, "仅响应正文"),
+                );
+                if body_choice.clicked() {
+                    tab.handoff_body_only = true;
+                }
+                ui.small(format!(
+                    "{}{}",
+                    response.content_type,
+                    if response.truncated {
+                        " · 正文已截断至 256 KiB"
+                    } else {
+                        ""
+                    }
+                ));
+                if !response.body_handoff_available {
+                    ui.small("正文类型未声明为文本或包含无效 UTF-8，无法文本接力");
+                }
+            } else {
+                ui.add_enabled(false, egui::RadioButton::new(false, "仅响应正文"));
+                ui.small("执行成功后可选择正文接力");
             }
         });
         ui.add_sized(
@@ -4244,6 +4965,8 @@ impl DevToolsApp {
                     self.network_state.busy = true;
                     self.network_state.output = "正在执行，请稍候…".into();
                     self.network_state.request_id += 1;
+                    self.network_state.task_pane = self.network_state.pane;
+                    self.network_state.job.begin();
                     let request_id = self.network_state.request_id;
                     let pane = self.network_state.pane;
                     let host = self.network_state.host.clone();
@@ -4251,12 +4974,17 @@ impl DevToolsApp {
                     let tx = self.event_tx.clone();
                     let ctx = ctx.clone();
                     std::thread::spawn(move || {
+                        let started = Instant::now();
                         let result = match pane {
                             NetworkPane::Dns => resolve_host(&host),
                             NetworkPane::Tcp => test_tcp(&host, &port),
                         }
                         .map_err(|error| error.to_string());
-                        let _ = tx.send(BackgroundEvent::NetworkResult(request_id, result));
+                        let _ = tx.send(BackgroundEvent::NetworkResult {
+                            request_id,
+                            duration_ms: started.elapsed().as_millis(),
+                            result,
+                        });
                         ctx.request_repaint();
                     });
                 }
@@ -4379,7 +5107,7 @@ impl DevToolsApp {
             (self.checksum_manifest.background_active(), "校验清单"),
             (self.disk_inspector.background_active(), "磁盘分析"),
             (self.duplicate_finder.background_active(), "重复文件"),
-            (self.directory_compare.background_active(), "目录比较"),
+            (self.directory_compare.background_active(), "目录对比或复制"),
             (self.sqlite_browser.background_active(), "SQLite"),
             (self.frameworks.background_active(), "Java/Django"),
             (self.integrations.background_active(), "本机集成"),
@@ -5010,6 +5738,8 @@ impl Drop for DevToolsApp {
 
 impl eframe::App for DevToolsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.observe_navigation();
+        self.history_keyboard(ctx);
         if self.last_preferences_refresh.elapsed() >= Duration::from_secs(2) {
             self.last_preferences_refresh = Instant::now();
             if self.preferences.workflow_history_pending()
@@ -5028,13 +5758,19 @@ impl eframe::App for DevToolsApp {
                 ctx.request_repaint();
             }
         }
-        self.clock
-            .persistence_tick(Instant::now(), chrono::Utc::now());
-        if self.clock.poll(Instant::now(), chrono::Utc::now()) {
+        let tick = scheduler::TickSnapshot::capture();
+        self.clock.persistence_tick(tick.monotonic, tick.utc);
+        let clock_fresh = self.clock.poll(tick.monotonic, tick.utc);
+        if clock_fresh {
             self.quick_open = false;
             restore_main_window(self.window_handle, ctx);
         }
-        if self.planner.poll(ctx) {
+        let planner_fresh = self.planner.poll_at(ctx, tick.monotonic, tick.local());
+        let restored_clock_notices = self.clock.take_notification_wake();
+        if clock_fresh || planner_fresh || restored_clock_notices {
+            self.reminder_center_open = true;
+        }
+        if planner_fresh {
             self.quick_open = false;
             restore_main_window(self.window_handle, ctx);
         }
@@ -5044,22 +5780,15 @@ impl eframe::App for DevToolsApp {
             self.planner.needs_clock() || self.clock.needs_clock() || self.clipboard.needs_clock(),
             Ordering::Release,
         );
-        self.mcp.tick(ctx);
         if self.recorder.poll() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         self.poll_tasks(ctx);
-        if let Some(message) = self.frameworks.poll() {
-            self.toast = Some((message, Instant::now()));
-        }
         if self.frameworks.is_running() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         if !matches!(self.page, Page::Java | Page::Django) {
             self.frameworks.clear_token();
-        }
-        if let Some(message) = self.plugins.poll() {
-            self.toast = Some((message, Instant::now()));
         }
         if self.plugins.is_running() {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -5151,6 +5880,16 @@ impl eframe::App for DevToolsApp {
                 Err(error) => self.toast = Some((error.to_string(), Instant::now())),
             }
         }
+        if self.intake.busy() {
+            if self.clipboard.notify_file_relay_waiting() {
+                self.toast = Some((
+                    "当前文件任务完成后会继续打开剪贴板路径确认页".into(),
+                    Instant::now(),
+                ));
+            }
+        } else if let Some(paths) = self.clipboard.take_file_relay() {
+            self.open_startup_files(paths);
+        }
 
         if self.images.take_screenshot_capture_request() {
             self.quick_open = false;
@@ -5172,6 +5911,7 @@ impl eframe::App for DevToolsApp {
         }
         self.receive_drop(ctx);
         self.quick_panel(ctx);
+        self.images.pinned_screenshot_ui(ctx);
         if self.clock.window_ui(ctx) {
             self.page = Page::Clock;
             restore_main_window(self.window_handle, ctx);
@@ -5363,7 +6103,10 @@ impl eframe::App for DevToolsApp {
                     if let Some(offset) = self.planner.take_page_navigation() {
                         scroll = scroll.vertical_scroll_offset(offset);
                     }
-                    scroll.show(ui, |ui| self.planner.ui(ui));
+                    scroll.show(ui, |ui| {
+                        self.planner
+                            .ui_with_reminder_count(ui, self.clock.pending_notice_count())
+                    });
                     let save_shortcut = !conflict_review_open
                         && !self.launcher_open
                         && (self.handoff.is_none() && !self.images.relay_active())
@@ -5383,11 +6126,26 @@ impl eframe::App for DevToolsApp {
                         });
                     }
                     self.page = page;
+                    if let Some((title, source, body)) = self.planner.take_knowledge_handoff() {
+                        match self
+                            .knowledge_capture
+                            .receive_memo_handoff(&title, &source, &body)
+                        {
+                            Ok(()) => {
+                                self.visit("knowledge-capture");
+                                self.page = Page::KnowledgeCapture;
+                            }
+                            Err(error) => {
+                                self.toast = Some((error.to_string(), Instant::now()));
+                            }
+                        }
+                    }
                 }
                 Page::Intake => {
                     egui::ScrollArea::vertical().show(ui, |ui| self.intake.ui(ui));
                 }
                 Page::Library => self.library_page(ui),
+                Page::Artifacts => self.artifact_hub.ui(ui),
                 Page::Home => {
                     egui::ScrollArea::vertical()
                         .id_salt("home-scroll")
@@ -5427,6 +6185,30 @@ impl eframe::App for DevToolsApp {
                             Err(error) => self.data_state.message = error.to_string(),
                         }
                     }
+                    if self.handoff.is_none()
+                        && let Some((label, data)) = self.data_state.take_workflow_table_send()
+                    {
+                        let provenance = crate::tool_provenance::current_for_tool("pipeline").ok();
+                        let source = provenance.as_ref().map_or_else(
+                            || format!("可组合数据管线 · {label}"),
+                            |provenance| {
+                                format!(
+                                    "{} v{} · {label}",
+                                    provenance.tool_id, provenance.tool_version
+                                )
+                            },
+                        );
+                        match handoff::Transfer::material(
+                            source,
+                            crate::text_flow::material::Material::Table(data),
+                        ) {
+                            Ok(mut transfer) => {
+                                transfer.set_source_provenance(provenance);
+                                self.handoff = Some(transfer);
+                            }
+                            Err(error) => self.data_state.message = error.to_string(),
+                        }
+                    }
                     if let Some(text) = self.data_state.take_text_flow_send() {
                         match handoff::Transfer::new("文本工具流程结果".into(), &text) {
                             Ok(transfer) => self.handoff = Some(transfer),
@@ -5434,8 +6216,20 @@ impl eframe::App for DevToolsApp {
                         }
                     }
                     if let Some(data) = self.data_state.take_text_flow_table() {
-                        match self.data_state.import_table(data, "流程表格结果") {
-                            Ok(()) => self.visit("data"),
+                        match handoff::Transfer::material(
+                            "文本工具流程表格结果".into(),
+                            crate::text_flow::material::Material::Table(data),
+                        ) {
+                            Ok(transfer) => self.handoff = Some(transfer),
+                            Err(error) => {
+                                self.data_state.text_flow_transfer_failed(error.to_string())
+                            }
+                        }
+                    }
+                    if let Some(file) = self.data_state.take_text_flow_file() {
+                        match handoff::Transfer::file("文本工具流程原始文件引用".into(), file)
+                        {
+                            Ok(transfer) => self.handoff = Some(transfer),
                             Err(error) => {
                                 self.data_state.text_flow_transfer_failed(error.to_string())
                             }
@@ -5555,6 +6349,21 @@ impl eframe::App for DevToolsApp {
                             .id_salt("image-tools-page")
                             .show(ui, |ui| self.images.ui(ui));
                     }
+                    if let Some(image) = self.images.take_text_flow_image() {
+                        match self
+                            .data_state
+                            .import_text_flow_image(image, "图片信息流程")
+                        {
+                            Ok(()) => {
+                                self.navigate(Page::Data, None);
+                                self.toast = Some((
+                                    "图片已接入新流程；点击运行生成信息报告".into(),
+                                    Instant::now(),
+                                ));
+                            }
+                            Err(error) => self.toast = Some((error.to_string(), Instant::now())),
+                        }
+                    }
                 }
                 Page::Markdown => {
                     egui::ScrollArea::vertical()
@@ -5565,6 +6374,16 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("file-encoding-page")
                         .show(ui, |ui| self.file_encoding.ui(ui));
+                }
+                Page::FileRename => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("file-rename-page")
+                        .show(ui, |ui| self.file_rename.ui(ui));
+                }
+                Page::LogViewer => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("log-viewer-page")
+                        .show(ui, |ui| self.log_viewer.ui(ui, ctx));
                 }
                 Page::ChecksumManifest => {
                     egui::ScrollArea::vertical()
@@ -5585,6 +6404,15 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("directory-compare-page")
                         .show(ui, |ui| self.directory_compare.ui(ui));
+                    if let Some((name, table)) = self.directory_compare.take_workbench_transfer() {
+                        let result = self.data_state.import_table(table, &name);
+                        if result.is_ok() {
+                            self.data_state.focus_received_table();
+                            self.page = Page::Data;
+                            self.visit("data");
+                        }
+                        self.directory_compare.complete_workbench_transfer(result);
+                    }
                 }
                 Page::SqliteBrowser => {
                     egui::ScrollArea::vertical()
@@ -5621,6 +6449,11 @@ impl eframe::App for DevToolsApp {
                             )
                         });
                 }
+                Page::TimeZone => {
+                    egui::ScrollArea::vertical()
+                        .id_salt("time-zone-workbench-page")
+                        .show(ui, |ui| self.time_zone.ui(ui));
+                }
                 Page::Clipboard => {
                     egui::ScrollArea::vertical()
                         .id_salt("clipboard-workbench-page")
@@ -5637,6 +6470,7 @@ impl eframe::App for DevToolsApp {
                                     .find(|entry| entry.id == "advanced-calculator")
                                     .and_then(|entry| entry.version.as_deref())
                                     .unwrap_or("未声明"),
+                                &mut self.time_zone,
                             )
                         });
                     self.finish_date_transfer();
@@ -5660,6 +6494,10 @@ impl eframe::App for DevToolsApp {
                     egui::ScrollArea::vertical()
                         .id_salt("knowledge-sources-page")
                         .show(ui, |ui| self.knowledge_sources.ui(ui));
+                    if self.knowledge_sources.take_index_request() {
+                        self.visit("knowledge-index");
+                        self.page = Page::KnowledgeIndex;
+                    }
                 }
                 Page::DocumentIngestion => {
                     egui::ScrollArea::vertical()
@@ -5677,8 +6515,13 @@ impl eframe::App for DevToolsApp {
                                 ui,
                                 self.knowledge_sources.sources(),
                                 self.knowledge_sources.is_locked(),
+                                self.document_ingestion.ocr_language_tag(),
                             )
                         });
+                    if self.knowledge_index.take_search_request() {
+                        self.visit("knowledge-search");
+                        self.page = Page::KnowledgeSearch;
+                    }
                 }
                 Page::VectorIndex => {
                     egui::ScrollArea::vertical()
@@ -5736,6 +6579,17 @@ impl eframe::App for DevToolsApp {
                         .show(ui, |ui| {
                             self.knowledge_capture.ui(ui, &mut self.knowledge_sources)
                         });
+                    if let Some(source_id) = self.knowledge_capture.take_scan_request() {
+                        match self.knowledge_sources.scan_source(&source_id) {
+                            Ok(()) => {
+                                self.visit("knowledge-sources");
+                                self.page = Page::KnowledgeSources;
+                            }
+                            Err(error) => {
+                                self.toast = Some((error.to_string(), Instant::now()));
+                            }
+                        }
+                    }
                 }
                 Page::KnowledgeMcp => {
                     egui::ScrollArea::vertical()
@@ -5793,14 +6647,39 @@ impl eframe::App for DevToolsApp {
             self.visit(id);
         }
         self.handoff_dialog(ctx);
-        self.file_material_dialog(ctx);
+        self.route_file_material();
         self.overlays(ctx);
         self.launcher(ctx);
-        self.clock.notice_ui(ctx);
-        if self.planner.reminder_ui(ctx) {
+        let reminder_count = self
+            .clock
+            .pending_notice_count()
+            .saturating_add(self.planner.pending_reminder_count());
+        if reminder_count > 0
+            && !self.reminder_center_open
+            && !matches!(self.page, Page::Notes | Page::Calendar)
+        {
+            let response = egui::Area::new(egui::Id::new("reminder-center-access"))
+                .order(egui::Order::Foreground)
+                .anchor(egui::Align2::RIGHT_TOP, [-20.0, 44.0])
+                .show(ctx, |ui| ui.button(format!("提醒中心 · {reminder_count}")));
+            if response.inner.clicked() {
+                self.reminder_center_open = true;
+            }
+        }
+        if self.planner.reminder_center_requested() {
+            self.reminder_center_open = true;
+        }
+        if self.planner.reminder_center_ui(
+            &mut self.clock,
+            &mut self.reminder_center_open,
+            ctx,
+            tick.local(),
+            tick.utc,
+        ) {
             self.navigate(Page::Calendar, None);
         }
         self.recorder.selection_overlay(ctx);
+        self.recorder.teleprompter_overlay(ctx);
         if self.recorder.take_restore_request() {
             restore_main_window(self.window_handle, ctx);
         }
@@ -5821,6 +6700,7 @@ impl eframe::App for DevToolsApp {
                         if ui.button("确认清空").clicked() {
                             self.tool_state.input.clear();
                             self.tool_state.pattern.clear();
+                            self.tool_state.replacement.clear();
                             self.tool_state.clear_result();
                             self.tool_state.qr_image = None;
                             self.qr_texture = None;
@@ -5829,6 +6709,7 @@ impl eframe::App for DevToolsApp {
                     });
                 });
         }
+        self.observe_navigation();
         ctx.request_repaint_after(Duration::from_millis(250));
     }
 }

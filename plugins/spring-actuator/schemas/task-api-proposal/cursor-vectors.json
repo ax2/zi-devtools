@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "profile": "plugin.task.lifecycle.v1@1.0.0-preview.1",
+  "vectors": [
+    {
+      "id": "normal-page",
+      "accepted": true,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [
+          {
+            "sequence": 5,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          },
+          {
+            "sequence": 6,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          }
+        ],
+        "requestedAfterSequence": 4,
+        "nextSequence": 6,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 6,
+        "snapshotRequired": false,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "has-more",
+      "accepted": true,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [
+          {
+            "sequence": 5,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          },
+          {
+            "sequence": 6,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          }
+        ],
+        "requestedAfterSequence": 4,
+        "nextSequence": 6,
+        "hasMore": true,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 8,
+        "snapshotRequired": false,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "empty-at-latest",
+      "accepted": true,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [],
+        "requestedAfterSequence": 6,
+        "nextSequence": 6,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 6,
+        "snapshotRequired": false,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "cursor-expired-requires-snapshot",
+      "accepted": true,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [],
+        "requestedAfterSequence": 2,
+        "nextSequence": 2,
+        "hasMore": false,
+        "earliestRetainedSequence": 5,
+        "latestSequence": 8,
+        "cursorError": "cursor_expired",
+        "snapshotRequired": true,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "cursor-invalid",
+      "accepted": true,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [],
+        "requestedAfterSequence": 9,
+        "nextSequence": 9,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 8,
+        "cursorError": "cursor_invalid",
+        "snapshotRequired": true,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "non-monotonic-events-rejected",
+      "accepted": false,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [
+          {
+            "sequence": 6,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          },
+          {
+            "sequence": 5,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          }
+        ],
+        "requestedAfterSequence": 4,
+        "nextSequence": 5,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 6,
+        "snapshotRequired": false,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "next-sequence-mismatch-rejected",
+      "accepted": false,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [
+          {
+            "sequence": 5,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          },
+          {
+            "sequence": 6,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          }
+        ],
+        "requestedAfterSequence": 4,
+        "nextSequence": 5,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 6,
+        "snapshotRequired": false,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "has-more-mismatch-rejected",
+      "accepted": false,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [
+          {
+            "sequence": 5,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          },
+          {
+            "sequence": 6,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          }
+        ],
+        "requestedAfterSequence": 4,
+        "nextSequence": 6,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 8,
+        "snapshotRequired": false,
+        "terminal": null
+      },
+      "schemaAccepted": true
+    },
+    {
+      "id": "expired-with-event-rejected",
+      "accepted": false,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [
+          {
+            "sequence": 5,
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "eventType": "state_changed",
+            "state": "running",
+            "at": "2026-10-16T12:00:00Z"
+          }
+        ],
+        "requestedAfterSequence": 2,
+        "nextSequence": 5,
+        "hasMore": true,
+        "earliestRetainedSequence": 5,
+        "latestSequence": 8,
+        "cursorError": "cursor_expired",
+        "snapshotRequired": true,
+        "terminal": null
+      },
+      "schemaAccepted": false
+    },
+    {
+      "id": "terminal-sequence-after-latest-rejected",
+      "accepted": false,
+      "response": {
+        "schemaVersion": 1,
+        "taskRef": "taskref_opaque_example_01",
+        "events": [],
+        "requestedAfterSequence": 8,
+        "nextSequence": 8,
+        "hasMore": false,
+        "earliestRetainedSequence": 1,
+        "latestSequence": 8,
+        "snapshotRequired": false,
+        "terminal": {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 9,
+          "state": "cancelled",
+          "executionFinished": true,
+          "finishedAt": "2026-10-16T12:00:00Z",
+          "resultAvailable": false
+        }
+      },
+      "schemaAccepted": true
+    }
+  ]
+}

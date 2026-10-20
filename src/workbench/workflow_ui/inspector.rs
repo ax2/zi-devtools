@@ -5,6 +5,7 @@ const PAGE: usize = 50;
 pub(super) struct State {
     pub(super) open: bool,
     source: bool,
+    snapshot: Option<(String, std::sync::Arc<Dataset>)>,
     query: String,
     visible: Vec<usize>,
     page: usize,
@@ -21,6 +22,25 @@ impl State {
             visible: (0..result.rows.len()).collect(),
             ..Default::default()
         };
+    }
+    pub(super) fn open_step(&mut self, step: usize, result: Dataset) {
+        let visible = (0..result.rows.len()).collect();
+        *self = Self {
+            open: true,
+            snapshot: Some((format!("第{step}步结果"), std::sync::Arc::new(result))),
+            visible,
+            ..Default::default()
+        };
+    }
+    #[cfg(test)]
+    pub(super) fn step_snapshot(&self) -> Option<&Dataset> {
+        self.snapshot.as_ref().map(|(_, data)| data.as_ref())
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn snapshot_for_preview(&self) -> Option<(&str, &Dataset)> {
+        self.snapshot
+            .as_ref()
+            .map(|(label, data)| (label.as_str(), data.as_ref()))
     }
     fn filter(&mut self, data: &Dataset) {
         self.visible = data.view(&self.query, None, false);
@@ -91,30 +111,52 @@ impl DataState {
         if !self.workflow.inspect.open {
             return;
         }
-        let (Some(preview), Some(source)) = (&self.workflow.proposal, &self.workflow.source) else {
+        let state = &mut self.workflow.inspect;
+        let snapshot = state.snapshot.clone();
+        let (source, preview) = if snapshot.is_none() {
+            let (Some(preview), Some(source)) = (&self.workflow.proposal, &self.workflow.source)
+            else {
+                self.workflow.inspect = State::default();
+                return;
+            };
+            (Some(source), Some(preview))
+        } else {
+            (None, None)
+        };
+        if snapshot.is_none() && (preview.is_none() || source.is_none()) {
             self.workflow.inspect = State::default();
             return;
-        };
-        let state = &mut self.workflow.inspect;
+        }
         #[cfg(feature = "ui-preview")]
         let buttons = &mut self.workflow.buttons;
         let mut close = false;
+        let mut table_send = None;
         let response = egui::Modal::new(ui.id().with("workflow-inspector")).show(ui.ctx(), |ui| {
             let width = (ui.ctx().screen_rect().width() - 64.0).clamp(240.0, 820.0);
             ui.set_width(width);
-            ui.heading("检查流程结果");
+            ui.heading(snapshot.as_ref().map_or("检查流程结果", |(label, _)| label));
             ui.small("只读快照 · 查看筛选和分页不改变流程范围；关闭后仍需明确应用。");
-            ui.horizontal_wrapped(|ui| {
-                let before = state.source;
-                let input = ui.selectable_value(&mut state.source, true, format!("输入表 · {}行", source.rows.len()));
-                let output = ui.selectable_value(&mut state.source, false, format!("流程结果 · {}行", preview.result.rows.len()));
-                #[cfg(feature = "ui-preview")]
-                { buttons[7] = Some((input.rect, ui.clip_rect())); buttons[8] = Some((output.rect, ui.clip_rect())); }
-                #[cfg(not(feature = "ui-preview"))]
-                let _ = (input, output);
-                if before != state.source { state.query.clear(); state.filter(if state.source { source } else { &preview.result }); }
-            });
-            let data = if state.source { source } else { &preview.result };
+            if let Some((_, data)) = &snapshot {
+                ui.label(format!("{} 行 · {} 列 · 重新计算自原始输入", data.rows.len(), data.headers.len()));
+            } else if let (Some(source), Some(preview)) = (source, preview) {
+                ui.horizontal_wrapped(|ui| {
+                    let before = state.source;
+                    let input = ui.selectable_value(&mut state.source, true, format!("输入表 · {}行", source.rows.len()));
+                    let output = ui.selectable_value(&mut state.source, false, format!("流程结果 · {}行", preview.result.rows.len()));
+                    #[cfg(feature = "ui-preview")]
+                    { buttons[7] = Some((input.rect, ui.clip_rect())); buttons[8] = Some((output.rect, ui.clip_rect())); }
+                    #[cfg(not(feature = "ui-preview"))]
+                    let _ = (input, output);
+                    if before != state.source { state.query.clear(); state.filter(if state.source { source } else { &preview.result }); }
+                });
+            }
+            let data = if let Some((_, data)) = &snapshot {
+                data.as_ref()
+            } else if state.source {
+                source.expect("input snapshot")
+            } else {
+                &preview.expect("workflow preview").result
+            };
             if ui.add(egui::TextEdit::singleline(&mut state.query).char_limit(4096).hint_text("仅筛选查看内容，匹配所有列…").desired_width(width)).changed() { state.filter(data); }
             ui.horizontal_wrapped(|ui| {
                 ui.label(format!("{}列 · 匹配{} / {}行 · 第{} / {}页", data.headers.len(), state.visible.len(), data.rows.len(), state.page + 1, state.pages()));
@@ -151,13 +193,40 @@ impl DataState {
                 egui::ScrollArea::vertical().id_salt("inspect-cell").max_height(65.0).show(ui, |ui| { ui.monospace(fragment(value, 4096)); });
             } else { ui.small("尚未选择单元格。查看不会修改输入或结果。"); }
             ui.separator();
+            if let Some((label, data)) = &snapshot {
+                ui.horizontal_wrapped(|ui| {
+                    let save = ui.button(format!("另存{label}为 CSV / SQLite…"));
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        buttons[10] = Some((save.rect, ui.clip_rect()));
+                    }
+                    if save.clicked() {
+                        self.workflow
+                            .output
+                            .select_result(label.clone(), data.as_ref().clone());
+                        close = true;
+                    }
+                    let send = ui.button(format!("发送{label}到工具…"));
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        buttons[11] = Some((send.rect, ui.clip_rect()));
+                    }
+                    if send.clicked() {
+                        table_send = Some((label.clone(), data.as_ref().clone()));
+                        close = true;
+                    }
+                });
+            }
             let button = ui.button("关闭检查，返回流程");
             #[cfg(feature = "ui-preview")]
             { buttons[6] = Some((button.rect, ui.clip_rect())); }
-            close = button.clicked();
+            close |= button.clicked();
         });
         if close || response.should_close() {
             state.open = false;
+        }
+        if let Some((label, data)) = table_send {
+            self.workflow.queue_table_send(label, data);
         }
     }
 }
@@ -208,7 +277,7 @@ mod tests {
         assert!(value.to_string().len() > 240);
         let empty = Dataset {
             headers: vec!["x".into()],
-            rows: vec![],
+            rows: vec![].into(),
         };
         let mut state = State::default();
         state.open(&empty);

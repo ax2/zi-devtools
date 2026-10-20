@@ -61,6 +61,16 @@ pub struct SearchResults {
     pub literal_match: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SearchMode {
+    /// Preserve the original behavior: CJK phrases use literal matching, other text uses AND.
+    #[default]
+    Auto,
+    ExactPhrase,
+    AllTerms,
+    AnyTerm,
+}
+
 fn is_cjk(ch: char) -> bool {
     matches!(ch as u32, 0x3400..=0x9fff | 0xf900..=0xfaff | 0x20000..=0x2fa1f)
 }
@@ -70,6 +80,16 @@ pub fn search(
     query: &str,
     source_id: Option<&str>,
     limit: usize,
+) -> Result<SearchResults> {
+    search_with_mode(path, query, source_id, limit, SearchMode::Auto)
+}
+
+pub fn search_with_mode(
+    path: &Path,
+    query: &str,
+    source_id: Option<&str>,
+    limit: usize,
+    mode: SearchMode,
 ) -> Result<SearchResults> {
     let query = query.trim();
     ensure!(!query.is_empty(), "请输入关键词");
@@ -85,12 +105,26 @@ pub fn search(
     ensure!(checked_file(path)?, "知识索引尚未建立，请先同步知识源");
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     check_version(&conn)?;
-    let literal_match = query.chars().any(is_cjk);
+    let literal_match = match mode {
+        SearchMode::Auto => query.chars().any(is_cjk),
+        SearchMode::ExactPhrase => true,
+        SearchMode::AllTerms | SearchMode::AnyTerm => false,
+    };
+    if !literal_match {
+        ensure!(
+            query.chars().any(char::is_alphanumeric),
+            "查询没有可搜索的文字或数字"
+        );
+    }
     let fts_query = query
         .split_whitespace()
         .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
         .collect::<Vec<_>>()
-        .join(" AND ");
+        .join(if mode == SearchMode::AnyTerm {
+            " OR "
+        } else {
+            " AND "
+        });
     let sql = if literal_match {
         "SELECT c.source_id,c.relative,c.location,c.ordinal,f.sha256,c.sha256,c.text
          FROM chunks c JOIN indexed_files f ON f.source_id=c.source_id AND f.relative=c.relative
@@ -304,6 +338,17 @@ pub fn sync_all(
     sources: &[Source],
     rebuild: bool,
     cancel: &AtomicBool,
+    progress: impl FnMut(usize, usize, &str),
+) -> Result<SyncReport> {
+    sync_all_with_ocr_language(path, sources, rebuild, None, cancel, progress)
+}
+
+fn sync_all_with_ocr_language(
+    path: &Path,
+    sources: &[Source],
+    rebuild: bool,
+    ocr_language_tag: Option<&str>,
+    cancel: &AtomicBool,
     mut progress: impl FnMut(usize, usize, &str),
 ) -> Result<SyncReport> {
     ensure!(sources.len() <= 32, "知识源数量超过 32 个");
@@ -387,8 +432,9 @@ pub fn sync_all(
                 report.unchanged += 1;
                 continue;
             }
-            let preview = document_ingestion::ingest(source, file)
-                .with_context(|| format!("解析 {} / {} 失败", source.name, file.relative))?;
+            let preview =
+                document_ingestion::ingest_with_ocr_language(source, file, ocr_language_tag)
+                    .with_context(|| format!("解析 {} / {} 失败", source.name, file.relative))?;
             check_cancel(cancel)?;
             let text_bytes: u64 = preview.chunks.iter().map(|c| c.text.len() as u64).sum();
             let count = preview.chunks.len() as u64;
@@ -457,6 +503,8 @@ pub struct State {
     message: String,
     confirm_rebuild: bool,
     confirm_delete: bool,
+    search_followup_available: bool,
+    search_request: bool,
 }
 
 impl State {
@@ -483,13 +531,18 @@ impl State {
             message,
             confirm_rebuild: false,
             confirm_delete: false,
+            search_followup_available: false,
+            search_request: false,
         }
     }
 
-    fn start(&mut self, sources: Vec<Source>, rebuild: bool) {
+    fn start(&mut self, sources: Vec<Source>, rebuild: bool, ocr_language_tag: Option<String>) {
+        self.search_followup_available = false;
+        self.search_request = false;
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = self.cancel.clone();
         let path = self.path.clone();
+        let ocr_language_tag = ocr_language_tag.clone();
         let (tx, rx) = mpsc::channel();
         self.running = Some(rx);
         self.message = if rebuild {
@@ -499,10 +552,11 @@ impl State {
         }
         .into();
         std::thread::spawn(move || {
-            let result = sync_all(
+            let result = sync_all_with_ocr_language(
                 &path,
                 &sources,
                 rebuild,
+                ocr_language_tag.as_deref(),
                 &cancel,
                 |done, total, relative| {
                     let _ = tx.send(Event::Progress(done, total, relative.to_owned()));
@@ -512,8 +566,13 @@ impl State {
         });
     }
 
+    pub fn take_search_request(&mut self) -> bool {
+        std::mem::take(&mut self.search_request)
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, sources: &[Source]) {
+        self.path = PathBuf::from(r"C:\Demo\Knowledge\knowledge-index.sqlite3");
         self.stats = Some(IndexStats {
             files: 12,
             chunks: 84,
@@ -530,9 +589,16 @@ impl State {
             );
         }
         self.message = "上次同步：新增 2、更新 1、移除 1、未变 8；索引已保存到本机。".into();
+        self.search_followup_available = true;
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, sources: &[Source], sources_locked: bool) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        sources: &[Source],
+        sources_locked: bool,
+        ocr_language_tag: Option<&str>,
+    ) {
         let mut finished = None;
         if let Some(rx) = &self.running {
             loop {
@@ -556,6 +622,7 @@ impl State {
             self.running = None;
             match result {
                 Ok(report) => {
+                    self.search_followup_available = report.stats.files > 0;
                     self.stats = Some(report.stats);
                     self.source_stats = source_stats(&self.path).unwrap_or_default();
                     self.message = format!(
@@ -567,16 +634,35 @@ impl State {
                         report.unscanned_sources
                     );
                 }
-                Err(e) => self.message = e,
+                Err(e) => {
+                    self.search_followup_available = false;
+                    self.message = e;
+                }
             }
         }
         ui.heading("增量知识索引");
         ui.label("手动同步已扫描的本地知识源。索引会在本机保存分块正文；不上传网络。文件变更会更新，移出快照或移除知识源会删除对应索引记录。");
+        ui.small(format!(
+            "图片 OCR 语言：{}",
+            ocr_language_tag.unwrap_or("Windows 用户首选语言")
+        ));
         if sources_locked {
             ui.colored_label(
                 egui::Color32::RED,
                 "知识源配置读取失败；同步与重建已禁用，避免误删现有索引。请先修复知识源配置。",
             );
+        }
+        if self.search_followup_available && !sources_locked {
+            let response = ui.add_enabled(
+                self.running.is_none() && !self.confirm_rebuild && !self.confirm_delete,
+                egui::Button::new("下一步：打开本机关键词检索…"),
+            );
+            if response.clicked() {
+                self.search_request = true;
+            }
+            response
+                .on_hover_text("打开检索页，但不执行查询；任何索引内容都不会自动发送给其他工具。");
+            ui.small("此按钮只打开检索页；不会自动运行查询或发送索引内容。 ");
         }
         ui.add_space(8.0);
         ui.group(|ui| {
@@ -600,7 +686,7 @@ impl State {
                 )
                 .clicked()
             {
-                self.start(sources.to_vec(), false);
+                self.start(sources.to_vec(), false, ocr_language_tag.map(str::to_owned));
             }
             if ui
                 .add_enabled(
@@ -631,7 +717,7 @@ impl State {
                 ui.label("重新解析所有已扫描文件；失败时保留原索引。确认？");
                 if ui.button("确认重建").clicked() {
                     self.confirm_rebuild = false;
-                    self.start(sources.to_vec(), true);
+                    self.start(sources.to_vec(), true, ocr_language_tag.map(str::to_owned));
                 }
                 if ui.button("取消").clicked() {
                     self.confirm_rebuild = false;
@@ -647,6 +733,7 @@ impl State {
                         Ok(()) => {
                             self.stats = Some(IndexStats::default());
                             self.source_stats.clear();
+                            self.search_followup_available = false;
                             "索引数据库已删除；源文件未修改".into()
                         }
                         Err(e) => format!("删除索引失败：{e:#}"),
@@ -692,8 +779,38 @@ mod tests {
     }
 
     #[test]
+    fn successful_nonempty_sync_enables_explicit_keyword_search_followup() {
+        let (root, index, source) = fixture();
+        let mut state = State::new(index);
+        state.start(vec![source], false, None);
+        let ctx = egui::Context::default();
+        let started = std::time::Instant::now();
+        while state.background_active() {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    state.ui(ui, &[], false, None);
+                });
+            });
+            assert!(started.elapsed().as_secs() < 8, "index sync timed out");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(state.search_followup_available);
+        assert_eq!(state.stats.as_ref().unwrap().files, 2);
+        assert!(!state.take_search_request());
+        state.search_request = true;
+        assert!(state.take_search_request());
+        assert!(!state.take_search_request());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn keyword_search_is_bounded_filtered_and_tracks_index_changes() {
         let (root, index, mut source) = fixture();
+        fs::write(
+            root.join("docs/three.txt"),
+            "gamma extra phrase; second unrelated term",
+        )
+        .unwrap();
         fs::write(
             root.join("docs/chinese.txt"),
             "本机知识库支持查找文档片段。另一个知识库示例。",
@@ -712,6 +829,31 @@ mod tests {
         assert_eq!(english.hits.len(), 1);
         assert!(!english.literal_match);
         assert_eq!(english.hits[0].relative, "one.txt");
+        let all_terms =
+            search_with_mode(&index, "alpha document", None, 10, SearchMode::AllTerms).unwrap();
+        assert_eq!(
+            all_terms
+                .hits
+                .iter()
+                .map(|hit| hit.relative.as_str())
+                .collect::<Vec<_>>(),
+            ["one.txt"]
+        );
+        let any_term =
+            search_with_mode(&index, "alpha unrelated", None, 10, SearchMode::AnyTerm).unwrap();
+        assert_eq!(any_term.hits.len(), 2);
+        let phrase =
+            search_with_mode(&index, "first document", None, 10, SearchMode::ExactPhrase).unwrap();
+        assert_eq!(phrase.hits.len(), 1);
+        assert_eq!(phrase.hits[0].relative, "one.txt");
+        assert!(phrase.literal_match);
+        assert!(
+            search_with_mode(&index, "alpha document", None, 10, SearchMode::ExactPhrase)
+                .unwrap()
+                .hits
+                .is_empty()
+        );
+        assert!(search_with_mode(&index, "---", None, 10, SearchMode::AllTerms).is_err());
         assert_eq!(
             search(&index, "alpha", Some("missing"), 10)
                 .unwrap()
@@ -937,6 +1079,29 @@ mod tests {
         delete_index(&index).unwrap();
         assert!(!index.exists());
         assert!(root.join("docs/one.txt").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a Windows OCR language and a synthetic high-contrast PNG fixture"]
+    fn manual_index_sync_uses_the_selected_ocr_language() {
+        let fixture_image = std::env::var_os("ZIDEVTOOLS_OCR_FIXTURE")
+            .expect("set ZIDEVTOOLS_OCR_FIXTURE to a synthetic high-contrast PNG");
+        let (root, index, mut source) = fixture();
+        fs::copy(fixture_image, root.join("docs/scan.png")).unwrap();
+        source.snapshot = Some(scan(&source, &AtomicBool::new(false)).unwrap());
+        sync_all_with_ocr_language(
+            &index,
+            &[source.clone()],
+            false,
+            Some("en-US"),
+            &AtomicBool::new(false),
+            |_, _, _| {},
+        )
+        .unwrap();
+        let hits = search(&index, "HELLO", Some(&source.id), 10).unwrap();
+        assert!(hits.hits.iter().any(|hit| hit.relative == "scan.png"));
         fs::remove_dir_all(root).unwrap();
     }
 }

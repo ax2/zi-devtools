@@ -16,6 +16,10 @@ pub(super) struct Import {
     pub records: Vec<Item>,
     pub notices: Vec<String>,
 }
+enum CountConversion {
+    Single,
+    Until,
+}
 
 fn extension(path: &Path) -> Result<()> {
     ensure!(
@@ -398,7 +402,18 @@ fn parse_event(props: &[Property], notices: &mut HashSet<String>) -> Result<Item
             !utc,
             "UTC 重复日程暂不导入：转换为本机钟表重复会改变夏令时后的安排"
         );
-        parse_rule(s, rule)?;
+        match parse_rule(s, rule)? {
+            Some(CountConversion::Single) => {
+                notices.insert("RRULE COUNT=1 已转换为单次日程；再次导出时不含重复规则。".into());
+            }
+            Some(CountConversion::Until) => {
+                notices.insert(
+                    "重复次数 COUNT 已换算为本机重复规则的截止日期；再次导出时会使用 UNTIL。"
+                        .into(),
+                );
+            }
+            None => {}
+        }
         if s.repeat_until.is_some() {
             notices.insert(
                 "重复截止已按当前开始钟点换算为包含的日期；限制最后起点，不裁剪事件时长。".into(),
@@ -438,7 +453,7 @@ fn parse_event(props: &[Property], notices: &mut HashSet<String>) -> Result<Item
     Ok(item)
 }
 
-fn parse_rule(s: &mut Schedule, rule: &str) -> Result<()> {
+fn parse_rule(s: &mut Schedule, rule: &str) -> Result<Option<CountConversion>> {
     let mut parts = HashMap::new();
     for part in rule.split(';') {
         let (key, value) = part.split_once('=').context("RRULE 格式无效")?;
@@ -453,7 +468,13 @@ fn parse_rule(s: &mut Schedule, rule: &str) -> Result<()> {
         parts.remove("INTERVAL").is_none_or(|v| v == "1"),
         "暂不支持间隔大于 1 的重复规则"
     );
-    if let Some(until) = parts.remove("UNTIL") {
+    let until = parts.remove("UNTIL");
+    let count = parts.remove("COUNT");
+    ensure!(
+        until.is_none() || count.is_none(),
+        "RRULE 不能同时设置 UNTIL 和 COUNT"
+    );
+    if let Some(until) = until {
         let day = if s.all_day {
             ensure!(
                 until.len() == 8 && until.bytes().all(|b| b.is_ascii_digit()),
@@ -535,9 +556,26 @@ fn parse_rule(s: &mut Schedule, rule: &str) -> Result<()> {
     }
     ensure!(
         parts.is_empty(),
-        "RRULE 含当前无法保留的条件（如 COUNT / BYDAY / BYSETPOS），未导入任何记录"
+        "RRULE 含当前无法保留的条件（如多值 BYDAY / BYSETPOS），未导入任何记录"
     );
-    Ok(())
+    if let Some(count) = count {
+        let count = count.parse::<u32>().context("RRULE COUNT 必须是正整数")?;
+        ensure!(count > 0, "RRULE COUNT 必须大于零");
+        let Some(last) = s.occurrence_date(count) else {
+            bail!("RRULE COUNT 超出日程支持的 1901–2099 年日期范围");
+        };
+        if count == 1 {
+            s.repeat = Repeat::Once;
+            s.clamp_missing_day = false;
+            Ok(Some(CountConversion::Single))
+        } else {
+            s.repeat_until =
+                (last != NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap()).then_some(last);
+            Ok(Some(CountConversion::Until))
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 fn line(out: &mut String, text: &str) {

@@ -2,7 +2,7 @@
 import math
 
 
-def validate_compute_metadata(manifest, catalog, reference):
+def validate_compute_metadata(manifest, catalog, reference, require_directory=False):
     """Check frozen Pi routing/inputs; this is not complete Host validation."""
     contributions = manifest['contributes']
     capabilities = contributions['capabilities']
@@ -21,6 +21,15 @@ def validate_compute_metadata(manifest, catalog, reference):
     assert {tool['capability'] for tool in pi_tools} == ids
     assert all(cap['inputSchema'] == reference_pi['inputSchema'] for cap in capabilities)
     assert manifest['permissions'] == reference['permissions'], 'Compute permissions differ from frozen optional Pi grant'
+    if require_directory:
+        from tool_directory import PROFILE, apply_manifest, validate_directory
+        assert manifest['schemaVersion'] == 2
+        assert manifest['requiredProfiles'] == {PROFILE: '=1.0.0-preview.1'}
+        expected = apply_manifest({**manifest, 'contributes': {**contributions, 'capabilities': [dict(item) for item in capabilities]}})
+        expected_by_id = {item['id']: item['directory'] for item in expected['contributes']['capabilities']}
+        for capability in capabilities:
+            validate_directory(capability.get('directory'))
+            assert capability['directory'] == expected_by_id[capability['id']], 'Directory metadata differs from vendored mapping'
 
 
 def validate_budget(budget, parity, module_sha256, module_bytes):

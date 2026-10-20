@@ -53,6 +53,14 @@ fn sequential_crop_coordinates_and_real_webp_report_keep_source() {
     let bytes = last.encoded.as_ref().unwrap();
     assert_eq!(image::load_from_memory(bytes).unwrap().to_rgba8(), expected);
     let report: serde_json::Value = serde_json::from_str(last.report.as_ref().unwrap()).unwrap();
+    assert_eq!(report["schemaVersion"], 2);
+    assert_eq!(report["generatedBy"]["toolId"], "image-workflow");
+    let provenance = crate::tool_provenance::current_for_tool("image-workflow").unwrap();
+    assert_eq!(
+        report["generatedBy"]["toolVersion"].as_str(),
+        Some(provenance.tool_version.as_str())
+    );
+    assert_eq!(report["generatedBy"]["runtimeFingerprint"]["schema"], 1);
     assert_eq!(report["encoding"]["format"], "webp");
     assert_eq!(report["encoding"]["bytes"], bytes.len());
     assert_eq!(report["width"], 5);
@@ -102,6 +110,11 @@ fn definition_roundtrip_rejects_authority_unknown_versions_and_invalid_geometry(
     let def = Definition::default();
     let bytes = def.bytes().unwrap();
     assert_eq!(Definition::parse(&bytes).unwrap(), def);
+    let ocr = Definition {
+        steps: vec![Step::Ocr { version: 1 }],
+        ..def.clone()
+    };
+    assert_eq!(Definition::parse(&ocr.bytes().unwrap()).unwrap(), ocr);
     let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     value["path"] = serde_json::json!("C:/hidden.png");
     assert!(Definition::parse(&serde_json::to_vec(&value).unwrap()).is_err());
@@ -133,6 +146,7 @@ fn definition_roundtrip_rejects_authority_unknown_versions_and_invalid_geometry(
             format: Encoding::Png,
             quality: 1,
         },
+        Step::Ocr { version: 2 },
     ] {
         assert!(
             Definition {
@@ -157,6 +171,127 @@ fn definition_roundtrip_rejects_authority_unknown_versions_and_invalid_geometry(
     );
     assert_eq!(fs::read(path).unwrap(), bytes);
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn ocr_handoff_requires_explicit_selection_and_expires_with_result() {
+    let mut workflow = State::default();
+    workflow.run = Some(Run {
+        outputs: vec![core::Output {
+            image: source(),
+            encoded: None,
+            report: Some("合成OCR文字；不来自 Windows OCR 引擎".into()),
+            report_label: "本机 OCR 识别文字",
+            label: "本机 OCR",
+        }],
+        ..Run::default()
+    });
+    assert!(workflow.handoff_text().is_none());
+
+    workflow.ocr_handoff = true;
+    let (source, text) = workflow.handoff_text().unwrap();
+    assert_eq!(source, "图片流程本机 OCR 结果");
+    assert!(text.contains("不来自 Windows OCR 引擎"));
+
+    let mut images = crate::image_tools::State::default();
+    *images.workflow = workflow;
+    images.mode = crate::image_tools::Mode::Workflow;
+    assert_eq!(
+        images.workflow_ocr_handoff_text().unwrap().1,
+        "合成OCR文字；不来自 Windows OCR 引擎"
+    );
+    images.mode = crate::image_tools::Mode::Single;
+    assert!(images.workflow_ocr_handoff_text().is_none());
+
+    images.show_workflow();
+    assert!(images.workflow_ocr_handoff_text().is_some());
+    images.show_batch();
+    assert!(images.workflow_ocr_handoff_text().is_none());
+    images.show_workflow();
+    assert!(images.workflow_ocr_handoff_text().is_none());
+
+    images.workflow.selected = usize::MAX;
+    images.mode = crate::image_tools::Mode::Workflow;
+    assert!(images.workflow_ocr_handoff_text().is_none());
+    images.workflow.selected = 0;
+    images.workflow.invalidate();
+    assert!(images.workflow_ocr_handoff_text().is_none());
+}
+
+#[test]
+fn selected_image_output_can_enter_the_common_typed_handoff_with_tool_provenance() {
+    let source = source();
+    let mut workflow = State::default();
+    workflow.run = Some(Run {
+        outputs: vec![core::Output {
+            image: source.clone(),
+            encoded: None,
+            report: None,
+            report_label: "",
+            label: "裁剪结果",
+        }],
+        ..Run::default()
+    });
+    let mut images = crate::image_tools::State::default();
+    *images.workflow = workflow;
+    images.mode = crate::image_tools::Mode::Workflow;
+
+    let material = images.workflow_handoff_image().unwrap();
+    assert!(Arc::ptr_eq(&material.image, &source));
+    assert_eq!(material.kind, "裁剪结果");
+    assert_eq!(material.origins.last().unwrap().id, "image-workflow");
+    assert!(!material.origins.last().unwrap().version.is_empty());
+
+    images.mode = crate::image_tools::Mode::Single;
+    assert!(images.workflow_handoff_image().is_none());
+    images.mode = crate::image_tools::Mode::Workflow;
+    images.workflow.selected = usize::MAX;
+    assert!(images.workflow_handoff_image().is_none());
+}
+
+#[cfg(not(windows))]
+#[test]
+fn workflow_ocr_reports_platform_limit_and_keeps_prior_image_result() {
+    let def = Definition {
+        steps: vec![
+            Step::Resize {
+                version: 1,
+                max_width: 10,
+            },
+            Step::Ocr { version: 1 },
+        ],
+        ..Definition::default()
+    };
+    let run = execute(&def, source(), &AtomicBool::new(false)).unwrap();
+    assert_eq!(run.outputs.len(), 1);
+    assert_eq!(run.outputs[0].image.dimensions(), (10, 8));
+    assert!(run.failure.as_deref().unwrap().contains("仅支持 Windows"));
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires an installed Windows OCR language component; uses the existing synthetic OCR fixture"]
+fn workflow_ocr_preserves_image_and_returns_bounded_text() {
+    let bytes = std::fs::read(std::env::var_os("ZIDEVTOOLS_OCR_FIXTURE").unwrap()).unwrap();
+    let picture = crate::clipboard::Picture::from_png(&bytes).unwrap();
+    let source = Arc::new(picture.image().unwrap());
+    let original = source.clone();
+    let def = Definition {
+        steps: vec![Step::Ocr { version: 1 }],
+        ..Definition::default()
+    };
+    let run = execute(&def, source.clone(), &AtomicBool::new(false)).unwrap();
+    assert!(run.failure.is_none() && !run.cancelled);
+    assert!(Arc::ptr_eq(&run.outputs[0].image, &source));
+    assert!(
+        run.outputs[0]
+            .report
+            .as_deref()
+            .unwrap()
+            .to_ascii_uppercase()
+            .contains("HELLO")
+    );
+    assert_eq!(source.as_bytes(), original.as_bytes());
 }
 #[test]
 fn cumulative_budget_stops_before_allocation_and_preserves_completed_steps() {

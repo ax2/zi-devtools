@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "profile": "service.http.get.v1@1.0.0-preview.1",
+  "networkMock": "in-memory only; no real socket is opened",
+  "cases": [
+    {"id":"health-200","endpoint":"health","confirmed":true,"httpStatus":200,"contentType":"application/json","data":{"status":"UP","components":{"db":{"status":"UP"}}},"byteLength":51,"expected":"summary-success"},
+    {"id":"health-503","endpoint":"health","confirmed":true,"httpStatus":503,"contentType":"application/json","data":{"status":"DOWN","components":{"db":{"status":"DOWN"}}},"byteLength":55,"expected":"health-503-data"},
+    {"id":"info-200","endpoint":"info","confirmed":true,"httpStatus":200,"contentType":"application/json","data":{"app":{"name":"sample","version":"1.0"}},"byteLength":41,"expected":"summary-success"},
+    {"id":"metrics-200","endpoint":"metrics","confirmed":true,"httpStatus":200,"contentType":"application/json","data":{"names":["jvm.memory.used","http.server.requests"]},"byteLength":52,"expected":"summary-success"},
+    {"id":"user-declined","endpoint":"health","confirmed":false,"networkRequests":0,"response":{"schemaVersion":1,"operation":"http.get","status":"declined"},"expected":"declined-no-network"},
+    {"id":"profile-mismatch","endpoint":"health","confirmed":false,"hostApiAvailable":false,"networkRequests":0,"expected":"profile-required-no-network"},
+    {"id":"permission-denied","endpoint":"health","confirmed":false,"errorCode":"permission_denied","networkRequests":0,"expected":"error-displayed"},
+    {"id":"dns-failure","endpoint":"info","confirmed":true,"errorCode":"http_service_dns_failed","networkRequests":0,"expected":"error-displayed"},
+    {"id":"dns-timeout","endpoint":"metrics","confirmed":true,"errorCode":"http_service_dns_timeout","networkRequests":0,"expected":"error-displayed"},
+    {"id":"tls-failure","endpoint":"health","confirmed":true,"errorCode":"http_service_request_failed","networkRequests":0,"expected":"error-displayed"},
+    {"id":"http-failure","endpoint":"info","confirmed":true,"errorCode":"http_service_status_error","networkRequests":1,"expected":"error-displayed"},
+    {"id":"timeout","endpoint":"metrics","confirmed":true,"errorCode":"http_service_timeout","networkRequests":1,"expected":"error-displayed"},
+    {"id":"cancelled","endpoint":"health","confirmed":true,"errorCode":"http_service_request_cancelled","networkRequests":1,"expected":"cancel-awaits-final"}
+  ],
+  "securityVectors": [
+    {"id":"origin-path-rejected","origin":"https://example.com/context","apiCalls":0,"networkRequests":0},
+    {"id":"origin-credentials-rejected","origin":"https://user:secret@example.com","apiCalls":0,"networkRequests":0},
+    {"id":"origin-query-rejected","origin":"https://example.com/?token=redacted","apiCalls":0,"networkRequests":0},
+    {"id":"origin-fragment-rejected","origin":"https://example.com/#section","apiCalls":0,"networkRequests":0},
+    {"id":"origin-invalid-port-rejected","origin":"https://example.com:99999","apiCalls":0,"networkRequests":0},
+    {"id":"origin-whitespace-host-rejected","origin":"https://exa mple.com","apiCalls":0,"networkRequests":0},
+    {"id":"origin-scheme-rejected","origin":"ftp://example.com","apiCalls":0,"networkRequests":0},
+    {"id":"origin-empty-rejected","origin":"   ","apiCalls":0,"networkRequests":0},
+    {"id":"endpoint-outside-allowlist","endpoint":"env","apiCalls":0,"networkRequests":0}
+  ],
+  "canonicalOriginVectors": [
+    {"id":"origin-normalizes-domain-and-default-port","input":"HTTPS://Example.COM:443","expected":"https://example.com"},
+    {"id":"origin-retains-explicit-nondefault-port","input":"http://127.0.0.1:8080","expected":"http://127.0.0.1:8080"},
+    {"id":"origin-normalizes-ipv6-loopback","input":"http://[::1]:8080","expected":"http://[::1]:8080"}
+  ]
+}

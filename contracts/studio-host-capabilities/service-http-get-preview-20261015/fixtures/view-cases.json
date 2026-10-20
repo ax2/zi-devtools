@@ -1,0 +1,89 @@
+{
+  "profileProposal": "service.http.get.v1@1.0.0-preview.1",
+  "status": "provider fixtures; not Studio Host conformance evidence",
+  "cases": [
+    {
+      "id": "health-loopback-confirmed-200",
+      "kind": "positive",
+      "request": {"origin": "http://127.0.0.1:8080", "endpoint": "health"},
+      "result": {"endpoint": "health", "status": 200, "contentType": "application/json", "data": {"status": "UP"}, "error": null},
+      "expect": {"sdkCall": true, "method": "GET", "path": "/actuator/health", "hostConfirmation": true, "displayStatus": 200}
+    },
+    {
+      "id": "health-loopback-confirmed-503",
+      "kind": "positive",
+      "request": {"origin": "http://127.0.0.1:8080", "endpoint": "health"},
+      "result": {"endpoint": "health", "status": 503, "contentType": "application/problem+json", "data": {"status": "DOWN", "components": {"db": {"status": "DOWN"}}}, "error": null},
+      "expect": {"sdkCall": true, "method": "GET", "path": "/actuator/health", "hostConfirmation": true, "displayStatus": 503, "preserveJson": true}
+    },
+    {
+      "id": "info-https-200",
+      "kind": "positive",
+      "request": {"origin": "https://service.example.invalid", "endpoint": "info"},
+      "result": {"endpoint": "info", "status": 200, "contentType": "application/json; charset=utf-8", "data": {"app": {"name": "demo"}}, "error": null},
+      "expect": {"sdkCall": true, "method": "GET", "path": "/actuator/info", "hostConfirmation": true, "displayStatus": 200}
+    },
+    {
+      "id": "metrics-https-200",
+      "kind": "positive",
+      "request": {"origin": "https://service.example.invalid", "endpoint": "metrics"},
+      "result": {"endpoint": "metrics", "status": 200, "contentType": "application/vnd.spring-boot.actuator.v3+json", "data": {"names": ["jvm.memory.used", "process.cpu.usage"]}, "error": null},
+      "expect": {"sdkCall": true, "method": "GET", "path": "/actuator/metrics", "hostConfirmation": true, "displayStatus": 200}
+    },
+    {
+      "id": "reject-base-path",
+      "kind": "negative",
+      "request": {"origin": "https://service.example.invalid/context", "endpoint": "health"},
+      "expect": {"sdkCall": false, "error": "origin_must_be_origin_only"}
+    },
+    {
+      "id": "reject-userinfo",
+      "kind": "negative",
+      "request": {"origin": "https://user:secret@service.example.invalid", "endpoint": "health"},
+      "expect": {"sdkCall": false, "error": "userinfo_not_allowed"}
+    },
+    {
+      "id": "reject-query",
+      "kind": "negative",
+      "request": {"origin": "https://service.example.invalid?token=redacted", "endpoint": "info"},
+      "expect": {"sdkCall": false, "error": "query_not_allowed"}
+    },
+    {
+      "id": "reject-fragment",
+      "kind": "negative",
+      "request": {"origin": "https://service.example.invalid/#frag", "endpoint": "metrics"},
+      "expect": {"sdkCall": false, "error": "fragment_not_allowed"}
+    },
+    {
+      "id": "reject-unlisted-endpoint",
+      "kind": "negative",
+      "request": {"origin": "https://service.example.invalid", "endpoint": "metrics/jvm.memory.used"},
+      "expect": {"sdkCall": false, "error": "endpoint_not_in_profile"}
+    },
+    {
+      "id": "reject-auth-field",
+      "kind": "negative",
+      "request": {"origin": "https://service.example.invalid", "endpoint": "health", "authorization": "Bearer synthetic"},
+      "expect": {"sdkCall": false, "error": "unknown_field"}
+    },
+    {
+      "id": "dns-change-error",
+      "kind": "negative",
+      "request": {"origin": "https://service.example.invalid", "endpoint": "health"},
+      "result": {"endpoint": "health", "status": null, "contentType": null, "data": null, "error": {"code": "dns_changed"}},
+      "expect": {"sdkCall": true, "status": "failed", "showResponseBody": false}
+    },
+    {
+      "id": "cancel-discards-late-result",
+      "kind": "lifecycle",
+      "request": {"origin": "https://service.example.invalid", "endpoint": "info"},
+      "expect": {"sdkCall": true, "abortSignal": true, "lateResultVisible": false}
+    }
+  ],
+  "boundaries": [
+    "Fixtures validate the provider View and draft SDK shapes only.",
+    "DNS resolution/pinning, address classification, permission grants, confirmation, proxy/redirect exclusion, streaming byte bounds, TLS, and Host cancellation require Studio implementation and Host tests.",
+    "The profile draft permits only health/info/metrics collection endpoints; it cannot select a single metric name.",
+    "No credentials are accepted by this proposal; current desktop Bearer-authenticated calls are outside this preview."
+  ]
+}

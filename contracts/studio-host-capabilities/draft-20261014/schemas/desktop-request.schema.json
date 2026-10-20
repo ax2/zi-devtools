@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zicode.com/contracts/studio-host/desktop.v1/request-draft-2026-10-14.schema.json",
+  "title": "Studio Host desktop.v1 provider request draft",
+  "description": "Host-bound Windows first draft. OS-specific capability support is negotiated by Host; no path or arbitrary process field is accepted.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "clipboard.subscribe"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "formats": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 6,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "text",
+                  "image",
+                  "file_reference",
+                  "html",
+                  "rtf",
+                  "ocr"
+                ]
+              }
+            },
+            "userGestureId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Opaque one-shot reference; Studio must verify trusted user-interaction issuance and bind it to plugin, scene, operation and permission generation. A provider-supplied string is not a user gesture.",
+              "x-host-trusted-one-shot-binding": ["pluginId", "sceneId", "operation", "permissionGeneration"]
+            }
+          },
+          "required": [
+            "formats",
+            "userGestureId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "clipboard.unsubscribe"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "subscriptionId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "clipboard.snapshot"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "expectedRevision": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "subscriptionId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "clipboard.write"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "userGestureId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Opaque one-shot reference; Studio must verify trusted user-interaction issuance and bind it to plugin, scene, operation and permission generation. A provider-supplied string is not a user gesture.",
+              "x-host-trusted-one-shot-binding": ["pluginId", "sceneId", "operation", "permissionGeneration"]
+            },
+            "formats": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 5,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string",
+                        "minLength": 0,
+                        "maxLength": 1048576
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "html"
+                      },
+                      "content": {
+                        "type": "string",
+                        "minLength": 0,
+                        "maxLength": 1048576
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "content"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "rtf"
+                      },
+                      "contentBase64": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1398104
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "contentBase64"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "image"
+                      },
+                      "resourceRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "resourceRef"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "file_reference"
+                      },
+                      "resourceRef": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "resourceRef"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "userGestureId",
+            "formats"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "ocr.recognize"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "imageResourceRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "languageTag": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "region": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "width",
+                "height"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "subscriptionId",
+            "imageResourceRef",
+            "languageTag"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "operation.cancel"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "operationId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

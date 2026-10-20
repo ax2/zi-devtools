@@ -50,6 +50,7 @@ enum Tool {
     #[default]
     Crop,
     Redact,
+    Pixelate,
     Arrow,
     Text,
 }
@@ -58,6 +59,10 @@ enum Tool {
 enum Edit {
     Crop(Rect),
     Redact(Rect),
+    Pixelate {
+        rect: Rect,
+        block_size: u32,
+    },
     Arrow {
         a: Point,
         b: Point,
@@ -101,6 +106,7 @@ pub(super) struct State {
     annotation_text: String,
     color: [u8; 4],
     stroke_width: u32,
+    pixel_block_size: u32,
     font_size: u32,
     font_path: String,
     format: Format,
@@ -126,6 +132,7 @@ impl Default for State {
             annotation_text: "标注".into(),
             color: [244, 68, 68, 255],
             stroke_width: 6,
+            pixel_block_size: 16,
             font_size: 42,
             font_path: String::new(),
             format: Format::Png,
@@ -228,6 +235,13 @@ impl State {
                 a: Point::new(0.12, 0.23),
                 b: Point::new(0.38, 0.37),
             }),
+            Edit::Pixelate {
+                rect: Rect {
+                    a: Point::new(0.58, 0.42),
+                    b: Point::new(0.87, 0.72),
+                },
+                block_size: 24,
+            },
             Edit::Arrow {
                 a: Point::new(0.46, 0.68),
                 b: Point::new(0.78, 0.32),
@@ -241,7 +255,9 @@ impl State {
                 size: 42,
             },
         ];
-        self.message = "合成界面预览：裁剪、遮挡、箭头和中文文字已放置。".into();
+        self.tool = Tool::Pixelate;
+        self.pixel_block_size = 24;
+        self.message = "合成界面预览：裁剪、黑色/像素化遮挡、箭头和中文文字已放置。".into();
     }
 
     fn invalidate(&mut self) {
@@ -404,6 +420,10 @@ impl State {
         let edit = match self.tool {
             Tool::Crop => Edit::Crop(rect),
             Tool::Redact => Edit::Redact(rect),
+            Tool::Pixelate => Edit::Pixelate {
+                rect,
+                block_size: self.pixel_block_size,
+            },
             Tool::Arrow => Edit::Arrow {
                 a,
                 b,
@@ -483,7 +503,7 @@ impl State {
             ui.label(&self.message);
             return;
         }
-        let source = self.source.as_ref().unwrap();
+        let source = self.source.as_ref().unwrap().clone();
         let source_width = source.width();
         let source_height = source.height();
         ui.small(format!(
@@ -496,6 +516,7 @@ impl State {
             for (tool, label) in [
                 (Tool::Crop, "裁剪"),
                 (Tool::Redact, "黑色遮挡"),
+                (Tool::Pixelate, "像素化打码"),
                 (Tool::Arrow, "箭头"),
                 (Tool::Text, "文字"),
             ] {
@@ -522,6 +543,12 @@ impl State {
                 self.invalidate();
             }
         });
+        if self.tool == Tool::Pixelate {
+            ui.horizontal(|ui| {
+                ui.add(egui::Slider::new(&mut self.pixel_block_size, 4..=64).text("像素块大小"));
+                ui.small("块越大细节越少；高敏信息请用黑色遮挡，像素化仍可能辨认");
+            });
+        }
         if matches!(self.tool, Tool::Arrow | Tool::Text) {
             ui.horizontal(|ui| {
                 ui.label("颜色");
@@ -575,7 +602,7 @@ impl State {
             egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
             Color32::WHITE,
         );
-        paint_edits(ui.painter(), rect, source_width, &self.edits);
+        paint_edits(ui.painter(), rect, &source, &self.edits);
         if !busy && let Some(at) = response.interact_pointer_pos() {
             let p = Point::new(
                 (at.x - rect.left()) / rect.width(),
@@ -698,7 +725,7 @@ impl State {
         } else {
             ui.visuals().text_color()
         }));
-        ui.small("黑色遮挡会写入输出像素；原图不修改。输入 ≤32 MiB/1600 万像素，输出 ≤128 MiB；拒绝覆盖已有文件。文字导出需本机字体支持字符。");
+        ui.small("黑色遮挡/像素化会写入输出像素；原图不修改。请检查预览确认敏感内容确已遮挡。输入 ≤32 MiB/1600 万像素，输出 ≤128 MiB；拒绝覆盖已有文件。文字导出需本机字体支持字符。");
     }
 }
 
@@ -729,7 +756,8 @@ fn paint_drag(painter: &egui::Painter, rect: egui::Rect, a: Point, b: Point, too
         );
     }
 }
-fn paint_edits(painter: &egui::Painter, rect: egui::Rect, source_width: u32, edits: &[Edit]) {
+fn paint_edits(painter: &egui::Painter, rect: egui::Rect, source: &DynamicImage, edits: &[Edit]) {
+    let source_width = source.width();
     if let Some(crop) = edits.iter().rev().find_map(|e| {
         if let Edit::Crop(r) = e {
             Some(*r)
@@ -755,6 +783,12 @@ fn paint_edits(painter: &egui::Painter, rect: egui::Rect, source_width: u32, edi
                     0.0,
                     Color32::BLACK,
                 );
+            }
+            Edit::Pixelate {
+                rect: area,
+                block_size,
+            } => {
+                paint_pixelated_preview(painter, rect, source, *area, *block_size);
             }
             Edit::Arrow { a, b, color, width } => {
                 let a = screen_point(rect, *a);
@@ -850,6 +884,18 @@ fn render_output_budgeted(
                     }
                 }
             }
+            Edit::Pixelate { rect, block_size } => {
+                let (x0, y0, x1, y1) = rect.pixel_bounds(full_width, full_height);
+                let x0 = x0.max(cx0);
+                let y0 = y0.max(cy0);
+                let x1 = x1.min(cx1);
+                let y1 = y1.min(cy1);
+                pixelate_region(
+                    &mut pixels,
+                    (x0 - cx0, y0 - cy0, x1 - cx0, y1 - cy0),
+                    *block_size,
+                );
+            }
             Edit::Arrow { a, b, color, width } => {
                 let a = (
                     (a.x * full_width as f32 - cx0 as f32),
@@ -918,6 +964,98 @@ fn render_output_budgeted(
         width: decoded.width(),
         height: decoded.height(),
     })
+}
+
+fn pixelate_region(image: &mut RgbaImage, bounds: (u32, u32, u32, u32), block_size: u32) {
+    let (x0, y0, x1, y1) = bounds;
+    let block_size = block_size.max(2);
+    let mut block_y = y0;
+    while block_y < y1 {
+        let end_y = block_y.saturating_add(block_size).min(y1);
+        let mut block_x = x0;
+        while block_x < x1 {
+            let end_x = block_x.saturating_add(block_size).min(x1);
+            let mut sums = [0u64; 3];
+            let mut alpha_sum = 0u64;
+            for y in block_y..end_y {
+                for x in block_x..end_x {
+                    let pixel = image.get_pixel(x, y);
+                    let alpha = u64::from(pixel[3]);
+                    for channel in 0..3 {
+                        sums[channel] += u64::from(pixel[channel]) * alpha;
+                    }
+                    alpha_sum += alpha;
+                }
+            }
+            let color = if alpha_sum == 0 {
+                [0; 3]
+            } else {
+                [
+                    ((sums[0] + alpha_sum / 2) / alpha_sum) as u8,
+                    ((sums[1] + alpha_sum / 2) / alpha_sum) as u8,
+                    ((sums[2] + alpha_sum / 2) / alpha_sum) as u8,
+                ]
+            };
+            for y in block_y..end_y {
+                for x in block_x..end_x {
+                    let alpha = image.get_pixel(x, y)[3];
+                    image.put_pixel(x, y, Rgba([color[0], color[1], color[2], alpha]));
+                }
+            }
+            block_x = end_x;
+        }
+        block_y = end_y;
+    }
+}
+
+fn paint_pixelated_preview(
+    painter: &egui::Painter,
+    canvas: egui::Rect,
+    source: &DynamicImage,
+    selection: Rect,
+    block_size: u32,
+) {
+    let (x0, y0, x1, y1) = selection.pixel_bounds(source.width(), source.height());
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
+    let source_scale =
+        (canvas.width() / source.width() as f32).min(canvas.height() / source.height() as f32);
+    let desired_cell = (block_size.max(2) as f32 * source_scale).max(1.0);
+    let coarsening = (4.0 / desired_cell).ceil().max(1.0) as u32;
+    let step = block_size.max(2).saturating_mul(coarsening).max(1);
+    let mut y = y0;
+    while y < y1 {
+        let next_y = y.saturating_add(step).min(y1);
+        let mut x = x0;
+        while x < x1 {
+            let next_x = x.saturating_add(step).min(x1);
+            let sample_x = (x + (next_x - x) / 2).min(source.width() - 1);
+            let sample_y = (y + (next_y - y) / 2).min(source.height() - 1);
+            let pixel = source.get_pixel(sample_x, sample_y);
+            let top_left = screen_point(
+                canvas,
+                Point::new(
+                    x as f32 / source.width() as f32,
+                    y as f32 / source.height() as f32,
+                ),
+            );
+            let bottom_right = screen_point(
+                canvas,
+                Point::new(
+                    next_x as f32 / source.width() as f32,
+                    next_y as f32 / source.height() as f32,
+                ),
+            );
+            painter.rect_filled(
+                egui::Rect::from_min_max(top_left, bottom_right),
+                0.0,
+                Color32::from_rgb(pixel[0], pixel[1], pixel[2]),
+            );
+            x = next_x;
+        }
+        y = next_y;
+    }
 }
 
 fn flatten_on_white(image: &DynamicImage) -> DynamicImage {
@@ -1005,7 +1143,7 @@ fn paint_arrow(image: &mut RgbaImage, a: (f32, f32), b: (f32, f32), color: [u8; 
     }
 }
 
-fn load_font(custom: &str) -> Result<FontVec> {
+pub(super) fn load_font(custom: &str) -> Result<FontVec> {
     let candidates: Vec<PathBuf> = if custom.trim().is_empty() {
         ["msyh.ttc", "simsun.ttc", "segoeui.ttf"]
             .iter()
@@ -1026,13 +1164,36 @@ fn load_font(custom: &str) -> Result<FontVec> {
     }
     bail!("找不到可用字体；请选择本机 TTF/TTC/OTF 字体文件")
 }
-fn paint_text(
+pub(super) fn paint_text(
     image: &mut RgbaImage,
     at: (f32, f32),
     value: &str,
     color: [u8; 4],
     size: u32,
     font: &FontVec,
+) -> Result<()> {
+    paint_text_inner(image, at, value, color, size, font, false)
+}
+
+pub(super) fn paint_text_preserving_transparency(
+    image: &mut RgbaImage,
+    at: (f32, f32),
+    value: &str,
+    color: [u8; 4],
+    size: u32,
+    font: &FontVec,
+) -> Result<()> {
+    paint_text_inner(image, at, value, color, size, font, true)
+}
+
+fn paint_text_inner(
+    image: &mut RgbaImage,
+    at: (f32, f32),
+    value: &str,
+    color: [u8; 4],
+    size: u32,
+    font: &FontVec,
+    preserve_transparency: bool,
 ) -> Result<()> {
     ensure!(
         !value.is_empty() && value.chars().count() <= 80,
@@ -1056,13 +1217,18 @@ fn paint_text(
         {
             let bounds = outline.px_bounds();
             outline.draw(|x, y, coverage| {
-                blend_pixel(
-                    image,
-                    bounds.min.x as i32 + x as i32,
-                    bounds.min.y as i32 + y as i32,
-                    color,
-                    coverage,
-                )
+                let x = bounds.min.x as i32 + x as i32;
+                let y = bounds.min.y as i32 + y as i32;
+                if preserve_transparency
+                    && (x < 0
+                        || y < 0
+                        || x >= image.width() as i32
+                        || y >= image.height() as i32
+                        || image.get_pixel(x as u32, y as u32)[3] == 0)
+                {
+                    return;
+                }
+                blend_pixel(image, x, y, color, coverage)
             });
         }
         caret += scale.h_advance(id);
@@ -1185,8 +1351,9 @@ mod tests {
     }
     #[test]
     fn crop_redact_arrow_and_output_keep_original_unchanged() {
-        let image =
-            DynamicImage::ImageRgba8(RgbaImage::from_pixel(100, 80, Rgba([200, 200, 200, 255])));
+        let image = DynamicImage::ImageRgba8(RgbaImage::from_fn(100, 80, |x, y| {
+            Rgba([x as u8 * 2, y as u8 * 3, 200, 255])
+        }));
         let edits = vec![
             Edit::Crop(Rect {
                 a: Point::new(0.1, 0.1),
@@ -1196,6 +1363,13 @@ mod tests {
                 a: Point::new(0.2, 0.2),
                 b: Point::new(0.4, 0.4),
             }),
+            Edit::Pixelate {
+                rect: Rect {
+                    a: Point::new(0.5, 0.2),
+                    b: Point::new(0.7, 0.4),
+                },
+                block_size: 10,
+            },
             Edit::Arrow {
                 a: Point::new(0.5, 0.7),
                 b: Point::new(0.8, 0.3),
@@ -1217,8 +1391,37 @@ mod tests {
             .unwrap()
             .to_rgba8();
         assert_eq!(output.get_pixel(20, 15).0, [0, 0, 0, 255]);
-        assert_eq!(image.to_rgba8().get_pixel(30, 25).0, [200, 200, 200, 255]);
+        assert_eq!(output.get_pixel(40, 8), output.get_pixel(49, 17));
+        assert_ne!(output.get_pixel(40, 8), output.get_pixel(50, 8));
+        let original = image.to_rgba8();
+        assert_eq!(*original.get_pixel(30, 25), Rgba([60, 75, 200, 255]));
         assert!(output.pixels().any(|p| p[0] > p[1]));
+    }
+
+    #[test]
+    fn pixelation_averages_blocks_preserves_alpha_and_leaves_outside_untouched() {
+        let mut image = RgbaImage::from_fn(12, 4, |x, y| {
+            Rgba([
+                if x < 4 { 255 } else { x as u8 * 20 },
+                if x < 4 { 0 } else { y as u8 * 30 },
+                90,
+                if x < 4 {
+                    0
+                } else if x % 2 == 0 {
+                    128
+                } else {
+                    255
+                },
+            ])
+        });
+        let original = image.clone();
+        pixelate_region(&mut image, (2, 0, 10, 4), 4);
+        assert_eq!(&image.get_pixel(2, 0).0[..3], &image.get_pixel(5, 3).0[..3]);
+        assert_ne!(&image.get_pixel(2, 0).0[..3], &image.get_pixel(6, 0).0[..3]);
+        assert_eq!(image.get_pixel(2, 0)[3], original.get_pixel(2, 0)[3]);
+        assert_eq!(&image.get_pixel(2, 0).0[..3], &[93, 45, 90]);
+        assert_eq!(image.get_pixel(1, 2), original.get_pixel(1, 2));
+        assert_eq!(image.get_pixel(10, 2), original.get_pixel(10, 2));
     }
     #[test]
     fn text_renders_and_missing_glyph_is_explicit() {

@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/request.schema.json",
+  "title": "Diagnostics v2 command request; Host compute envelope remains v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.java.threads"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/java.threads.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.java.dependencies"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/java.dependencies.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.java.gc"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/java.gc.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.java.jfr_json"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/java.jfr_json.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.spring.config"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/spring.config.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.django.migrations"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/django.migrations.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.django.sql"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/django.sql.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.django.urls"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/django.urls.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.django.openapi"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/django.openapi.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.django.checks"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/django.checks.input.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pluginId",
+        "sceneId",
+        "capabilityId",
+        "commandId",
+        "input"
+      ],
+      "properties": {
+        "pluginId": {
+          "const": "com.zicode.devtools.diagnostics"
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Runtime additionally limits UTF-8 bytes to 128."
+        },
+        "capabilityId": {
+          "const": "devtools.diagnostics.celery.report"
+        },
+        "commandId": {
+          "type": "null"
+        },
+        "input": {
+          "$ref": "operations/celery.report.input.schema.json"
+        }
+      }
+    }
+  ]
+}

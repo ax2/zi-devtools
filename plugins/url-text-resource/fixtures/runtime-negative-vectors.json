@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "id": "wrong-mime",
+      "mimeType": "image/png",
+      "bytesHex": "61",
+      "expectedError": "UNSUPPORTED_MIME"
+    },
+    {
+      "id": "invalid-utf8",
+      "mimeType": "text/plain",
+      "bytesHex": "fffe61",
+      "expectedError": "INVALID_UTF8"
+    },
+    {
+      "id": "empty-text",
+      "mimeType": "text/plain",
+      "bytesHex": "",
+      "expectedError": "EMPTY_RESOURCE"
+    },
+    {
+      "id": "over-limit-8193-bytes",
+      "mimeType": "text/plain",
+      "repeatByteHex": "61",
+      "repeatBytes": 8193,
+      "expectedError": "INPUT_TOO_LARGE"
+    }
+  ]
+}

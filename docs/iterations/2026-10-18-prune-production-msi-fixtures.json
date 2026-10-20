@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "E:\\zi-devtools",
+  "targets": [
+    {
+      "bytes": 13919499,
+      "relative": "target\\zi-msi-production-47jmz9r4",
+      "latestTicks": 639277610207026371,
+      "files": 5,
+      "kind": "directory"
+    },
+    {
+      "bytes": 13919494,
+      "relative": "target\\zi-msi-production-ixuayu6_",
+      "latestTicks": 639277610563637946,
+      "files": 5,
+      "kind": "directory"
+    }
+  ]
+}

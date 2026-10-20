@@ -1,0 +1,43 @@
+{
+  "pass": true,
+  "profile": "service.http.get.v1@1.0.0-preview.1",
+  "cases": [
+    "health-loopback-confirmed-200",
+    "health-loopback-confirmed-503",
+    "info-https-200",
+    "metrics-https-200",
+    "reject-base-path",
+    "reject-userinfo",
+    "reject-query",
+    "reject-fragment",
+    "reject-unlisted-endpoint",
+    "reject-auth-field",
+    "dns-change-error",
+    "cancel-discards-late-result"
+  ],
+  "sdkCalls": 6,
+  "requestKeys": [
+    "endpoint,origin"
+  ],
+  "hostConfirmation": "SDK handoff observed; confirmation itself requires Studio Host",
+  "directNetworkPrimitives": false,
+  "connectSrcNone": true,
+  "lateResultIgnored": true,
+  "errors": [],
+  "viewport": {
+    "width": 1180,
+    "height": 900,
+    "devicePixelRatio": 1,
+    "prefersDark": false
+  },
+  "pageErrors": [],
+  "browser": "msedge.exe",
+  "viewSha256": "f283ebd6ce6340995416aa4a479c56a5f330edadbce0a13afb658a36aad4a4d7",
+  "fixturesSha256": "78ef37188bdbda80a72f08fb9a87828c228759f7d7d63cc57bd3be4c978cd9fd",
+  "limitations": [
+    "Injected SDK-shaped mock; no Studio Host, HTTP server, DNS, TLS, proxy, or confirmation was exercised",
+    "This proof validates View request/response handling only and is not Host conformance"
+  ],
+  "screenshot": "desktop-view-desktop.png",
+  "screenshotSha256": "82988d5ac0a33b6f88caaa3ff8a0f4f45bdd8834df5efcb4287df67f26ce873f"
+}

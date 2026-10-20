@@ -2,6 +2,24 @@
 use super::*;
 
 impl DataState {
+    pub fn preview_workflow_search_fixture(&mut self, folder: &std::path::Path) {
+        let definition = crate::workbench::workflow::Definition {
+            version: 2,
+            name: "JSON".into(),
+            steps: vec![crate::workbench::workflow::Step::SelectColumns {
+                columns: vec!["name".into()],
+            }],
+            output: None,
+        };
+        std::fs::create_dir_all(folder).unwrap();
+        std::fs::write(
+            folder.join("same-name.json"),
+            serde_json::to_vec(&definition).unwrap(),
+        )
+        .unwrap();
+        self.workflow.files.list(folder.to_path_buf()).unwrap();
+    }
+
     pub fn preview_page_handoff_source(&self) {
         let source = self.dataset.as_ref().unwrap();
         assert_eq!(source.rows[0][1], " Zi Tools ");
@@ -43,7 +61,9 @@ impl DataState {
         }
     }
     pub fn preview_workflow_output_prepare(&mut self, path: &std::path::Path, sqlite: bool) {
-        self.preview_workflow();
+        if self.workflow.proposal.is_none() {
+            self.preview_workflow();
+        }
         self.workflow.output.preview_prepare(path, sqlite);
     }
     pub fn preview_workflow_output_position(&self, index: usize) -> egui::Pos2 {
@@ -146,6 +166,55 @@ impl DataState {
             _ => panic!("unknown inspection phase"),
         }
         assert!(!self.can_undo_transform());
+    }
+    pub fn preview_workflow_step_output_check(&self, phase: u8, target: &std::path::Path) {
+        assert_eq!(self.dataset.as_ref().unwrap().rows.len(), 2);
+        assert_eq!(
+            self.workflow.proposal.as_ref().unwrap().result.rows.len(),
+            2
+        );
+        assert!(!self.can_undo_transform());
+        self.workflow
+            .output
+            .preview_step_result_check(phase, target);
+    }
+    pub fn preview_workflow_step_send_position(&self) -> egui::Pos2 {
+        self.workflow.buttons[11]
+            .expect("workflow step send button rendered")
+            .0
+            .center()
+    }
+    pub fn preview_workflow_step_send_check(&self) {
+        assert_eq!(
+            self.input,
+            "编号,名称,数量\n001, Zi Tools ,2\n002, Local Notes ,3"
+        );
+        let preview = self
+            .workflow
+            .proposal
+            .as_ref()
+            .expect("final preview retained");
+        assert_eq!(preview.result.rows[0][1], "Zi Tools");
+        assert_eq!(preview.result.rows[0][2], serde_json::json!(2));
+        let (label, snapshot) = self
+            .workflow
+            .inspect
+            .snapshot_for_preview()
+            .expect("intermediate snapshot retained after send");
+        assert_eq!(label, "第1步结果");
+        assert_eq!(snapshot.rows[0][1], "Zi Tools");
+        assert_eq!(snapshot.rows[0][2], "2");
+        assert!(!self.can_undo_transform());
+    }
+    pub fn preview_workflow_step_send_received_check(&self) {
+        let data = self.dataset.as_ref().expect("received typed table dataset");
+        assert_eq!(data.headers, ["编号", "名称", "数量"]);
+        assert_eq!(data.rows.len(), 2);
+        assert_eq!(data.rows[0][0], "001");
+        assert_eq!(data.rows[0][1], "Zi Tools");
+        assert_eq!(data.rows[0][2], "2");
+        assert!(!self.busy());
+        assert_eq!(self.visible.len(), 2);
     }
     pub fn preview_workflow_rows(&mut self, phase: u8) -> bool {
         match phase {

@@ -5,7 +5,10 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::mpsc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 
@@ -24,12 +27,25 @@ impl Drop for Process {
         let _ = self.child.wait();
     }
 }
+#[cfg(test)]
 fn run_with_limits(
     executable: &Path,
     args: &[&str],
     limit: usize,
     timeout: Duration,
 ) -> Result<String> {
+    run_with_limits_cancel(executable, args, limit, timeout, None)
+}
+fn run_with_limits_cancel(
+    executable: &Path,
+    args: &[&str],
+    limit: usize,
+    timeout: Duration,
+    cancelled: Option<&AtomicBool>,
+) -> Result<String> {
+    if cancelled.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+        anyhow::bail!("检测已取消");
+    }
     let mut command = Command::new(executable);
     command
         .args(args)
@@ -105,6 +121,9 @@ fn run_with_limits(
     let start = Instant::now();
     let mut output = [None, None];
     loop {
+        if cancelled.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+            anyhow::bail!("检测已取消");
+        }
         while let Ok((i, result)) = rx.try_recv() {
             let bytes = result?;
             ensure!(
@@ -163,13 +182,14 @@ pub fn path_entry(names: &[&str]) -> Option<PathBuf> {
         .flat_map(|p| names.iter().map(move |name| p.join(name)))
         .find(|p| p.is_absolute() && p.is_file())
 }
-fn java_probe(path: &str) -> Result<Value> {
+fn java_probe(path: &str, cancelled: &AtomicBool) -> Result<Value> {
     let path = executable(path, &["java.exe", "java"])?;
-    let text = run_with_limits(
+    let text = run_with_limits_cancel(
         &path,
         &["-XshowSettings:properties", "-version"],
         64 * 1024,
         Duration::from_secs(15),
+        Some(cancelled),
     )?;
     let mut properties = serde_json::Map::new();
     for line in text.lines() {
@@ -188,11 +208,18 @@ fn java_probe(path: &str) -> Result<Value> {
     )
 }
 pub fn java_environment(primary: &str, comparison: &str) -> Result<String> {
-    let selected = java_probe(primary)?;
+    java_environment_cancellable(primary, comparison, &AtomicBool::new(false))
+}
+pub fn java_environment_cancellable(
+    primary: &str,
+    comparison: &str,
+    cancelled: &AtomicBool,
+) -> Result<String> {
+    let selected = java_probe(primary, cancelled)?;
     let compared = if comparison.trim().is_empty() {
         Value::Null
     } else {
-        java_probe(comparison)?
+        java_probe(comparison, cancelled)?
     };
     let java_home = std::env::var_os("JAVA_HOME").map(PathBuf::from);
     let selected_home = selected
@@ -213,22 +240,30 @@ try:
 except m.PackageNotFoundError: django=None
 s=u.find_spec('django')
 print(json.dumps({'executable':sys.executable,'version':sys.version.split()[0],'prefix':sys.prefix,'basePrefix':sys.base_prefix,'scriptsPath':sysconfig.get_path('scripts'),'virtualEnvironment':sys.prefix!=sys.base_prefix,'django':django,'djangoImportOrigin':None if s is None else s.origin}))"#;
-fn python_probe(path: &str) -> Result<Value> {
+fn python_probe(path: &str, cancelled: &AtomicBool) -> Result<Value> {
     let path = executable(path, &["python.exe", "python3.exe", "python", "python3"])?;
-    let output = run_with_limits(
+    let output = run_with_limits_cancel(
         &path,
         &["-I", "-c", PYTHON_PROBE],
         64 * 1024,
         Duration::from_secs(15),
+        Some(cancelled),
     )?;
     serde_json::from_str(output.trim()).context("解释器未返回预期 JSON；启动钩子可能写入了额外内容")
 }
 pub fn python_environment(primary: &str, comparison: &str) -> Result<String> {
-    let selected = python_probe(primary)?;
+    python_environment_cancellable(primary, comparison, &AtomicBool::new(false))
+}
+pub fn python_environment_cancellable(
+    primary: &str,
+    comparison: &str,
+    cancelled: &AtomicBool,
+) -> Result<String> {
+    let selected = python_probe(primary, cancelled)?;
     let compared = if comparison.trim().is_empty() {
         Value::Null
     } else {
-        python_probe(comparison)?
+        python_probe(comparison, cancelled)?
     };
     let admin = path_entry(&["django-admin.exe", "django-admin"]);
     let sibling_admin = selected["scriptsPath"].as_str().map(|p| {
@@ -247,6 +282,9 @@ pub fn python_environment(primary: &str, comparison: &str) -> Result<String> {
     )
 }
 pub fn recording(exe: &str, file: &str) -> Result<String> {
+    recording_cancellable(exe, file, &AtomicBool::new(false))
+}
+pub fn recording_cancellable(exe: &str, file: &str, cancelled: &AtomicBool) -> Result<String> {
     let path = executable(exe, &["jfr.exe", "jfr"])?;
     let file = Path::new(file).canonicalize().context("JFR 文件不存在")?;
     ensure!(
@@ -260,7 +298,7 @@ pub fn recording(exe: &str, file: &str) -> Result<String> {
         file.metadata()?.len() <= 64 * 1024 * 1024,
         "录制超过 64 MiB；请缩小录制"
     );
-    let text = run_with_limits(
+    let text = run_with_limits_cancel(
         &path,
         &[
             "print",
@@ -271,6 +309,7 @@ pub fn recording(exe: &str, file: &str) -> Result<String> {
         ],
         8 * 1024 * 1024,
         Duration::from_secs(30),
+        Some(cancelled),
     )?;
     java::jfr(&text)
 }
@@ -357,6 +396,37 @@ mod tests {
                 .to_string()
                 .contains("超过")
         );
+    }
+    #[test]
+    fn cancellation_terminates_a_running_probe() {
+        let exe = std::env::current_exe().unwrap();
+        let args = [
+            "--ignored",
+            "--exact",
+            "framework::runtime::tests::child_fixture",
+            "--nocapture",
+        ];
+        let cancelled = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            let task = scope.spawn(|| {
+                run_with_limits_cancel(
+                    &exe,
+                    &args,
+                    1024 * 1024,
+                    Duration::from_secs(5),
+                    Some(&cancelled),
+                )
+            });
+            std::thread::sleep(Duration::from_millis(100));
+            cancelled.store(true, Ordering::Relaxed);
+            assert!(
+                task.join()
+                    .unwrap()
+                    .unwrap_err()
+                    .to_string()
+                    .contains("取消")
+            );
+        });
     }
     #[test]
     fn forbids_scripts_and_actuator_other_endpoints() {

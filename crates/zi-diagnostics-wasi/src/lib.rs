@@ -42,8 +42,19 @@ struct Request {
 #[serde(deny_unknown_fields)]
 struct Input {
     text: String,
-    #[serde(default)]
-    secondary: String,
+    #[serde(default, deserialize_with = "deserialize_secondary")]
+    secondary: Secondary,
+}
+#[derive(Default)]
+enum Secondary {
+    #[default]
+    Missing,
+    Present(String),
+}
+fn deserialize_secondary<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Secondary, D::Error> {
+    String::deserialize(deserializer).map(Secondary::Present)
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Text {
@@ -88,7 +99,7 @@ pub fn execute_request(bytes: &[u8]) -> Envelope {
     {
         return Envelope::failure("INVALID_INPUT", "插件或场景标识无效");
     }
-    if request.input.text.len() > TEXT_LIMIT || request.input.secondary.len() > TEXT_LIMIT {
+    if request.input.text.len() > TEXT_LIMIT {
         return Envelope::failure("INPUT_TOO_LARGE", "每份报告最多8192 UTF-8字节");
     }
     let capability = match (request.capability_id.0, request.command_id.0) {
@@ -101,18 +112,26 @@ pub fn execute_request(bytes: &[u8]) -> Envelope {
     let Some(action) = capability.strip_prefix("devtools.diagnostics.") else {
         return Envelope::failure("UNSUPPORTED_OPERATION", "未知分析能力");
     };
+    let secondary = match &request.input.secondary {
+        Secondary::Missing => "",
+        Secondary::Present(value) if value.len() <= TEXT_LIMIT => value,
+        Secondary::Present(_) => {
+            return Envelope::failure("INPUT_TOO_LARGE", "每份报告最多8192 UTF-8字节");
+        }
+    };
+    if matches!(&request.input.secondary, Secondary::Present(_))
+        && !zi_diagnostics_core::supports_secondary(action)
+    {
+        return Envelope::failure("INVALID_INPUT", "此操作不接受secondary输入");
+    }
     if !zi_diagnostics_core::ACTIONS
         .iter()
         .any(|entry| entry.id == action)
     {
         return Envelope::failure("UNSUPPORTED_OPERATION", "未知分析能力");
     }
-    match zi_diagnostics_core::execute_plugin(
-        action,
-        &request.input.text,
-        &request.input.secondary,
-        REQUEST_LIMIT,
-    ) {
+    match zi_diagnostics_core::execute_plugin(action, &request.input.text, secondary, REQUEST_LIMIT)
+    {
         Ok(text) => Envelope {
             contract_version: CONTRACT_VERSION.into(),
             ok: true,
@@ -233,5 +252,39 @@ mod tests {
             assert_eq!(rejected.error.unwrap().code, "OUTPUT_TOO_LARGE");
             assert!(rejected.data.is_none());
         }
+    }
+    #[test]
+    fn per_operation_secondary_is_optional_only_for_declared_operations() {
+        let base = request();
+        for value in ["", "extra"] {
+            let mut unsupported = base.clone();
+            unsupported["input"]["secondary"] = value.into();
+            assert_eq!(
+                execute_request(&serde_json::to_vec(&unsupported).unwrap())
+                    .error
+                    .unwrap()
+                    .code,
+                "INVALID_INPUT"
+            );
+        }
+        let mut invalid_type = base.clone();
+        invalid_type["input"]["secondary"] = serde_json::Value::Null;
+        assert_eq!(
+            execute_request(&serde_json::to_vec(&invalid_type).unwrap())
+                .error
+                .unwrap()
+                .code,
+            "INVALID_INPUT"
+        );
+
+        let mut supported = base;
+        supported["capabilityId"] = "devtools.diagnostics.spring.config".into();
+        supported["input"]["text"] = "{}".into();
+        supported["input"]["secondary"] = "{}".into();
+        let response = execute_request(&serde_json::to_vec(&supported).unwrap());
+        assert!(response.ok);
+        let report: serde_json::Value = serde_json::from_str(&response.data.unwrap().text).unwrap();
+        assert_eq!(report["diagnosticsProtocol"], "2.0.0-rc.1");
+        assert_eq!(report["generatedBy"]["toolId"], "spring-config");
     }
 }

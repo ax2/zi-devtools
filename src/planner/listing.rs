@@ -38,6 +38,13 @@ impl Cache {
     }
 }
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_tags(&mut self) {
+        self.preview(false, false);
+        self.items[0].tags = vec!["工作".into(), "WebP".into(), "复查".into()];
+        self.edit(self.items[0].clone());
+    }
+
     pub(super) fn replace_items(&mut self, items: Vec<Item>) {
         self.shared.invalidate();
         self.items = items;
@@ -74,7 +81,7 @@ impl State {
                     && i.schedule.is_some() == self.calendar
                     && (!self.list_pinned || i.pinned)
                     && (query.is_empty()
-                        || format!("{} {}", i.title, i.body)
+                        || format!("{} {} {}", i.title, i.body, i.tags.join(" "))
                             .to_lowercase()
                             .contains(query))
                     && (!self.calendar

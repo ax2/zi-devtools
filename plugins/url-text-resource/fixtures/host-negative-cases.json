@@ -1,0 +1,20 @@
+{
+  "scope": "Studio Host conformance required; provider-only execution cannot synthesize or attest Host grant state",
+  "cases": [
+    {
+      "id": "cancel-before-worker",
+      "setup": "Start a resource handoff and cancel before the receiver Worker starts.",
+      "expected": "No receiver execution and no new result; original source result remains available."
+    },
+    {
+      "id": "permission-revoked",
+      "setup": "Revoke resource.read after the UI grant is displayed but before Worker invocation.",
+      "expected": "Host rejects the invocation before guest resource reads; no encoded result is produced."
+    },
+    {
+      "id": "stale-transfer-grant",
+      "setup": "Change or expire the resource contentVersion after grant creation and before invocation.",
+      "expected": "Host rejects the stale grant; no bytes are exposed and no encoded result is produced."
+    }
+  ]
+}

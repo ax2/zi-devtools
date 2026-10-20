@@ -436,51 +436,6 @@ impl State {
             chrono_tz::IANA_TZDB_VERSION
         ));
     }
-    pub fn notice_ui(&mut self, ctx: &egui::Context) {
-        if self.notices.is_empty() {
-            return;
-        }
-        let mut dismiss = None;
-        let mut snooze = None;
-        egui::Window::new("时钟提醒")
-            .id(egui::Id::new("clock-notices"))
-            .default_pos(egui::pos2(
-                (ctx.screen_rect().right() - 440.0).max(16.0),
-                120.0,
-            ))
-            .collapsible(false)
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.label("提醒保持至确认；声音遵循当前声音和免打扰设置。");
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .show(ui, |ui| {
-                        for n in &self.notices {
-                            ui.group(|ui| {
-                                ui.label(&n.title);
-                                ui.horizontal(|ui| {
-                                    if ui.button("已知晓").clicked() {
-                                        dismiss = Some(n.source);
-                                    }
-                                    if n.source != Source::Focus
-                                        && ui.button("5分钟后再提醒").clicked()
-                                    {
-                                        snooze = Some(n.source);
-                                    }
-                                });
-                            });
-                        }
-                    });
-            });
-        if let Some(source) = dismiss {
-            self.notices.retain(|n| n.source != source);
-            self.changed();
-        }
-        if let Some(source) = snooze {
-            self.snooze(source, Utc::now());
-            self.changed();
-        }
-    }
 }
 
 pub(super) fn zone_label(zone: Tz) -> String {

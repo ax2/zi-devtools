@@ -1,4 +1,11 @@
 use super::*;
+use std::io::Read;
+
+#[derive(Clone, Debug)]
+struct CollectionDragPayload {
+    collection_id: String,
+    tool_id: String,
+}
 
 impl DevToolsApp {
     #[cfg(feature = "ui-preview")]
@@ -137,7 +144,8 @@ impl DevToolsApp {
 }
 
 impl DevToolsApp {
-    fn open_library(&mut self, filter: &str, category: &str) {
+    pub(super) fn open_library(&mut self, filter: &str, category: &str) {
+        self.observe_navigation();
         self.page = Page::Library;
         self.home_filter = filter.into();
         self.home_category = category.into();
@@ -162,6 +170,7 @@ impl DevToolsApp {
                     .show_separator_line(false)
                     .default_height(246.0)
                     .show_inside(ui, |ui| {
+                        self.history_controls(ui);
                         let frequent = ui.add_sized(
                             [ui.available_width(), 30.0],
                             egui::Button::new("常用排行 →"),
@@ -305,20 +314,8 @@ impl DevToolsApp {
         }
         ui.separator();
         ui.small("当前工作台");
-        let entries = self.entries("");
-        let active = entries.iter().find(|e| {
-            e.page == self.page
-                && match e.kind {
-                    Some(kind) => kind == self.tool_state.selected,
-                    None if matches!(self.page, Page::Java | Page::Django) => {
-                        e.id == self.frameworks.selected.id()
-                    }
-                    None if self.page == Page::Images => e.id == self.images.active_tool_id(),
-                    None if self.page == Page::Data => e.id == self.data_state.active_tool_id(),
-                    None if self.page == Page::Recorder => e.id == self.recorder.active_tool_id(),
-                    None => true,
-                }
-        });
+        let active_entry = self.current_entry();
+        let active = active_entry.as_ref();
         if let Some(entry) = active {
             let title = ui
                 .add(
@@ -449,7 +446,7 @@ impl DevToolsApp {
                 );
             } else {
                 for entry in selected {
-                    self.directory_row(ui, &entry, "");
+                    self.directory_row(ui, &entry, "", None);
                 }
             }
             ui.add_space(16.0);
@@ -480,13 +477,14 @@ impl DevToolsApp {
     pub(super) fn library_page(&mut self, ui: &mut egui::Ui) {
         ui.heading(RichText::new("工具库").size(28.0));
         ui.label(
-            RichText::new("按名称或用途查找；打开工具后再选择操作。").color(self.colors.muted),
+            RichText::new("按名称、用途、当前/历史版本或变更说明查找；打开工具后再选择操作。")
+                .color(self.colors.muted),
         );
         ui.add_space(12.0);
         ui.add_sized(
             [ui.available_width(), 36.0],
             egui::TextEdit::singleline(&mut self.library_query)
-                .hint_text("搜索名称或用途，例如 压缩图片、合并表格、JSON…")
+                .hint_text("搜索名称、用途、当前/历史版本或变更说明，例如 0.3.0、sqlformat…")
                 .char_limit(160),
         );
         ui.add_space(10.0);
@@ -503,13 +501,297 @@ impl DevToolsApp {
                         ui.selectable_value(&mut self.home_category, (*category).into(), *category);
                     }
                 });
+            let selected_collection = self.home_filter.strip_prefix("集合:").and_then(|id| {
+                self.preferences
+                    .tool_collections
+                    .iter()
+                    .find(|item| item.id == id)
+            });
+            egui::ComboBox::from_id_salt("tool-collection-filter")
+                .selected_text(selected_collection.map_or("工具集合", |item| item.name.as_str()))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.home_filter, "全部".into(), "全部集合");
+                    for collection in &self.preferences.tool_collections {
+                        ui.selectable_value(
+                            &mut self.home_filter,
+                            format!("集合:{}", collection.id),
+                            &collection.name,
+                        );
+                    }
+                });
             if ui.small_button("重置筛选").clicked() {
                 self.open_library("全部", "全部分类");
             }
         });
+        ui.horizontal_wrapped(|ui| {
+            ui.add_sized(
+                [ui.available_width().min(250.0), 28.0],
+                egui::TextEdit::singleline(&mut self.collection_name_draft)
+                    .hint_text("新建工具集合，例如：Java排查")
+                    .char_limit(40),
+            );
+            if ui
+                .add_enabled(
+                    !self.collection_name_draft.trim().is_empty(),
+                    egui::Button::new("＋ 新建集合"),
+                )
+                .clicked()
+            {
+                match self
+                    .preferences
+                    .create_tool_collection(&self.preferences_path, &self.collection_name_draft)
+                {
+                    Ok(id) => {
+                        self.home_filter = format!("集合:{id}");
+                        self.collection_name_draft.clear();
+                    }
+                    Err(error) => {
+                        self.toast = Some((error.to_string(), std::time::Instant::now()));
+                    }
+                }
+            }
+            #[cfg(windows)]
+            {
+                if ui
+                    .add_enabled(
+                        !self.preferences.tool_collections.is_empty(),
+                        egui::Button::new("导出集合…"),
+                    )
+                    .clicked()
+                    && let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Zi DevTools 工具集合", &["json"])
+                        .set_file_name("zi-tool-collections.json")
+                        .save_file()
+                {
+                    let result = self
+                        .preferences
+                        .export_tool_collections()
+                        .and_then(|json| std::fs::write(&path, json).map_err(Into::into));
+                    self.toast = Some((
+                        result.map_or_else(
+                            |error: anyhow::Error| format!("导出失败：{error}"),
+                            |_| format!("已导出到 {}", path.display()),
+                        ),
+                        std::time::Instant::now(),
+                    ));
+                }
+                if ui.small_button("导入集合…").clicked()
+                    && let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Zi DevTools 工具集合", &["json"])
+                        .pick_file()
+                {
+                    let load = (|| -> anyhow::Result<_> {
+                        let file = std::fs::File::open(&path)?;
+                        let mut reader = file
+                            .take(crate::preferences::TOOL_COLLECTIONS_EXPORT_MAX_BYTES as u64 + 1);
+                        let mut bytes = Vec::new();
+                        reader.read_to_end(&mut bytes)?;
+                        anyhow::ensure!(
+                            bytes.len() <= crate::preferences::TOOL_COLLECTIONS_EXPORT_MAX_BYTES,
+                            "导入文件超过1 MiB"
+                        );
+                        self.preferences.preview_tool_collections_import(
+                            path.file_name()
+                                .and_then(|name| name.to_str())
+                                .unwrap_or("工具集合文件"),
+                            &bytes,
+                        )
+                    })();
+                    match load {
+                        Ok(preview) => self.collection_import_preview = Some(preview),
+                        Err(error) => {
+                            self.toast = Some((
+                                format!("无法预览导入文件：{error}"),
+                                std::time::Instant::now(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(collection) = self.home_filter.strip_prefix("集合:").and_then(|id| {
+                self.preferences
+                    .tool_collections
+                    .iter()
+                    .find(|item| item.id == id)
+            }) {
+                let selected_id = collection.id.clone();
+                let selected_name = collection.name.clone();
+                if self.collection_rename_target != selected_id {
+                    self.collection_rename_target = selected_id.clone();
+                    self.collection_rename_draft = selected_name.clone();
+                }
+                ui.add_sized(
+                    [ui.available_width().min(220.0), 28.0],
+                    egui::TextEdit::singleline(&mut self.collection_rename_draft)
+                        .hint_text("重命名集合")
+                        .char_limit(40),
+                );
+                if ui
+                    .add_enabled(
+                        self.collection_rename_draft.trim() != selected_name,
+                        egui::Button::new("重命名"),
+                    )
+                    .clicked()
+                {
+                    match self.preferences.rename_tool_collection(
+                        &self.preferences_path,
+                        &selected_id,
+                        &self.collection_rename_draft,
+                    ) {
+                        Ok(()) => {
+                            self.collection_rename_draft =
+                                self.collection_rename_draft.trim().to_owned()
+                        }
+                        Err(error) => {
+                            self.toast = Some((error.to_string(), std::time::Instant::now()));
+                        }
+                    }
+                }
+                if ui.small_button("删除集合…").clicked() {
+                    self.collection_delete_pending = Some(selected_id);
+                }
+            } else {
+                ui.small("集合可保存一组任务常用入口；在工具行的“集合”菜单中增减工具。");
+            }
+        });
+        if let Some(preview) = self.collection_import_preview.clone() {
+            let mut open = true;
+            let mut confirm = false;
+            let mut cancel = false;
+            egui::Window::new("导入工具集合预览")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(true)
+                .default_width(500.0)
+                .show(ui.ctx(), |ui| {
+                    let membership_count = preview
+                        .items
+                        .iter()
+                        .map(|item| item.collection.tool_ids.len())
+                        .sum::<usize>();
+                    ui.label(format!(
+                        "文件：{}。将新增 {} 个集合和 {} 个工具入口；现有集合不会被覆盖或删除。",
+                        preview.source_name,
+                        preview.items.len(),
+                        membership_count
+                    ));
+                    ui.small("只导入集合名称与工具 ID，不包含工具输入、收藏或其他偏好。未知插件 ID 会保留。");
+                    ui.add_space(8.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(260.0)
+                        .show(ui, |ui| {
+                            for item in &preview.items {
+                                ui.horizontal(|ui| {
+                                    if item.renamed_to_avoid_conflict {
+                                        ui.label(format!(
+                                            "{} → {}",
+                                            item.source_name, item.collection.name
+                                        ));
+                                    } else {
+                                        ui.label(&item.collection.name);
+                                    }
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} 个工具",
+                                            item.collection.tool_ids.len()
+                                        ))
+                                        .color(self.colors.muted),
+                                    );
+                                });
+                            }
+                        });
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("确认导入").clicked() {
+                            confirm = true;
+                        }
+                        if ui.button("取消").clicked() {
+                            cancel = true;
+                        }
+                    });
+                });
+            if cancel {
+                open = false;
+            }
+            if confirm {
+                match self
+                    .preferences
+                    .import_tool_collections(&self.preferences_path, &preview)
+                {
+                    Ok(()) => {
+                        if let Some(first) = preview.items.first() {
+                            self.home_filter = format!("集合:{}", first.collection.id);
+                        }
+                        self.toast = Some((
+                            format!("已导入 {} 个工具集合", preview.items.len()),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                    Err(error) => {
+                        self.toast =
+                            Some((format!("导入未完成：{error}"), std::time::Instant::now()));
+                    }
+                }
+                self.collection_import_preview = None;
+            } else if !open {
+                self.collection_import_preview = None;
+            }
+        }
+        if let Some(id) = self.collection_delete_pending.clone() {
+            let name = self
+                .preferences
+                .tool_collections
+                .iter()
+                .find(|collection| collection.id == id)
+                .map_or("此集合", |collection| collection.name.as_str())
+                .to_owned();
+            egui::Window::new("删除工具集合")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ui.ctx(), |ui| {
+                    ui.label(format!("删除“{name}”及其中的工具列表？工具本身不会删除。"));
+                    ui.horizontal(|ui| {
+                        if ui.button("删除集合").clicked() {
+                            match self
+                                .preferences
+                                .delete_tool_collection(&self.preferences_path, &id)
+                            {
+                                Ok(()) => {
+                                    self.collection_delete_pending = None;
+                                    self.home_filter = "全部".into();
+                                }
+                                Err(error) => {
+                                    self.toast =
+                                        Some((error.to_string(), std::time::Instant::now()));
+                                }
+                            }
+                        }
+                        if ui.button("取消").clicked() {
+                            self.collection_delete_pending = None;
+                        }
+                    });
+                });
+        }
         let entries = self.library_entries();
         ui.add_space(10.0);
         ui.small(format!("{} 个匹配工具", entries.len()));
+        let reorder_collection_id = if self.library_query.trim().is_empty() {
+            self.home_filter
+                .strip_prefix("集合:")
+                .filter(|id| {
+                    self.preferences
+                        .tool_collections
+                        .iter()
+                        .any(|collection| collection.id == *id)
+                })
+                .map(str::to_owned)
+        } else {
+            None
+        };
+        if reorder_collection_id.is_some() {
+            ui.small("拖动工具行左侧的 ↕ 按任务顺序调整；搜索时按匹配度排序。");
+        }
         ui.add_space(6.0);
         let key = (
             self.library_query.clone(),
@@ -521,7 +803,9 @@ impl DevToolsApp {
         let mut scroll = egui::ScrollArea::vertical()
             .id_salt("tool-library-list")
             .auto_shrink([false, false]);
-        if changed {
+        if let Some(offset) = self.library_scroll_restore.take() {
+            scroll = scroll.vertical_scroll_offset(offset);
+        } else if changed {
             scroll = scroll.vertical_scroll_offset(0.0);
         }
         if entries.is_empty() {
@@ -533,15 +817,26 @@ impl DevToolsApp {
         let query = self.library_query.clone();
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
-            scroll.show_rows(ui, 64.0, entries.len(), |ui, range| {
+            let output = scroll.show_rows(ui, 64.0, entries.len(), |ui, range| {
                 for entry in &entries[range] {
-                    self.directory_row(ui, entry, &query);
+                    self.directory_row(ui, entry, &query, reorder_collection_id.as_deref());
                 }
+            });
+            self.library_scroll_offset = output.state.offset.y;
+            #[cfg(feature = "ui-preview")]
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(egui::Id::new("history-library-scroll"), output.inner_rect)
             });
         });
     }
 
-    fn directory_row(&mut self, ui: &mut egui::Ui, entry: &ToolEntry, query: &str) {
+    fn directory_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        entry: &ToolEntry,
+        query: &str,
+        reorder_collection: Option<&str>,
+    ) {
         ui.push_id(&entry.id, |ui| {
             let (rect, _) = ui
                 .allocate_exact_size(egui::vec2(ui.available_width(), 64.0), egui::Sense::hover());
@@ -561,6 +856,21 @@ impl DevToolsApp {
                 .show(&mut row, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
+                        if let Some(collection_id) = reorder_collection {
+                            let source_id =
+                                egui::Id::new(("tool-collection-order", collection_id, &entry.id));
+                            let source = ui.dnd_drag_source(
+                                source_id,
+                                CollectionDragPayload {
+                                    collection_id: collection_id.to_owned(),
+                                    tool_id: entry.id.clone(),
+                                },
+                                |ui| {
+                                    ui.add_sized([24.0, 28.0], egui::Button::new("↕").frame(false))
+                                },
+                            );
+                            source.response.on_hover_text("拖动以调整集合顺序");
+                        }
                         let favorite = self.preferences.favorites.contains(&entry.id);
                         if ui
                             .add_sized(
@@ -577,7 +887,17 @@ impl DevToolsApp {
                             self.toggle_favorite(&entry.id);
                         }
                         let wide = ui.available_width() >= 640.0;
-                        let reserve = if wide { 390.0 } else { 340.0 };
+                        let reserve = if wide {
+                            if reorder_collection.is_some() {
+                                520.0
+                            } else {
+                                495.0
+                            }
+                        } else if reorder_collection.is_some() {
+                            470.0
+                        } else {
+                            445.0
+                        };
                         let title_width = (ui.available_width() - reserve).max(100.0);
                         ui.allocate_ui_with_layout(
                             egui::vec2(title_width, 28.0),
@@ -600,6 +920,46 @@ impl DevToolsApp {
                             if ui.small_button("打开 →").clicked() {
                                 self.open_entry(entry);
                             }
+                            ui.menu_button("版本", |ui| {
+                                ui.set_min_width(300.0);
+                                let current = entry.version.as_deref().map_or_else(
+                                    || "版本未声明".to_owned(),
+                                    |version| {
+                                        if entry.in_progress {
+                                            format!("v{version} · 开发中")
+                                        } else {
+                                            format!("v{version}")
+                                        }
+                                    },
+                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        RichText::new("当前版本").small().color(self.colors.muted),
+                                    );
+                                    ui.strong(current);
+                                });
+                                ui.separator();
+                                if entry.version_history.is_empty() {
+                                    ui.label("此工具尚未声明版本历史");
+                                } else {
+                                    egui::ScrollArea::vertical()
+                                        .max_height(280.0)
+                                        .show(ui, |ui| {
+                                            for record in entry.version_history.iter().rev() {
+                                                ui.horizontal_wrapped(|ui| {
+                                                    ui.strong(format!("v{}", record.version));
+                                                    ui.label(
+                                                        RichText::new(&record.date)
+                                                            .small()
+                                                            .color(self.colors.muted),
+                                                    );
+                                                });
+                                                ui.label(&record.changes);
+                                                ui.add_space(6.0);
+                                            }
+                                        });
+                                }
+                            });
                             ui.menu_button("快捷方式", |ui| {
                                 ui.label("工具入口保留当前配置位置");
                                 ui.separator();
@@ -623,6 +983,39 @@ impl DevToolsApp {
                                         }
                                     }
                                     ui.close();
+                                }
+                            });
+                            let collections = self.preferences.tool_collections.clone();
+                            ui.menu_button("集合", |ui| {
+                                if collections.is_empty() {
+                                    ui.label("先创建一个工具集合");
+                                }
+                                for collection in collections {
+                                    let mut included = collection.tool_ids.contains(&entry.id);
+                                    if ui.checkbox(&mut included, &collection.name).changed() {
+                                        match self.preferences.toggle_tool_in_collection(
+                                            &self.preferences_path,
+                                            &collection.id,
+                                            &entry.id,
+                                        ) {
+                                            Ok(added) => {
+                                                self.toast = Some((
+                                                    if added {
+                                                        format!("已加入“{}”", collection.name)
+                                                    } else {
+                                                        format!("已从“{}”移除", collection.name)
+                                                    },
+                                                    std::time::Instant::now(),
+                                                ));
+                                            }
+                                            Err(error) => {
+                                                self.toast = Some((
+                                                    error.to_string(),
+                                                    std::time::Instant::now(),
+                                                ));
+                                            }
+                                        }
+                                    }
                                 }
                             });
                             ui.label(RichText::new(entry.badge()).small().color(
@@ -652,8 +1045,9 @@ impl DevToolsApp {
                     let detail = if query.trim().is_empty() {
                         description.clone()
                     } else {
-                        format!("{}  ·  {description}", entry.match_hint(query))
+                        format!("{}  ·  {description}", entry.match_detail(query))
                     };
+                    let detail_hover = format!("{detail}\n{description}");
                     ui.allocate_ui_with_layout(
                         egui::vec2(
                             ui.available_width(),
@@ -664,11 +1058,11 @@ impl DevToolsApp {
                             ui.add_space(37.0);
                             ui.add(
                                 egui::Label::new(
-                                    RichText::new(detail).small().color(self.colors.muted),
+                                    RichText::new(&detail).small().color(self.colors.muted),
                                 )
                                 .truncate(),
                             )
-                            .on_hover_text(&description);
+                            .on_hover_text(detail_hover);
                         },
                     );
                 });
@@ -680,6 +1074,52 @@ impl DevToolsApp {
                 _rendered.response.rect.height(),
                 rect.height()
             );
+            let Some(collection_id) = reorder_collection else {
+                return;
+            };
+            let drop_response = ui.interact(
+                rect,
+                egui::Id::new(("tool-collection-drop-row", collection_id, &entry.id)),
+                egui::Sense::hover(),
+            );
+            let pointer = ui.ctx().input(|input| input.pointer.interact_pos());
+            if let Some(payload) = drop_response.dnd_hover_payload::<CollectionDragPayload>()
+                && payload.collection_id == collection_id
+                && payload.tool_id != entry.id
+                && let Some(pointer) = pointer
+            {
+                let y = if pointer.y < rect.center().y {
+                    rect.top() + 1.0
+                } else {
+                    rect.bottom() - 1.0
+                };
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(rect.left() + 6.0, y),
+                        egui::pos2(rect.right() - 6.0, y),
+                    ],
+                    egui::Stroke::new(2.0, self.colors.accent),
+                );
+            }
+            if let Some(payload) = drop_response.dnd_release_payload::<CollectionDragPayload>()
+                && payload.collection_id == collection_id
+                && payload.tool_id != entry.id
+                && let Some(pointer) = pointer
+            {
+                let after = pointer.y >= rect.center().y;
+                match self.preferences.move_tool_in_collection(
+                    &self.preferences_path,
+                    collection_id,
+                    &payload.tool_id,
+                    &entry.id,
+                    after,
+                ) {
+                    Ok(()) => {
+                        self.toast = Some(("集合顺序已保存".into(), std::time::Instant::now()))
+                    }
+                    Err(error) => self.toast = Some((error.to_string(), std::time::Instant::now())),
+                }
+            }
         });
     }
 
@@ -728,6 +1168,12 @@ impl DevToolsApp {
                     "收藏" => self.preferences.favorites.contains(&e.id),
                     "最近" => self.preferences.recent.contains(&e.id),
                     "常用" => self.preferences.usage.contains_key(&e.id),
+                    filter if filter.starts_with("集合:") => self
+                        .preferences
+                        .tool_collections
+                        .iter()
+                        .find(|collection| format!("集合:{}", collection.id) == filter)
+                        .is_some_and(|collection| collection.tool_ids.contains(&e.id)),
                     _ => true,
                 }
         });
@@ -751,17 +1197,22 @@ impl DevToolsApp {
                     .unwrap_or(usize::MAX)
             });
         }
+        if browsing {
+            if let Some(collection) = self.home_filter.strip_prefix("集合:").and_then(|id| {
+                self.preferences
+                    .tool_collections
+                    .iter()
+                    .find(|item| item.id == id)
+            }) {
+                super::launcher::filter_collection(&mut entries, collection, false);
+            }
+        }
         if browsing && self.home_filter == "常用" {
-            entries.sort_by_key(|e| {
-                (
-                    std::cmp::Reverse(self.preferences.usage.get(&e.id).copied().unwrap_or(0)),
-                    self.preferences
-                        .recent
-                        .iter()
-                        .position(|id| id == &e.id)
-                        .unwrap_or(usize::MAX),
-                )
-            });
+            super::launcher::sort_by_usage(
+                &mut entries,
+                &self.preferences.usage,
+                &self.preferences.recent,
+            );
         }
         entries
     }

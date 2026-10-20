@@ -31,7 +31,16 @@ fn validate(history: &History) -> Result<()> {
     let mut ids = std::collections::HashSet::new();
     let mut texts = std::collections::HashSet::new();
     let mut images = std::collections::HashSet::new();
+    let mut file_sets = std::collections::HashSet::new();
+    let mut rich_contents = std::collections::HashSet::new();
     for e in &history.entries {
+        ensure!(e.labels.len() <= super::LABEL_LIMIT, "剪贴板标签数量无效");
+        let mut label_keys = std::collections::HashSet::new();
+        for label in &e.labels {
+            let normalized = super::normalize_label(label).map_err(anyhow::Error::msg)?;
+            ensure!(normalized.as_str() == label, "剪贴板标签格式无效");
+            ensure!(label_keys.insert(label.to_lowercase()), "剪贴板标签重复");
+        }
         ensure!(
             e.first_captured_utc
                 .into_iter()
@@ -50,10 +59,54 @@ fn validate(history: &History) -> Result<()> {
         );
         if let Some(image) = &e.image {
             ensure!(
-                e.text.is_empty() && images.insert(&image.sha256),
-                "图片混入文本或重复图片"
+                e.text.is_empty()
+                    && e.rich_html.is_none()
+                    && e.rich_rtf.is_none()
+                    && e.file_references.is_empty()
+                    && images.insert(&image.sha256),
+                "图片混入其他材料或重复图片"
             );
             image.validate()?;
+        } else if !e.file_references.is_empty() {
+            ensure!(
+                e.text.is_empty() && e.rich_html.is_none() && e.rich_rtf.is_none(),
+                "文件引用混入文本"
+            );
+            let normalized = super::normalize_file_references(e.file_references.clone())
+                .map_err(anyhow::Error::msg)?;
+            ensure!(
+                normalized == e.file_references,
+                "文件引用为空、重复、超限或格式无效"
+            );
+            let mut key = e
+                .file_references
+                .iter()
+                .map(|path| path.to_lowercase())
+                .collect::<Vec<_>>();
+            key.sort();
+            ensure!(file_sets.insert(key.join("\0")), "重复的文件引用条目");
+        } else if e.rich_html.is_some() || e.rich_rtf.is_some() {
+            ensure!(
+                e.text.len() <= TEXT_LIMIT && !e.text.contains('\0'),
+                "剪贴板富文本的纯文本回退无效"
+            );
+            if let Some(html) = &e.rich_html {
+                ensure!(
+                    html.len() <= super::HTML_LIMIT && !html.is_empty() && !html.contains('\0'),
+                    "剪贴板HTML无效或超过2 MiB"
+                );
+            }
+            if let Some(rtf) = &e.rich_rtf {
+                super::validate_rtf_payload(rtf).map_err(anyhow::Error::msg)?;
+            }
+            ensure!(
+                rich_contents.insert((
+                    e.text.as_str(),
+                    e.rich_html.as_deref(),
+                    e.rich_rtf.as_deref(),
+                )),
+                "剪贴板富文本重复"
+            );
         } else {
             ensure!(
                 !e.text.is_empty()
@@ -164,7 +217,7 @@ fn connect(path: &Path, write: bool) -> Result<Connection> {
 fn save(path: &Path, history: History) -> Result<()> {
     validate(&history)?;
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-    serde_json::to_writer(&mut encoder, &Snapshot { schema: 3, history })?;
+    serde_json::to_writer(&mut encoder, &Snapshot { schema: 7, history })?;
     let compressed = Zeroizing::new(encoder.finish()?);
     let protected = protect(&compressed, false)?;
     let mut db = connect(path, true)?;
@@ -193,7 +246,47 @@ fn load(path: &Path) -> Result<Option<History>> {
     let compressed = protect(&cipher, true)?;
     let decoder = flate2::read::GzDecoder::new(compressed.as_slice()).take(200 * 1024 * 1024);
     let snapshot: Snapshot = serde_json::from_reader(decoder)?;
-    ensure!(matches!(snapshot.schema, 1..=3), "剪贴板快照版本不支持");
+    ensure!(matches!(snapshot.schema, 1..=7), "剪贴板快照版本不支持");
+    if snapshot.schema < 6 {
+        ensure!(
+            snapshot
+                .history
+                .entries
+                .iter()
+                .all(|entry| entry.rich_html.is_none()),
+            "旧快照不支持HTML富文本"
+        );
+    }
+    if snapshot.schema < 7 {
+        ensure!(
+            snapshot
+                .history
+                .entries
+                .iter()
+                .all(|entry| entry.rich_rtf.is_none()),
+            "旧剪贴板快照不能包含RTF"
+        );
+    }
+    if snapshot.schema < 5 {
+        ensure!(
+            snapshot
+                .history
+                .entries
+                .iter()
+                .all(|entry| entry.file_references.is_empty()),
+            "旧快照不支持文件引用"
+        );
+    }
+    if snapshot.schema < 4 {
+        ensure!(
+            snapshot
+                .history
+                .entries
+                .iter()
+                .all(|entry| entry.labels.is_empty()),
+            "旧快照不支持剪贴板标签"
+        );
+    }
     if snapshot.schema < 3 {
         ensure!(
             snapshot
@@ -577,6 +670,88 @@ mod tests {
         assert!(load(&path).is_err());
         std::fs::remove_file(path).unwrap();
     }
+
+    #[test]
+    fn schema_five_file_references_roundtrip_and_older_schemas_reject_them() {
+        let snapshot_path = path();
+        let mut history = History::default();
+        history
+            .insert_files(
+                vec![r"C:\synthetic\example.csv".into()],
+                "fixture.exe".into(),
+            )
+            .unwrap();
+        save(&snapshot_path, history.clone()).unwrap();
+        let restored = load(&snapshot_path).unwrap().unwrap();
+        assert_eq!(
+            restored.entries[0].file_references,
+            history.entries[0].file_references
+        );
+        std::fs::remove_file(snapshot_path).unwrap();
+
+        let legacy_path = path();
+        store_snapshot(&legacy_path, 4, history).unwrap();
+        assert!(
+            load(&legacy_path).is_err(),
+            "older snapshots must not silently discard file references"
+        );
+        std::fs::remove_file(legacy_path).unwrap();
+    }
+
+    #[test]
+    fn schema_six_html_roundtrip_and_schema_five_rejects_rich_text() {
+        let snapshot_path = path();
+        let mut history = History::default();
+        history
+            .insert_rich_text(
+                "formatted text".into(),
+                "<p><strong>formatted</strong> text</p>".into(),
+                "fixture.exe".into(),
+            )
+            .unwrap();
+        save(&snapshot_path, history.clone()).unwrap();
+        let restored = load(&snapshot_path).unwrap().unwrap();
+        assert_eq!(restored.entries[0].text, "formatted text");
+        assert_eq!(restored.entries[0].rich_html, history.entries[0].rich_html);
+        std::fs::remove_file(&snapshot_path).unwrap();
+
+        let legacy = path();
+        store_snapshot(&legacy, 5, history).unwrap();
+        assert!(load(&legacy).is_err(), "schema 5 must reject HTML content");
+        std::fs::remove_file(legacy).unwrap();
+    }
+
+    #[test]
+    fn schema_seven_rtf_roundtrip_and_schema_six_rejects_rtf() {
+        let snapshot_path = path();
+        let mut history = History::default();
+        let rtf = br#"{\rtf1\ansi Hello {\b world}}"#.to_vec();
+        history
+            .insert_rich_formats(
+                "Hello world".into(),
+                "<p>Hello <b>world</b></p>".into(),
+                rtf.clone(),
+                "fixture.exe".into(),
+            )
+            .unwrap();
+        save(&snapshot_path, history.clone()).unwrap();
+        let restored = load(&snapshot_path).unwrap().unwrap();
+        assert_eq!(
+            restored.entries[0].rich_rtf.as_deref(),
+            Some(rtf.as_slice())
+        );
+        assert_eq!(
+            restored.entries[0].rich_html.as_deref(),
+            Some("<p>Hello <b>world</b></p>")
+        );
+        assert_eq!(restored.entries[0].text, "Hello world");
+        std::fs::remove_file(&snapshot_path).unwrap();
+
+        let legacy = path();
+        store_snapshot(&legacy, 6, history).unwrap();
+        assert!(load(&legacy).is_err(), "schema 6 must reject RTF content");
+        std::fs::remove_file(legacy).unwrap();
+    }
     #[test]
     fn legacy_snapshot_migrates_without_inventing_utc_and_new_policy_roundtrips() {
         let path = path();
@@ -784,6 +959,40 @@ mod tests {
             uuid::Uuid::new_v4()
         ))
     }
+    fn store_snapshot(path: &Path, schema: u32, history: History) -> Result<()> {
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        serde_json::to_writer(&mut encoder, &Snapshot { schema, history })?;
+        let compressed = encoder.finish()?;
+        let protected = protect(&compressed, false)?;
+        let db = connect(path, true)?;
+        db.execute(
+            "INSERT INTO clipboard VALUES(1,1,?1)",
+            params![protected.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn schema_three_restores_without_labels_and_rejects_labels() {
+        let legacy_path = path();
+        let mut legacy = History::default();
+        legacy.insert("legacy".into(), "fixture".into()).unwrap();
+        store_snapshot(&legacy_path, 3, legacy).unwrap();
+        let restored = load(&legacy_path).unwrap().unwrap();
+        assert!(restored.entries[0].labels.is_empty());
+        std::fs::remove_file(&legacy_path).unwrap();
+
+        let tagged_path = path();
+        let mut tagged = History::default();
+        tagged.insert("tagged".into(), "fixture".into()).unwrap();
+        tagged
+            .add_label(tagged.entries[0].id, "legacy-incompatible")
+            .unwrap();
+        store_snapshot(&tagged_path, 3, tagged).unwrap();
+        assert!(load(&tagged_path).is_err());
+        std::fs::remove_file(tagged_path).unwrap();
+    }
+
     #[test]
     fn windows_protection_roundtrip_mutations_clear_and_disable() {
         let p = path();
@@ -791,6 +1000,7 @@ mod tests {
         h.insert("合成多行\nfixture-only".into(), "fixture".into())
             .unwrap();
         h.entries[0].pinned = true;
+        h.add_label(h.entries[0].id, "  记录  ").unwrap();
         save(&p, h.clone()).unwrap();
         let raw = std::fs::read(&p).unwrap();
         assert!(
@@ -800,6 +1010,7 @@ mod tests {
         let restored = load(&p).unwrap().unwrap();
         assert_eq!(restored.entries[0].text, h.entries[0].text);
         assert!(restored.entries[0].pinned);
+        assert_eq!(restored.entries[0].labels, vec!["记录".to_string()]);
         h.entries.clear();
         save(&p, h).unwrap();
         assert!(load(&p).unwrap().unwrap().entries.is_empty());

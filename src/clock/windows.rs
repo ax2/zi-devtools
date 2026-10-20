@@ -8,6 +8,52 @@ pub(super) enum Target {
     Timer(u64),
     Focus,
 }
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SavedSize {
+    target: String,
+    width: u16,
+    height: u16,
+}
+impl SavedSize {
+    fn from_target_size(target: Target, size: egui::Vec2) -> Self {
+        let target = match target {
+            Target::World(zone) => format!("world:{}", zone.name()),
+            Target::Stopwatch => "stopwatch".into(),
+            Target::Timer(id) => format!("timer:{id}"),
+            Target::Focus => "focus".into(),
+        };
+        Self {
+            target,
+            width: size.x.round() as u16,
+            height: size.y.round() as u16,
+        }
+    }
+    pub(super) fn validate(&self) -> Result<Target, String> {
+        let target = match self.target.as_str() {
+            "stopwatch" => Target::Stopwatch,
+            "focus" => Target::Focus,
+            value if value.starts_with("world:") => value[6..]
+                .parse::<Tz>()
+                .map(Target::World)
+                .map_err(|_| "无效的小窗时区".to_owned())?,
+            value if value.starts_with("timer:") => {
+                let id = value[6..]
+                    .parse::<u64>()
+                    .map_err(|_| "无效的小窗计时器".to_owned())?;
+                if id == 0 || id == u64::MAX {
+                    return Err("无效的小窗计时器".into());
+                }
+                Target::Timer(id)
+            }
+            _ => return Err("无效的小窗目标".into()),
+        };
+        if !(320..=1600).contains(&self.width) || !(260..=1200).contains(&self.height) {
+            return Err("小窗尺寸越界".into());
+        }
+        Ok(target)
+    }
+}
 #[derive(Debug, Clone)]
 struct Pane {
     id: u64,
@@ -33,12 +79,15 @@ impl Pane {
 pub(super) struct Windows {
     panes: Vec<Pane>,
     next_id: u64,
+    recent_sizes: Vec<(Target, egui::Vec2)>,
     #[cfg(feature = "ui-preview")]
     rects: [egui::Rect; 5],
     #[cfg(feature = "ui-preview")]
     actual_fullscreen: bool,
     #[cfg(feature = "ui-preview")]
     scale: f32,
+    #[cfg(feature = "ui-preview")]
+    preview_size_before_reopen: Option<egui::Vec2>,
 }
 #[cfg(feature = "ui-preview")]
 impl Default for Windows {
@@ -46,12 +95,15 @@ impl Default for Windows {
         Self {
             panes: Vec::new(),
             next_id: 0,
+            recent_sizes: Vec::new(),
             #[cfg(feature = "ui-preview")]
             rects: [egui::Rect::NOTHING; 5],
             #[cfg(feature = "ui-preview")]
             actual_fullscreen: false,
             #[cfg(feature = "ui-preview")]
             scale: 1.0,
+            #[cfg(feature = "ui-preview")]
+            preview_size_before_reopen: None,
         }
     }
 }
@@ -72,16 +124,69 @@ impl Windows {
             return Err("最多同时打开8个时钟小窗；请先关闭一个。".into());
         }
         self.next_id = self.next_id.saturating_add(1);
+        let size = self
+            .recent_sizes
+            .iter()
+            .find_map(|(recent_target, size)| (*recent_target == target).then_some(*size))
+            .unwrap_or_else(|| egui::vec2(440.0, 350.0));
         self.panes.push(Pane {
             id: self.next_id,
             target,
             pinned: false,
             fullscreen: false,
             reset_confirmation: false,
-            size: egui::vec2(440.0, 350.0),
+            size,
         });
         ctx.request_repaint();
         Ok(())
+    }
+    pub(super) fn remember_size(&mut self, target: Target, size: egui::Vec2) -> bool {
+        let size = egui::vec2(
+            if size.x.is_finite() {
+                size.x.clamp(320.0, 1600.0)
+            } else {
+                440.0
+            },
+            if size.y.is_finite() {
+                size.y.clamp(260.0, 1200.0)
+            } else {
+                350.0
+            },
+        );
+        if let Some(index) = self
+            .recent_sizes
+            .iter()
+            .position(|(recent_target, _)| *recent_target == target)
+        {
+            if SavedSize::from_target_size(target, self.recent_sizes[index].1)
+                == SavedSize::from_target_size(target, size)
+            {
+                return false;
+            }
+            self.recent_sizes.remove(index);
+        } else if self.recent_sizes.len() == 48 {
+            self.recent_sizes.remove(0);
+        }
+        self.recent_sizes.push((target, size));
+        true
+    }
+    pub(super) fn saved_sizes(&self) -> Vec<SavedSize> {
+        self.recent_sizes
+            .iter()
+            .map(|(target, size)| SavedSize::from_target_size(*target, *size))
+            .collect()
+    }
+    pub(super) fn restore_sizes(&mut self, sizes: &[SavedSize]) {
+        self.recent_sizes = sizes
+            .iter()
+            .map(|size| {
+                let target = size.validate().expect("validated saved window size");
+                (
+                    target,
+                    egui::vec2(f32::from(size.width), f32::from(size.height)),
+                )
+            })
+            .collect();
     }
 }
 #[derive(Clone, Copy)]
@@ -160,6 +265,12 @@ impl State {
                     self.windows.actual_fullscreen =
                         panel.input(|i| i.viewport().fullscreen.unwrap_or(false));
                     self.windows.scale = panel.pixels_per_point();
+                }
+                if !pane.fullscreen
+                    && !panel.input(|i| i.viewport().maximized.unwrap_or(false))
+                    && let Some(rect) = panel.input(|i| i.viewport().inner_rect)
+                {
+                    pane.size = rect.size();
                 }
                 if panel.input(|i| i.viewport().close_requested()) {
                     open = false;
@@ -248,6 +359,9 @@ impl State {
                     250
                 }));
             });
+            if self.windows.remember_size(pane.target, pane.size) {
+                self.changed();
+            }
             if open {
                 self.windows.panes.push(pane);
             }

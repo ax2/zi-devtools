@@ -61,3 +61,36 @@ impl Workspace {
         assert_eq!(self.active, if phase == 1 { 1 } else { 0 });
     }
 }
+
+impl Workspace {
+    pub(crate) fn preview_navigation_b_finished(&self) -> bool {
+        !self.instances[1].state.job.phase.active()
+    }
+    pub(crate) fn preview_navigation_task_ids(&self) -> (String, String) {
+        (self.instances[0].id.clone(), self.instances[1].id.clone())
+    }
+    pub(crate) fn preview_navigation_task_check(&self, finished: bool) {
+        assert_eq!(self.instances.len(), 2);
+        assert_eq!(
+            self.instances[0].state.job.phase,
+            if finished {
+                Phase::Cancelled
+            } else {
+                Phase::Running
+            }
+        );
+        if !finished {
+            assert!(!self.instances[0].state.cancel.load(Ordering::Relaxed));
+        }
+        assert_eq!(self.instances[1].state.job.phase, Phase::Done);
+        assert_eq!(
+            self.instances[1].state.run.as_ref().unwrap().outputs[1]
+                .image
+                .dimensions(),
+            (24, 10)
+        );
+    }
+    pub(crate) fn preview_navigation_cancel(&mut self) {
+        self.instances[0].state.request_cancel();
+    }
+}

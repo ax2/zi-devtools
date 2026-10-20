@@ -99,3 +99,22 @@ impl Workspace {
         }
     }
 }
+
+impl Workspace {
+    pub(crate) fn preview_navigation_images_check(&self) {
+        assert_eq!(self.instances.len(), 2);
+        let a = &self.instances[0].state;
+        let b = &self.instances[1].state;
+        assert_eq!(
+            a.source.as_ref().unwrap().to_rgba8().get_pixel(0, 0).0,
+            [210, 30, 40, 120]
+        );
+        assert_eq!(
+            b.source.as_ref().unwrap().to_rgba8().get_pixel(0, 0).0,
+            [30, 40, 210, 255]
+        );
+        assert!(a.run.is_some());
+        assert!(b.run.is_none());
+        assert!(!a.busy() && !b.busy());
+    }
+}

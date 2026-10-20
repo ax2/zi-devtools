@@ -36,6 +36,8 @@ impl State {
             matrix_mode: self.matrix_mode,
             plot_mode: self.plot_mode,
             date_mode: self.date_mode,
+            root_mode: self.root_mode,
+            root_solver: self.root_solver.saved.clone(),
             dates: self.dates.saved.clone(),
             plot: self.plot.saved.clone(),
             variables: self.variables.clone(),
@@ -51,6 +53,8 @@ impl State {
                 || self.matrix_mode != data.matrix_mode
                 || self.plot_mode != data.plot_mode
                 || self.date_mode != data.date_mode
+                || self.root_mode != data.root_mode
+                || self.root_solver.saved != data.root_solver
                 || self.dates.saved != data.dates
                 || self.plot.saved != data.plot
                 || self.variables != data.variables
@@ -67,7 +71,7 @@ impl State {
     pub fn has_work(&self) -> bool {
         self.dirty() || self.busy() || self.files.incoming.is_some()
     }
-    fn apply(&mut self, data: Data) {
+    pub(super) fn apply(&mut self, data: Data) {
         self.message.clear();
         self.sheet_name = data.name.clone();
         self.expression = data.expression.clone();
@@ -75,6 +79,10 @@ impl State {
         self.matrix_mode = data.matrix_mode;
         self.plot_mode = data.plot_mode;
         self.date_mode = data.date_mode;
+        self.time_zone_mode = false;
+        self.root_mode = data.root_mode;
+        self.root_solver = Default::default();
+        self.root_solver.saved = data.root_solver.clone();
         self.dates = Default::default();
         self.dates.saved = data.dates.clone();
         self.plot = Default::default();
@@ -246,6 +254,18 @@ impl State {
                         "{} · 来源工具 v{}",
                         doc.data.name, doc.tool_version
                     ));
+                    if let Some(runtime) = &doc.runtime_fingerprint {
+                        ui.small(format!(
+                            "环境：{} / {} · {} · Zi DevTools {} · SHA-256 {}…（不含设备名与本机路径）",
+                            runtime.os,
+                            runtime.architecture,
+                            runtime.build_profile,
+                            runtime.app_version,
+                            &runtime.sha256[..12]
+                        ));
+                    } else {
+                        ui.small("此旧工作表没有环境指纹；导入预览不会推断或补造来源信息。");
+                    }
                     if let Some(at) = chrono::DateTime::from_timestamp(doc.created_utc, 0) {
                         ui.small(format!(
                             "文件记录的保存UTC：{}（不证明内容来源）",
@@ -437,6 +457,34 @@ mod tests {
                 .receive_numeric_with_policy(&text, super::super::exchange::MatrixSlot::B, true)
                 .is_err()
         );
+    }
+    #[test]
+    fn root_solver_inputs_roundtrip_but_derived_result_is_not_restored() {
+        let mut state = State {
+            root_mode: true,
+            ..Default::default()
+        };
+        state.root_solver.saved.formula = "scale*x-6".into();
+        state.root_solver.saved.lower = "1".into();
+        state.root_solver.saved.upper = "3".into();
+        state.variables.insert("scale".into(), Value::Exact(3, 1));
+        let saved = state.snapshot();
+        state.root_solver.last = Some((
+            state.root_solver.saved.clone(),
+            state.variables.clone(),
+            super::super::Angle::Radians,
+            super::super::root_solver::ResultValue {
+                root: 2.0,
+                residual: 0.0,
+                iterations: 1,
+                converged: true,
+            },
+        ));
+        assert!(state.dirty());
+        state.apply(saved.clone());
+        assert_eq!(state.snapshot(), saved);
+        assert!(!state.dirty());
+        assert!(state.root_solver.last.is_none());
     }
     #[test]
     fn pending_restore_cannot_be_bypassed_by_matrix_replacement_consent() {

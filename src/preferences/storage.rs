@@ -1,5 +1,5 @@
 //! Merge this window's changes while a Windows exclusive file handle is held.
-use super::Preferences;
+use super::{Preferences, ToolCollection};
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 use std::{
@@ -40,7 +40,12 @@ fn merge_fields(latest: &mut Value, base: &Value, current: &Value, root: bool) {
             if root
                 && matches!(
                     key.as_str(),
-                    "favorites" | "recent" | "usage" | "workflow_favorites" | "workflow_recent"
+                    "favorites"
+                        | "recent"
+                        | "usage"
+                        | "workflow_favorites"
+                        | "workflow_recent"
+                        | "tool_collections"
                 )
             {
                 continue;
@@ -64,6 +69,75 @@ fn merge_fields(latest: &mut Value, base: &Value, current: &Value, root: bool) {
         }
     } else {
         *latest = current.clone();
+    }
+}
+
+/// Merge collection edits by stable ID. Membership additions/removals from separate
+/// windows compose instead of replacing the complete serialized array.
+fn merge_tool_collections(
+    latest: &mut Vec<ToolCollection>,
+    base: &[ToolCollection],
+    current: &[ToolCollection],
+) {
+    for before in base {
+        if !current.iter().any(|item| item.id == before.id) {
+            latest.retain(|item| item.id != before.id);
+        }
+    }
+    for after in current {
+        let Some(before) = base.iter().find(|item| item.id == after.id) else {
+            if !latest.iter().any(|item| item.id == after.id) {
+                latest.push(after.clone());
+            }
+            continue;
+        };
+        let Some(target) = latest.iter_mut().find(|item| item.id == after.id) else {
+            // A concurrent deletion wins over stale edits to the deleted collection.
+            continue;
+        };
+        if before.name != after.name {
+            target.name = after.name.clone();
+        }
+        for removed in before
+            .tool_ids
+            .iter()
+            .filter(|id| !after.tool_ids.contains(id))
+        {
+            target.tool_ids.retain(|id| id != removed);
+        }
+        for added in after
+            .tool_ids
+            .iter()
+            .filter(|id| !before.tool_ids.contains(id))
+        {
+            if !target.tool_ids.contains(added) {
+                target.tool_ids.push(added.clone());
+            }
+        }
+        let before_set = before
+            .tool_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>();
+        let after_set = after
+            .tool_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>();
+        if before_set == after_set && before.tool_ids != after.tool_ids {
+            let mut order = after
+                .tool_ids
+                .iter()
+                .filter(|id| target.tool_ids.contains(id))
+                .cloned()
+                .collect::<Vec<_>>();
+            let concurrent_additions = target
+                .tool_ids
+                .iter()
+                .filter(|id| !order.contains(id))
+                .cloned()
+                .collect::<Vec<_>>();
+            order.extend(concurrent_additions);
+            target.tool_ids = order;
+        }
     }
 }
 
@@ -137,6 +211,7 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
         || prefs.favorites != old.favorites
         || prefs.usage != old.usage
         || prefs.workflow_favorites != old.workflow_favorites
+        || prefs.tool_collections != old.tool_collections
     {
         return Ok(false);
     }
@@ -149,13 +224,15 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
         || prefs.recent != latest.recent
         || prefs.usage != latest.usage
         || prefs.workflow_favorites != latest.workflow_favorites
-        || prefs.workflow_recent != latest.workflow_recent;
+        || prefs.workflow_recent != latest.workflow_recent
+        || prefs.tool_collections != latest.tool_collections;
     if changed {
         prefs.favorites = latest.favorites;
         prefs.recent = latest.recent;
         prefs.usage = latest.usage;
         prefs.workflow_favorites = latest.workflow_favorites;
         prefs.workflow_recent = latest.workflow_recent;
+        prefs.tool_collections = latest.tool_collections;
         let current = serde_json::to_value(&*prefs)?;
         for key in [
             "favorites",
@@ -163,6 +240,7 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
             "usage",
             "workflow_favorites",
             "workflow_recent",
+            "tool_collections",
         ] {
             base[key] = current[key].clone();
         }
@@ -172,6 +250,22 @@ pub(super) fn refresh_discovery(prefs: &mut Preferences, path: &Path) -> Result<
 }
 
 pub(super) fn save(prefs: &mut Preferences, path: &Path) -> Result<()> {
+    save_inner(prefs, path, None)
+}
+
+pub(super) fn save_tool_collection_import(
+    prefs: &mut Preferences,
+    path: &Path,
+    expected: &[ToolCollection],
+) -> Result<()> {
+    save_inner(prefs, path, Some(expected))
+}
+
+fn save_inner(
+    prefs: &mut Preferences,
+    path: &Path,
+    expected_collections: Option<&[ToolCollection]>,
+) -> Result<()> {
     ensure!(!path.is_dir(), "偏好目标是目录");
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent)?;
@@ -189,9 +283,21 @@ pub(super) fn save(prefs: &mut Preferences, path: &Path) -> Result<()> {
         .clone()
         .unwrap_or(serde_json::to_value(Preferences::default())?);
     let mut document = read(path)?.unwrap_or(serde_json::to_value(Preferences::default())?);
+    if let Some(expected) = expected_collections {
+        let latest: Preferences = serde_json::from_value(document.clone())?;
+        ensure!(
+            latest.tool_collections == expected,
+            "工具集合在导入确认时已被其他窗口修改，请重新预览"
+        );
+    }
     merge_fields(&mut document, &base, &current, true);
     let mut next: Preferences = serde_json::from_value(document.clone())?;
     let old: Preferences = serde_json::from_value(base)?;
+    merge_tool_collections(
+        &mut next.tool_collections,
+        &old.tool_collections,
+        &prefs.tool_collections,
+    );
     for entry in &old.workflow_favorites {
         if !prefs
             .workflow_favorites
@@ -265,6 +371,7 @@ pub(super) fn save(prefs: &mut Preferences, path: &Path) -> Result<()> {
         "usage",
         "workflow_favorites",
         "workflow_recent",
+        "tool_collections",
     ] {
         document[key] = clean[key].clone();
     }
@@ -359,6 +466,58 @@ mod tests {
         assert_eq!(merged.usage["json"], 2);
         assert_eq!(merged.recent, ["json"]);
         assert_eq!(merged.command_bindings.len(), 2);
+    }
+
+    #[test]
+    fn concurrent_tool_collection_creates_and_membership_additions_merge() {
+        let fixture = Fixture::new();
+        let path = fixture.path();
+        let mut a = Preferences::load(&path);
+        let mut b = Preferences::load(&path);
+        let first = a.create_tool_collection(&path, "Java 排查").unwrap();
+        b.create_tool_collection(&path, "图像处理").unwrap();
+        let after_creates = Preferences::load(&path);
+        assert_eq!(after_creates.tool_collections.len(), 2);
+
+        let mut a = Preferences::load(&path);
+        let mut b = Preferences::load(&path);
+        a.toggle_tool_in_collection(&path, &first, "java-diagnostics")
+            .unwrap();
+        b.toggle_tool_in_collection(&path, &first, "django-diagnostics")
+            .unwrap();
+        let merged = Preferences::load(&path);
+        let collection = merged
+            .tool_collections
+            .iter()
+            .find(|collection| collection.id == first)
+            .unwrap();
+        assert_eq!(
+            collection.tool_ids,
+            ["java-diagnostics", "django-diagnostics"]
+        );
+    }
+
+    #[test]
+    fn concurrent_collection_reorder_does_not_restore_a_removed_tool() {
+        let fixture = Fixture::new();
+        let path = fixture.path();
+        let mut seed = Preferences::load(&path);
+        let id = seed.create_tool_collection(&path, "常用").unwrap();
+        for tool in ["json", "uuid", "base64"] {
+            seed.toggle_tool_in_collection(&path, &id, tool).unwrap();
+        }
+
+        let mut reorder = Preferences::load(&path);
+        let mut remove = Preferences::load(&path);
+        remove
+            .toggle_tool_in_collection(&path, &id, "uuid")
+            .unwrap();
+        reorder
+            .move_tool_in_collection(&path, &id, "base64", "json", false)
+            .unwrap();
+
+        let stored = Preferences::load(&path);
+        assert_eq!(stored.tool_collections[0].tool_ids, ["base64", "json"]);
     }
 
     #[test]

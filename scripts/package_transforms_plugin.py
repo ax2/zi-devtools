@@ -5,6 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 from plugin_proof import validate_cold, validate_compute_metadata, validate_budget
+from tool_directory import PROFILE, PROFILE_VERSION, SNAPSHOT, directory_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -54,7 +55,7 @@ assert schema_proof['contractIndexSha256'] == digest((ROOT / 'contracts/studio-d
 subprocess.run(['python', str(ROOT / sync_script), '--check'], cwd=ROOT, check=True)
 manifest = json.loads((plugin_dir / 'plugin.json').read_text(encoding='utf-8'))
 catalog = json.loads((plugin_dir / 'catalog.json').read_text(encoding='utf-8'))
-validate_compute_metadata(manifest, catalog, json.loads((ROOT / 'contracts/studio-devtools/v1/plugin.example.json').read_text(encoding='utf-8')))
+validate_compute_metadata(manifest, catalog, json.loads((ROOT / 'contracts/studio-devtools/v1/plugin.example.json').read_text(encoding='utf-8')), require_directory=True)
 caps = {c['id'] for c in manifest['contributes']['capabilities']}
 assert len(caps) == {'transforms': 23, 'inspect': 8, 'trace': 2}[args.plugin] and caps == set(parity['operations']) == {t['capability'] for t in manifest['contributes']['piTools']}
 assert caps == {c['capabilityId'] for c in catalog['tools']}
@@ -65,11 +66,13 @@ source = dict(revision=git('rev-parse', 'HEAD'), dirty=bool(git('status', '--por
 catalog['source'] = source
 paths = [ROOT / p for p in ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', sync_script,
                           'scripts/package_transforms_plugin.py', 'scripts/plugin_proof.py', 'scripts/verify_transforms_wasi.py',
-                          'scripts/verify_transforms_schema.py', 'scripts/verify_diagnostics_fuel.py', 'scripts/run_text_wasi.mjs', 'src/tools.rs', 'src/tools_extra.rs']]
-folders = ['crates/zi-text-core', 'crates/' + adapter, 'plugins/' + args.plugin, 'contracts/studio-devtools/v1']
+                          'scripts/verify_transforms_schema.py', 'scripts/verify_diagnostics_fuel.py', 'scripts/run_text_wasi.mjs',
+                          'scripts/tool_directory.py', 'scripts/verify_tool_directory.py', 'src/tools.rs', 'src/tools_extra.rs']]
+folders = ['crates/zi-text-core', 'crates/' + adapter, 'plugins/' + args.plugin, 'contracts/studio-devtools/v1', 'contracts/studio-tool-directory/1.0.0-preview.1']
 if args.plugin == 'inspect':
     folders.append('crates/zi-inspect-core')
-    paths += [ROOT / 'plugins/transforms/views/main.html', ROOT / 'src/tools_advanced.rs']
+    paths += [ROOT / 'plugins/transforms/views/main.html', ROOT / 'src/tools_advanced.rs',
+              ROOT / 'scripts/verify_inspect_view.py', ROOT / 'docs/tools.json']
 if args.plugin == 'trace':
     folders.append('crates/zi-trace-core')
     paths += [ROOT / 'plugins/transforms/views/main.html', ROOT / 'src/diagnostics.rs', ROOT / 'docs/tools.json']
@@ -78,6 +81,12 @@ for folder in folders:
 provenance = dict(source=source, profile='compute.wasi.v1', status='unsigned provider candidate; not Host-accepted',
                   sourceFiles=[dict(path=p.relative_to(ROOT).as_posix(), sha256=digest(p.read_bytes())) for p in sorted(set(paths))],
                   rustc=subprocess.check_output(['rustc', '--version']).decode().strip())
+directory_snapshot_bytes = encoded(directory_snapshot(manifest))
+directory_profile = dict(id=PROFILE, version=PROFILE_VERSION,
+                         schemaSha256=digest((SNAPSHOT / 'schema.json').read_bytes()),
+                         capabilityMapSha256=digest((SNAPSHOT / 'capabilities.json').read_bytes()),
+                         snapshotSha256=digest(directory_snapshot_bytes))
+provenance['directoryProfile'] = directory_profile
 payload = {}
 
 
@@ -100,6 +109,9 @@ for kind, folder, evidence in [('parity', args.parity, parity), ('budget', args.
 assert {c['id']: c['expectedSha256'] for c in parity['cases']} == {c['id']: c['expectedSha256'] for c in budget['cases']}
 write('runtime/tools.wasm', module)
 write('plugin.json', encoded(manifest))
+write('verification/tool-directory-snapshot.json', directory_snapshot_bytes)
+write('contracts/tool-directory/schema.json', (SNAPSHOT / 'schema.json').read_bytes())
+write('contracts/tool-directory/capabilities.json', (SNAPSHOT / 'capabilities.json').read_bytes())
 write('catalog.json', encoded(catalog))
 write('provenance.json', encoded(provenance))
 write('views/main.html', view.read_bytes())

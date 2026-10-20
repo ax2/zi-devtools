@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/http-get-input.schema.json",
+  "title": "Studio HTTP GET View input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["origin", "endpoint"],
+  "properties": {
+    "origin": {
+      "type": "string",
+      "maxLength": 2048,
+      "format": "uri",
+      "description": "Origin only: scheme, host, and optional port. No path, query, fragment, or credentials."
+    },
+    "endpoint": {
+      "type": "string",
+      "enum": ["health", "info", "metrics"]
+    }
+  }
+}

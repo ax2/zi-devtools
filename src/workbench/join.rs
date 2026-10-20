@@ -19,7 +19,7 @@ impl Mode {
         }
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Preview {
     data: Dataset,
@@ -49,6 +49,20 @@ pub(super) struct State {
     invalidated: bool,
 }
 impl State {
+    pub(super) fn snapshot_clone(&self) -> Self {
+        let mut snapshot = Self::default();
+        snapshot.input = self.input.clone();
+        snapshot.path = self.path.clone();
+        snapshot.format = self.format;
+        snapshot.tsv = self.tsv;
+        snapshot.mode = self.mode;
+        snapshot.left_key = self.left_key;
+        snapshot.right_key = self.right_key.clone();
+        snapshot.preview = self.preview.clone();
+        snapshot.force_open = self.force_open;
+        snapshot
+    }
+
     pub(super) fn has_content(&self) -> bool {
         !self.input.is_empty() || self.preview.is_some()
     }
@@ -253,7 +267,10 @@ fn combine(
     }
     check_cancel(cancel)?;
     Ok(Preview {
-        data: Dataset { headers, rows },
+        data: Dataset {
+            headers,
+            rows: rows.into(),
+        },
         report,
     })
 }
@@ -585,7 +602,7 @@ mod tests {
         assert!(combine(&l, &r, Mode::Left, 0, "id", &AtomicBool::new(true)).is_err());
         let many = Dataset {
             headers: vec!["id".into()],
-            rows: vec![vec![Value::from("1")]; 101],
+            rows: vec![vec![Value::from("1")]; 101].into(),
         };
         assert!(
             combine(&many, &many, Mode::Inner, 0, "id", &AtomicBool::new(false))

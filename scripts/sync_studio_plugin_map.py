@@ -69,12 +69,12 @@ for tool in catalog["tools"]:
                      pilotCapabilities=pilot.get(tool["id"], []),
                      operationScopes=([dict(operationId=report_actions[tool["id"]], scopeKind="completed_imported_report_subset", scope=report_scopes[tool["id"]],
                          sourceVersion=tool["tool_version"], pluginStatus="candidate",
-                         core="zi-diagnostics-core/0.1.3", adapter="zi-diagnostics-wasi/0.1.3",
-                         packageId="com.zicode.devtools.diagnostics", packageVersion="0.1.3",
+                         core="zi-diagnostics-core/0.1.4", adapter="zi-diagnostics-wasi/0.1.4",
+                         packageId="com.zicode.devtools.diagnostics", packageVersion="0.1.4",
                          hostProfile="compute.wasi.v1@=1.0.0-rc.1", diagnosticsProfile="diagnostics.compute.wasi.v1.proposal",
-                         diagnosticsSchemaVersion="2.0.0-rc.1", requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1"},
-                         candidateDirectory="release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-                         verificationReceipt="release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+                         diagnosticsSchemaVersion="2.0.0-rc.1", requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
+                         candidateDirectory="release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+                         verificationReceipt="release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
                          runtimeVerification="native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
                          viewVerification="public_sdk_fixture_actual_wasi_11_actions_two_viewports",
                          blockingReason="unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收")]
@@ -82,10 +82,11 @@ for tool in catalog["tools"]:
                              scopeKind="complete_transform_operation_within_plugin_budget", scope=tool["scope"],
                              sourceVersion=tool["tool_version"], pluginStatus="candidate",
                              core="zi-text-core/0.1.0", adapter="zi-text-wasi/0.1.0",
-                             packageId="com.zicode.devtools.transforms", packageVersion="0.1.0",
+                             packageId="com.zicode.devtools.transforms", packageVersion="0.1.1",
+                             requiredProfiles={"tool.directory.v1":"=1.0.0-preview.1"},
                              limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
-                             candidateDirectory="release/transforms-0.1.0-candidate-02",
-                             verificationReceipt="release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+                             candidateDirectory="release/plugin-candidates/transforms-0.1.1-candidate-01",
+                             verificationReceipt="release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
                              runtimeVerification="174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
                              viewVerification="public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
                              blockingReason="unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收")
@@ -122,12 +123,13 @@ for operation, source_id, title in trace_actions:
         scopeKind="complete_trace_operation_within_plugin_budget", scope=next(t["scope"] for t in catalog["tools"] if t["id"] == source_id),
         sourceVersion=row["sourceVersion"], pluginStatus="candidate",
         core="zi-trace-core/0.1.0", adapter="zi-trace-wasi/0.1.0",
-        packageId="com.zicode.devtools.trace", packageVersion="0.1.0",
+        packageId="com.zicode.devtools.trace", packageVersion="0.1.1",
+        requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
         limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
-        candidateDirectory="release/trace-0.1.0-candidate-01",
-        verificationReceipt="release/trace-0.1.0-candidate-01-verification.json",
+        candidateDirectory="release/plugin-candidates/trace-0.1.1-candidate-01",
+        verificationReceipt="release/plugin-candidates/trace-0.1.1-candidate-01-verification.json",
         moduleSha256="bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e",
-        directoryIndexSha256="45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+        directoryIndexSha256="2e8b35249384757bc1c809bf971e2feccfc9396211a4efde7ca4f29fda9820c0",
         runtimeVerification="59_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
         viewVerification="public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
         blockingReason="unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收")]
@@ -155,6 +157,7 @@ json_row["operationScopes"] = [dict(
     directoryProfile="tool.directory.v1@=1.0.0-preview.1",
     limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
     candidateDirectory="release/text-plugin-0.4.1-candidate-02",
+    verificationReceipt=json_row["verificationReceipt"],
     runtimeVerification="43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
     viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
     blockingReason="unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收")
@@ -169,24 +172,24 @@ json_row["candidatePackages"] = [
          candidateDirectory="release/text-plugin-0.4.1-candidate-02",
          verificationReceipt="release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
          capabilities=pilot["json"]),
-    dict(packageId="com.zicode.devtools.json-object", packageVersion="0.1.0",
-         candidateDirectory="release/plugin-candidates/json-object-0.1.0-candidate-07",
-         verificationReceipt="release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
+    dict(packageId="com.zicode.devtools.json-object", packageVersion="0.1.1",
+         candidateDirectory="release/plugin-candidates/json-object-0.1.1-candidate-03",
+         verificationReceipt="release/plugin-candidates/json-object-0.1.1-candidate-03-verification.json",
          capabilities=[capability for capability, _, _ in json_object_capabilities]),
 ]
-json_row["reason"] = "JSON 格式化/压缩/校验仍由 Text 0.4.1 候选提供；对象摘要另由 JSON Object 0.1.0 候选声明 result.json.v1，对象接收能力用于显式接力。提供方字节一致验证已完成，Studio Host/Pi 和结果接力仍待接收方验收。"
+json_row["reason"] = "JSON 格式化/压缩/校验仍由 Text 0.4.1 候选提供；对象摘要另由 JSON Object 0.1.1 候选声明 result.json.v1 与 tool.directory.v1，对象接收能力用于显式接力。提供方字节一致验证已完成，Studio Host/Pi 和结果接力仍待接收方验收。"
 for capability, title, scope_kind in json_object_capabilities:
     json_row["operationScopes"].append(dict(
         operationId=capability, title=title, scopeKind=scope_kind,
         scope="根值必须为 JSON object；输入对象最多 8 KiB、128 个根字段、64 层与 4096 节点，请求/结果最多 48 KiB。" if capability.endswith("inspect") else "仅作为已捕获 JSON object 的显式接收端；保持对象类型，受 8 KiB 输入、128 字段、48 KiB envelope 限制。",
         sourceVersion=json_row["sourceVersion"], pluginStatus="candidate",
         core="zi-json-core/0.1.0", adapter="zi-json-object-wasi/0.1.0",
-        packageId="com.zicode.devtools.json-object", packageVersion="0.1.0",
-        requiredProfiles={"output.schema.v1": "=1.0.0-rc.1", "result.json.v1": "=1.0.0-preview.1"},
+        packageId="com.zicode.devtools.json-object", packageVersion="0.1.1",
+        requiredProfiles={"output.schema.v1": "=1.0.0-rc.1", "result.json.v1": "=1.0.0-preview.1", "tool.directory.v1": "=1.0.0-preview.1"},
         limits=dict(inputObjectBytes=8192, requestBytes=49152, resultBytes=49152, rootFields=128, depth=64, nodes=4096),
-        candidateDirectory="release/plugin-candidates/json-object-0.1.0-candidate-07",
-        verificationReceipt="release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
-        runtimeVerification="10_native_wasi_byte_parity_cases_duplicate_key_and_size_rejection",
+        candidateDirectory="release/plugin-candidates/json-object-0.1.1-candidate-03",
+        verificationReceipt="release/plugin-candidates/json-object-0.1.1-candidate-03-verification.json",
+        runtimeVerification="10_baseline_native_wasi_parity_and_current_packaged_wasi_replay",
         viewVerification="no_plugin_view; standalone_JSON_object_summary_action_uses_same_native_adapter",
         blockingReason="unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"))
 for source_id, operations in {
@@ -213,6 +216,7 @@ for source_id, operations in {
         directoryProfile="tool.directory.v1@=1.0.0-preview.1",
         limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
         candidateDirectory="release/text-plugin-0.4.1-candidate-02",
+        verificationReceipt=tool_row["verificationReceipt"],
         runtimeVerification="43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
         viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
         blockingReason="unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收")
@@ -234,6 +238,7 @@ sql_row["operationScopes"] = [dict(
     directoryProfile="tool.directory.v1@=1.0.0-preview.1",
     limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
     candidateDirectory="release/text-plugin-0.4.1-candidate-02",
+    verificationReceipt=sql_row["verificationReceipt"],
     runtimeVerification="43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
     viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
     blockingReason="unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收")]
@@ -249,8 +254,9 @@ for row in rows:
         row.setdefault("packageId", next(iter(packages))[0])
         row.setdefault("packageVersion", next(iter(packages))[1])
 spring = next(row for row in rows if row["sourceToolId"] == "spring-actuator")
-spring["reason"] = "0.1.1仅有固定health/info/metrics HTTP View候选；Studio任务生命周期profile仍是未实现草案，provider schema/vectors待Studio复核；报告资源profile亦未发布。无正式包/收据、真实Pi到Host到View未验收，完整来源范围未交付。"
-spring["candidateCapabilities"] = [
+spring["reason"] = "0.1.3增加四项页面操作的搜索定位，保留原应用分类与用途；已有冻结HTTP View候选目录及外部校验收据，包含health/info/metrics与摘要4项页面操作；manifest未声明Agent可调用capability。任务中心、认证、context path、单项指标和报告导出未交付；真实Host端到端未验收，完整来源范围未交付。"
+spring["candidateCapabilities"] = []
+spring["candidateViewOperations"] = [
     "devtools.spring-actuator.health",
     "devtools.spring-actuator.info",
     "devtools.spring-actuator.metrics",
@@ -259,11 +265,12 @@ spring["candidateCapabilities"] = [
 spring["pilotCapabilities"] = []
 spring["scopeComplete"] = False
 spring["packageId"] = "com.zicode.devtools.spring-actuator"
-spring["packageVersion"] = "0.1.1"
-spring["candidateDirectory"] = "plugins/spring-actuator"
-spring["reviewCandidateDirectory"] = "release/plugin-candidates/spring-actuator-0.1.1-candidate-02"
-spring["verificationReceipt"] = "release/plugin-candidates/spring-actuator-0.1.1-candidate-02-verification.json"
-spring["requiredProfile"] = {"service.http.get.v1": "=1.0.0-preview.1"}
+spring["packageVersion"] = "0.1.3"
+spring["sourceDirectory"] = "plugins/spring-actuator"
+spring["candidateDirectory"] = "release/plugin-candidates/spring-actuator-0.1.3-candidate-01"
+spring["reviewCandidateDirectory"] = "release/plugin-candidates/spring-actuator-0.1.3-candidate-01"
+spring["verificationReceipt"] = "release/plugin-candidates/spring-actuator-0.1.3-candidate-01-verification.json"
+spring["requiredProfile"] = {"service.http.get.v1": "=1.0.0-preview.1", "application.directory.v1": "=1.0.0-preview.1", "view.operation.directory.v1": "=1.0.0-preview.1"}
 spring["optionalPermissions"] = ["service.http.read"]
 spring["proposalProfiles"] = {
     "taskLifecycle": {
@@ -306,6 +313,14 @@ spring["operationScopes"] = [
          pluginStatus="not_delivered", proposal="plugins/spring-actuator/schemas/result-resource-proposal",
          blockingReason="Studio未发布经用户预览/确认的结果资源创建profile；不得自行写路径"),
 ]
+for scope in spring["operationScopes"]:
+    if scope["pluginStatus"] == "candidate":
+        scope.update(
+            packageId=spring["packageId"], packageVersion=spring["packageVersion"],
+            candidateDirectory=spring["candidateDirectory"], verificationReceipt=spring["verificationReceipt"],
+            executionSurface="view", viewId="devtools.spring-actuator.main",
+            requiredProfiles=spring["requiredProfile"],
+        )
 for row in rows:
     if row["pluginStatus"] == "candidate":
         assert row.get("candidateDirectory") or row.get("reviewCandidateDirectory"), \
@@ -362,21 +377,60 @@ for row in rows:
             scopeKind="single_turn_model_assistance_view",
             sourceToolVersion=row["sourceVersion"],
             packageId="com.zicode.devtools.agent-assist",
-            packageVersion="0.1.0",
-            candidateDirectory="release/agent-assist-preview-0.1.0-candidate-03",
-            verificationFile="release/agent-assist-preview-0.1.0-candidate-03-verification.json",
+            packageVersion="0.1.3",
+            candidateDirectory="release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01",
+            verificationFile="release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01-verification.json",
             view="self_contained_html_in_srcdoc_no_external_assets",
             requiredProfiles={
                 "model.catalog.read.v1": "1.0.0-preview.1",
                 "model.generate.v1": "1.0.0-preview.1",
+                "application.directory.v1": "1.0.0-preview.1",
+                "view.operation.directory.v1": "1.0.0-preview.1",
             },
             requiredPermissions=["model.catalog.read", "model.generate"],
-            validation="three_utf8_limit_tests_jsdom_csp_meta_mock_host_and_installable_root_external_proof_pass",
+            validation="public_sdk_mock_sandbox_navigation_two_themes_and_original_model_result_regression",
             nativeStudioEndToEnd="pending",
             deliveryStatus="unsigned_candidate_not_Host_accepted",
             design="docs/agent-model-preview.md",
             excludes=["MCP", "RAG", "file_and_clipboard_input", "multi_step_agent", "tool_execution", "task_resume_and_cancellation"],
         )]
+        preview = row["previewScopes"][0]
+        row["candidateViewOperations"] = ["devtools.agent-assist.models", "devtools.agent-assist.generate"]
+        row["operationScopes"].extend([
+            dict(operationId=operation, scopeKind="single_turn_model_assistance_view", pluginStatus="candidate",
+                 sourceVersion=row["sourceVersion"], packageId=preview["packageId"], packageVersion=preview["packageVersion"],
+                 candidateDirectory=preview["candidateDirectory"], verificationReceipt=preview["verificationFile"],
+                 executionSurface="view", viewId="devtools.agent-assist.main",
+                 scope="用户主动读取模型目录或逐次确认后进行一轮文字生成；不包含MCP、RAG和自动执行。",
+                 blockingReason="unsigned页面候选；真实Studio权限、模型请求、安装与完整Agent范围尚未验收")
+            for operation in row["candidateViewOperations"]
+        ])
+image = next(row for row in rows if row["sourceToolId"] == "image-workflow")
+image["candidateCapabilities"] = ["devtools.image.resize"]
+image["scopeComplete"] = False
+image["reason"] = "已有0.2.0单图缩放资源候选，使用当前0.12.0图片核心与整数参数适配器；当前独立版的完整图片工作流并未迁移。目录/MIME发现与参数schema已验证，真实Host生命周期、全尺寸/跨平台验收仍待完成。"
+image["operationScopes"].append(dict(
+    operationId="devtools.image.resize", title="缩放授权图片",
+    scopeKind="single_image_resource_resize", sourceVersion=image["sourceVersion"], candidateSourceVersion="0.12.0",
+    pluginStatus="candidate", packageId="com.zicode.devtools.image", packageVersion="0.2.0",
+    candidateDirectory="release/plugin-candidates/image-resize-0.2.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/image-resize-0.2.0-candidate-01-verification.json",
+    scope="运行模块来源0.12.0，仅单图PNG/JPEG/WebP缩放；宽度1–4096，JPEG质量35–95，PNG/WebP无损。不含批处理、裁剪、OCR和文件保存。",
+    runtimeVerification="23_direct_wasi_numeric_legacy_format_parameter_and_zero_output_error_cases",
+    blockingReason="unsigned候选；Host真实授权、资源登记、接力、取消及全尺寸/跨平台验收未由本轮证明。",
+))
+url = next(row for row in rows if row["sourceToolId"] == "url")
+url["operationScopes"].append(dict(
+    operationId="devtools.transforms.url.encode", title="URL 编码共享文本资源",
+    scopeKind="explicit_text_resource_receiver", sourceVersion=url["sourceVersion"], pluginStatus="candidate",
+    packageId="com.zicode.devtools.url-text-resource", packageVersion="0.1.1",
+    candidateDirectory="release/plugin-candidates/url-text-resource-0.1.1-candidate-01",
+    verificationReceipt="release/plugin-candidates/url-text-resource-0.1.1-candidate-01-verification.json",
+    requiredProfiles={"resource.input.types.v1": "=1.0.0-preview.1", "output.schema.v1": "=1.0.0-rc.1", "tool.directory.v1": "=1.0.0-preview.1"},
+    scope="单个用户授权的text/plain资源，1至8192 UTF-8字节；返回编码文本、源字节数或7种明确业务错误。",
+    runtimeVerification="13_actual_wasi_schema_and_budget_cases_same_frozen_runtime",
+    blockingReason="与transforms共享同一能力ID，隔离接收测试只启用一个提供方；真实Host资源授权、撤权、取消和跨工具接力尚未验收。",
+))
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "operation": "model.generate",
+  "input": {
+    "modelRef": "model-ref-from-host-picker",
+    "runId": "run-17",
+    "consentId": "one-time-consent-from-host-review",
+    "goal": "Summarize the selected stack trace",
+    "materials": [
+      {
+        "sourceId": "file-1",
+        "displayName": "trace.txt",
+        "sourceKind": "explicit_file_selection",
+        "trust": "untrusted_user_material",
+        "text": "Exception: example"
+      }
+    ],
+    "maxOutputTokens": 1024,
+    "deadlineMs": 60000
+  }
+}

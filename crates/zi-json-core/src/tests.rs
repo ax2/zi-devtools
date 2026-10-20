@@ -63,6 +63,29 @@ fn complete_path_semantics_and_errors_match_original() {
 }
 
 #[test]
+fn object_summary_preserves_structured_values_and_enforces_profile_limits() {
+    let value: Value =
+        serde_json::from_str(r#"{"name":"Zi","enabled":true,"items":[1,null]}"#).unwrap();
+    let summary = object_summary(&value).unwrap();
+    assert_eq!(summary["value"], value);
+    assert_eq!(summary["keyCount"], 3);
+    assert_eq!(
+        summary["keys"],
+        serde_json::json!(["enabled", "items", "name"])
+    );
+    assert_eq!(summary["valueTypes"]["items"], "array");
+    assert_eq!(summary["maxDepth"], 3);
+    assert!(object_summary(&serde_json::json!([1, 2])).is_err());
+    assert!(object_summary_text(&" ".repeat(8193)).is_err());
+    let too_many = serde_json::Value::Object(
+        (0..129)
+            .map(|n| (format!("k{n}"), serde_json::json!(n)))
+            .collect(),
+    );
+    assert!(object_summary(&too_many).is_err());
+}
+
+#[test]
 fn query_bytes_steps_and_match_limits_are_exact() {
     assert_eq!(
         json_path("{}", &format!("${}", ".a".repeat(128))).unwrap(),

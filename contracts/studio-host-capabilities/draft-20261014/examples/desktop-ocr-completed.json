@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "type": "ocr.completed",
+  "operationId": "ocr-12",
+  "languageTag": "en-US",
+  "text": "OCR result shown locally",
+  "truncated": false
+}

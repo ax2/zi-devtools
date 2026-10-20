@@ -1,0 +1,29 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.image",
+  "packageVersion": "0.2.0",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "image-workflow",
+      "toolId": "devtools.image.resize",
+      "capabilityId": "devtools.image.resize",
+      "version": "0.12.0",
+      "status": "candidate",
+      "profile": "resource.wasi.image.resize.v1@1.0.0-preview.1",
+      "title": "缩放图片",
+      "scope": "对单张用户确认的 PNG/JPEG/WebP 图片缩放并输出 PNG/JPEG/WebP；不含批处理、裁剪、OCR、EXIF 清理、文件路径访问或保存。"
+    }
+  ],
+  "requiredProfiles": {
+    "resource.wasi.image.resize.v1": "=1.0.0-preview.1",
+    "output.schema.v1": "=1.0.0-rc.1",
+    "resource.output.types.v1": "=1.0.0-preview.1",
+    "resource.input.types.v1": "=1.0.0-preview.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
+  },
+  "deliveryStatus": "unsigned_provider_candidate_not_host_accepted"
+}

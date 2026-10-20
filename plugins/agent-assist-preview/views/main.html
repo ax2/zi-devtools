@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>ZiDevTools 模型辅助</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font: 14px/1.55 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+        --accent: #3478d4;
+        --accent-strong: #2163bd;
+        --accent-soft: color-mix(in srgb, var(--accent) 11%, Canvas);
+        --border: color-mix(in srgb, CanvasText 13%, transparent);
+        --muted: color-mix(in srgb, CanvasText 65%, transparent);
+        --surface: color-mix(in srgb, CanvasText 3%, Canvas);
+        --surface-raised: color-mix(in srgb, CanvasText 6%, Canvas);
+        --danger: #b42318;
+        color: CanvasText;
+        background: Canvas;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 300px; }
+      main { width: min(960px, 100%); margin: 0 auto; padding: 30px clamp(16px, 4vw, 40px) 48px; }
+      header { margin-bottom: 22px; }
+      .eyebrow { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+      .mark { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 8px; color: white; background: linear-gradient(145deg, #58a1f1, #2d68c3); font-size: 13px; font-weight: 800; letter-spacing: -.06em; }
+      h1 { margin: 13px 0 4px; font-size: clamp(24px, 3vw, 30px); line-height: 1.2; letter-spacing: -.025em; }
+      .lead { max-width: 690px; margin: 0; color: var(--muted); }
+      .notice { display: flex; gap: 10px; align-items: flex-start; margin-top: 17px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); border-radius: 12px; background: var(--accent-soft); }
+      .notice-icon { display: grid; flex: 0 0 20px; width: 20px; height: 20px; place-items: center; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 17%, Canvas); font-weight: 800; }
+      .notice p { margin: 0; font-size: 12px; }
+      .notice strong { display: block; margin-bottom: 1px; }
+      .layout { display: grid; gap: 16px; }
+      .card { padding: clamp(16px, 2.8vw, 23px); border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 3px 14px color-mix(in srgb, CanvasText 3%, transparent); }
+      .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 15px; }
+      .section-heading h2 { margin: 0; font-size: 16px; letter-spacing: -.01em; }
+      .section-heading p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+      .field { display: grid; gap: 6px; min-width: 0; }
+      .field label, .field-label { font-size: 12px; font-weight: 650; }
+      .help { color: var(--muted); font-size: 11px; }
+      .model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: end; }
+      select, textarea, input[type="text"] { width: 100%; border: 1px solid var(--border); border-radius: 9px; color: CanvasText; background: Canvas; font: inherit; outline: none; }
+      select, input[type="text"] { min-height: 38px; padding: 7px 10px; }
+      textarea { min-height: 145px; padding: 11px 12px; line-height: 1.55; resize: vertical; }
+      select:focus-visible, textarea:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 78%, white); outline-offset: 2px; }
+      button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 9px; color: CanvasText; background: var(--surface-raised); font: 600 12px/1.2 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif; cursor: pointer; transition: background-color .15s ease, border-color .15s ease, transform .15s ease; }
+      button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); }
+      button:active:not(:disabled) { transform: translateY(1px); }
+      button:disabled { opacity: .52; cursor: not-allowed; }
+      .primary { min-height: 42px; padding-inline: 17px; border-color: var(--accent); color: #fff; background: var(--accent); font-size: 13px; }
+      .primary:hover:not(:disabled) { border-color: var(--accent-strong); color: #fff; background: var(--accent-strong); }
+      .quiet { min-height: 30px; padding-inline: 9px; font-size: 11px; }
+      .status { min-height: 19px; margin-top: 9px; color: var(--muted); font-size: 11px; }
+      .status[data-kind="error"] { color: var(--danger); }
+      .status[data-kind="success"] { color: #18804a; }
+      @media (prefers-color-scheme: dark) {
+        :root { --danger: #ffb4ab; }
+        .status[data-kind="success"] { color: #80d9a4; }
+      }
+      .empty { display: grid; justify-items: center; gap: 5px; min-height: 108px; place-content: center; padding: 16px; border: 1px dashed var(--border); border-radius: 11px; color: var(--muted); text-align: center; }
+      .empty strong { color: CanvasText; font-size: 12px; }
+      .materials { display: grid; gap: 10px; }
+      .material { padding: 12px; border: 1px solid var(--border); border-radius: 11px; background: color-mix(in srgb, Canvas 72%, var(--surface)); }
+      .material-top { display: grid; grid-template-columns: minmax(120px, .4fr) minmax(0, 1fr) auto; gap: 9px; align-items: end; margin-bottom: 9px; }
+      .material textarea { min-height: 92px; }
+      .material-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px; color: var(--muted); font-size: 10px; }
+      .pill { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--surface-raised); font-size: 10px; white-space: nowrap; }
+      .limits { display: flex; flex-wrap: wrap; gap: 6px; }
+      .task-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .submit-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; }
+      .submit-copy { max-width: 500px; color: var(--muted); font-size: 11px; }
+      [hidden] { display: none !important; }
+      .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .result-state { margin: 8px 0; padding: 10px 12px; border-radius: 9px; background: var(--accent-soft); color: CanvasText; }
+      .result-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
+      .result-head h2 { margin: 0; font-size: 16px; }
+      .result-meta { color: var(--muted); font-size: 11px; }
+      pre { max-height: 560px; overflow: auto; margin: 0; padding: 15px; border: 1px solid var(--border); border-radius: 10px; background: Canvas; font: 12px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .result-warning { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+      footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 15px; color: var(--muted); font-size: 10px; }
+      fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+      fieldset:disabled { opacity: .72; }
+      @media (max-width: 680px) {
+        main { padding-top: 20px; }
+        .model-row { grid-template-columns: minmax(0, 1fr) auto; }
+        .model-row .pager-label { grid-column: 1 / -1; grid-row: 2; }
+        .material-top { grid-template-columns: 1fr auto; }
+        .material-top .name-field { grid-column: 1 / -1; grid-row: 2; }
+        .task-grid { grid-template-columns: 1fr; }
+        .submit-row { align-items: stretch; flex-direction: column; }
+        .submit-row .primary { width: 100%; }
+      }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+          [tabindex="-1"]:focus { outline: 3px solid var(--accent); outline-offset: 4px; }
+    </style>
+    <script>
+      (() => {
+        "use strict";
+
+        const encoder = new TextEncoder();
+        const bytes = (value) => encoder.encode(String(value ?? "")).byteLength;
+
+        function validateDraft({ goal, materials, model, maxOutputTokens, deadlineMs }) {
+          if (typeof goal !== "string" || goal.trim().length === 0) return "goal_required";
+          if (bytes(goal) > 2048) return "goal_too_large";
+          if (!model || typeof model.modelRef !== "string" || model.modelRef.length === 0 || bytes(model.modelRef) > 128) {
+            return "model_required";
+          }
+          if (!Array.isArray(materials) || materials.length > 32) return "too_many_materials";
+
+          let total = 0;
+          const ids = new Set();
+          for (const material of materials) {
+            if (!material || typeof material !== "object") return "invalid_material";
+            if (typeof material.sourceId !== "string" || material.sourceId.length === 0 ||
+                bytes(material.sourceId) > 128 || ids.has(material.sourceId)) return "invalid_material_id";
+            ids.add(material.sourceId);
+            if (typeof material.displayName !== "string" || material.displayName.trim().length === 0 ||
+                bytes(material.displayName) > 128) return "invalid_material_name";
+            if (material.sourceKind !== "user_text" || material.trust !== "untrusted_user_material") {
+              return "invalid_material_source";
+            }
+            if (typeof material.text !== "string") return "invalid_material_text";
+            total += bytes(material.text);
+            if (total > 32768) return "materials_too_large";
+          }
+
+          if (!Number.isInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 4096) {
+            return "invalid_output_limit";
+          }
+          if (!Number.isInteger(deadlineMs) || deadlineMs < 1000 || deadlineMs > 120000) {
+            return "invalid_deadline";
+          }
+          return null;
+        }
+
+        window.ZiAgentAssistLimits = Object.freeze({ bytes, validateDraft });
+      })();
+    </script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow"><span class="mark" aria-hidden="true">Zi</span><span>ZiDevTools · Agent 子能力预览</span></div>
+        <h1>模型辅助任务</h1>
+        <p class="lead">选择 Studio 当前场景中的模型，整理一个明确目标和少量文字资料，生成一份可以继续审阅的回答。</p>
+        <div class="notice" role="note">
+          <span class="notice-icon" aria-hidden="true">i</span>
+          <p><strong>这是模型辅助视图，不是完整 Agent 工作台。</strong>每次生成都会由 Studio 显示实际待发送内容并要求你确认。资料来源标签由此界面填写，Host 不验证来源真实性；本页不会调用 MCP、读取文件或自动执行回答中的操作。</p>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="card" aria-labelledby="model-heading">
+          <div class="section-heading">
+            <div><h2 id="model-heading">01 · 选择模型</h2><p>只读取当前 Studio 场景已配置的模型。</p></div>
+            <span class="pill">用户触发 · 不透明引用</span>
+          </div>
+          <div class="model-row">
+            <div class="field">
+              <label for="model-select">当前场景模型</label>
+              <select id="model-select" disabled aria-describedby="model-help"><option value="">先点击“读取模型”</option></select>
+              <span class="help" id="model-help">不会显示或读取模型密钥、连接地址。</span>
+            </div>
+            <button id="refresh-models" type="button" disabled>↻ 读取模型</button>
+            <button id="previous-page" class="quiet" type="button" disabled aria-label="上一页模型">←</button>
+            <button id="next-page" class="quiet" type="button" disabled aria-label="下一页模型">→</button>
+          </div>
+          <div id="model-status" class="status" role="status" aria-live="polite">正在连接 Studio 插件界面……</div>
+        </section>
+
+        <div id="generation-form" class="layout">
+          <fieldset id="form-fields" disabled>
+            <section class="card" aria-labelledby="goal-heading">
+              <div class="section-heading">
+                <div><h2 id="goal-heading">02 · 写清任务目标</h2><p>短目标更容易得到可核对的回答。</p></div>
+                <span class="pill">最多 2 KiB UTF-8</span>
+              </div>
+              <div class="field">
+                <label for="goal">你希望模型完成什么？</label>
+                <textarea id="goal" maxlength="2048" placeholder="例如：根据资料列出 Django 迁移计划里可能造成锁表的步骤，并说明还需要核对哪些前提。" aria-describedby="goal-help goal-count"></textarea>
+                <div class="material-meta"><span id="goal-help">目标与所选资料会在 Studio 确认前显示。</span><span id="goal-count">0 / 2048 字节</span></div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="materials-heading">
+              <div class="section-heading">
+                <div><h2 id="materials-heading">03 · 添加文字资料</h2><p>只包含你在本页明确粘贴或输入的内容。</p></div>
+                <button id="add-material" class="quiet" type="button">＋ 添加资料</button>
+              </div>
+              <div id="materials" class="materials"></div>
+              <div class="material-meta"><span>共 <span id="material-count">0</span> 项 · 总计 <span id="materials-bytes">0</span> / 32768 字节</span><span>最多 32 项；来源名称和标签仅供展示</span></div>
+              <div id="materials-status" class="status" role="status" aria-live="polite">没有添加资料时，只发送任务目标。</div>
+            </section>
+
+            <section class="card" aria-labelledby="limits-heading">
+              <div class="section-heading">
+                <div><h2 id="limits-heading" tabindex="-1">04 · 控制本次生成</h2><p>限制只作用于当前请求，不会保存为默认设置。</p></div>
+                <span class="pill">本次运行内存</span>
+              </div>
+              <div class="task-grid">
+                <div class="field">
+                  <label for="output-limit">最多生成 token</label>
+                  <select id="output-limit"><option>512</option><option selected>1024</option><option>2048</option><option>4096</option></select>
+                  <span class="help">Host 上限为 4096。</span>
+                </div>
+                <div class="field">
+                  <label for="deadline">请求最长等待</label>
+                  <select id="deadline"><option value="30000">30 秒</option><option value="60000" selected>60 秒</option><option value="90000">90 秒</option><option value="120000">120 秒</option></select>
+                  <span class="help">最长 120 秒；已发送的请求不能从本插件取消。</span>
+                </div>
+              </div>
+              <div class="submit-row">
+                <span class="submit-copy">生成前，Studio 会向你展示模型名称、目标域名和完整发送文本。你可以拒绝本次请求；拒绝不会发出网络请求。</span>
+                <button id="generate" class="primary" type="button">✦ 预览并生成</button>
+              </div>
+              <div id="generation-status" class="status" role="status" aria-live="polite"></div>
+            </section>
+          </fieldset>
+        </div>
+
+        <button id="show-result" type="button" hidden>查看上次回答 ↓</button>
+        <section id="result-card" class="card result-card" aria-labelledby="result-heading" hidden>
+          <div class="result-head"><div><h2 id="result-heading">模型回答</h2><div id="result-meta" class="result-meta"></div></div><span class="pill">未保存</span></div>
+          <pre id="result-text" tabindex="0"></pre>
+          <p id="result-state" class="result-state" role="status" hidden></p>
+          <div class="result-actions"><button id="select-result" type="button">选择回答文字</button><button id="clear-result" type="button">清空回答</button></div>
+          <p class="help">选择后按 Ctrl+C（macOS 为 Command+C）复制。清空回答会保留当前目标和资料。</p>
+          <p class="result-warning">模型回答未经来源证明或事实核验。检查关键结论后，再通过其他工具处理。</p>
+        </section>
+      </div>
+
+      <footer><span>接口：model.catalog.read.v1 + model.generate.v1 preview.1</span><span>来源与结果仅保存在当前 View 内存</span></footer>
+    </main>
+
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const state = { models: [], selectedModelRef: null, pageCursor: null, nextCursor: null, previous: [], ready: false, busy: false, loading: false, materialSequence: 0, resultDraftKey: null };
+      const limitChecks = window.ZiAgentAssistLimits;
+      if (!limitChecks) throw new Error("view_limits_unavailable");
+
+      function setStatus(id, message, kind = "") {
+        const node = $(id);
+        node.textContent = message;
+        node.dataset.kind = kind;
+      }
+
+      function api() {
+        const models = window.zicode?.services?.models;
+        if (!models || typeof models.list !== "function" || typeof models.generate !== "function") {
+          throw new Error("host_api_unavailable");
+        }
+        return models;
+      }
+
+      function unwrap(value) {
+        return value && typeof value === "object" && value.result && typeof value.result === "object"
+          ? value.result : value;
+      }
+
+      function updateModelSelect() {
+        const select = $("model-select");
+        select.replaceChildren();
+        if (!state.models.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "此页没有可用模型";
+          select.append(option);
+        } else {
+          state.models.forEach((model, index) => {
+            const option = document.createElement("option");
+            option.value = String(index);
+            option.textContent = model.displayName;
+            select.append(option);
+          });
+        }
+        const index = state.models.findIndex(model => model.modelRef === state.selectedModelRef);
+        select.value = state.models.length ? String(Math.max(0, index)) : "";
+        state.selectedModelRef = state.models[Number(select.value)]?.modelRef ?? null;
+        select.disabled = !state.ready || state.busy || state.loading || state.models.length === 0;
+        $("previous-page").disabled = state.busy || state.loading || state.previous.length === 0;
+        $("next-page").disabled = state.busy || state.loading || !state.nextCursor;
+        $("form-fields").disabled = !state.ready || state.busy || state.loading || state.models.length === 0;
+        $("generate").disabled = $("form-fields").disabled;
+        updateResultState();
+      }
+
+      async function loadModels(cursor = null, pushCurrent = false) {
+        if (state.busy || state.loading) return;
+        state.loading = true;
+        updateModelSelect();
+        $("refresh-models").disabled = true;
+        $("previous-page").disabled = true;
+        $("next-page").disabled = true;
+        setStatus("model-status", "正在读取当前场景模型列表……");
+        try {
+          const raw = await api().list(cursor ?? undefined);
+          const page = unwrap(raw);
+          if (!page || !Array.isArray(page.models)) throw new Error("model_list_invalid");
+          if (page.models.length > 128 || page.models.some((model) =>
+            !model || typeof model.modelRef !== "string" || model.modelRef.length === 0 ||
+            typeof model.displayName !== "string" || model.displayName.length === 0)) {
+            throw new Error("model_list_invalid");
+          }
+          if (pushCurrent && state.nextCursor) state.previous.push(state.pageCursor);
+          state.pageCursor = cursor;
+          state.nextCursor = typeof page.nextCursor === "string" && page.nextCursor.length > 0 ? page.nextCursor : null;
+          state.models = page.models.map((model) => ({
+            modelRef: model.modelRef,
+            displayName: model.displayName,
+            providerKind: model.providerKind,
+            supportsCancellation: model.supportsCancellation
+          }));
+          updateModelSelect();
+          const pageNumber = state.previous.length + 1;
+          setStatus("model-status", state.models.length
+            ? `已读取 ${state.models.length} 个模型 · 第 ${pageNumber} 页${state.nextCursor ? "，还有下一页" : ""}`
+            : "当前场景没有可用模型，请先在 Studio 配置模型。", state.models.length ? "success" : "");
+        } catch (_) {
+          setStatus("model-status", "模型列表读取失败。请检查 Studio 场景、插件权限或模型配置。", "error");
+        } finally {
+          state.loading = false;
+          $("refresh-models").disabled = !state.ready || state.busy;
+          updateModelSelect();
+        }
+      }
+
+      function newMaterialId() {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
+        state.materialSequence += 1;
+        return `user-text-${Date.now().toString(36)}-${state.materialSequence}`;
+      }
+
+      function addMaterial() {
+        if (state.busy || $("materials").children.length >= 32) return;
+        const id = newMaterialId();
+        const card = document.createElement("article");
+        card.className = "material";
+        card.dataset.material = "";
+        card.dataset.sourceId = id;
+
+        const top = document.createElement("div");
+        top.className = "material-top";
+        const badge = document.createElement("span");
+        badge.className = "pill";
+        badge.textContent = "用户文字";
+        const nameField = document.createElement("div");
+        nameField.className = "field name-field";
+        const label = document.createElement("label");
+        label.textContent = "资料名称";
+        const name = document.createElement("input");
+        name.type = "text";
+        name.maxLength = 128;
+        name.value = `文字资料 ${$("materials").children.length + 1}`;
+        name.setAttribute("aria-label", "资料名称");
+        nameField.append(label, name);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "quiet";
+        remove.textContent = "移除";
+        remove.setAttribute("aria-label", "移除此项资料");
+        remove.addEventListener("click", () => { card.remove(); updateMaterialStats(); });
+        top.append(badge, nameField, remove);
+
+        const body = document.createElement("div");
+        body.className = "field";
+        const text = document.createElement("textarea");
+        text.maxLength = 32768;
+        text.placeholder = "在此粘贴你已确认可以发送给模型的文字。";
+        text.setAttribute("aria-label", "资料文字");
+        text.addEventListener("input", updateMaterialStats);
+        body.append(text);
+        const meta = document.createElement("div");
+        meta.className = "material-meta";
+        const source = document.createElement("span");
+        source.textContent = "sourceKind: user_text · 标签由本界面提供";
+        const count = document.createElement("span");
+        count.className = "material-bytes";
+        count.textContent = "0 字节";
+        meta.append(source, count);
+        card.append(top, body, meta);
+        $("materials").append(card);
+        text.focus();
+        updateMaterialStats();
+      }
+
+      function collectMaterials() {
+        return [...$("materials").querySelectorAll("[data-material]")].map((card) => ({
+          sourceId: card.dataset.sourceId,
+          displayName: card.querySelector('input[type="text"]').value,
+          sourceKind: "user_text",
+          trust: "untrusted_user_material",
+          text: card.querySelector("textarea").value
+        }));
+      }
+
+      function updateMaterialStats() {
+        const materials = collectMaterials();
+        let total = 0;
+        for (const item of materials) {
+          const size = limitChecks.bytes(item.text);
+          total += size;
+          const card = $("materials").querySelector(`[data-source-id="${CSS.escape(item.sourceId)}"]`);
+          if (card) card.querySelector(".material-bytes").textContent = `${size} 字节`;
+        }
+        $("material-count").textContent = String(materials.length);
+        $("materials-bytes").textContent = String(total);
+        $("add-material").disabled = state.busy || materials.length >= 32;
+        if (materials.length === 0) setStatus("materials-status", "没有添加资料时，只发送任务目标。");
+        else if (total > 32768) setStatus("materials-status", "资料已超过 32768 字节，请移除或缩短内容。", "error");
+        else setStatus("materials-status", "全部资料只在本次 View 内存中；关闭页面后不保留。", "");
+        updateResultState();
+      }
+
+      function draftKey() {
+        return JSON.stringify({ modelRef: state.selectedModelRef, goal: $("goal").value,
+          materials: collectMaterials(), maxOutputTokens: Number($("output-limit").value), deadlineMs: Number($("deadline").value) });
+      }
+
+      function updateResultState() {
+        const hasResult = state.resultDraftKey !== null;
+        $("show-result").hidden = !hasResult;
+        $("clear-result").disabled = state.busy;
+        const stale = hasResult && state.resultDraftKey !== draftKey();
+        $("result-state").hidden = !hasResult || (!state.busy && !stale);
+        $("result-state").textContent = state.busy ? "正在处理新请求；下方保留的是上次回答。" :
+          stale ? "目标、资料、模型或参数已变化；下方回答对应此前的输入。" : "";
+      }
+
+      function showResult() {
+        $("result-text").scrollIntoView({ block: "center" });
+        $("result-text").focus({ preventScroll: true });
+      }
+      $("show-result").addEventListener("click", showResult);
+      $("select-result").addEventListener("click", () => {
+        showResult();
+        const range = document.createRange(); range.selectNodeContents($("result-text"));
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+      });
+      $("clear-result").addEventListener("click", () => {
+        if (state.busy) return;
+        state.resultDraftKey = null;
+        $("result-text").textContent = ""; $("result-meta").textContent = "";
+        $("result-card").hidden = true; updateResultState();
+        setStatus("generation-status", "已清空回答；目标和资料已保留。");
+        $("goal").focus();
+      });
+      $("generation-form").addEventListener("input", updateResultState);
+      $("generation-form").addEventListener("change", updateResultState);
+      $("model-select").addEventListener("change", () => {
+        state.selectedModelRef = state.models[Number($("model-select").value)]?.modelRef ?? null;
+        updateResultState();
+      });
+
+      function updateGoalCount() {
+        const count = limitChecks.bytes($("goal").value);
+        $("goal-count").textContent = `${count} / 2048 字节`;
+        $("goal-count").dataset.kind = count > 2048 ? "error" : "";
+      }
+
+      const messages = {
+        goal_required: "请先写明任务目标。",
+        goal_too_large: "任务目标超过 2048 UTF-8 字节。",
+        model_required: "请读取并选择一个模型。",
+        too_many_materials: "资料最多 32 项。",
+        invalid_material: "资料内容格式无效。",
+        invalid_material_id: "资料标识重复或长度超限。",
+        invalid_material_name: "资料名称不能为空，且最多 128 UTF-8 字节。",
+        invalid_material_source: "资料来源标签无效。",
+        invalid_material_text: "资料必须是文字。",
+        materials_too_large: "资料文字合计超过 32768 UTF-8 字节。",
+        invalid_output_limit: "输出 token 限制超出范围。",
+        invalid_deadline: "等待时限超出范围。"
+      };
+
+      $("goal").addEventListener("input", updateGoalCount);
+      $("add-material").addEventListener("click", addMaterial);
+      $("refresh-models").addEventListener("click", () => {
+        state.previous = [];
+        state.nextCursor = null;
+        loadModels(null, false);
+      });
+      $("next-page").addEventListener("click", () => {
+        if (state.nextCursor) loadModels(state.nextCursor, true);
+      });
+      $("previous-page").addEventListener("click", () => {
+        if (state.previous.length) loadModels(state.previous.pop(), false);
+      });
+
+      async function generate() {
+        if (!state.ready || state.busy || state.loading) return;
+        const selected = state.models[Number($("model-select").value)];
+        const goal = $("goal").value;
+        const materials = collectMaterials();
+        const maxOutputTokens = Number($("output-limit").value);
+        const deadlineMs = Number($("deadline").value);
+        const error = limitChecks.validateDraft({ goal, materials, model: selected, maxOutputTokens, deadlineMs });
+        if (error) {
+          setStatus("generation-status", messages[error] || "输入超出本预览允许范围。", "error");
+          return;
+        }
+
+        const request = { modelRef: selected.modelRef, goal, materials, maxOutputTokens, deadlineMs };
+        const submittedDraftKey = JSON.stringify(request);
+        state.busy = true;
+        $("generate").disabled = true;
+        $("generate").textContent = "等待 Studio 确认或生成……";
+        $("refresh-models").disabled = true;
+        updateModelSelect();
+        setStatus("generation-status", "Studio 将展示本次完整待发送内容。请在系统确认对话框中核对并决定是否发送。");
+        try {
+          const raw = await api().generate(request);
+          const result = unwrap(raw);
+          if (!result || typeof result.text !== "string") throw new Error("generation_result_invalid");
+          $("result-text").textContent = result.text;
+          $("result-meta").textContent = `${selected.displayName} · 回答 ${limitChecks.bytes(result.text)} 字节`;
+          $("result-card").hidden = false;
+          state.resultDraftKey = submittedDraftKey;
+          setStatus("generation-status", "生成完成。回答只留在当前 View；请独立核对结论。", "success");
+        } catch (_) {
+          setStatus("generation-status", "本次请求未返回结果。可能是你拒绝了确认、权限已撤销、模型请求失败或超时。请核对 Studio 提示后再决定是否重试。", "error");
+        } finally {
+          state.busy = false;
+          $("generate").disabled = false;
+          $("generate").textContent = "✦ 预览并生成";
+          $("refresh-models").disabled = !state.ready;
+          updateModelSelect();
+          updateMaterialStats();
+        }
+      }
+      $("generate").addEventListener("click", generate);
+
+      function openViewOperation({ operationId }) {
+        const known = ["devtools.agent-assist.models", "devtools.agent-assist.generate"];
+        if (!known.includes(operationId)) return "not_found";
+        if (!state.ready || state.busy || state.loading) return "unsupported";
+        const target = operationId === known[0] ? $("refresh-models") :
+          $("generate").disabled ? $("limits-heading") : $("generate");
+        target.scrollIntoView({ block: "center", behavior: "instant" });
+        target.focus({ preventScroll: true });
+        return document.activeElement === target ? "opened" : "unsupported";
+      }
+
+      (async () => {
+        try {
+          if (!window.zicode || typeof window.zicode.ready !== "function") throw new Error("host_bridge_unavailable");
+          await window.zicode.ready();
+          api();
+          state.ready = true;
+          $("refresh-models").disabled = false;
+          setStatus("model-status", "Studio 插件界面已连接。点击“读取模型”后才会查询当前场景。", "success");
+        } catch (_) {
+          setStatus("model-status", "当前环境没有可用的 Studio 模型服务；这份页面需在支持 preview.1 profile 的 Studio 桌面 View 中打开。", "error");
+        }
+        updateModelSelect();
+        updateMaterialStats();
+        updateGoalCount();
+        const registration = window.zicode?.navigation?.onOpenViewOperation?.(openViewOperation);
+        window.addEventListener("pagehide", () => registration?.dispose(), { once: true });
+      })();
+    </script>
+  </body>
+</html>

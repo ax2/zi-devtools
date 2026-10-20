@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "operation": "model.generate",
+  "accepted": true,
+  "taskId": "host-task-ref",
+  "deadlineMs": 60000
+}

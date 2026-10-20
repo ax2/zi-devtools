@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/cancel.request.schema.json",
+  "title": "plugin.task.lifecycle.v1 cancel request proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256}
+  }
+}

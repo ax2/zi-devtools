@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "profile": "plugin.task.lifecycle.v1@1.0.0-preview.1",
+  "status": "provider proposal; not implemented by Studio",
+  "vectors": [
+    {
+      "id": "submit-accepted",
+      "terminal": "succeeded",
+      "executionFinished": true,
+      "networkRequestsAfterUserConfirmation": 1,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "succeeded"
+      ],
+      "operationId": "devtools.spring-actuator.run.v1",
+      "hostIdentityFieldsInjected": true
+    },
+    {
+      "id": "health-503-is-data",
+      "terminal": "succeeded",
+      "httpStatus": 503,
+      "resultAvailable": true,
+      "resultRefExposedToView": false,
+      "networkRequestsAfterUserConfirmation": 1,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "succeeded"
+      ]
+    },
+    {
+      "id": "declined-no-network",
+      "terminal": "declined",
+      "executionFinished": true,
+      "networkRequestsAfterUserConfirmation": 0,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "declined"
+      ]
+    },
+    {
+      "id": "cancel-during-queue",
+      "terminal": "cancelled",
+      "phase": "queued",
+      "executionFinished": true,
+      "networkRequests": 0,
+      "states": [
+        "queued",
+        "cancelled"
+      ]
+    },
+    {
+      "id": "cancel-during-dns",
+      "terminal": "cancelled",
+      "phase": "dns",
+      "executionFinished": true,
+      "cancelResponseBeforeTerminal": "requested",
+      "networkRequests": 0,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "cancelled"
+      ]
+    },
+    {
+      "id": "cancel-during-http",
+      "terminal": "cancelled",
+      "phase": "http",
+      "executionFinished": true,
+      "cancelResponseBeforeTerminal": "requested",
+      "networkRequestsAfterUserConfirmation": 1,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "cancelled"
+      ]
+    },
+    {
+      "id": "cancel-during-parse",
+      "terminal": "cancelled",
+      "phase": "parse",
+      "executionFinished": true,
+      "cancelResponseBeforeTerminal": "requested",
+      "networkRequestsAfterUserConfirmation": 1,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "cancelled"
+      ]
+    },
+    {
+      "id": "revoked-during-request",
+      "terminal": "revoked",
+      "executionFinished": true,
+      "activeExecutionFinished": true,
+      "nextEndpointStarted": false,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "revoked"
+      ]
+    },
+    {
+      "id": "dns-error",
+      "terminal": "failed",
+      "errorCode": "http_service_dns_failed",
+      "rawNetworkErrorExposed": false,
+      "states": [
+        "queued",
+        "awaiting_confirmation",
+        "running",
+        "failed"
+      ]
+    },
+    {
+      "id": "idempotent-retry",
+      "createdTaskCount": 1,
+      "networkRequests": 0,
+      "sameIdempotencyKey": true,
+      "sameCanonicalInput": true,
+      "replayedTaskRefSame": true,
+      "differentCanonicalInputRejected": true
+    },
+    {
+      "id": "restart-recovery-snapshot",
+      "snapshotState": "running",
+      "latestSequence": 7,
+      "eventsAfterSequence": [
+        8,
+        9
+      ],
+      "terminal": null,
+      "resultRefExposedToView": false,
+      "restartRule": "queued resumes after owner and operation revalidation; in-progress becomes interrupted unless idempotent recovery with fresh authorization"
+    },
+    {
+      "id": "terminal-snapshot",
+      "terminal": {
+        "executionFinished": true,
+        "taskRef": "taskref_opaque_example_01"
+      },
+      "eventsAfterSequence": [],
+      "state": "cancelled"
+    },
+    {
+      "id": "cursor-expired",
+      "afterSequence": 2,
+      "earliestRetainedSequence": 5,
+      "response": "cursor_expired; empty events; snapshotRequired=true"
+    },
+    {
+      "id": "cursor-invalid",
+      "afterSequence": 9,
+      "latestSequence": 7,
+      "response": "cursor_invalid; empty events"
+    },
+    {
+      "id": "duplicate-replay",
+      "lastSeenSequence": 4,
+      "incomingSequences": [
+        4,
+        5
+      ],
+      "appliedSequences": [
+        5
+      ]
+    },
+    {
+      "id": "gap-requires-snapshot",
+      "lastSeenSequence": 4,
+      "incomingSequences": [
+        6
+      ],
+      "response": "snapshot_required"
+    },
+    {
+      "id": "terminal-event-binding",
+      "eventSequence": 9,
+      "terminalSequence": 9,
+      "accepted": true,
+      "eventTaskRef": "task-a",
+      "terminalTaskRef": "task-a"
+    },
+    {
+      "id": "terminal-event-binding-mismatch",
+      "eventTaskRef": "task-a",
+      "eventSequence": 9,
+      "terminalSequence": 9,
+      "rejected": true,
+      "terminalTaskRef": "task-b"
+    },
+    {
+      "id": "origin-path-rejected",
+      "origin": "https://service.example.test/actuator",
+      "requestAccepted": false,
+      "dnsQueries": 0
+    },
+    {
+      "id": "link-local-target-rejected",
+      "origin": "http://169.254.169.254",
+      "confirmed": true,
+      "requestAccepted": false,
+      "networkRequests": 0,
+      "rawAddressExposed": false
+    },
+    {
+      "id": "dns-rebinding-rejected",
+      "initialAddressClass": "private",
+      "preconnectAddressClass": "public",
+      "requestAccepted": false,
+      "networkRequests": 0,
+      "errorCode": "http_service_address_changed"
+    },
+    {
+      "id": "duplicate-json-key-rejected",
+      "file": "fixtures/duplicate-json-key.input.txt",
+      "expected": "parse_error"
+    },
+    {
+      "id": "monotonic-events",
+      "acceptedSequence": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "accepted": true,
+      "rejectedSequence": [
+        2,
+        1
+      ],
+      "rejected": true,
+      "duplicateTerminalRejected": true,
+      "postTerminalEventRejected": true
+    }
+  ]
+}

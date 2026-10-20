@@ -9,7 +9,7 @@ sys.stdin.reconfigure(encoding="utf-8")
 sys.stdout.reconfigure(encoding="utf-8")
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "normal"
-SYNC = Path(sys.argv[2]) if MODE == "delayed_tools" and len(sys.argv) > 2 else None
+SYNC = Path(sys.argv[2]) if MODE in {"delayed_tools", "write"} and len(sys.argv) > 2 else None
 
 
 def send(value):
@@ -52,7 +52,24 @@ for line in sys.stdin:
                     time.sleep(0.005)
             else:
                 time.sleep(0.7)
-        if MODE == "bad_tool":
+        if MODE == "write":
+            response = {
+                "tools": [{
+                    "name": "write_note",
+                    "description": "Write a note into the disposable test directory",
+                    "annotations": {
+                        "readOnlyHint": False,
+                        "destructiveHint": True,
+                        "openWorldHint": False,
+                    },
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}},
+                        "required": ["text"],
+                    },
+                }]
+            }
+        elif MODE == "bad_tool":
             response = {"tools": [{"name": ""}]}
         elif request.get("params", {}).get("cursor") == "next":
             response = {
@@ -86,7 +103,10 @@ for line in sys.stdin:
         response = {"prompts": [{"name": "summary"}]}
     elif method == "tools/call":
         if SYNC is not None:
-            (SYNC / "tool-called").write_text("called", encoding="utf-8")
+            if MODE == "write":
+                (SYNC / "note.txt").write_text(request["params"]["arguments"]["text"], encoding="utf-8")
+            else:
+                (SYNC / "tool-called").write_text("called", encoding="utf-8")
         if MODE == "knowledge":
             response = {
                 "content": [{"type": "text", "text": "synthetic excerpt"}],

@@ -15,13 +15,24 @@
         "unique",
         "dedup"
       ],
+      "aliases": [
+        "remove duplicate lines",
+        "删除重复行"
+      ],
       "sample": "Rust\nPython\nRust",
       "adapter": {
         "type": "builtin",
         "tool": "lines",
         "action": 0
       },
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "建立独立工具版本基线；当前范围见工具说明。"
+        }
+      ]
     },
     {
       "id": "extract-names",
@@ -39,7 +50,14 @@
         "tool": "json-path",
         "pattern": "$.items[*].name"
       },
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "建立独立工具版本基线；当前范围见工具说明。"
+        }
+      ]
     }
   ]
 }

@@ -28,7 +28,7 @@ pub struct Prepared {
     pub version: String,
     pub old_version: String,
     pub bytes: u64,
-    pub changes: Vec<String>,
+    pub changes: signed::ToolChangeSummary,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -628,7 +628,7 @@ pub fn history(directory: &Path) -> Result<Vec<(Prepared, Receipt)>> {
                     version: a.manifest.version,
                     old_version: p.old_version,
                     bytes: 0,
-                    changes: Vec::new(),
+                    changes: signed::ToolChangeSummary::default(),
                 },
                 r,
             ));

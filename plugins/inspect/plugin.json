@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "com.zicode.devtools.inspect",
   "name": "ZiDevTools Inspect",
   "displayName": "ZiDevTools 格式与检查",
@@ -58,6 +58,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "color converter",
+            "convert color code",
+            "颜色转换",
+            "HEX RGB HSL"
+          ],
+          "description": "Convert supplied HEX, RGB, or HSL color text locally; this is not a screen color picker."
         }
       },
       {
@@ -75,6 +85,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "YAML to JSON",
+            "convert YAML",
+            "YAML 转 JSON",
+            "YAML 转换"
+          ],
+          "description": "Convert one supplied YAML document to JSON locally; duplicate keys use the last value."
         }
       },
       {
@@ -92,6 +112,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "JSON to YAML",
+            "convert JSON to YAML",
+            "JSON 转 YAML",
+            "转成 YAML"
+          ],
+          "description": "Convert supplied JSON text to YAML locally while preserving large integer text."
         }
       },
       {
@@ -109,6 +139,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "web",
+          "aliases": [
+            "IPv4 CIDR calculator",
+            "subnet calculator",
+            "CIDR 子网计算",
+            "网段计算"
+          ],
+          "description": "Calculate IPv4 CIDR network details from pasted text; does not connect to or scan a network."
         }
       },
       {
@@ -126,6 +166,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "security",
+          "aliases": [
+            "JWT decoder",
+            "JWT payload",
+            "JWT 解码",
+            "令牌内容查看"
+          ],
+          "description": "Decode JWT header and payload locally; does not verify signature, expiry, or trust."
         }
       },
       {
@@ -143,6 +193,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "Unicode code points",
+            "invisible characters",
+            "Unicode 码点",
+            "不可见字符检查"
+          ],
+          "description": "Inspect code points, UTF-8 bytes, and common invisible characters in supplied text."
         }
       },
       {
@@ -160,6 +220,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "Unicode NFC",
+            "normalize NFC",
+            "Unicode NFC 规范化",
+            "NFC 文本规范化"
+          ],
+          "description": "Normalize supplied text to Unicode NFC; this changes the text representation."
         }
       },
       {
@@ -177,6 +247,16 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "Unicode NFKC",
+            "normalize NFKC",
+            "Unicode NFKC 规范化",
+            "NFKC 文本规范化"
+          ],
+          "description": "Normalize supplied text to Unicode NFKC; compatibility normalization may change meaning."
         }
       }
     ],
@@ -343,5 +423,8 @@
         "reason": "显式授权后允许当前场景的 AI 使用文本工具"
       }
     ]
+  },
+  "requiredProfiles": {
+    "tool.directory.v1": "=1.0.0-preview.1"
   }
 }

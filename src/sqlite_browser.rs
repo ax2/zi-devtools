@@ -14,7 +14,10 @@ use std::{
 };
 
 use crate::disk_inspector::is_link;
+mod backup;
+mod row;
 mod transfer;
+mod write;
 
 const PAGE_SIZE: usize = 50;
 const MAX_PAGES: usize = 200;
@@ -347,9 +350,147 @@ pub fn export_csv(data: &PageData, path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EditOperation {
+    New,
+    Undo,
+    Redo,
+}
+
+impl EditOperation {
+    fn title(self) -> &'static str {
+        match self {
+            Self::New => "确认写入 SQLite",
+            Self::Undo => "确认撤销 SQLite 修改",
+            Self::Redo => "确认重做 SQLite 修改",
+        }
+    }
+    fn button(self) -> &'static str {
+        match self {
+            Self::New => "确认写入",
+            Self::Undo => "确认撤销",
+            Self::Redo => "确认重做",
+        }
+    }
+    fn completed(self) -> &'static str {
+        match self {
+            Self::New => "修改已提交",
+            Self::Undo => "撤销已提交",
+            Self::Redo => "重做已提交",
+        }
+    }
+}
+
 enum Response {
     Catalog(Result<Catalog, String>),
     Page(Result<PageData, String>),
+    Backup(Result<PathBuf, String>),
+    EditPreview(Result<MutationReview, String>),
+    EditApplied(
+        EditOperation,
+        std::result::Result<MutationReview, ApplyFailure>,
+    ),
+}
+
+#[derive(Debug)]
+enum ApplyFailure {
+    NotCommitted(String),
+    CommittedWithoutHistory(String),
+}
+
+impl std::fmt::Display for ApplyFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotCommitted(message) | Self::CommittedWithoutHistory(message) => {
+                formatter.write_str(message)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum MutationReview {
+    Cell(write::Review),
+    Row(row::Review),
+}
+
+impl MutationReview {
+    fn apply(&self) -> std::result::Result<Self, ApplyFailure> {
+        match self {
+            Self::Cell(review) => write::apply(review).map(Self::Cell),
+            Self::Row(review) => row::apply(review).map(Self::Row),
+        }
+    }
+    fn refresh_source(&mut self) -> Result<()> {
+        match self {
+            Self::Cell(review) => review.refresh_source(),
+            Self::Row(review) => review.refresh_source(),
+        }
+    }
+    fn table(&self) -> &str {
+        match self {
+            Self::Cell(review) => review.table(),
+            Self::Row(review) => review.table(),
+        }
+    }
+    fn change_label(&self) -> String {
+        match self {
+            Self::Cell(review) => format!(
+                "单元格 {}：{} → {}",
+                review.column(),
+                review.old_label(),
+                review.new_label()
+            ),
+            Self::Row(review) => review.change_label(),
+        }
+    }
+    fn preview_details(&self) -> Vec<String> {
+        match self {
+            Self::Cell(review) => vec![format!(
+                "{}：{} → {}",
+                review.column(),
+                review.old_label(),
+                review.new_label()
+            )],
+            Self::Row(review) => review.preview_details(),
+        }
+    }
+    fn title(&self, operation: EditOperation) -> &'static str {
+        match (self, operation) {
+            (Self::Cell(_), _) => operation.title(),
+            (Self::Row(_), EditOperation::New) => "预览删除整行",
+            (Self::Row(_), EditOperation::Undo) => "预览撤销删除",
+            (Self::Row(_), EditOperation::Redo) => "预览重做删除",
+        }
+    }
+    fn button(&self, operation: EditOperation) -> &'static str {
+        match (self, operation) {
+            (Self::Row(_), EditOperation::New) => "确认删除行",
+            _ => operation.button(),
+        }
+    }
+    fn key_summary(&self) -> String {
+        match self {
+            Self::Cell(review) => review.key_summary(),
+            Self::Row(review) => review.key_summary(),
+        }
+    }
+    fn warning(&self, operation: EditOperation) -> &'static str {
+        match self {
+            Self::Cell(_) if operation == EditOperation::New => {
+                "上述预览已在事务中执行并回滚。确认后会再次核对文件身份、数据库结构、主键和旧值，再提交单条 UPDATE；若数据已变化，将拒绝写入。"
+            }
+            Self::Cell(_) => {
+                "该撤销/重做只针对本机当前会话的最近一次单格修改。确认后会再次核对数据库文件身份、结构、主键和当前值；若数据已变化，将拒绝写入。"
+            }
+            Self::Row(_) if operation == EditOperation::New => {
+                "上述删除已在事务中执行并回滚。确认后会再次核对文件身份、数据库结构、主键和整行内容，再提交单行 DELETE。整行数据仅保存在当前会话内以支持撤销。"
+            }
+            Self::Row(_) => {
+                "该撤销/重做只针对本机当前会话中的整行删除。确认后会核对文件身份、数据库结构、主键和行内容，再恢复或删除该行；发生冲突时会拒绝操作。"
+            }
+        }
+    }
 }
 
 pub struct State {
@@ -361,6 +502,14 @@ pub struct State {
     message: String,
     receiver: Option<Receiver<Response>>,
     cancel: Arc<AtomicBool>,
+    backup_progress: Option<Arc<backup::Progress>>,
+    selected_cell: Option<(usize, usize)>,
+    edit_input: String,
+    edit_dialog: bool,
+    edit_review: Option<MutationReview>,
+    edit_operation: EditOperation,
+    undo_stack: Vec<MutationReview>,
+    redo_stack: Vec<MutationReview>,
 }
 
 impl Default for State {
@@ -374,6 +523,14 @@ impl Default for State {
             message: String::new(),
             receiver: None,
             cancel: Arc::new(AtomicBool::new(false)),
+            backup_progress: None,
+            selected_cell: None,
+            edit_input: String::new(),
+            edit_dialog: false,
+            edit_review: None,
+            edit_operation: EditOperation::New,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
     }
 }
@@ -448,7 +605,88 @@ impl State {
             Ok(Response::Page(Ok(data))) => {
                 self.message = format!("第 {} 页 · {} 行", data.page + 1, data.rows.len());
                 self.data = Some(data);
+                self.selected_cell = None;
                 self.receiver = None;
+            }
+            Ok(Response::Backup(Ok(path))) => {
+                self.message = format!("备份已完成：{}", path.display());
+                self.receiver = None;
+                self.backup_progress = None;
+            }
+            Ok(Response::Backup(Err(error))) => {
+                self.message = format!("备份失败：{error}");
+                self.receiver = None;
+                self.backup_progress = None;
+            }
+            Ok(Response::EditPreview(Ok(review))) => {
+                self.edit_review = Some(review);
+                self.edit_dialog = false;
+                self.message = "变更预览已准备；数据库尚未提交修改".into();
+                self.receiver = None;
+            }
+            Ok(Response::EditPreview(Err(error))) => {
+                self.message = format!("无法预览写入：{error}");
+                self.receiver = None;
+            }
+            Ok(Response::EditApplied(operation, Ok(inverse))) => {
+                let page = self.data.as_ref().map_or(0, |data| data.page);
+                self.edit_review = None;
+                self.edit_dialog = false;
+                match operation {
+                    EditOperation::New => {
+                        if self.undo_stack.len() == 20 {
+                            self.undo_stack.remove(0);
+                        }
+                        self.undo_stack.push(inverse);
+                        self.redo_stack.clear();
+                    }
+                    EditOperation::Undo => {
+                        self.undo_stack.pop();
+                        self.redo_stack.push(inverse);
+                    }
+                    EditOperation::Redo => {
+                        self.redo_stack.pop();
+                        if self.undo_stack.len() == 20 {
+                            self.undo_stack.remove(0);
+                        }
+                        self.undo_stack.push(inverse);
+                    }
+                }
+                let history_ok = self
+                    .undo_stack
+                    .iter_mut()
+                    .chain(self.redo_stack.iter_mut())
+                    .all(|review| review.refresh_source().is_ok());
+                let history_message = if !history_ok {
+                    self.undo_stack.clear();
+                    self.redo_stack.clear();
+                    format!(
+                        "{}；无法继续核验历史，撤销/重做记录已清空",
+                        operation.completed()
+                    )
+                } else {
+                    format!("{}，正在刷新当前页…", operation.completed())
+                };
+                self.receiver = None;
+                self.start_page(page);
+                self.message = history_message;
+            }
+            Ok(Response::EditApplied(_, Err(error))) => {
+                let page = self.data.as_ref().map_or(0, |data| data.page);
+                self.edit_review = None;
+                self.undo_stack.clear();
+                self.redo_stack.clear();
+                self.receiver = None;
+                self.start_page(page);
+                self.message = match error {
+                    ApplyFailure::NotCommitted(error) => {
+                        format!("未写入：{error}；正在刷新当前页…")
+                    }
+                    ApplyFailure::CommittedWithoutHistory(error) => format!(
+                        "{}；撤销/重做快照刷新失败，历史记录已清空（{error}）；正在刷新当前页…",
+                        self.edit_operation.completed()
+                    ),
+                };
             }
             Ok(Response::Catalog(Err(error)) | Response::Page(Err(error))) => {
                 self.message = error;
@@ -457,16 +695,21 @@ impl State {
             Err(mpsc::TryRecvError::Disconnected) => {
                 self.message = "SQLite 读取线程意外结束".into();
                 self.receiver = None;
+                self.backup_progress = None;
             }
             Err(mpsc::TryRecvError::Empty) => {}
         }
     }
 
     fn start_catalog(&mut self) {
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        self.edit_review = None;
         self.catalog = None;
         self.data = None;
         self.message = "正在只读打开数据库…".into();
         self.cancel = Arc::new(AtomicBool::new(false));
+        self.backup_progress = None;
         let signal = Arc::clone(&self.cancel);
         let path = PathBuf::from(self.path.trim().trim_matches('"'));
         let (sender, receiver) = mpsc::channel();
@@ -481,8 +724,10 @@ impl State {
     fn start_page(&mut self, page: usize) {
         let Some(catalog) = &self.catalog else { return };
         self.data = None;
+        self.selected_cell = None;
         self.message = format!("正在读取第 {} 页…", page + 1);
         self.cancel = Arc::new(AtomicBool::new(false));
+        self.backup_progress = None;
         let signal = Arc::clone(&self.cancel);
         let path = catalog.path.clone();
         let table = self.table.clone();
@@ -492,6 +737,72 @@ impl State {
             let result = load_page(&path, &table, page, &signal)
                 .map_err(|error| format!("读取失败：{error:#}"));
             let _ = sender.send(Response::Page(result));
+        });
+    }
+
+    fn start_edit_preview(&mut self, row: usize, column: usize) {
+        let Some(catalog) = &self.catalog else { return };
+        let Some(data) = self.data.clone() else {
+            return;
+        };
+        let path = catalog.path.clone();
+        let input = self.edit_input.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.receiver = Some(receiver);
+        self.message = "正在执行回滚预览…".into();
+        std::thread::spawn(move || {
+            let result = write::prepare(&path, &data, row, column, &input)
+                .map(MutationReview::Cell)
+                .map_err(|error| format!("{error:#}"));
+            let _ = sender.send(Response::EditPreview(result));
+        });
+    }
+
+    fn start_delete_preview(&mut self, row_index: usize) {
+        let Some(catalog) = &self.catalog else { return };
+        let Some(data) = self.data.clone() else {
+            return;
+        };
+        let path = catalog.path.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.receiver = Some(receiver);
+        self.message = "正在执行整行删除回滚预览…".into();
+        std::thread::spawn(move || {
+            let result = row::prepare_delete(&path, &data, row_index)
+                .map(MutationReview::Row)
+                .map_err(|error| format!("{error:#}"));
+            let _ = sender.send(Response::EditPreview(result));
+        });
+    }
+
+    fn start_backup(&mut self, destination: PathBuf) {
+        let source = PathBuf::from(self.path.trim().trim_matches('"'));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let signal = Arc::clone(&cancelled);
+        let progress = Arc::new(backup::Progress::default());
+        self.cancel = cancelled;
+        self.backup_progress = Some(Arc::clone(&progress));
+        self.message = "正在创建数据库备份…".into();
+        let (sender, receiver) = mpsc::channel();
+        self.receiver = Some(receiver);
+        std::thread::spawn(move || {
+            let result = backup::create(&source, &destination, &signal, &progress)
+                .map_err(|error| format!("{error:#}"));
+            let _ = sender.send(Response::Backup(result));
+        });
+    }
+
+    fn start_edit_apply(&mut self) {
+        let Some(review) = self.edit_review.clone() else {
+            return;
+        };
+        let operation = self.edit_operation;
+        let (sender, receiver) = mpsc::channel();
+        self.receiver = Some(receiver);
+        self.message = "正在复核原值并提交事务…".into();
+        std::thread::spawn(move || {
+            let result = review.apply();
+            let _ = sender.send(Response::EditApplied(operation, result));
         });
     }
 
@@ -572,6 +883,7 @@ impl State {
             has_next: true,
             truncated_cells: 0,
         });
+        self.selected_cell = Some((0, 1));
         self.message = "合成 SQLite 预览，未读取本机数据库".into();
     }
 
@@ -579,8 +891,9 @@ impl State {
         self.poll();
         self.transfer.ui(ui);
         ui.heading("SQLite 浏览器");
-        ui.label("选择本机数据库，只读查看表结构和每页最多 50 行；不执行任意 SQL 或修改数据。");
+        ui.label("选择本机数据库，按页查看数据；需要编辑时，先查看变更预览，再明确确认写入。");
         ui.add_space(8.0);
+        let mut backup_destination = None;
         ui.horizontal(|ui| {
             if ui
                 .add(
@@ -610,23 +923,55 @@ impl State {
             if ui
                 .add_enabled(
                     self.receiver.is_none() && !self.path.trim().is_empty(),
-                    egui::Button::new("只读打开"),
+                    egui::Button::new("打开数据库"),
                 )
                 .clicked()
             {
                 self.start_catalog();
             }
+            let backup_button = ui
+                .add_enabled(
+                    self.receiver.is_none() && !self.path.trim().is_empty(),
+                    egui::Button::new("备份数据库…"),
+                )
+                .on_hover_text("创建一致的本机 SQLite 副本；目标已存在时拒绝覆盖，可随时取消。");
+            if backup_button.clicked() {
+                let source = PathBuf::from(self.path.trim().trim_matches('"'));
+                let stem = source.file_stem().map_or_else(
+                    || "database".to_owned(),
+                    |value| value.to_string_lossy().into_owned(),
+                );
+                backup_destination = rfd::FileDialog::new()
+                    .add_filter("SQLite", &["sqlite", "sqlite3", "db"])
+                    .set_file_name(format!("{stem}-backup.sqlite"))
+                    .save_file();
+            }
             if self.receiver.is_some() {
-                if ui.button("停止读取").clicked() {
+                let label = if self.backup_progress.is_some() {
+                    "停止备份"
+                } else {
+                    "停止读取"
+                };
+                if ui.button(label).clicked() {
                     self.cancel.store(true, Ordering::Relaxed);
                 }
                 ui.spinner();
                 ui.ctx().request_repaint_after(Duration::from_millis(120));
             }
+            if let Some(progress) = &self.backup_progress {
+                ui.label(format!(
+                    "{} · {}%",
+                    progress.phase_label(),
+                    progress.percent.load(Ordering::Relaxed)
+                ));
+            }
             if !self.message.is_empty() {
                 ui.label(&self.message);
             }
         });
+        if let Some(destination) = backup_destination {
+            self.start_backup(destination);
+        }
         let Some(catalog) = &self.catalog else { return };
         if catalog.more_tables {
             ui.colored_label(
@@ -665,6 +1010,7 @@ impl State {
             }
         });
         if (changed || refresh) && self.receiver.is_none() {
+            self.edit_review = None;
             self.start_page(0);
         }
         let Some(data) = &self.data else { return };
@@ -699,20 +1045,67 @@ impl State {
                 });
         });
         let mut requested_page = None;
-        let send = ui.add_enabled(
-            self.receiver.is_none(),
-            egui::Button::new("当前页送到数据工作台…"),
-        );
-        #[cfg(feature = "ui-preview")]
-        {
-            self.transfer.buttons[0] = Some(send.rect.intersect(ui.clip_rect()));
-        }
-        if send.clicked() {
-            match transfer::Review::prepare(data, &self.path) {
-                Ok(review) => self.transfer.review = Some(review),
-                Err(error) => self.message = format!("无法接力当前页：{error:#}"),
+        let mut edit_action = 0;
+        ui.horizontal(|ui| {
+            let send = ui.add_enabled(
+                self.receiver.is_none(),
+                egui::Button::new("当前页送到数据工作台…"),
+            );
+            #[cfg(feature = "ui-preview")]
+            {
+                self.transfer.buttons[0] = Some(send.rect.intersect(ui.clip_rect()));
             }
-        }
+            if send.clicked() {
+                match transfer::Review::prepare(data, &self.path) {
+                    Ok(review) => self.transfer.review = Some(review),
+                    Err(error) => self.message = format!("无法接力当前页：{error:#}"),
+                }
+            }
+            let selected = self.selected_cell;
+            let edit = ui.add_enabled(
+                self.receiver.is_none() && selected.is_some() && self.edit_review.is_none(),
+                egui::Button::new("编辑选中单元格…"),
+            );
+            if edit.clicked()
+                && let Some((row, column)) = selected
+                && let Some(cell) = data.rows.get(row).and_then(|row| row.get(column))
+            {
+                self.edit_operation = EditOperation::New;
+                self.edit_input = cell
+                    .value
+                    .as_ref()
+                    .map_or_else(String::new, ToString::to_string);
+                self.edit_dialog = true;
+            }
+            let delete_row = ui.add_enabled(
+                self.receiver.is_none() && selected.is_some() && self.edit_review.is_none(),
+                egui::Button::new("删除选中行…"),
+            );
+            if delete_row.clicked() && selected.is_some() {
+                edit_action = 5;
+            }
+            let can_undo = self.receiver.is_none() && self.edit_review.is_none();
+            let undo = ui.add_enabled(
+                can_undo && !self.undo_stack.is_empty(),
+                egui::Button::new(format!("撤销 ({})", self.undo_stack.len())),
+            );
+            if undo.clicked()
+                && let Some(review) = self.undo_stack.last().cloned()
+            {
+                self.edit_review = Some(review);
+                self.edit_operation = EditOperation::Undo;
+            }
+            let redo = ui.add_enabled(
+                can_undo && !self.redo_stack.is_empty(),
+                egui::Button::new(format!("重做 ({})", self.redo_stack.len())),
+            );
+            if redo.clicked()
+                && let Some(review) = self.redo_stack.last().cloned()
+            {
+                self.edit_review = Some(review);
+                self.edit_operation = EditOperation::Redo;
+            }
+        });
         ui.horizontal(|ui| {
             if ui
                 .add_enabled(
@@ -768,29 +1161,139 @@ impl State {
                         );
                     }
                     ui.end_row();
-                    for row in &data.rows {
-                        for cell in row {
+                    for (row_index, row) in data.rows.iter().enumerate() {
+                        for (column_index, cell) in row.iter().enumerate() {
                             let short: String = cell.display.chars().take(80).collect();
                             let preview = if cell.display.chars().count() > 80 {
                                 format!("{short}…")
                             } else {
                                 short
                             };
-                            ui.add_sized(
-                                [column_width, 30.0],
-                                egui::Label::new(egui::RichText::new(preview).monospace())
-                                    .truncate(),
-                            )
-                            .on_hover_text(format!("{} · {}", cell.kind, cell.display));
+                            let response = ui
+                                .add_sized(
+                                    [column_width, 30.0],
+                                    egui::Button::selectable(
+                                        self.selected_cell == Some((row_index, column_index)),
+                                        egui::RichText::new(preview).monospace(),
+                                    ),
+                                )
+                                .on_hover_text(format!("{} · {}", cell.kind, cell.display));
+                            if response.clicked() {
+                                self.selected_cell = Some((row_index, column_index));
+                            }
                         }
                         ui.end_row();
                     }
                 });
         });
         ui.add_space(8.0);
-        ui.small("最多列出200个表/视图、128列，预览前10000行。长文本与二进制仅显示有界内容；CSV只导出当前页且不覆盖文件。数据库可能同时被其他程序修改，分页不是一致性快照。WAL模式下SQLite可能管理辅助文件。");
+        ui.small("最多列出200个表/视图、128列，预览前10000行。编辑仅支持有主键的普通表单个非主键标量；含触发器、外键的数据库暂不支持写入。变更先在事务中预览后回滚，确认时复核原值再提交。CSV只导出当前页且不覆盖文件；WAL模式下SQLite可能管理辅助文件。");
         if let Some(next) = requested_page {
+            self.edit_review = None;
             self.start_page(next);
+        }
+
+        if self.edit_dialog {
+            let response = egui::Modal::new(ui.id().with("sqlite-cell-edit")).show(ui.ctx(), |ui| {
+                ui.set_max_width((ui.ctx().screen_rect().width() - 48.0).clamp(220.0, 620.0));
+                ui.heading("预览单元格修改");
+                if let Some((row, column)) = self.selected_cell
+                    && let Some(cell) = self.data.as_ref().and_then(|data| data.rows.get(row).and_then(|row| row.get(column)))
+                {
+                    let column_name = self.data.as_ref().and_then(|data| data.columns.get(column)).map_or("?", |column| column.name.as_str());
+                    ui.label(format!("{} · 第{}行 / {} · 当前值：{}", self.data.as_ref().map_or("", |data| data.table.as_str()), row + 1, column_name, cell.display));
+                    ui.label("新值按 JSON 标量输入：文本写成 \"文字\"，也可输入数字、true、false 或 null。");
+                }
+                ui.add(egui::TextEdit::singleline(&mut self.edit_input).desired_width(480.0));
+                if self.receiver.is_some() {
+                    ui.horizontal(|ui| { ui.spinner(); ui.label("正在检查；预览事务结束后会自动回滚…"); });
+                    ui.ctx().request_repaint_after(Duration::from_millis(120));
+                }
+                ui.horizontal(|ui| {
+                    let cancel = ui.add_enabled(self.receiver.is_none(), egui::Button::new("取消"));
+                    let preview = ui.add_enabled(self.receiver.is_none(), egui::Button::new("预览变更"));
+                    if cancel.clicked() { edit_action = 1; }
+                    if preview.clicked() { edit_action = 2; }
+                });
+            });
+            if response.should_close() && self.receiver.is_none() {
+                edit_action = 1;
+            }
+        }
+        if edit_action == 1 {
+            self.edit_dialog = false;
+        } else if edit_action == 2
+            && self.receiver.is_none()
+            && let Some((row, column)) = self.selected_cell
+        {
+            self.start_edit_preview(row, column);
+        }
+
+        if edit_action == 5
+            && self.receiver.is_none()
+            && let Some((row, _)) = self.selected_cell
+        {
+            self.edit_operation = EditOperation::New;
+            self.start_delete_preview(row);
+        }
+
+        if let Some(review) = &self.edit_review {
+            let response =
+                egui::Modal::new(ui.id().with("sqlite-cell-edit-review")).show(ui.ctx(), |ui| {
+                    ui.set_max_width((ui.ctx().screen_rect().width() - 48.0).clamp(220.0, 620.0));
+                    ui.heading(review.title(self.edit_operation));
+                    let database_path = self
+                        .catalog
+                        .as_ref()
+                        .map(|catalog| catalog.path.display().to_string())
+                        .unwrap_or_default();
+                    ui.label(database_path);
+                    ui.label(format!("表 {} · {}", review.table(), review.change_label()));
+                    ui.label(format!("主键定位：{}", review.key_summary()));
+                    egui::ScrollArea::vertical()
+                        .max_height(190.0)
+                        .show(ui, |ui| {
+                            for field in review.preview_details() {
+                                ui.monospace(field);
+                            }
+                        });
+                    ui.colored_label(
+                        ui.visuals().warn_fg_color,
+                        review.warning(self.edit_operation),
+                    );
+                    if self.receiver.is_some() {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("正在复核并提交；请勿关闭应用…");
+                        });
+                        ui.ctx().request_repaint_after(Duration::from_millis(120));
+                    }
+                    ui.horizontal(|ui| {
+                        let cancel = ui.add_enabled(
+                            self.receiver.is_none(),
+                            egui::Button::new("取消，不写入"),
+                        );
+                        let apply = ui.add_enabled(
+                            self.receiver.is_none(),
+                            egui::Button::new(review.button(self.edit_operation)),
+                        );
+                        if cancel.clicked() {
+                            edit_action = 3;
+                        }
+                        if apply.clicked() {
+                            edit_action = 4;
+                        }
+                    });
+                });
+            if response.should_close() && self.receiver.is_none() {
+                edit_action = 3;
+            }
+        }
+        if edit_action == 3 {
+            self.edit_review = None;
+            self.edit_dialog = false;
+        } else if edit_action == 4 && self.receiver.is_none() {
+            self.start_edit_apply();
         }
     }
 }

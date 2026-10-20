@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/terminal.schema.json",
+  "title": "plugin.task.lifecycle.v1 terminal record proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef", "sequence", "state", "executionFinished", "finishedAt", "resultAvailable"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256},
+    "sequence": {"type": "integer", "minimum": 1},
+    "state": {"enum": ["succeeded", "partial", "declined", "cancelled", "failed", "revoked", "interrupted"]},
+    "executionFinished": {"const": true},
+    "finishedAt": {"type": "string", "format": "date-time"},
+    "resultAvailable": {"type": "boolean"},
+    "errorCode": {"type": "string", "maxLength": 96}
+  }
+}

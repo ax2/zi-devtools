@@ -1,0 +1,63 @@
+{
+  "profile": "result.json.v1@1.0.0-preview.1",
+  "validSuccess": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": true,
+    "data": {
+      "value": {"name": "Zi", "enabled": true},
+      "keyCount": 2,
+      "keys": ["enabled", "name"],
+      "valueTypes": {"enabled": "boolean", "name": "string"},
+      "maxDepth": 1,
+      "serializedBytes": 28
+    },
+    "error": null
+  },
+  "validReceiver": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": true,
+    "data": {
+      "receivedValue": {"value": {"name": "Zi"}, "keyCount": 1},
+      "rootKeyCount": 2,
+      "rootKeys": ["keyCount", "value"]
+    },
+    "error": null
+  },
+  "invalidSuccessWithNonObjectData": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": true,
+    "data": "not-an-object",
+    "error": null
+  },
+  "invalidSuccessMissingData": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": true,
+    "error": null
+  },
+  "invalidFailureWithData": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": false,
+    "data": {"value": {}},
+    "error": {"code": "INVALID_INPUT", "message": "invalid"}
+  },
+  "validFailure": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": false,
+    "data": null,
+    "error": {"code": "INVALID_INPUT", "message": "invalid"}
+  },
+  "validLimitFailure": {
+    "contractVersion": "1.0.0-rc.1",
+    "ok": false,
+    "data": null,
+    "error": {"code": "INPUT_TOO_LARGE", "message": "input exceeds limit"}
+  },
+  "limits": {
+    "inputObjectBytes": 8192,
+    "requestBytes": 49152,
+    "resultBytes": 49152,
+    "rootFields": 128,
+    "depth": 64,
+    "nodes": 4096
+  }
+}

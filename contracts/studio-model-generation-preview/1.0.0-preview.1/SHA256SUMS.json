@@ -1,0 +1,20 @@
+{
+  "contract": "Studio model service desktop View preview",
+  "version": "1.0.0-preview.1",
+  "origin": "zicode-studio-desktop/docs/plugins",
+  "snapshotDate": "2026-10-14",
+  "files": [
+    {
+      "path": "model-catalog-preview.md",
+      "sha256": "7a3f70c5e69ad912915ab0d13f2043eef36eb099184bd1bb26e7c5a5fb0624f0"
+    },
+    {
+      "path": "model-generation-preview.md",
+      "sha256": "e33ebf7000a743c56b64dbfbee1ad2b772ab6b9ae1436ca1a2ccde69a5316b82"
+    },
+    {
+      "path": "README.md",
+      "sha256": "2d36293e555539304be924e13ea16b7af70a90c52ba027baa47b5527397fac73"
+    }
+  ]
+}

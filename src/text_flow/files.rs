@@ -66,6 +66,8 @@ impl Output {
             format: match material {
                 Material::Text(_) => "UTF-8原文本（不因扩展名转换）",
                 Material::Table(_) => "列结构JSON（headers/rows，保留空表、列序和值类型）",
+                Material::File(_) => "文件引用不可导出为文本",
+                Material::Image(_) => "图片像素不可直接导出为文本",
             },
         })
     }

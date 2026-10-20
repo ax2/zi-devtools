@@ -1,12 +1,12 @@
 # 资源管理器统一入口：实现约束与验收
 
-更新：2026-10-13。当前状态以[工具目录](tools.md)和本文最新验证节为准：文件与文件夹菜单能力已通过 Windows 托管安装事务和 Explorer 可见菜单验证；真实 Explorer 的多选、现代 Windows 11 菜单、接收动作实际启动及内容导入仍未完成。
+更新：2026-10-16。当前状态以[工具目录](tools.md)和本文最新验证节为准：共享MSI模板已包含 Explorer 安装选项及事务自定义动作；当前开发包的能力声明、EXE/DLL摘要、CustomAction Type/Source/Target和执行序列已在本机compile-only烟测中核对。历史Hosted Windows结果证明经典Explorer可见菜单及旧正式版升级流程；现代菜单、完整多选、开发机安装生命周期和实际内容导入仍未全部验收。最新生产模板证明明确记录没有在本机安装MSI。
 
 ## 已有基础及缺口
 
 `src/main.rs`的`--open-files`接收1–64条末尾字面路径，不与工具直达/配置导入/服务夹具混用，不自动恢复服务。`DevToolsApp::open_startup_files`与拖放共用确认入口；只做路径排队与扩展名推荐，用户选择工具后主动导入。CSV/TSV/JSON表进入新实例，其他现有文本工具明确替换草稿，多个文件可交给文件校验。文本2 MiB/UTF-8及64文件上限保留。
 
-现有快捷方式允许各工具独立窗口和任务栏身份，不能为了Shell接入强制所有工具变成单实例。`packaging/windows.wxs`目前是perUser MSI，只维护程序、许可证、开始菜单及Installed标记；没有右键安装选项或菜单组件。不得把现有MSI升级夹具通过当成菜单生命周期通过。
+现有快捷方式允许各工具独立窗口和任务栏身份，不能为了Shell接入强制所有工具变成单实例。`packaging/windows.wxs`是perUser MSI，并include共享的`explorer.wxi`事务动作与`explorer-ui.wxi`安装选项；菜单变更由安装器生命周期动作负责，桌面设置页不能直接改写MSI所有权登记。当前包清单已做compile-only核对，但不能把该证明或历史MSI升级矩阵当成当前版本完整生命周期通过。
 
 ## 入口和命令共用
 
@@ -74,7 +74,7 @@ Windows存储API固定在HKCU/Software/ZiCode/ZiDevTools/ExplorerInstallations�
 
 ## 确认式联合维护0.4.0
 
-设置页后台预览本程序的经典单文件菜单，列出当前和目标程序、配置位置及变更数量；勾选同意后才能应用。可刷新安装记录、切换已登记程序、将便携身份迁移到本程序位置或移除登记。移除不删除程序、配置或用户文件；剩余安装重新核验后接管，没有可用项才移除共享入口。MSI记录的更新和移除仍须安装器接入，界面不冒充Windows Installer维护。
+设置页后台预览本程序的经典单文件菜单，列出当前和目标程序、配置位置及变更数量；勾选同意后才能应用。可刷新安装记录、切换已登记程序、将便携身份迁移到本程序位置或移除登记。移除不删除程序、配置或用户文件；剩余安装重新核验后接管，没有可用项才移除共享入口。便携身份可由该界面维护；MSI身份的安装、更新和移除由共享Windows Installer自定义动作处理，桌面界面不直接改写MSI登记。
 
 活动程序记录包含SHA-256。预览核验绝对规范文件位置、祖先重解析点、基本MZ头及有界文件内容摘要；配置只核验位置和文件存在，不读取内容。应用前重新核验活动程序，持有拒绝写入/删除的读取句柄直到提交。这是文件一致性检查，不是发布者数字签名验证或完整PE验证。
 
@@ -352,3 +352,22 @@ proof 和六张原始 Explorer 截图归档于 iterations/explorer-folder-contex
 截图同时暴露长路径与较长结果项会被单行控件截短。路径输入框、直属分类标签和最大文件名现增加悬停全文提示；截图用于核验结果页布局，未悬停到提示层，所以提示文字本身没有截图验收。全工作区测试、全target/all-feature Clippy、cargo fmt检查及该实际渲染扫描场景通过。没有更新版本、安装MSI或更改注册表。实际Explorer子项点击仍未验证。
 
 最后，cargo build --release --locked 通过（7分41秒）。本机 target/release/ZiDevTools.exe 仍为 0.82.0-dev.105，32,404,480 字节，SHA-256 EB4186118D2E5611FA40A1553A1DC89A4D874395931AB33E7D2575F0D3659B45；没有递增dev版本或发布安装包。
+
+## MSI 能力清单反读验收（2026-10-16）
+
+开发打包器从当前桌面 EXE 的只读能力检查结果传递菜单声明、EXE SHA-256 和基础数字 ProductVersion。编译完成后，`scripts/verify_msi_menu_manifest.py` 通过 Windows Installer API 反读 Property、CustomAction、InstallExecuteSequence、Binary 和 File 表，要求声明与 EXE 检查结果逐字一致，事务动作完整且都进入执行序列。
+
+本机 `scripts/package.ps1 -OutputDir target\msi-manifest-final-20261016` 通过：当前开发版声明 11 项能力，MSI ProductVersion 为 `0.82.0`，EXE 摘要及事务链匹配，且未产生 WIX1148 版本警告。`explorer_production_msi_smoke.py` 的编译型路径也会调用同一验证器，并把结果纳入 JSON 证据。
+
+本节只证明 MSI 数据库清单，不证明自定义动作安装行为；本机没有安装该 MSI。安装、修复、升级、回滚、卸载仍由隔离 GitHub Hosted Windows runner 验证。
+
+
+0.28.0 再验证内嵌 DLL 的内容：从 MSI Binary 表流式读取 `ZiMenuActions`，与本次构建 `zi_msi_actions.dll` 的 SHA-256 逐字节比对。当前开发包正向通过，临时变更 DLL 的负向输入被拒绝。此项仍只覆盖 MSI 文件内容，不证明 CustomAction 在安装期间的实际行为。完整机器证明：[`ExplorerMenuManifestProof-v2.json`](iterations/2026-10-16-explorer-msi-manifest-v3.json)。
+
+
+生产 MSI 烟测还会在安装前对临时 DLL 副本做一字节扰动，要求清单验收拒绝并且不输出通过证明；失败将阻止后续安装测试。此处不改变真实 MSI、构建 DLL 或安装目标。Hosted Windows CI 尚待触发以形成远端结果。
+
+本机生产模板 compile-only 烟测现已实际通过，覆盖事务序列和菜单安装选项表；未安装 MSI，故不替代 Hosted Windows 生命周期烟测。证明：[生产模板编译证明](iterations/2026-10-16-explorer-production-compile-proof.json)。
+
+
+0.30.0 将 CustomAction 验收收紧到 `Type`、`Source` 和 `Target`：嵌入 DLL 的类型与执行旗标、`ZiMenuActions` Binary 来源和每项导出入口名称都必须与共享模板完全一致。实际编译 MSI 六项匹配。旗标含义参照 [Microsoft 的 MSI Custom Action 执行选项](https://learn.microsoft.com/en-us/windows/win32/msi/custom-action-in-script-execution-options)；读表仍不等同于安装期成功加载 DLL 或执行事务动作。

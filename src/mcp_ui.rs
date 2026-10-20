@@ -2,6 +2,7 @@ use crate::{
     mcp::{self, Action, Config, ConnectedRequest, Report},
     mcp_access::{self, Decision, Rule, Store},
     mcp_http::{self, HttpConfig},
+    tasks::{Job, Phase, Row},
 };
 use eframe::egui;
 use serde_json::Value;
@@ -106,6 +107,8 @@ pub struct McpState {
     credential_ack: Option<CredentialAck>,
     applied_revision: u64,
     cancelled: Arc<AtomicBool>,
+    operation_cancellable: bool,
+    operation_job: Job,
     message: String,
 }
 
@@ -144,6 +147,8 @@ impl McpState {
             credential_ack: None,
             applied_revision: 0,
             cancelled: Arc::new(AtomicBool::new(false)),
+            operation_cancellable: false,
+            operation_job: Job::default(),
             message: String::new(),
         }
     }
@@ -156,6 +161,71 @@ impl Drop for McpState {
 }
 
 impl McpState {
+    pub(crate) fn task_snapshot(&self) -> Option<Row> {
+        self.operation_job.snapshot(
+            "mcp-operation",
+            "MCP 操作",
+            self.receiver.is_some() && self.operation_cancellable,
+        )
+    }
+
+    pub(crate) fn handoff_result(&self) -> Option<(String, String)> {
+        if self.background_active() {
+            return None;
+        }
+        let report = self.report.as_ref()?;
+        let (kind, value) = match self.section {
+            McpSection::Tools => {
+                let name = self.selected_tool.trim();
+                if name.is_empty() || name != self.last_called_tool {
+                    return None;
+                }
+                ("工具", report.call_result.as_ref()?)
+            }
+            McpSection::Resources => {
+                let name = self.selected_resource.trim();
+                let (uri, value) = report.resource_result.as_ref()?;
+                if name.is_empty() || name != uri {
+                    return None;
+                }
+                ("资源", value)
+            }
+            McpSection::Prompts => {
+                let name = self.selected_prompt.trim();
+                let (prompt, value) = report.prompt_result.as_ref()?;
+                if name.is_empty() || name != prompt {
+                    return None;
+                }
+                ("提示词", value)
+            }
+        };
+        let text = serde_json::to_string_pretty(value).ok()?;
+        Some((format!("MCP {kind}结果"), text))
+    }
+
+    pub(crate) fn cancel_task(&mut self, generation: u64) -> bool {
+        let matches_generation = self
+            .task_snapshot()
+            .is_some_and(|row| row.generation == generation && row.phase.active());
+        if !matches_generation || self.receiver.is_none() || !self.operation_cancellable {
+            return false;
+        }
+        self.cancelled.store(true, Ordering::Relaxed);
+        self.operation_job.cancelling();
+        true
+    }
+
+    fn finish_operation(&mut self, phase: Phase) {
+        self.operation_job.finish(
+            phase,
+            match phase {
+                Phase::Done => "MCP 操作完成；详细内容保留在协议调试台",
+                Phase::Cancelled => "MCP 操作已取消；详细内容保留在协议调试台",
+                _ => "MCP 操作失败或连接结束；详细状态保留在协议调试台",
+            },
+        );
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_fixture(&mut self, show_prompts: bool) {
         self.executable = r"C:\Tools\mcp-demo.exe".into();
@@ -363,6 +433,8 @@ impl McpState {
             });
         }
         self.receiver = Some(receiver);
+        self.operation_cancellable = self.connection.is_none();
+        self.operation_job.begin();
         self.message = "正在与 MCP 服务通信…".into();
         self.call_confirm = false;
         self.confirmation_name.clear();
@@ -448,6 +520,7 @@ impl McpState {
         self.cancelled.store(true, Ordering::Relaxed);
         self.connection = None;
         // A cancelled operation must not restore a report after authorization is discarded.
+        self.finish_operation(Phase::Cancelled);
         self.receiver = None;
         self.credential_updates = None;
         self.credential_ack = None;
@@ -540,6 +613,7 @@ impl McpState {
         };
         match receiver.try_recv() {
             Ok(Ok(report)) => {
+                self.finish_operation(Phase::Done);
                 let suffix = if self.connection.is_some() {
                     "；连接保持中"
                 } else {
@@ -593,6 +667,11 @@ impl McpState {
                 self.receiver = None;
             }
             Ok(Err(error)) => {
+                self.finish_operation(if self.cancelled.load(Ordering::Relaxed) {
+                    Phase::Cancelled
+                } else {
+                    Phase::Failed
+                });
                 self.message = error;
                 self.receiver = None;
                 if self.transport != Transport::Http
@@ -604,6 +683,11 @@ impl McpState {
                 self.call_confirm = false;
             }
             Err(mpsc::TryRecvError::Disconnected) => {
+                self.finish_operation(if self.cancelled.load(Ordering::Relaxed) {
+                    Phase::Cancelled
+                } else {
+                    Phase::Failed
+                });
                 self.message = "MCP 后台任务意外结束".into();
                 self.receiver = None;
             }
@@ -614,7 +698,6 @@ impl McpState {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        self.tick(ui.ctx());
         let busy = self.receiver.is_some() || self.oauth.pending() || self.credential_ack.is_some();
         ui.heading("MCP 协议调试台");
         ui.label("检查 MCP 工具、资源和提示词，并在逐次确认后调用工具。可选本机 stdio 或 Streamable HTTP；连接信息与结果不会保存。");
@@ -777,6 +860,7 @@ impl McpState {
                     && ui.add_enabled(!busy && self.oauth.can_revoke(), egui::Button::new("撤销授权并断开")).clicked() {
                     self.cancelled.store(true, Ordering::Relaxed);
                     self.connection = None;
+                    self.finish_operation(Phase::Cancelled);
                     self.receiver = None;
                     self.report = None;
                     self.credential_updates = None;
@@ -1276,6 +1360,54 @@ mod renewal_tests {
         (state, requests, receiver)
     }
     #[test]
+    fn handoff_exposes_only_the_completed_result_for_the_selected_mcp_item() {
+        let (mut state, _, _) = state();
+        state.section = McpSection::Tools;
+        state.selected_tool = "search_notes".into();
+        state.last_called_tool = "search_notes".into();
+        state.report = Some(Report {
+            call_result: Some(serde_json::json!({
+                "content": [{"type": "text", "text": "matched note"}]
+            })),
+            ..Report::default()
+        });
+
+        let (source, text) = state.handoff_result().unwrap();
+        assert_eq!(source, "MCP 工具结果");
+        assert!(text.contains("matched note"));
+        assert!(!text.contains("example.test"));
+
+        state.selected_tool = "other_tool".into();
+        assert!(state.handoff_result().is_none());
+        state.selected_tool = "search_notes".into();
+
+        let secret_uri = "mcp://example.test/private?token=synthetic";
+        state.section = McpSection::Resources;
+        state.selected_resource = secret_uri.into();
+        state.report.as_mut().unwrap().resource_result = Some((
+            secret_uri.into(),
+            serde_json::json!({"contents": [{"text": "resource result"}]}),
+        ));
+        let (source, text) = state.handoff_result().unwrap();
+        assert_eq!(source, "MCP 资源结果");
+        assert!(!source.contains("private"));
+        assert!(text.contains("resource result"));
+
+        state.section = McpSection::Prompts;
+        state.selected_prompt = "summarize".into();
+        state.report.as_mut().unwrap().prompt_result = Some((
+            "summarize".into(),
+            serde_json::json!({"messages": [{"role": "user", "content": "prompt result"}]}),
+        ));
+        let (source, text) = state.handoff_result().unwrap();
+        assert_eq!(source, "MCP 提示词结果");
+        assert!(text.contains("prompt result"));
+
+        state.receiver = Some(mpsc::channel().1);
+        assert!(state.handoff_result().is_none());
+    }
+
+    #[test]
     fn new_token_blocks_operations_until_worker_ack_and_preserves_connection() {
         let (mut state, requests, updates) = state();
         let _job = state.oauth.test_pending(Some(true));
@@ -1363,5 +1495,42 @@ mod renewal_tests {
         state.end_authorized_connection("cancelled".into());
         assert!(!state.oauth.pending());
         assert!(!state.oauth.refresh_due());
+    }
+
+    #[test]
+    fn task_tracking_keeps_mcp_details_private_and_only_cancels_one_shot_operations() {
+        let (mut connected, _, _) = state();
+        let (_response, receiver) = mpsc::channel();
+        connected.receiver = Some(receiver);
+        connected.operation_job.begin();
+        let connected_row = connected.task_snapshot().unwrap();
+        assert!(!connected_row.cancellable);
+        assert_eq!(connected_row.summary, "");
+        assert!(!connected.cancel_task(connected_row.generation));
+        connected.connection = None;
+        assert!(!connected.task_snapshot().unwrap().cancellable);
+        assert!(!connected.cancel_task(connected_row.generation));
+
+        let mut one_shot = McpState::new(
+            std::env::temp_dir().join(format!("zi-mcp-task-{}.json", uuid::Uuid::new_v4())),
+        );
+        let (response, receiver) = mpsc::channel();
+        one_shot.receiver = Some(receiver);
+        one_shot.operation_cancellable = true;
+        one_shot.operation_job.begin();
+        let generation = one_shot.task_snapshot().unwrap().generation;
+        assert!(!one_shot.cancel_task(generation.wrapping_add(1)));
+        assert!(one_shot.cancel_task(generation));
+        assert!(one_shot.cancelled.load(Ordering::Relaxed));
+        response
+            .send(Err("sensitive endpoint and tool arguments".into()))
+            .unwrap();
+
+        one_shot.tick(&egui::Context::default());
+        let row = one_shot.task_snapshot().unwrap();
+        assert_eq!(row.phase, crate::tasks::Phase::Cancelled);
+        assert!(!row.cancellable);
+        assert!(!row.summary.contains("sensitive"));
+        assert!(!row.summary.contains("endpoint"));
     }
 }

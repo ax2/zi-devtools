@@ -37,13 +37,74 @@ fn legacy_schema1_requires_confirmation_and_keeps_exact_backup_on_migration() {
         .unwrap();
     assert_eq!(fs::read(backup).unwrap(), raw);
     let snap = read(&path).unwrap().unwrap().0;
-    assert_eq!(snap.schema, 2);
+    assert_eq!(snap.schema, 3);
     let mut restored = State::default();
     snap.restore(&mut restored, now, utc, Policy::Pause)
         .unwrap();
     assert!(restored.audio.settings.enabled);
     assert_eq!(restored.audio.settings.volume, 23);
     fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn confirmed_snapshot_restores_bounded_window_sizes_without_reopening_windows() {
+    let (mut state, now, utc) = fixture();
+    state
+        .windows
+        .remember_size(windows::Target::Timer(1), egui::vec2(777.0, 555.0));
+    state.windows.remember_size(
+        windows::Target::World("Asia/Tokyo".parse().unwrap()),
+        egui::vec2(900.0, 600.0),
+    );
+    let snapshot = Snapshot::capture(&state, now, utc, Policy::Pause);
+    assert_eq!(snapshot.schema, 3);
+    state.windows.clear();
+    let mut restored = State::default();
+    snapshot
+        .restore(&mut restored, now, utc, Policy::Pause)
+        .unwrap();
+    assert!(!restored.windows.active());
+    assert_eq!(restored.windows.saved_sizes(), snapshot.window_sizes);
+
+    let mut legacy_json = serde_json::to_value(&snapshot).unwrap();
+    legacy_json["schema"] = 2.into();
+    legacy_json.as_object_mut().unwrap().remove("window_sizes");
+    let legacy: Snapshot = serde_json::from_value(legacy_json).unwrap();
+    let mut old_restored = State::default();
+    legacy
+        .restore(&mut old_restored, now, utc, Policy::Pause)
+        .unwrap();
+    assert!(old_restored.windows.saved_sizes().is_empty());
+}
+
+#[test]
+fn invalid_saved_window_sizes_are_rejected_before_restoring_any_state() {
+    let (state, now, utc) = fixture();
+    let snapshot = Snapshot::capture(&state, now, utc, Policy::Pause);
+    for size in [
+        serde_json::json!({"target":"timer:1","width":319,"height":400}),
+        serde_json::json!({"target":"timer:1","width":400,"height":1201}),
+        serde_json::json!({"target":"timer:0","width":400,"height":300}),
+        serde_json::json!({"target":"unknown","width":400,"height":300}),
+    ] {
+        let mut value = serde_json::to_value(&snapshot).unwrap();
+        value["window_sizes"] = serde_json::json!([size]);
+        let candidate: Snapshot = serde_json::from_value(value).unwrap();
+        let mut target = State::default();
+        assert!(
+            candidate
+                .restore(&mut target, now, utc, Policy::Pause)
+                .is_err()
+        );
+        assert!(target.timers.is_empty());
+    }
+    let mut duplicate = serde_json::to_value(&snapshot).unwrap();
+    duplicate["window_sizes"] = serde_json::json!([
+        {"target":"timer:1","width":400,"height":300},
+        {"target":"timer:1","width":500,"height":350}
+    ]);
+    let candidate: Snapshot = serde_json::from_value(duplicate).unwrap();
+    assert!(candidate.validate().is_err());
 }
 #[test]
 fn migration_refuses_inconsistent_backup_and_invalid_audio_without_mutating_live_data() {
@@ -209,7 +270,7 @@ fn invalid_snapshots_do_not_modify_current_state() {
     let good = Snapshot::capture(&s, now, utc, Policy::Pause);
     let mut invalid = Vec::new();
     let mut x = good.clone();
-    x.schema = 3;
+    x.schema = 4;
     invalid.push(x);
     let mut x = good.clone();
     x.zones = vec!["Unknown/Zone".into()];

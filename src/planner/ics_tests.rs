@@ -140,7 +140,6 @@ fn ics_repeat_export_round_trips_dates_for_supported_rules() {
 #[test]
 fn ics_rejects_unsupported_or_incomplete_semantics_without_partial_import() {
     for extra in [
-        "RRULE:FREQ=DAILY;COUNT=3",
         "RRULE:FREQ=DAILY;UNTIL=20261001T090000",
         "RRULE:FREQ=WEEKLY;BYDAY=MO,WE",
         "RRULE:FREQ=MONTHLY;BYDAY=1MO",
@@ -194,6 +193,106 @@ fn ics_utc_single_event_converts_and_utc_repetition_is_rejected() {
 }
 
 #[test]
+fn ics_count_repetitions_convert_to_equivalent_local_cutoffs() {
+    let cases = [
+        (
+            "DTSTART:20261002T090000",
+            "FREQ=DAILY;COUNT=3",
+            date("2026-10-04 00:00").date(),
+        ),
+        (
+            "DTSTART:20261002T090000",
+            "FREQ=WEEKLY;COUNT=3",
+            date("2026-10-16 00:00").date(),
+        ),
+        (
+            "DTSTART:20260131T090000",
+            "FREQ=MONTHLY;BYMONTHDAY=31;COUNT=3",
+            date("2026-05-31 00:00").date(),
+        ),
+        (
+            "DTSTART:20260131T090000",
+            "FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1;COUNT=3",
+            date("2026-03-31 00:00").date(),
+        ),
+        (
+            "DTSTART:20240229T090000",
+            "FREQ=YEARLY;COUNT=3",
+            date("2032-02-29 00:00").date(),
+        ),
+        (
+            "DTSTART:20240229T090000",
+            "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1;COUNT=3",
+            date("2026-02-28 00:00").date(),
+        ),
+        (
+            "DTSTART;VALUE=DATE:20261002",
+            "FREQ=DAILY;COUNT=3",
+            date("2026-10-04 00:00").date(),
+        ),
+    ];
+
+    for (start, rule, expected_last) in cases {
+        let item = ics::parse(&calendar(&format!("{start}\r\nRRULE:{rule}")))
+            .unwrap()
+            .records
+            .remove(0);
+        let schedule = item.schedule.as_ref().unwrap();
+        assert_eq!(schedule.last_repeat_day(), expected_last, "{rule}");
+        assert!(schedule.on_day(expected_last), "{rule}");
+        assert!(
+            !schedule.on_day(expected_last.succ_opt().unwrap()),
+            "{rule}"
+        );
+        let roundtrip = ics::parse(&ics::export(&[item.clone()], false).unwrap())
+            .unwrap()
+            .records
+            .remove(0);
+        let roundtrip_schedule = roundtrip.schedule.as_ref().unwrap();
+        for offset in 0..4_000 {
+            let day = schedule.start.date() + Days::new(offset);
+            assert_eq!(
+                schedule.on_day(day),
+                roundtrip_schedule.on_day(day),
+                "{rule} at {day}"
+            );
+        }
+    }
+
+    let once = ics::parse(&calendar(
+        "DTSTART:20261002T090000\r\nRRULE:FREQ=DAILY;COUNT=1",
+    ))
+    .unwrap();
+    assert_eq!(
+        once.records[0].schedule.as_ref().unwrap().repeat,
+        Repeat::Once
+    );
+    assert!(
+        once.notices
+            .iter()
+            .any(|notice| notice.contains("单次日程"))
+    );
+    assert!(
+        !ics::export(&once.records, false)
+            .unwrap()
+            .contains("RRULE:")
+    );
+}
+
+#[test]
+fn ics_count_rejects_invalid_conflicting_and_out_of_range_values() {
+    for event in [
+        "DTSTART:20261002T090000\r\nRRULE:FREQ=DAILY;COUNT=0",
+        "DTSTART:20261002T090000\r\nRRULE:FREQ=DAILY;COUNT=abc",
+        "DTSTART:20261002T090000\r\nRRULE:FREQ=DAILY;COUNT=3;UNTIL=20261009T090000",
+        "DTSTART:20991231T090000\r\nRRULE:FREQ=DAILY;COUNT=2",
+        "DTSTART:21000131T090000\r\nRRULE:FREQ=MONTHLY;COUNT=2",
+    ] {
+        assert!(ics::parse(&calendar(event)).is_err(), "{event}");
+    }
+}
+
+#[test]
 fn ics_reminder_export_is_opt_in_and_import_never_enables_alarms() {
     let mut item = event();
     assert!(
@@ -220,6 +319,7 @@ fn ics_plan_deduplicates_uid_and_preserves_unrelated_notes_and_local_flags() {
         .records;
     let mut old = incoming[0].clone();
     old.title = "本机修改".into();
+    old.tags = vec!["工作".into(), "会议".into()];
     old.pinned = true;
     old.trash = true;
     old.schedule.as_mut().unwrap().done = true;
@@ -235,6 +335,7 @@ fn ics_plan_deduplicates_uid_and_preserves_unrelated_notes_and_local_flags() {
     assert_eq!(update.records[1], note);
     let changed = &update.records[0];
     assert!(changed.pinned && changed.trash && changed.schedule.as_ref().unwrap().done);
+    assert_eq!(changed.tags, ["工作", "会议"]);
     let repeated = ics_ui::plan(&update.records, &incoming, true).unwrap();
     assert_eq!(repeated.unchanged, 1);
     assert_eq!(repeated.updated, 0);

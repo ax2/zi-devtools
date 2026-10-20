@@ -92,10 +92,13 @@ impl State {
         };
         let mut cancel = false;
         let mut restore = false;
+        let mut import = false;
         #[cfg(feature = "ui-preview")]
         let mut rects = [None; 4];
         #[cfg(windows)]
         let mut export = false;
+        #[cfg(windows)]
+        let mut export_batch = false;
         egui::Modal::new(egui::Id::new("planner-backup")).show(ctx, |ui| {
             ui.set_width(570.0_f32.min((ctx.screen_rect().width() - 48.0).max(180.0)));
             match review {
@@ -165,6 +168,69 @@ impl State {
                         Err(error) => { ui.colored_label(ui.visuals().error_fg_color,error); cancel = ui.button("取消").clicked(); }
                     }
                 }
+                Review::Import(review) => {
+                    ui.heading("预览批量导入备忘");
+                    ui.label(format!(
+                        "{} 个文件 · 正文合计 {} 字节 · 当前本机 {} 条记录",
+                        review.records.len(),
+                        review.total_bytes,
+                        review.expected.len()
+                    ));
+                    ui.label("确认后会将每个文件作为一条新备忘一次性写入。本机记录若在预览期间变化，整批导入会取消。原文件不修改。导入的日程提醒、置顶和标签不会从文件推断。" );
+                    egui::ScrollArea::vertical()
+                        .id_salt("batch-import-records")
+                        .max_height(280.0)
+                        .show(ui, |ui| {
+                            for item in &review.records {
+                                ui.push_id(&item.id, |ui| {
+                                    ui.collapsing(format!("备忘 · {}", item.title), |ui| {
+                                        item_details(ui, item);
+                                    });
+                                });
+                            }
+                        });
+                    ui.small("单文件最多 128 KiB；每批最多 32 个文件、正文总量不超过 1 MiB。写入使用单个数据库事务，不会留下部分导入结果。");
+                    ui.horizontal_wrapped(|ui| {
+                        cancel = ui.button("取消，不导入").clicked();
+                        let response = ui.add_enabled(
+                            !review.records.is_empty(),
+                            egui::Button::new(format!("确认导入 {} 条备忘", review.records.len())),
+                        );
+                        import = response.clicked();
+                        #[cfg(feature = "ui-preview")]
+                        {
+                            rects[3] = Some(response.rect);
+                        }
+                    });
+                }
+                Review::BatchExport(review) => {
+                    ui.heading("预览批量导出备忘");
+                    ui.label(format!(
+                        "当前筛选 {} 条备忘 · 正文合计 {} 字节",
+                        review.records.len(),
+                        review.total_bytes
+                    ));
+                    ui.label("只导出当前列表中的正常备忘；每条生成一个 Markdown 文件，不含标签等内部属性。选择父文件夹后会创建唯一名称的子文件夹，不覆盖已有内容，也不修改本机记录。");
+                    egui::ScrollArea::vertical()
+                        .id_salt("batch-export-records")
+                        .max_height(280.0)
+                        .show(ui, |ui| {
+                            for item in &review.records {
+                                ui.horizontal(|ui| {
+                                    ui.strong(&item.title);
+                                    ui.small(format!("{} · {} 字节", item.filename, item.body.len()));
+                                });
+                            }
+                        });
+                    ui.small("最多 32 条，正文总量不超过 1 MiB。文件会先写入新的暂存子目录，全部完成后再显示为正式导出目录；若磁盘错误，暂存目录会保留以便检查。");
+                    ui.horizontal_wrapped(|ui| {
+                        cancel = ui.button("取消，不导出").clicked();
+                        #[cfg(windows)]
+                        {
+                            export_batch = ui.button("选择父文件夹并导出…").clicked();
+                        }
+                    });
+                }
             }
         });
         #[cfg(feature = "ui-preview")]
@@ -180,6 +246,9 @@ impl State {
         if restore {
             result = self.restore_backup();
         }
+        if import {
+            result = self.confirm_batch_import();
+        }
         #[cfg(windows)]
         if export
             && let Some(path) = rfd::FileDialog::new()
@@ -191,6 +260,13 @@ impl State {
                 .save_file()
         {
             result = self.save_backup(path);
+        }
+        #[cfg(windows)]
+        if !cancel
+            && export_batch
+            && let Some(parent) = rfd::FileDialog::new().pick_folder()
+        {
+            result = self.export_batch(parent);
         }
         if let Err(error) = result {
             self.message = format!("{error:#}");

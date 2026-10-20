@@ -1,5 +1,46 @@
 # Studio 插件提供方交接
 
+## 2026-10-18：操作定位0.1.3与总目录ba45d264
+
+模型辅助与Spring Actuator插件0.1.3新增六项页面操作定位：搜索可直达模型目录、生成和Actuator端点/摘要，保留草稿与结果，不自动发请求。12组实际浏览器定位、原View回归、75项脚本测试和冻结包/目录校验通过。新交付目录ba45d264，真实Studio原生验收待续，完整接受仍0/154，未发布。
+
+当前目录为`release/plugin-candidates/devtools-catalog-2026-10-18-ba45d264d48bf094`，两份0.1.3候选及同名包外收据均可只读校验。完整SDK模拟浏览器证据与版本哈希绑定，尚不代表Host传输验收。见[本轮记录](iterations/2026-10-18-view-operation-navigation.md)。以下为历史记录。
+
+## 2026-10-18：应用目录0.1.2与总目录eee5a2fb
+
+模型辅助与Spring Actuator插件0.1.2补齐整应用分类、别名和用途，保留原View与权限；70项脚本回归、原View/合同测试和只读包校验通过。六项单操作定位另有30条待实现协议向量，未伪装成可调用工具。当前交付目录eee5a2fb，Host完整接受仍0，未发布。
+
+当前目录为`release/plugin-candidates/devtools-catalog-2026-10-18-eee5a2fbeb430f20`。六项定位提案位于`proposals/studio-view-operation-directory/2026-10-18`，不在manifest声明待实现profile。见[本轮记录](iterations/2026-10-18-application-directory.md)。以下保留历史记录。
+
+
+## 2026-10-18：当前图片0.2.0及目录b91d5f51
+
+图片缩放插件0.2.0已改用Host支持的整数范围参数，增加分类、搜索别名和资源类型过滤。23项实际WASI（含9项原生字节对比）、65项脚本测试及全工作区1337项Rust测试通过；Clippy和release构建通过。当前目录b91d5f51包含10个未签名候选包，Host完整接受仍0，未发布。
+
+当前图片候选为 `release/plugin-candidates/image-resize-0.2.0-candidate-01`，新WASM与当前image-workflow 0.12.0核心构建。0.1.2的pattern/not输入声明不兼容Host，保留为失败中间证据；不可安装，也不作为当前交付。下文0.1.1及其他目录为历史记录。详见[本轮记录](iterations/2026-10-18-image-resize-input-contract.md)。
+
+
+## 2026-10-18：当前目录9c17b7b9与URL资源0.1.1
+
+当前资源插件：URL文本资源0.1.1补齐安装所需profile及7类错误输出契约，13项实际WASI与60项脚本测试通过，复用原WASM。目录9c17b7b9包含9个候选包，明确记录普通/资源URL提供方的同名能力冲突；Host接受仍0，未发布。
+
+当前目录release/plugin-candidates/devtools-catalog-2026-10-18-9c17b7b91e84f1c7。资源版与普通版保留同一能力ID，隔离验收只启用一个提供方。新契约覆盖实际失败结果，完整接力仍待Studio验收；见[本轮记录](iterations/2026-10-18-url-resource-output-contract.md)。以下保留历史证据。
+
+
+## 2026-10-18：当前目录794fe75c与模型辅助0.1.1
+
+当前模型辅助插件0.1.1：修复生成后模型选择跳回第一项，增加旧回答提醒、结果跳转、选择与清空；桌面浅色和真实窄屏深色交互通过。交付目录794fe75c包含8包、53项Agent能力与6项页面操作，Host接受仍0，未发布。
+
+当前目录 release/plugin-candidates/devtools-catalog-2026-10-18-794fe75cdcb85480；模型辅助候选 release/agent-assist-preview-0.1.1-candidate-02。完整Agent功能不因页面子能力交付而变成已接入。详情见[本轮记录](iterations/2026-10-18-agent-result-state.md)。以下为历史交付记录。
+
+
+## 2026-10-18：当前交付目录与 Actuator View 映射
+
+当前插件交付：已补齐 Spring Actuator 冻结 View 候选映射，七包共53项Agent能力与4项页面操作，覆盖32项来源工具；56项脚本测试、合同复测、包与目录只读校验通过。最终目录修订5f0572f4；Host接受仍为0，未发布。
+
+最终快照为 release/plugin-candidates/devtools-catalog-2026-10-18-5f0572f4e15f565e；七包索引全部 matched。原候选字节未改动，Actuator 新增外部规范化收据 revision-01。详情见 [本轮记录](iterations/2026-10-18-actuator-catalog-mapping.md)。以下内容保留历史交付证据，以本节链接为当前入口。
+
+
 ## 2026-10-18：全部包收据索引规范化
 
 在上一份不可变目录修订基础上，为此前缺少 Studio 所需结构化索引编码的四个插件收据新增 revision-01，包目录与其逐文件内容均未改动；旧收据和旧目录保留。Inspect 0.1.2 已有的 revision-01 收据经 Studio 校验器复核后直接复用。迁移映射现为 6/6 个包收据目录索引全部 `matched`。

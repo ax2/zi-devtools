@@ -51,6 +51,8 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
             .iter()
             .flat_map(|step| &step.references)
             .any(|reference| reference.citation_id.is_some());
+    let has_context = include_content && !snapshot.plan.config.context.is_empty();
+    let generated_by = crate::tool_provenance::current_for_tool("agent-runner")?;
     if has_citation_ids {
         ensure!(
             snapshot
@@ -93,7 +95,8 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
         .collect();
     let mut record = json!({
         "schema": "zi-devtools-agent-run",
-        "schema_version": if has_citation_ids { 3 } else if has_references { 2 } else { 1 },
+        "schema_version": 5,
+        "generated_by": generated_by,
         "finished_at_utc": snapshot.finished_at,
         "status": snapshot.status.label(),
         "model": snapshot.plan.config.model,
@@ -111,6 +114,9 @@ pub fn export_json(snapshot: Snapshot<'_>, include_content: bool) -> Result<Stri
             "answer": snapshot.outcome.map(|outcome| outcome.answer.as_str()),
             "error": snapshot.error,
         });
+        if has_context {
+            record["content"]["context"] = json!(snapshot.plan.config.context);
+        }
         if has_citation_ids {
             record["content"]["citations"] = json!(
                 snapshot
@@ -145,6 +151,7 @@ pub struct ImportedContent {
     pub answer: Option<String>,
     pub error: Option<String>,
     pub citations: Option<Vec<usize>>,
+    pub context: Option<Vec<agent::SourceContext>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -160,6 +167,8 @@ pub struct ImportedRecord {
     pub max_calls: usize,
     pub calls_made: usize,
     pub model_tokens_reported: Option<u64>,
+    #[serde(default)]
+    pub generated_by: Option<crate::tool_provenance::ToolProvenance>,
     pub steps: Vec<ImportedStep>,
     pub content: Option<ImportedContent>,
 }
@@ -183,9 +192,20 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
     );
     let record: ImportedRecord = serde_json::from_slice(bytes).context("运行记录 JSON 结构无效")?;
     ensure!(
-        record.schema == "zi-devtools-agent-run" && matches!(record.schema_version, 1..=3),
+        record.schema == "zi-devtools-agent-run" && matches!(record.schema_version, 1..=5),
         "不支持的 Agent 运行记录版本"
     );
+    ensure!(
+        (record.schema_version == 5) == record.generated_by.is_some(),
+        "v5 运行记录必须包含生成工具来源，旧版不能声明该字段"
+    );
+    if let Some(generated_by) = &record.generated_by {
+        generated_by.validate()?;
+        ensure!(
+            generated_by.tool_id == "agent-runner",
+            "Agent 记录来源工具不匹配"
+        );
+    }
     ensure!(
         record.schema_version != 1 || record.steps.iter().all(|step| step.references.is_none()),
         "v1 记录不支持来源字段"
@@ -266,7 +286,29 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
             );
         }
     }
-    if record.schema_version == 3 {
+    let has_citation_ids = record
+        .steps
+        .iter()
+        .flat_map(|step| step.references.iter().flatten())
+        .any(|reference| reference.citation_id.is_some());
+    if record.schema_version == 5 {
+        ensure!(
+            record
+                .content
+                .as_ref()
+                .is_some_and(|content| content.citations.is_some())
+                == has_citation_ids,
+            "v5 来源编号与引用列表不匹配"
+        );
+    }
+    let validates_citations = record.schema_version == 3
+        || (record.schema_version == 4
+            && record
+                .content
+                .as_ref()
+                .is_some_and(|content| content.citations.is_some()))
+        || (record.schema_version == 5 && has_citation_ids);
+    if validates_citations {
         let references: Vec<&EvidenceRef> = record
             .steps
             .iter()
@@ -284,7 +326,7 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
                     .all(|reference| reference.citation_id.is_some())
                 && ids.len() == references.len()
                 && ids.iter().copied().eq(1..=ids.len()),
-            "v3 来源编号无效"
+            "v3/v4 来源编号无效"
         );
         let content = record.content.as_ref().unwrap();
         let reported = content.citations.as_ref().context("v3 记录缺少引用列表")?;
@@ -293,8 +335,18 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
         } else {
             Vec::new()
         };
-        ensure!(*reported == expected, "v3 答案引用与来源不一致");
+        ensure!(*reported == expected, "v3/v4 答案引用与来源不一致");
     }
+    let has_context = record.content.as_ref().is_some_and(|content| {
+        content
+            .context
+            .as_ref()
+            .is_some_and(|context| !context.is_empty())
+    });
+    ensure!(
+        (record.schema_version == 4) == has_context || record.schema_version == 5,
+        "v4/v5 会话资料版本不匹配"
+    );
     if record.status == "completed" {
         ensure!(
             record.model_tokens_reported.is_some(),
@@ -329,6 +381,17 @@ pub fn parse_json(bytes: &[u8]) -> Result<ImportedRecord> {
                 .is_none_or(|error| error.len() <= 128 * 1024),
             "错误内容超出限制"
         );
+        if let Some(context) = &content.context {
+            ensure!(
+                !context.is_empty()
+                    && serde_json::to_vec(context)?.len() <= agent::MAX_CONTEXT_BYTES
+                    && context.iter().all(|item| {
+                        identifier(&item.source, 512)
+                            && content_text(&item.content, agent::MAX_CONTEXT_BYTES)
+                    }),
+                "接力资料无效或超过32 KiB"
+            );
+        }
         ensure!(
             record.status != "completed" || content.answer.is_some(),
             "完成记录缺少可选答案"
@@ -356,6 +419,7 @@ mod tests {
     fn fixture() -> (Plan, Vec<Step>, Outcome) {
         let plan = Plan {
             text: "secret plan".into(),
+            planning_tokens: 20,
             config: agent::Config {
                 endpoint: "http://127.0.0.1:11434/api/chat".into(),
                 model: "local-model".into(),
@@ -365,6 +429,7 @@ mod tests {
                 },
                 access_path: PathBuf::from("C:/secret/access.json"),
                 goal: "secret goal".into(),
+                context: Vec::new(),
                 selected: vec!["echo".into()],
                 max_calls: 2,
             },
@@ -422,6 +487,12 @@ mod tests {
         assert_eq!(record["steps"][0]["response_bytes"], 78);
         assert_eq!(record["model_tokens_reported"], 42);
         assert!(record.get("content").is_none());
+        let mut legacy = record.clone();
+        legacy["schema_version"] = json!(1);
+        legacy.as_object_mut().unwrap().remove("generated_by");
+        let imported = parse_json(legacy.to_string().as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 1);
+        assert!(imported.generated_by.is_none());
     }
 
     #[test]
@@ -467,6 +538,44 @@ mod tests {
     }
 
     #[test]
+    fn handed_off_context_is_only_exported_with_opt_in_v5_content() {
+        let (mut plan, steps, outcome) = fixture();
+        plan.config.context.push(agent::SourceContext {
+            source: "synthetic handoff".into(),
+            content: "private report body".into(),
+        });
+        let snapshot = || Snapshot {
+            plan: &plan,
+            steps: &steps,
+            outcome: Some(&outcome),
+            status: Status::Completed,
+            approved: true,
+            finished_at: "2026-10-14T00:00:00Z",
+            error: None,
+        };
+
+        let default: Value =
+            serde_json::from_str(&export_json(snapshot(), false).unwrap()).unwrap();
+        assert_eq!(default["schema_version"], 5);
+        assert_eq!(default["generated_by"]["toolId"], "agent-runner");
+        assert!(default.get("content").is_none());
+
+        let with_content = export_json(snapshot(), true).unwrap();
+        let imported = parse_json(with_content.as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 5);
+        assert_eq!(
+            imported.content.unwrap().context.unwrap()[0].content,
+            "private report body"
+        );
+        let mut legacy: Value = serde_json::from_str(&with_content).unwrap();
+        legacy["schema_version"] = json!(4);
+        legacy.as_object_mut().unwrap().remove("generated_by");
+        let imported = parse_json(legacy.to_string().as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 4);
+        assert!(imported.generated_by.is_none());
+    }
+
+    #[test]
     fn exports_roundtrip_into_read_only_record() {
         let (plan, steps, outcome) = fixture();
         for include_content in [false, true] {
@@ -485,6 +594,10 @@ mod tests {
             .unwrap();
             let imported = parse_json(exported.as_bytes()).unwrap();
             assert_eq!(imported.status, "completed");
+            assert_eq!(imported.schema_version, 5);
+            let generated_by = imported.generated_by.as_ref().unwrap();
+            assert_eq!(generated_by.tool_id, "agent-runner");
+            generated_by.validate().unwrap();
             assert_eq!(imported.calls_made, 1);
             assert_eq!(imported.steps[0].tool, "echo");
             assert_eq!(imported.content.is_some(), include_content);
@@ -493,7 +606,7 @@ mod tests {
     }
 
     #[test]
-    fn knowledge_references_require_explicit_content_export_and_v2() {
+    fn knowledge_references_require_explicit_content_export_in_v5() {
         let (mut plan, mut steps, _) = fixture();
         plan.config.selected = vec!["search_knowledge".into()];
         steps[0].tool = "search_knowledge".into();
@@ -533,11 +646,17 @@ mod tests {
         );
         let selected = export_json(snapshot(), true).unwrap();
         let imported = parse_json(selected.as_bytes()).unwrap();
-        assert_eq!(imported.schema_version, 2);
+        assert_eq!(imported.schema_version, 5);
         assert_eq!(
             imported.steps[0].references.as_ref().unwrap()[0].relative_path,
             "private/path.md"
         );
+        let mut legacy: Value = serde_json::from_str(&selected).unwrap();
+        legacy["schema_version"] = json!(2);
+        legacy.as_object_mut().unwrap().remove("generated_by");
+        let imported = parse_json(legacy.to_string().as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 2);
+        assert!(imported.generated_by.is_none());
         assert!(!selected.contains("secret tool response"));
         let mut malformed: Value = serde_json::from_str(&selected).unwrap();
         malformed["steps"][0]["references"][0]["file_sha256"] = json!("bad");
@@ -548,7 +667,7 @@ mod tests {
     }
 
     #[test]
-    fn numbered_sources_roundtrip_as_v3_and_reject_forged_citations() {
+    fn numbered_sources_roundtrip_as_v5_and_reject_forged_citations() {
         let (mut plan, mut steps, _) = fixture();
         plan.config.selected = vec!["search_knowledge".into()];
         steps[0].tool = "search_knowledge".into();
@@ -578,15 +697,21 @@ mod tests {
         };
         let default = export_json(snapshot(), false).unwrap();
         assert!(!default.contains("private/guide.md"));
-        assert_eq!(parse_json(default.as_bytes()).unwrap().schema_version, 1);
+        assert_eq!(parse_json(default.as_bytes()).unwrap().schema_version, 5);
         let selected = export_json(snapshot(), true).unwrap();
         let imported = parse_json(selected.as_bytes()).unwrap();
-        assert_eq!(imported.schema_version, 3);
+        assert_eq!(imported.schema_version, 5);
         assert_eq!(
             imported.steps[0].references.as_ref().unwrap()[0].citation_id,
             Some(1)
         );
         assert_eq!(imported.content.unwrap().citations, Some(vec![1]));
+        let mut legacy: Value = serde_json::from_str(&selected).unwrap();
+        legacy["schema_version"] = json!(3);
+        legacy.as_object_mut().unwrap().remove("generated_by");
+        let imported = parse_json(legacy.to_string().as_bytes()).unwrap();
+        assert_eq!(imported.schema_version, 3);
+        assert!(imported.generated_by.is_none());
         let mut forged: Value = serde_json::from_str(&selected).unwrap();
         forged["content"]["answer"] = json!("Fabricated [K2]");
         assert!(parse_json(forged.to_string().as_bytes()).is_err());
@@ -632,6 +757,18 @@ mod tests {
                 change.0
             );
         }
+        let mut missing_provenance = original.clone();
+        missing_provenance
+            .as_object_mut()
+            .unwrap()
+            .remove("generated_by");
+        assert!(parse_json(missing_provenance.to_string().as_bytes()).is_err());
+        let mut wrong_tool = original.clone();
+        wrong_tool["generated_by"]["toolId"] = json!("image-tools");
+        assert!(parse_json(wrong_tool.to_string().as_bytes()).is_err());
+        let mut invalid_tool_version = original.clone();
+        invalid_tool_version["generated_by"]["toolVersion"] = json!("1.02.0");
+        assert!(parse_json(invalid_tool_version.to_string().as_bytes()).is_err());
         let mut other_tool = original.clone();
         other_tool["steps"][0]["tool"] = json!("delete_file");
         assert!(parse_json(other_tool.to_string().as_bytes()).is_err());

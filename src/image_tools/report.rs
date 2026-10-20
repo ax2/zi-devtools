@@ -5,6 +5,43 @@ use super::{
 };
 use std::{collections::BTreeMap, sync::Weak};
 
+pub(crate) fn build_material_report(
+    material: &relay::ImageMaterial,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<String> {
+    use std::sync::atomic::Ordering;
+    let image = &material.image;
+    ensure!(
+        image.width() > 0
+            && image.height() > 0
+            && image.width() <= 12000
+            && image.height() <= 12000
+            && u64::from(image.width()) * u64::from(image.height()) <= MAX_PIXELS,
+        "图片尺寸超出信息报告限制"
+    );
+    ensure!(image.as_bytes().len() <= 192 * 1024 * 1024, "图片内存超限");
+    let mut transparent = false;
+    for (index, (_, _, pixel)) in image.pixels().enumerate() {
+        if index % 4096 == 0 {
+            ensure!(!cancel.load(Ordering::Relaxed), "图片信息报告已取消");
+        }
+        transparent |= pixel.0[3] < 255;
+    }
+    ensure!(!cancel.load(Ordering::Relaxed), "图片信息报告已取消");
+    let generated_by = crate::tool_provenance::current_for_tool("text-flow")?;
+    let text = serde_json::to_string_pretty(&serde_json::json!({
+        "schemaVersion":2,"material":"image-information","generatedBy":generated_by,"snapshotKind":material.kind,
+        "width":image.width(),"height":image.height(),
+        "pixels":u64::from(image.width())*u64::from(image.height()),
+        "hasAlphaChannel":image.color().has_alpha(),"hasTransparentPixels":transparent,
+        "encoding":null,
+        "origins":material.origins.iter().map(|o|serde_json::json!({"toolId":o.id,"version":o.version,"utc":o.utc})).collect::<Vec<_>>(),
+        "notes":"来自图片材料的冻结内存快照，不含文件路径。未读取或保存文件；encoding=null表示像素材料没有已知编码结果。"
+    }))?;
+    ensure!(text.len() <= 48 * 1024, "图片报告超限");
+    Ok(text)
+}
+
 enum Key {
     Unsupported,
     Image(Weak<DynamicImage>),
@@ -58,6 +95,7 @@ fn build(source: Source, origins: Vec<Origin>, id: &str) -> Result<String> {
         !matches!(&source, Source::Published { .. }),
         "图片信息报告仅接受内存快照，不读取输出文件"
     );
+    let generated_by = crate::tool_provenance::current_for_tool(id)?;
     let encoding = match &source {
         Source::Encoded(bytes) => {
             ensure!(bytes.len() <= MAX_OUTPUT_BYTES, "编码结果超限");
@@ -76,7 +114,7 @@ fn build(source: Source, origins: Vec<Origin>, id: &str) -> Result<String> {
     let image = &prepared.image;
     let transparent = image.pixels().any(|(_, _, pixel)| pixel.0[3] < 255);
     let text = serde_json::to_string_pretty(&serde_json::json!({
-        "schemaVersion":1,"material":"image-information","snapshotKind":prepared.kind,
+        "schemaVersion":2,"material":"image-information","generatedBy":generated_by,"snapshotKind":prepared.kind,
         "width":image.width(),"height":image.height(),
         "pixels":u64::from(image.width())*u64::from(image.height()),
         "hasAlphaChannel":image.color().has_alpha(),"hasTransparentPixels":transparent,
@@ -282,6 +320,7 @@ impl super::State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn encoded_report_uses_actual_dimensions_size_and_alpha_without_paths() {
         let image = DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
@@ -298,6 +337,14 @@ mod tests {
                 &build(Source::Encoded(Arc::new(bytes)), vec![], "image-tools").unwrap(),
             )
             .unwrap();
+            assert_eq!(report["schemaVersion"], 2);
+            assert_eq!(report["generatedBy"]["toolId"], "image-tools");
+            let provenance = crate::tool_provenance::current_for_tool("image-tools").unwrap();
+            assert_eq!(
+                report["generatedBy"]["toolVersion"].as_str(),
+                Some(provenance.tool_version.as_str())
+            );
+            assert_eq!(report["generatedBy"]["runtimeFingerprint"]["schema"], 1);
             assert_eq!(report["width"], 7);
             assert_eq!(report["height"], 5);
             assert_eq!(report["encoding"]["bytes"], size);
@@ -316,6 +363,13 @@ mod tests {
         )));
         let report: serde_json::Value =
             serde_json::from_str(&build(source, vec![], "screenshot-workbench").unwrap()).unwrap();
+        assert_eq!(report["schemaVersion"], 2);
+        assert_eq!(report["generatedBy"]["toolId"], "screenshot-workbench");
+        let provenance = crate::tool_provenance::current_for_tool("screenshot-workbench").unwrap();
+        assert_eq!(
+            report["generatedBy"]["toolVersion"].as_str(),
+            Some(provenance.tool_version.as_str())
+        );
         assert!(report["encoding"].is_null());
         assert_eq!(report["pixels"], 12);
         assert_eq!(report["hasTransparentPixels"], false);

@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--wasm', type=Path, required=True)
 parser.add_argument('--native', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--cases-dir', type=Path, help='Write raw requests and expected outputs for independent Wasmtime verification')
 args = parser.parse_args()
 wasm = args.wasm.read_bytes()
 assert len(wasm) <= 2 * 1024 * 1024
@@ -56,6 +57,11 @@ for value in [' YQ==', 'YQ==\n', 'YQ', 'YR==', '_w==']:
     cases.append(('strict-base64-'+str(len(cases)),request('devtools.text.base64.decode',{'text':value}),None,'INVALID_ENCODING'))
 for value in ['9007199254740992.0','9.007199254740992e15','1e100','{"a":{"x":1,"\\u0078":2}}','['*65+'0'+']'*65]:
     cases.append(('strict-json-'+str(len(cases)),request('devtools.text.json.minify',{'text':value}),None,'INVALID_INPUT'))
+cases.append(('json-validate-valid',request('devtools.text.json.validate',{'text':'{"name":"Zi","ok":true}'}),'JSON 有效（插件兼容规则）',None))
+for value in ['not-json','{"x":1,"x":2}','9007199254740992','['*65+'0'+']'*65]:
+    cases.append(('json-validate-invalid-'+str(len(cases)),request('devtools.text.json.validate',{'text':value}),None,'INVALID_INPUT'))
+cases.append(('sql-format-generic',request('devtools.text.sql.format',{'text':'select id,name from users where active=true'}),'SELECT id, name\nFROM users\nWHERE active = TRUE',None))
+cases.append(('sql-format-empty',request('devtools.text.sql.format',{'text':' \n'}),None,'INVALID_INPUT'))
 near = '['*60 + ','.join(['0']*320) + ']'*60
 cases.append(('large-output',request('devtools.text.json.format',{'text':near}),json.dumps(json.loads(near),ensure_ascii=False,indent=2),None))
 over = '['*60 + ','.join(['0']*750) + ']'*60
@@ -82,7 +88,22 @@ for name, value, expected, error in cases:
         assert output['ok'] is True and output['error'] is None and output['data']=={'text':expected},name
     telemetry = json.loads(wasi.stderr)
     assert telemetry['exitCode']==0 and telemetry['memoryBytes']<=64*1024*1024,name
-    results.append(dict(id=name,requestBytes=len(data),resultBytes=len(wasi.stdout),elapsedMs=round((time.monotonic()-start)*1000),**telemetry))
+    result_row=dict(id=name,requestBytes=len(data),resultBytes=len(wasi.stdout),requestSha256=hashlib.sha256(data).hexdigest(),
+                    expectedSha256=hashlib.sha256(wasi.stdout).hexdigest(),expectedError=error,
+                    elapsedMs=round((time.monotonic()-start)*1000),**telemetry)
+    if args.cases_dir:
+        args.cases_dir.mkdir(parents=True,exist_ok=True)
+        stem=f'{len(results):03d}-{name}'
+        (args.cases_dir/(stem+'.request')).write_bytes(data)
+        (args.cases_dir/(stem+'.expected.json')).write_bytes(wasi.stdout)
+        result_row['requestFile']=stem+'.request'
+        result_row['expectedFile']=stem+'.expected.json'
+    results.append(result_row)
 args.output.parent.mkdir(parents=True,exist_ok=True)
 args.output.write_text(json.dumps(dict(wasmBytes=len(wasm),wasmSha256=hashlib.sha256(wasm).hexdigest(),memoryMaxBytes=memory_max*65536,nativeSha256=hashlib.sha256(args.native.read_bytes()).hexdigest(),cases=results,limitations=['Node functional parity only; Studio installation/UI/Pi Broker untested','Node is not a secure sandbox; no fuel or Host timeout acceptance','5-second subprocess timeout is a verification guard, not Host acceptance']),ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 print(f'PASS {len(results)} native/WASI byte-parity cases; module {len(wasm)} bytes; maximum result {max(r["resultBytes"] for r in results)} bytes')
+if args.cases_dir:
+    portable_cases=[{**{key:case[key] for key in ['id','requestFile','expectedFile','requestSha256','expectedSha256','expectedError']},'checks':{}}
+                    for case in results]
+    (args.cases_dir/'fuel-proof.json').write_text(json.dumps(dict(wasmBytes=len(wasm),wasmSha256=hashlib.sha256(wasm).hexdigest(),
+        cases=portable_cases,limitations=['Expected responses were independently checked against native parity and semantic expectations before this budget run.']),ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

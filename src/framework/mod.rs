@@ -29,6 +29,15 @@ fn report(value: Value) -> Result<String> {
     );
     Ok(text)
 }
+fn generated_report(tool: Tool, text: String) -> Result<String> {
+    let mut value: Value = serde_json::from_str(&text).context("诊断结果不是有效 JSON")?;
+    let object = value.as_object_mut().context("诊断报告必须是 JSON 对象")?;
+    object.insert(
+        "generatedBy".into(),
+        serde_json::to_value(crate::tool_provenance::current_for_tool(tool.id())?)?,
+    );
+    report(value)
+}
 
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 pub enum Tool {
@@ -163,7 +172,7 @@ impl Tool {
                 "仅运行所选可信 python -I；不加载项目 settings，不安装依赖。解释器自身 site/.pth 启动钩子仍可能执行。"
             }
             Self::Threads => {
-                "粘贴 jstack / jcmd Thread.print 文本。只支持平台线程；循环等待线索与 JVM 明确死锁报告分别显示。"
+                "粘贴 jstack / jcmd Thread.print 文本，或导入 jcmd Thread.dump_to_file -format=json 输出。JSON保留线程容器；只在数据提供 virtual 字段时分类虚拟线程，不推断死锁。"
             }
             Self::Dependencies => {
                 "Maven dependency:tree 或 Gradle dependencies/insight 文本；insight 仅提取坐标，反向树不重建。多 scope/version 不等于运行时冲突。"
@@ -264,9 +273,12 @@ impl Tool {
     fn environment(self) -> bool {
         matches!(self, Self::JavaEnvironment | Self::PythonEnvironment)
     }
+    fn cancellable(self) -> bool {
+        self.environment() || self == Self::Jfr
+    }
 }
 pub fn analyze(tool: Tool, input: &str, second: &str) -> Result<String> {
-    match tool {
+    let output = match tool {
         Tool::Threads => java::threads(input),
         Tool::Dependencies => java::dependencies(input),
         Tool::Migrations => django::migrations(input, second),
@@ -279,7 +291,8 @@ pub fn analyze(tool: Tool, input: &str, second: &str) -> Result<String> {
         Tool::Checks => django::checks(input),
         Tool::Celery => django::celery(input),
         _ => anyhow::bail!("该工具需要明确选择执行目标"),
-    }
+    }?;
+    generated_report(tool, output)
 }
 
 #[derive(Clone, Default)]
@@ -295,13 +308,19 @@ struct Draft {
     base: String,
     endpoint: String,
 }
+type RunningTask = (
+    Tool,
+    mpsc::Receiver<Result<String, String>>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+);
 #[derive(Default)]
 pub struct State {
     pub selected: Tool,
     #[cfg(feature = "ui-preview")]
     pub preview_completed: usize,
     drafts: HashMap<Tool, Draft>,
-    running: Option<(Tool, mpsc::Receiver<Result<String, String>>)>,
+    running: Option<RunningTask>,
+    jobs: HashMap<Tool, crate::tasks::Job>,
     token: String,
     message: String,
     copied: Option<Instant>,
@@ -331,7 +350,7 @@ impl State {
             !self
                 .running
                 .as_ref()
-                .is_some_and(|(active, _)| *active == tool),
+                .is_some_and(|(active, _, _)| *active == tool),
             "该诊断正在运行，请稍后重试"
         );
         self.select(tool);
@@ -371,24 +390,52 @@ impl State {
         self.token.clear();
     }
     pub fn poll(&mut self) -> Option<String> {
-        let (tool, rx) = self.running.as_ref()?;
+        let (tool, rx, cancel) = self.running.as_ref()?;
+        let tool = *tool;
+        let cancel = std::sync::Arc::clone(cancel);
         let result = match rx.try_recv() {
             Ok(v) => v,
             Err(mpsc::TryRecvError::Empty) => return None,
             Err(mpsc::TryRecvError::Disconnected) => Err("执行线程意外结束".into()),
         };
+        let cancelled = cancel.load(std::sync::atomic::Ordering::Relaxed);
+        let succeeded = result.is_ok() && !cancelled;
         let message = format!(
             "{}：{}",
             tool.label(),
-            if result.is_ok() {
+            if cancelled {
+                "已取消"
+            } else if succeeded {
                 "分析完成"
             } else {
                 "执行失败，请查看结果"
             }
         );
-        let draft = self.drafts.entry(*tool).or_default();
-        draft.output = result.unwrap_or_else(|e| format!("失败：{e}"));
-        draft.summary = summary(*tool, &draft.output);
+        if cancelled {
+            self.message = "任务已取消；原有报告已保留".into();
+        } else {
+            let draft = self.drafts.entry(tool).or_default();
+            draft.output = result.unwrap_or_else(|e| format!("失败：{e}"));
+            draft.summary = summary(tool, &draft.output);
+        }
+        if let Some(job) = self.jobs.get_mut(&tool) {
+            job.finish(
+                if cancelled {
+                    crate::tasks::Phase::Cancelled
+                } else if succeeded {
+                    crate::tasks::Phase::Done
+                } else {
+                    crate::tasks::Phase::Failed
+                },
+                if cancelled {
+                    "任务已取消；原有报告保留在诊断工作台"
+                } else if succeeded {
+                    "分析完成；详细报告保留在诊断工作台"
+                } else {
+                    "处理失败；详细原因保留在诊断工作台"
+                },
+            );
+        }
         #[cfg(feature = "ui-preview")]
         {
             self.preview_completed += 1;
@@ -396,8 +443,43 @@ impl State {
         self.running = None;
         Some(message)
     }
+    pub(crate) fn cancel_task(&mut self, key: &str, generation: u64) -> bool {
+        let Some(tool) = Tool::from_id(key).filter(|tool| tool.cancellable()) else {
+            return false;
+        };
+        let matches_running = self
+            .running
+            .as_ref()
+            .is_some_and(|(active, _, _)| *active == tool);
+        let matches_generation = self
+            .jobs
+            .get(&tool)
+            .and_then(|job| job.snapshot(tool.id(), tool.label(), true))
+            .is_some_and(|row| row.generation == generation && row.phase.active());
+        if !matches_running || !matches_generation {
+            return false;
+        }
+        if let Some((_, _, cancelled)) = &self.running {
+            cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(job) = self.jobs.get_mut(&tool) {
+            job.cancelling();
+        }
+        true
+    }
     pub fn is_running(&self) -> bool {
         self.running.is_some()
+    }
+
+    pub(crate) fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
+        Tool::ALL
+            .into_iter()
+            .filter_map(|tool| {
+                self.jobs
+                    .get(&tool)
+                    .and_then(|job| job.snapshot(tool.id(), tool.label(), tool.cancellable()))
+            })
+            .collect()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview(&mut self, tool: Tool) {
@@ -585,21 +667,37 @@ impl State {
             let d = d.clone();
             let token = self.token.clone();
             let (tx, rx) = mpsc::channel();
-            self.running = Some((tool, rx));
+            let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let worker_cancelled = std::sync::Arc::clone(&cancelled);
+            self.jobs.entry(tool).or_default().begin();
+            self.running = Some((tool, rx, cancelled));
             std::thread::spawn(move || {
                 let result = if recording {
-                    runtime::recording(&d.executable, &d.file)
+                    runtime::recording_cancellable(&d.executable, &d.file, &worker_cancelled)
+                        .and_then(|text| generated_report(tool, text))
                 } else {
                     match tool {
-                        Tool::JavaEnvironment => {
-                            runtime::java_environment(&d.executable, &d.comparison)
-                        }
-                        Tool::PythonEnvironment => {
-                            runtime::python_environment(&d.executable, &d.comparison)
-                        }
-                        Tool::Actuator => runtime::actuator(&d.base, &d.endpoint, &token),
+                        Tool::JavaEnvironment => runtime::java_environment_cancellable(
+                            &d.executable,
+                            &d.comparison,
+                            &worker_cancelled,
+                        )
+                        .and_then(|text| generated_report(tool, text)),
+                        Tool::PythonEnvironment => runtime::python_environment_cancellable(
+                            &d.executable,
+                            &d.comparison,
+                            &worker_cancelled,
+                        )
+                        .and_then(|text| generated_report(tool, text)),
+                        Tool::Actuator => runtime::actuator(&d.base, &d.endpoint, &token)
+                            .and_then(|text| generated_report(tool, text)),
                         _ => analyze(tool, &d.input, &d.second),
                     }
+                };
+                let result = if worker_cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                    Err(anyhow::anyhow!("任务已取消"))
+                } else {
+                    result
                 };
                 let _ = tx.send(result.map_err(|e| format!("{e:#}")));
             });
@@ -688,6 +786,13 @@ fn summary(tool: Tool, text: &str) -> String {
     };
     let count = |key: &str| v[key].as_array().map_or(0, Vec::len);
     match tool {
+        Tool::Threads if v["sourceFormat"] == "jcmd-json" => format!(
+            "{} 个线程 · {} 个容器 · {} 个虚拟线程 · {} 个类型未提供 · JSON 未提供死锁检测",
+            v["threadCount"],
+            v["containerCount"],
+            v["virtualThreadCount"],
+            v["virtualTypeUnknownCount"]
+        ),
         Tool::Threads => format!(
             "{} 个线程 · {} 条等待关系 · {} 个循环相关线程 · JVM 明确死锁报告：{}",
             v["threadCount"],

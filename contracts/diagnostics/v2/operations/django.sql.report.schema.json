@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/django.sql.report.schema.json",
+  "title": "Django SQL / N+1 分析 report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "diagnosticsProtocol",
+    "generatedBy",
+    "data"
+  ],
+  "properties": {
+    "diagnosticsProtocol": {
+      "const": "2.0.0-rc.1"
+    },
+    "generatedBy": {
+      "$ref": "../generated-by.schema.json"
+    },
+    "data": {
+      "type": "object",
+      "description": "Operation-specific analysis report; see the selected capability scope."
+    }
+  }
+}

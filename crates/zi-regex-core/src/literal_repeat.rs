@@ -1,4 +1,4 @@
-//! Equivalent literal search for a bounded, fully parsed exact repetition.
+//! Equivalent literal search for a bounded, exact literal repetition.
 //! Everything outside this shape continues through the original regex engine.
 use anyhow::Result;
 use regex_syntax::hir::HirKind;
@@ -10,12 +10,12 @@ use crate::tests::legacy;
 
 // With the pinned default compiler, an exact non-empty Literal repetition
 // creates one Range per expanded byte, plus the small unanchored prefix,
-// capture 0 and Match wrappers. 256KiB of bytes accounts for at most 8MiB
-// of Windows64 intermediate Range states (32 bytes each), leaving 2MiB for
-// those fixed wrappers under the original 10MiB limit. There are no classes,
+// capture 0 and Match wrappers. 300,000 bytes account for 9,600,000 bytes
+// of Windows64 intermediate Range states (32 bytes each), leaving 885,760
+// bytes for those fixed wrappers under the original 10MiB limit. There are no classes,
 // branches, assertions or explicit capture states inside this accepted HIR.
 // This is an acceleration bound, not a new input or regex acceptance limit.
-const MAX_LITERAL_BYTES: usize = 256 * 1024;
+const MAX_LITERAL_BYTES: usize = 300_000;
 
 struct LiteralRepeat {
     unit: String,
@@ -27,6 +27,13 @@ fn literal(pattern: &str) -> Option<LiteralRepeat> {
     // Avoid a second parse for ordinary expressions without counted repeats.
     if !pattern.contains('{') {
         return None;
+    }
+    // The standard HIR parser expands counted literals before we can inspect
+    // their shape. Recognize the narrow, unambiguous single-scalar form first
+    // so a large but bounded repeat does not spend the entire WASI fuel budget
+    // in parsing. More expressive forms still go through the canonical parser.
+    if let Some(repetition) = single_literal_repeat(pattern) {
+        return Some(repetition);
     }
     let hir = regex_syntax::Parser::new().parse(pattern).ok()?;
     if hir.properties().explicit_captures_len() != 0 {
@@ -54,10 +61,32 @@ fn literal(pattern: &str) -> Option<LiteralRepeat> {
     })
 }
 
+fn single_literal_repeat(pattern: &str) -> Option<LiteralRepeat> {
+    let (unit_start, unit) = pattern.char_indices().next()?;
+    if unit_start != 0 || (unit.is_ascii() && b".+*?()|[]{}^$\\".contains(&(unit as u8))) {
+        return None;
+    }
+    let suffix = pattern.get(unit.len_utf8()..)?;
+    let count = suffix.strip_prefix('{')?.strip_suffix('}')?;
+    if count.is_empty() || !count.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let count = count.parse::<usize>().ok()?;
+    let bytes = unit.len_utf8().checked_mul(count)?;
+    if count < 2 || bytes > MAX_LITERAL_BYTES {
+        return None;
+    }
+    Some(LiteralRepeat {
+        unit: unit.to_string(),
+        count,
+        bytes,
+    })
+}
+
 pub(crate) fn evaluate(pattern: &str, input: &str, budget: usize) -> Option<Result<String>> {
     let repetition = literal(pattern)?;
-    // The HIR and the conservative program-size bound have already been
-    // validated. A shorter haystack cannot contain this non-empty literal;
+    // The accepted literal shape and conservative program-size bound have
+    // already been validated. A shorter haystack cannot contain this literal;
     // avoid materializing or preprocessing a huge search needle in that case.
     if input.len() < repetition.bytes {
         let output = "没有匹配";
@@ -101,7 +130,20 @@ mod tests {
 
     #[test]
     fn only_bounded_exact_literal_hir_is_accelerated() {
-        for pattern in ["a{2}", "(?:中日){3}", r"\x61{2}", "a{2,2}?", "a{262144}"] {
+        assert!(single_literal_repeat("a{300000}").is_some());
+        assert!(single_literal_repeat("中{100000}").is_some());
+        for pattern in ["a{1}", "a{2,3}", "a{300001}", "\\n{100}", ".{100}"] {
+            assert!(single_literal_repeat(pattern).is_none(), "{pattern}");
+        }
+        for pattern in [
+            "a{2}",
+            "(?:中日){3}",
+            r"\x61{2}",
+            "a{2,2}?",
+            "a{262144}",
+            "a{300000}",
+            "中{100000}",
+        ] {
             assert!(literal(pattern).is_some(), "{pattern}");
         }
         for pattern in [
@@ -114,8 +156,8 @@ mod tests {
             "(?i:a){2}",
             "^a{2}$",
             "a{2}|b",
-            "a{262145}",
-            "中{87382}",
+            "a{300001}",
+            "中{100001}",
             "a{1000000}",
             "a{4294967295}",
             "a{4294967296}",
@@ -178,6 +220,8 @@ mod tests {
             ("a{262144}", String::new()),
             ("a{200000}", String::new()),
             ("中{87381}", String::new()),
+            ("a{300000}", String::new()),
+            ("中{100000}", String::new()),
             ("(?:🙂a){52428}", String::new()),
         ] {
             assert_eq!(
@@ -186,14 +230,19 @@ mod tests {
                 "{pattern}"
             );
         }
-        for pattern in ["a{262145}", "a{327680}", "a{400000}", "中{87382}"] {
+        for pattern in ["a{300001}", "a{327680}", "a{400000}", "中{100001}"] {
             assert!(evaluate(pattern, "", usize::MAX).is_none(), "{pattern}");
         }
     }
 
     #[test]
     fn large_match_has_independently_known_report() {
-        for (pattern, unit, count) in [("a{200000}", "a", 200000), ("中{87381}", "中", 87381)] {
+        for (pattern, unit, count) in [
+            ("a{200000}", "a", 200000),
+            ("a{300000}", "a", 300000),
+            ("中{87381}", "中", 87381),
+            ("中{100000}", "中", 100000),
+        ] {
             let text = unit.repeat(count);
             let expected = format!("#1 字节 0..{}: {}…\n", text.len(), unit.repeat(120));
             assert_eq!(

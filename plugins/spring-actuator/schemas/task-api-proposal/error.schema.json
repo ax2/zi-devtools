@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/error.schema.json",
+  "title": "plugin.task.lifecycle.v1 stable error proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code"],
+  "properties": {
+    "code": {"enum": ["task_input_invalid", "task_unavailable", "task_idempotency_conflict", "task_storage_failed", "task_queue_full", "task_interrupted", "task_cancel_pending", "permission_denied", "http_service_dns_timeout", "http_service_dns_failed", "http_service_request_failed", "http_service_timeout", "http_service_status_error", "http_service_response_too_large", "task_event_sequence_invalid", "task_result_unavailable"]}
+  }
+}

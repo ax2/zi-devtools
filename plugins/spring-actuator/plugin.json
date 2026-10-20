@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "id": "com.zicode.devtools.spring-actuator",
+  "name": "ZiDevTools Spring Actuator",
+  "displayName": "Spring Actuator 只读诊断",
+  "description": "通过 Studio Host 逐次确认读取固定 Actuator health、info、metrics JSON 端点；这是 ZiDevTools 完整工具的 HTTP View 子集。",
+  "version": "0.1.3",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.1.0 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "requiredProfiles": {
+    "service.http.get.v1": "=1.0.0-preview.1",
+    "application.directory.v1": "=1.0.0-preview.1",
+    "view.operation.directory.v1": "=1.0.0-preview.1"
+  },
+  "activationEvents": [
+    "onView:devtools.spring-actuator.main"
+  ],
+  "contributes": {
+    "activities": [
+      {
+        "id": "devtools.spring-actuator",
+        "title": "Spring Actuator",
+        "order": 870,
+        "directory": {
+          "categoryId": "system",
+          "aliases": [
+            "Spring健康检查",
+            "Actuator诊断",
+            "Spring health",
+            "service diagnostics"
+          ],
+          "description": "逐次确认读取Spring Actuator的health、info或metrics端点，并查看响应摘要。"
+        }
+      }
+    ],
+    "views": [
+      {
+        "id": "devtools.spring-actuator.main",
+        "activity": "devtools.spring-actuator",
+        "location": "main",
+        "title": "只读诊断",
+        "entry": "views/main.html"
+      }
+    ],
+    "capabilities": [],
+    "commands": [],
+    "piTools": [],
+    "viewOperations": [
+      {
+        "id": "devtools.spring-actuator.health",
+        "title": "查看服务健康",
+        "viewId": "devtools.spring-actuator.main",
+        "sourceToolId": "spring-actuator",
+        "directory": {
+          "categoryId": "system",
+          "aliases": [
+            "健康状态",
+            "Actuator health"
+          ],
+          "description": "定位端点选择并选择health；不会自动提交HTTP请求。"
+        }
+      },
+      {
+        "id": "devtools.spring-actuator.info",
+        "title": "查看服务信息",
+        "viewId": "devtools.spring-actuator.main",
+        "sourceToolId": "spring-actuator",
+        "directory": {
+          "categoryId": "system",
+          "aliases": [
+            "服务信息",
+            "Actuator info"
+          ],
+          "description": "定位端点选择并选择info；不会自动提交HTTP请求。"
+        }
+      },
+      {
+        "id": "devtools.spring-actuator.metrics",
+        "title": "查看指标目录",
+        "viewId": "devtools.spring-actuator.main",
+        "sourceToolId": "spring-actuator",
+        "directory": {
+          "categoryId": "system",
+          "aliases": [
+            "指标列表",
+            "Actuator metrics"
+          ],
+          "description": "定位端点选择并选择metrics；不代表支持单项指标查询。"
+        }
+      },
+      {
+        "id": "devtools.spring-actuator.summary",
+        "title": "查看响应摘要",
+        "viewId": "devtools.spring-actuator.main",
+        "sourceToolId": "spring-actuator",
+        "directory": {
+          "categoryId": "system",
+          "aliases": [
+            "响应概览",
+            "response summary"
+          ],
+          "description": "定位结果标题；没有结果时显示现有空状态，不自动发起请求。"
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "name": "service.http.read",
+        "reason": "Read one user-confirmed, fixed Spring Actuator health, info, or metrics endpoint through the Studio Host."
+      }
+    ]
+  }
+}

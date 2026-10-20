@@ -1,0 +1,7 @@
+# Vendored Studio tool directory profile snapshot
+
+This folder vendors the public `tool.directory.v1` preview profile as a versioned input to DevTools plugin generation. The source contract is the Studio documentation at `E:\zicode-studio-desktop\docs\plugins\tool-directory-v1.md` (SHA-256 `5734dff46acf8c4dfd3f5b496308c39666a7bb92aa39340f4a7062883a6775fd`) and its adjacent `tool-directory.schema.json` (SHA-256 `5d21cf63e77be54a7c885ca48f62fb7acd0e1e4a0e438897585d5d98075de1fe`). The vendored `schema.json` preserves the upstream JSON shape; provider-specific runtime checks are implemented in `scripts/tool_directory.py`. DevTools generation and validation must use this snapshot only; builds must not import from the sibling Studio checkout.
+
+The snapshot covers the extension shape and valid category IDs. The Host additionally enforces UTF-8 byte limits, rejects control characters, and detects aliases that collide after NFKC, lowercase, and trim. `scripts/verify_tool_directory.py` implements these checks against the capability metadata. This preview does not alter the frozen `zicode.devtools-plugin/1.0.0-rc.1` compute/output contract.
+
+`capabilities.json` records truthful per-capability directory labels and aliases for the current Inspect, Trace, Text, Transforms, JSON Object, and Image provider scope. It is deliberately independent of package manifests so every generator and candidate verifier can check the same metadata. New capabilities require a deliberate mapping update; missing and extra IDs fail verification.

@@ -1,0 +1,294 @@
+{
+  "schemaVersion": 1,
+  "profile": "result.resource.create.v1@1.0.0-preview.1",
+  "vectors": [
+    {
+      "id": "health-up-report",
+      "expectedAccepted": true,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2,
+            "healthStatus": "UP"
+          }
+        ]
+      },
+      "captured": [
+        {
+          "endpoint": "health",
+          "httpStatus": 200,
+          "responseBytes": 51,
+          "topLevelFieldCount": 2,
+          "healthStatus": "UP"
+        }
+      ],
+      "hostReport": {
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-16T12:00:00Z",
+        "sourceToolId": "spring-actuator",
+        "summary": {
+          "endpointCount": 1,
+          "healthStatus": "UP"
+        },
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2
+          }
+        ],
+        "provenance": {
+          "pluginId": "com.zicode.devtools.spring-actuator",
+          "pluginVersion": "0.1.1",
+          "toolVersion": "1.1.1",
+          "applicationVersion": "0.82.0-dev.105",
+          "runtimeFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "factsSchemaValid": true
+    },
+    {
+      "id": "health-down-503-report",
+      "expectedAccepted": true,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 503,
+            "responseBytes": 55,
+            "topLevelFieldCount": 2,
+            "healthStatus": "DOWN"
+          }
+        ]
+      },
+      "captured": [
+        {
+          "endpoint": "health",
+          "httpStatus": 503,
+          "responseBytes": 55,
+          "topLevelFieldCount": 2,
+          "healthStatus": "DOWN"
+        }
+      ],
+      "hostReport": {
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-16T12:01:00Z",
+        "sourceToolId": "spring-actuator",
+        "summary": {
+          "endpointCount": 1,
+          "healthStatus": "DOWN"
+        },
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 503,
+            "responseBytes": 55,
+            "topLevelFieldCount": 2
+          }
+        ],
+        "provenance": {
+          "pluginId": "com.zicode.devtools.spring-actuator",
+          "pluginVersion": "0.1.1",
+          "toolVersion": "1.1.1",
+          "applicationVersion": "0.82.0-dev.105",
+          "runtimeFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "factsSchemaValid": true
+    },
+    {
+      "id": "duplicate-endpoint-facts",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2
+          },
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2
+          }
+        ]
+      },
+      "captured": [],
+      "errorCode": "resource_facts_mismatch",
+      "factsSchemaValid": true
+    },
+    {
+      "id": "mismatched-captured-health",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2,
+            "healthStatus": "UP"
+          }
+        ]
+      },
+      "captured": [
+        {
+          "endpoint": "health",
+          "httpStatus": 503,
+          "responseBytes": 55,
+          "topLevelFieldCount": 2,
+          "healthStatus": "DOWN"
+        }
+      ],
+      "errorCode": "resource_facts_mismatch",
+      "factsSchemaValid": true
+    },
+    {
+      "id": "inconsistent-endpoint-count-rejected-as-view-extra",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2
+          }
+        ],
+        "summary": {
+          "endpointCount": 2
+        }
+      },
+      "captured": [],
+      "errorCode": "resource_input_invalid",
+      "factsSchemaValid": false
+    },
+    {
+      "id": "health-summary-mismatch-rejected-as-view-extra",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 503,
+            "responseBytes": 55,
+            "topLevelFieldCount": 2,
+            "healthStatus": "DOWN"
+          }
+        ],
+        "summary": {
+          "healthStatus": "UP"
+        }
+      },
+      "captured": [],
+      "errorCode": "resource_input_invalid",
+      "factsSchemaValid": false
+    },
+    {
+      "id": "info-503-rejected",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "info",
+            "httpStatus": 503,
+            "responseBytes": 10,
+            "topLevelFieldCount": 1
+          }
+        ]
+      },
+      "captured": [],
+      "errorCode": "resource_facts_mismatch",
+      "factsSchemaValid": false
+    },
+    {
+      "id": "metrics-599-rejected",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "metrics",
+            "httpStatus": 599,
+            "responseBytes": 0,
+            "topLevelFieldCount": 0
+          }
+        ]
+      },
+      "captured": [],
+      "errorCode": "resource_facts_mismatch",
+      "factsSchemaValid": false
+    },
+    {
+      "id": "caller-provenance-is-rejected",
+      "expectedAccepted": false,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 51,
+            "topLevelFieldCount": 2
+          }
+        ],
+        "generatedAt": "2020-01-01T00:00:00Z",
+        "provenance": {
+          "runtimeFingerprint": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "captured": [],
+      "errorCode": "resource_input_invalid",
+      "factsSchemaValid": false
+    },
+    {
+      "id": "host-report-count-derived-from-captures",
+      "expectedAccepted": true,
+      "facts": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "info",
+            "httpStatus": 200,
+            "responseBytes": 41,
+            "topLevelFieldCount": 1
+          }
+        ]
+      },
+      "captured": [
+        {
+          "endpoint": "info",
+          "httpStatus": 200,
+          "responseBytes": 41,
+          "topLevelFieldCount": 1
+        }
+      ],
+      "expectedEndpointCount": 1,
+      "expectedHealthStatus": null,
+      "factsSchemaValid": true
+    }
+  ]
+}

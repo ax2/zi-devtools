@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/result-resource-proposal/report-facts.schema.json",
+  "title": "View-submitted diagnostic facts before Host binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["checks"],
+  "properties": {
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["endpoint", "httpStatus", "responseBytes", "topLevelFieldCount"],
+        "properties": {
+          "endpoint": {"enum": ["health", "info", "metrics"]},
+          "httpStatus": {"type": "integer", "minimum": 200, "maximum": 599},
+          "responseBytes": {"type": "integer", "minimum": 0, "maximum": 1048576},
+          "topLevelFieldCount": {"type": "integer", "minimum": 0, "maximum": 20000},
+          "healthStatus": {"enum": ["UP", "DOWN", "OUT_OF_SERVICE", "UNKNOWN"]}
+        },
+        "allOf": [
+          {"if": {"properties": {"endpoint": {"enum": ["info", "metrics"]}}, "required": ["endpoint"]}, "then": {"properties": {"httpStatus": {"maximum": 299}, "healthStatus": false}}},
+          {"if": {"properties": {"endpoint": {"const": "health"}}, "required": ["endpoint"]}, "then": {"properties": {"httpStatus": {"anyOf": [{"maximum": 299}, {"const": 503}]}}}}
+        ]
+      }
+    }
+  }
+}

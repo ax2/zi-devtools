@@ -101,13 +101,29 @@ pub fn matches(entry: &Entry, query: &str, include_content: bool) -> bool {
         return true;
     }
     let metadata = format!(
-        "{} {} {} {} {} {}",
+        "{} {} {} {} {} {} {}",
         entry.file_name,
         entry.record.finished_at_utc,
         entry.record.status,
         status_label(&entry.record.status),
         entry.record.model,
-        entry.record.allowed_tools.join(" ")
+        entry.record.allowed_tools.join(" "),
+        entry
+            .record
+            .generated_by
+            .as_ref()
+            .map_or_else(String::new, |provenance| {
+                let runtime = &provenance.runtime_fingerprint;
+                format!(
+                    "{} {} {} {} {} {}",
+                    provenance.tool_id,
+                    provenance.tool_version,
+                    runtime.app_version,
+                    runtime.os,
+                    runtime.architecture,
+                    runtime.build_profile
+                )
+            })
     )
     .to_lowercase();
     if terms.iter().all(|term| metadata.contains(term)) {
@@ -116,12 +132,20 @@ pub fn matches(entry: &Entry, query: &str, include_content: bool) -> bool {
     let Some(content) = entry.record.content.as_ref().filter(|_| include_content) else {
         return false;
     };
+    let context = content.context.as_ref().map_or_else(String::new, |items| {
+        items
+            .iter()
+            .map(|item| format!("{} {}", item.source, item.content))
+            .collect::<Vec<_>>()
+            .join(" ")
+    });
     let content = format!(
-        "{} {} {} {}",
+        "{} {} {} {} {}",
         content.goal,
         content.plan,
         content.answer.as_deref().unwrap_or_default(),
-        content.error.as_deref().unwrap_or_default()
+        content.error.as_deref().unwrap_or_default(),
+        context
     )
     .to_lowercase();
     terms
@@ -184,6 +208,36 @@ mod tests {
         assert!(!matches(&result.entries[1], "needle", false));
         assert!(matches(&result.entries[1], "needle", true));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn metadata_search_includes_tool_and_runtime_versions() {
+        let mut value: serde_json::Value =
+            serde_json::from_str(&record("private goal", "2026-10-01T01:00:00Z")).unwrap();
+        let provenance = crate::tool_provenance::current_for_tool("agent-runner").unwrap();
+        value["schema_version"] = json!(5);
+        value["generated_by"] = serde_json::to_value(provenance.clone()).unwrap();
+        let parsed = agent_record::parse_json(value.to_string().as_bytes()).unwrap();
+        let entry = Entry {
+            file_name: "run.json".into(),
+            record: parsed,
+        };
+
+        assert!(matches(
+            &entry,
+            &format!("agent-runner {}", provenance.tool_version),
+            false
+        ));
+        assert!(matches(
+            &entry,
+            &format!(
+                "{} {}",
+                provenance.runtime_fingerprint.app_version,
+                provenance.runtime_fingerprint.build_profile
+            ),
+            false
+        ));
+        assert!(!matches(&entry, "private goal", false));
     }
 
     #[test]

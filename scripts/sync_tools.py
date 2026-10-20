@@ -1,6 +1,7 @@
 """Generate tools.md; --check verifies source coverage and generated docs."""
 import argparse, json, re, subprocess, sys, tomllib
 from pathlib import Path
+from catalog_validation import normalized_search_term, validate_exact_search_terms
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--check', action='store_true')
@@ -40,8 +41,14 @@ for tool in items:
         assert all(isinstance(discovery.get(k), str) and discovery[k].strip() for k in ('label', 'summary', 'category'))
         assert isinstance(discovery.get('keywords'), str)
         assert isinstance(discovery.get('aliases'), list) and all(isinstance(a, str) and a.strip() for a in discovery['aliases'])
+        aliases = discovery['aliases']
+        normalized_aliases = [normalized_search_term(alias) for alias in aliases]
+        assert len(aliases) >= 2, f"Routed tool needs at least two search aliases: {tool['id']}"
+        assert len(set(normalized_aliases)) == len(aliases), f"Duplicate normalized search aliases: {tool['id']}"
+        assert discovery['keywords'].strip(), f"Routed tool needs search keywords: {tool['id']}"
     else:
         assert not tool.get('discovery'), f"Unrouted discovery entry: {tool['id']}"
+validate_exact_search_terms(items, ids)
 
 lines = ['# 工具清单与路线图', '', f"更新：{data['updated']} · 程序目录版本：v{data['version']}", '', '本文件由 `docs/tools.json` 生成。规划表示方向，不代表已经可用，也不承诺发布日期。', '', '每项工具独立版本与程序版本分开，首次基线不追溯历史发布。规划项的 0.0.0 不表示可用。版本记录见 JSON 的 version_history，维护规则见 [独立工具版本](tool-versions.md)，新需求见 [桌面效率扩展](desktop-product-roadmap.md)。', '', '## 已实现', '', '| 工具 | 工具版本 | 分类 | 当前范围 |', '| --- | --- | --- | --- |']
 for t in items:
@@ -84,6 +91,35 @@ if args.check:
     assert roadmap_text == roadmap_updated, 'Platform roadmap catalog summary is stale; regenerate it'
 else:
     roadmap.write_text(roadmap_updated, encoding='utf-8')
+
+framework_roadmap = root/'docs/java-django-roadmap.md'
+framework_text = framework_roadmap.read_text(encoding='utf-8')
+framework_tools = [t for t in items if t['id'].startswith(('java-', 'django-', 'spring-', 'celery-'))]
+legacy_trace_ids = {'java-trace', 'django-trace'}
+framework_specialized = [t for t in framework_tools if t['id'] not in legacy_trace_ids]
+framework_trace = [t for t in framework_tools if t['id'] in legacy_trace_ids]
+framework_implemented = sum(t['status']=='implemented' for t in framework_tools)
+framework_pending = len(framework_tools) - framework_implemented
+framework_summary = (
+    f'<!-- framework-catalog-summary:start -->\n'
+    f'截至 {data["updated"]} · 工具目录 v{data["version"]}：Java/JVM、Spring、Python/Django 与 Celery 专项诊断 '
+    f'{len(framework_specialized)} 项（{sum(t["status"]=="implemented" for t in framework_specialized)} 项已实现，'
+    f'{len(framework_specialized)-sum(t["status"]=="implemented" for t in framework_specialized)} 项规划 / 开发中）；'
+    f'另有 {len(framework_trace)} 项异常链 / Traceback 工具。共 {len(framework_tools)} 项，'
+    f'{framework_implemented} 项已实现、{framework_pending} 项规划 / 开发中。来源：`docs/tools.json`。\n'
+    f'<!-- framework-catalog-summary:end -->'
+)
+framework_updated, framework_count = re.subn(
+    r'<!-- framework-catalog-summary:start -->.*?<!-- framework-catalog-summary:end -->',
+    lambda _: framework_summary,
+    framework_text,
+    flags=re.S,
+)
+assert framework_count == 1, 'java-django-roadmap needs one framework-catalog-summary block'
+if args.check:
+    assert framework_text == framework_updated, 'Java/Django roadmap catalog summary is stale; regenerate it'
+else:
+    framework_roadmap.write_text(framework_updated, encoding='utf-8')
 
 # Keep the independently checked migration map in the same catalog update command.
 subprocess.run([sys.executable, str(root / "scripts/sync_studio_plugin_map.py"),

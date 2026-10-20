@@ -7,6 +7,9 @@ pub struct State {
     pub(super) matrix_mode: bool,
     pub(super) plot_mode: bool,
     pub(super) date_mode: bool,
+    pub(super) time_zone_mode: bool,
+    pub(super) root_mode: bool,
+    pub(super) root_solver: super::root_solver::State,
     pub(super) dates: super::dates::State,
     pub(super) plot: super::plot_ui::State,
     pub(super) matrix: super::matrix_ui::State,
@@ -31,6 +34,9 @@ impl Default for State {
             matrix_mode: false,
             plot_mode: false,
             date_mode: false,
+            time_zone_mode: false,
+            root_mode: false,
+            root_solver: Default::default(),
             dates: Default::default(),
             plot: Default::default(),
             matrix: Default::default(),
@@ -105,9 +111,16 @@ impl State {
         self.message = "已固定结果；ans 可引用上一次结果".into();
         Ok(())
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, version: &str) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        version: &str,
+        time_zone: &mut crate::time_zone::State,
+    ) {
         ui.heading("全能计算器");
-        if self.plot_mode || self.date_mode {
+        if self.time_zone_mode {
+            ui.small(format!("v{version} · IANA 时区换算 · 使用内置规则，不联网"));
+        } else if self.plot_mode || self.date_mode || self.root_mode {
             ui.small(format!("v{version} · 独立工作区 · 主动保存工作表"));
             let status = if self.busy() {
                 "后台任务中"
@@ -121,13 +134,13 @@ impl State {
                 .show(ui, |ui| self.worksheet_ui(ui));
         } else {
             ui.label(format!(
-                "v{version} · 开发中：精确表达式 / 科学函数 / 单位 / 矩阵 / 函数绘图 / 变量与历史"
+                "v{version} · 开发中：精确表达式 / 科学函数 / 复数 / 单位 / 矩阵 / 函数绘图 / 变量与历史"
             ));
-            ui.small("精确模式采用 i128 有理数；科学函数为近似实数。可主动另存JSON工作表并恢复；默认只保留在内存。");
+            ui.small("精确模式采用 i128 有理数；科学函数与复数为近似值。可主动另存JSON工作表并恢复；默认只保留在内存。");
             self.worksheet_ui(ui);
         }
         ui.add_space(12.0);
-        if !self.date_mode {
+        if !self.date_mode && !self.time_zone_mode {
             ui.horizontal_wrapped(|ui| {
                 ui.label("三角函数角度");
                 ui.selectable_value(&mut self.degrees, false, "弧度 RAD");
@@ -137,7 +150,11 @@ impl State {
         ui.horizontal_wrapped(|ui| {
             if ui
                 .selectable_label(
-                    !self.matrix_mode && !self.plot_mode && !self.date_mode,
+                    !self.matrix_mode
+                        && !self.plot_mode
+                        && !self.date_mode
+                        && !self.time_zone_mode
+                        && !self.root_mode,
                     "表达式计算",
                 )
                 .clicked()
@@ -145,6 +162,8 @@ impl State {
                 self.matrix_mode = false;
                 self.plot_mode = false;
                 self.date_mode = false;
+                self.time_zone_mode = false;
+                self.root_mode = false;
             }
             if ui
                 .selectable_label(self.matrix_mode && !self.plot_mode, "矩阵与数据统计")
@@ -153,11 +172,15 @@ impl State {
                 self.matrix_mode = true;
                 self.plot_mode = false;
                 self.date_mode = false;
+                self.time_zone_mode = false;
+                self.root_mode = false;
             }
             if ui.selectable_label(self.plot_mode, "函数绘图").clicked() {
                 self.matrix_mode = false;
                 self.plot_mode = true;
                 self.date_mode = false;
+                self.time_zone_mode = false;
+                self.root_mode = false;
             }
             if ui
                 .selectable_label(self.date_mode, "日期与工作日")
@@ -166,15 +189,50 @@ impl State {
                 self.date_mode = true;
                 self.matrix_mode = false;
                 self.plot_mode = false;
+                self.time_zone_mode = false;
+                self.root_mode = false;
+            }
+            if ui
+                .selectable_label(self.time_zone_mode, "时区换算")
+                .clicked()
+            {
+                self.time_zone_mode = true;
+                self.matrix_mode = false;
+                self.plot_mode = false;
+                self.date_mode = false;
+                self.root_mode = false;
+            }
+            if ui.selectable_label(self.root_mode, "非线性求解").clicked() {
+                self.root_mode = true;
+                self.matrix_mode = false;
+                self.plot_mode = false;
+                self.date_mode = false;
+                self.time_zone_mode = false;
             }
         });
         if self.date_mode {
             self.dates.ui(ui);
             return;
         }
+        if self.time_zone_mode {
+            time_zone.ui(ui);
+            return;
+        }
         if self.plot_mode {
             let files_busy = self.busy() && !self.plot.busy();
             self.plot.ui(ui, &self.variables, self.degrees, files_busy);
+            return;
+        }
+        if self.root_mode {
+            self.root_solver.ui(
+                ui,
+                &self.variables,
+                if self.degrees {
+                    Angle::Degrees
+                } else {
+                    Angle::Radians
+                },
+            );
             return;
         }
         if self.matrix_mode {
@@ -207,6 +265,7 @@ impl State {
                     ui.small(match value {
                         Value::Exact(..) => "精确值 · 有限小数或最简分数",
                         Value::Approx(_) => "近似值 · 浮点计算，约 12 位显示精度",
+                        Value::Complex(_, _) => "复数 · 采用复数主值分支",
                     });
                     if let Some(name) = name {
                         ui.small(format!("预览赋值：{name}；固定结果后才保存变量"));
@@ -291,11 +350,11 @@ impl State {
             });
         ui.collapsing("输入说明与示例",|ui| {
             ui.label("运算：+ - * / ^ % & | << >> ~；幂右结合，-2^2 = -4。输入需显式 *。");
-            ui.label("函数：sin cos tan sqrt ln log10 exp abs floor ceil round min max xor；常量 pi/e。");
+            ui.label("函数：sin cos tan sqrt ln log10 exp abs arg real/re imag/im conj floor ceil round min max xor；复数常量 i，主值分支。");
             ui.label("进制：0xff / 0b1010 / 0o17；科学计数法 1e-3；变量 price=19.90，后续 price*3。");
             ui.label("单位：mm/cm/m/km/in/ft/mi，mg/g/kg/lb，ms/s/min/h/day，B/KB/MB/GB/KiB/MiB/GiB，C/F/K。单位区分大小写。");
-            ui.horizontal_wrapped(|ui| { for example in ["0.1+0.2","(128+64)*3","sin(30)","0xff & 0x0f","5 km -> m","25 C -> F","1 GiB -> MB","price = 19.90"] { if ui.button(example).clicked() { self.expression=example.into(); input.request_focus(); } } });
-            ui.small("矩阵及线性方程见上方工作区；复数、非线性方程、原文件更新、任意精度与通用接力继续开发。");
+            ui.horizontal_wrapped(|ui| { for example in ["0.1+0.2","(128+64)*3","sin(30)","sqrt(-1)","3+4*i","0xff & 0x0f","5 km -> m","25 C -> F","1 GiB -> MB","price = 19.90"] { if ui.button(example).clicked() { self.expression=example.into(); input.request_focus(); } } });
+            ui.small("矩阵及线性方程见上方工作区；非线性方程、原文件更新、任意精度与通用接力继续开发。矩阵、统计和绘图目前仅支持实数。");
         });
         ui.collapsing(format!("变量（{}）", self.variables.len()), |ui| {
             for (name, v) in &self.variables {
@@ -337,6 +396,7 @@ impl State {
         self.matrix_mode = true;
         self.plot_mode = false;
         self.date_mode = false;
+        self.time_zone_mode = false;
         self.matrix.preview_fixture();
     }
     #[cfg(feature = "ui-preview")]
@@ -354,6 +414,49 @@ impl State {
         self.expression = "price * 3".into();
         self.commit().unwrap();
         self.expression = "25 C -> F".into();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_complex_fixture(&mut self) {
+        *self = Self::default();
+        self.expression = "sqrt(-1)".into();
+        self.commit().unwrap();
+        self.expression = "3+4*i".into();
+        self.commit().unwrap();
+        self.examples_expanded = true;
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_root_fixture(&mut self) {
+        self.matrix_mode = false;
+        self.plot_mode = false;
+        self.date_mode = false;
+        self.time_zone_mode = false;
+        self.root_mode = true;
+        self.root_solver.saved = super::root_solver::Saved::default();
+        let result = super::root_solver::solve(
+            &self.root_solver.saved.formula,
+            1.0,
+            2.0,
+            1e-10,
+            100,
+            &self.variables,
+            Angle::Radians,
+        )
+        .expect("preview bracket contains the square root of two");
+        self.root_solver.last = Some((
+            self.root_solver.saved.clone(),
+            self.variables.clone(),
+            Angle::Radians,
+            result,
+        ));
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_time_zone_fixture(&mut self) {
+        self.matrix_mode = false;
+        self.plot_mode = false;
+        self.date_mode = false;
+        self.time_zone_mode = true;
+        self.root_mode = false;
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_input_position(&self) -> egui::Pos2 {
@@ -454,5 +557,17 @@ mod tests {
         assert_eq!(state.variables["ans"].display(), "59.7");
         state.expression = "ans+0.3".into();
         assert_eq!(state.preview().unwrap().1.display(), "60");
+    }
+
+    #[test]
+    fn time_zone_workspace_stays_outside_calculation_sheet_snapshots() {
+        let mut state = State::default();
+        let baseline = state.snapshot();
+        state.time_zone_mode = true;
+        assert!(!state.dirty());
+
+        state.apply(baseline);
+        assert!(!state.time_zone_mode);
+        assert!(!state.dirty());
     }
 }

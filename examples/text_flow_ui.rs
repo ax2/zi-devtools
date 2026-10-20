@@ -17,6 +17,25 @@ struct Preview {
 }
 impl eframe::App for Preview {
     fn raw_input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
+        if self.table && self.frame == 110 {
+            input
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(800.0, 650.0)));
+            input.events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -1100.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if self.table && matches!(self.frame, 142 | 143) {
+            input.events.push(egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: self.frame == 142,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
         if self.shortcuts {
             let key = match self.frame {
                 30 | 31 => Some((egui::Key::K, egui::Modifiers::CTRL)),
@@ -39,13 +58,21 @@ impl eframe::App for Preview {
             20 | 21 => Some(if self.table { 3 } else { 0 }),
             50 | 51 if !self.shortcuts => Some(1),
             120 | 121 => Some(2),
-            142 | 143 if self.table => Some(5),
             180 | 181 if self.table => Some(2),
-            200 | 201 if self.table => Some(4),
             _ => None,
         };
         if let Some(index) = index {
             let pos = self.app.preview_text_flow_position(index);
+            input.events.push(egui::Event::PointerMoved(pos));
+            input.events.push(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: self.frame % 2 == 0,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        if self.table && matches!(self.frame, 200 | 201) {
+            let pos = self.app.preview_text_flow_table_apply_position();
             input.events.push(egui::Event::PointerMoved(pos));
             input.events.push(egui::Event::PointerButton {
                 pos,
@@ -121,7 +148,7 @@ impl eframe::App for Preview {
         if self.table && self.frame == 240 {
             assert_eq!(self.captured, 6);
             println!(
-                "PASS typed native table sample/run/review/cancel/review/confirm: new visible typed instance, source and results retained; light={}",
+                "PASS typed native table sample/run/shared handoff/cancel/reopen/confirm: new visible typed instance, source and results retained; light={}",
                 self.light
             );
             self.app.preview_tray_workflow_finish(ctx);

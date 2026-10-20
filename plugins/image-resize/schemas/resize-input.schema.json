@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "maxWidth": {
+      "type": "integer",
+      "title": "最大宽度（1–4096像素）",
+      "default": 1600,
+      "minimum": 1,
+      "maximum": 4096
+    },
+    "format": {
+      "type": "string",
+      "title": "输出格式（PNG/WebP无损）",
+      "enum": [
+        "png",
+        "jpeg",
+        "webp"
+      ],
+      "default": "webp"
+    },
+    "quality": {
+      "type": "integer",
+      "title": "JPEG质量（35–95；仅JPEG生效）",
+      "default": 82,
+      "minimum": 35,
+      "maximum": 95
+    }
+  },
+  "required": [
+    "maxWidth",
+    "format",
+    "quality"
+  ],
+  "additionalProperties": false
+}

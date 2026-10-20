@@ -42,10 +42,10 @@ def reject_link_chain(path: Path, root: Path) -> Path:
         raise RuntimeError(f"Path escapes {root_abs}: {path}")
     cursor = path_abs
     while cursor != root_abs:
-        if cursor.is_symlink():
+        if cursor.is_symlink() or (hasattr(cursor, "is_junction") and cursor.is_junction()):
             raise RuntimeError(f"Linked path rejected: {cursor}")
         cursor = cursor.parent
-    if root_abs.is_symlink():
+    if root_abs.is_symlink() or (hasattr(root_abs, "is_junction") and root_abs.is_junction()):
         raise RuntimeError(f"Linked root rejected: {root_abs}")
     resolved_root = root_abs.resolve(strict=True)
     resolved = path_abs.resolve(strict=True)
@@ -60,7 +60,7 @@ def directory_files(directory: Path) -> list[dict]:
         base_path = Path(base)
         for name in dirs:
             path = base_path / name
-            if path.is_symlink():
+            if path.is_symlink() or (hasattr(path, "is_junction") and path.is_junction()):
                 raise RuntimeError(f"Linked package directory rejected: {path}")
         for name in files:
             path = base_path / name
@@ -196,6 +196,63 @@ def package_receipt_path(
     return next(iter(receipts))
 
 
+def explicit_scope_receipt(migration_row: dict, scope: dict) -> str:
+    """Frozen source and package-map operations must carry the same receipt."""
+    receipt = receipt_for_scope(migration_row, scope)
+    if not receipt or scope.get("verificationReceipt") != receipt:
+        raise RuntimeError(
+            f"Operation must explicitly declare its verification receipt: {scope.get('operationId')}"
+        )
+    return receipt
+
+
+def validate_package_operations(manifest: dict, capabilities: set[str], scopes: list[dict]) -> list[str]:
+    """A View operation is discoverable, but is not an Agent capability."""
+    contributes = manifest.get("contributes", {})
+    declared = {item["id"] for item in contributes.get("capabilities", [])}
+    if capabilities != declared:
+        raise RuntimeError("Mapped capabilities differ from the frozen manifest")
+    views = {item["id"] for item in contributes.get("views", [])}
+    view_operations = []
+    for scope in scopes:
+        if scope.get("executionSurface") == "view":
+            if scope.get("viewId") not in views or scope["operationId"] in declared:
+                raise RuntimeError("View operation must reference a declared View, not a capability")
+            view_operations.append(scope["operationId"])
+    if len(view_operations) != len(set(view_operations)):
+        raise RuntimeError("Duplicate View operation")
+    if "viewOperations" in contributes:
+        operations = contributes["viewOperations"]
+        mapped = {(scope["operationId"], scope["viewId"]) for scope in scopes
+                  if scope.get("executionSurface") == "view"}
+        if len(operations) != len(mapped) or {(op["id"],op["viewId"]) for op in operations} != mapped:
+            raise RuntimeError("Declared View operation directory differs from mapped operations")
+        if manifest.get("requiredProfiles", {}).get("view.operation.directory.v1") != "=1.0.0-preview.1":
+            raise RuntimeError("Declared View operation directory requires the exact profile")
+    return sorted(view_operations)
+
+
+def capability_provider_conflicts(packages: list[dict]) -> list[dict]:
+    """Surface alternative providers without claiming they can be enabled together."""
+    providers = {}
+    for package in packages:
+        for capability in package["capabilities"]:
+            providers.setdefault(capability, []).append({
+                key: package[key] for key in ("packageId", "packageVersion", "path")
+            })
+    return [{"capabilityId": capability, "providers": sorted(items, key=lambda row: row["packageId"]),
+             "resolution": "select_one_provider_for_isolated_acceptance; concurrent_activation_not_verified"}
+            for capability, items in sorted(providers.items()) if len(items) > 1]
+
+
+def snapshot_changes(comparison: dict) -> dict:
+    snapshot = comparison.get("snapshotComparison")
+    keys = ("versionStatusChanged", "scopeChanged", "discoveryChanged")
+    if not isinstance(snapshot, dict) or any(not isinstance(snapshot.get(key), list) for key in keys):
+        raise RuntimeError("Comparison must contain explicit frozen-baseline change lists")
+    return {key: snapshot[key] for key in keys}
+
+
 def git_source_state() -> dict:
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
@@ -258,17 +315,21 @@ def main() -> None:
                 "scope": scope.get("scope"),
                 "pluginStatus": scope.get("pluginStatus"),
                 "blockingReason": scope.get("blockingReason"),
+                "executionSurface": scope.get("executionSurface", "capability"),
+                "viewId": scope.get("viewId"),
             })
             scopes.append({
                 "operationId": operation_id,
                 "packageId": package_id,
                 "packageVersion": package_version,
                 "candidateDirectory": directory,
-                "verificationReceipt": receipt_for_scope(migration_row, scope),
+                "verificationReceipt": explicit_scope_receipt(migration_row, scope),
                 "scopeKind": scope.get("scopeKind"),
                 "scope": scope.get("scope"),
                 "pluginStatus": scope.get("pluginStatus"),
                 "blockingReason": scope.get("blockingReason"),
+                "executionSurface": scope.get("executionSurface", "capability"),
+                "viewId": scope.get("viewId"),
             })
         mapping_tools.append({
             "sourceToolId": source_id,
@@ -278,6 +339,7 @@ def main() -> None:
             "migration": migration_row.get("migration"),
             "pluginStatus": migration_row.get("pluginStatus"),
             "candidateCapabilities": migration_row.get("candidateCapabilities", []),
+            "candidateViewOperations": migration_row.get("candidateViewOperations", []),
             "operationScopes": scopes,
             "uncoveredScope": migration_row.get("reason"),
         })
@@ -288,10 +350,13 @@ def main() -> None:
         receipt_info = verify_package(candidate, receipt_path)
         if receipt_info["packageId"] != package_id or receipt_info["packageVersion"] != package_version:
             raise RuntimeError(f"Receipt package identity mismatch: {receipt_path}")
+        manifest = json.loads((ROOT / candidate / "plugin.json").read_text(encoding="utf-8"))
+        view_operations = validate_package_operations(manifest, data["capabilities"], data["scopeRows"])
         package_records.append({
             **receipt_info,
             "sourceToolIds": sorted(data["sourceToolIds"]),
             "capabilities": sorted(data["capabilities"]),
+            "viewOperations": view_operations,
             "scopeRows": sorted(data["scopeRows"], key=lambda row: (row["sourceToolId"], row["operationId"])),
         })
 
@@ -303,12 +368,8 @@ def main() -> None:
         "statusCounts": comparison["statusCounts"],
         "added": comparison.get("added", []),
         "removed": comparison.get("removed", []),
-        "versionStatusChanged": comparison.get("snapshotComparison", {}).get("versionStatusChanged", []),
-        "scopeChanged": comparison.get("snapshotComparison", {}).get("scopeChanged", []),
-        "discoveryChanged": comparison.get("snapshotComparison", {}).get("discoveryChanged", []),
+        **snapshot_changes(comparison),
     }
-    if len(comparison_summary["versionStatusChanged"]) != 76 or len(comparison_summary["scopeChanged"]) != 70 or len(comparison_summary["discoveryChanged"]) != 76:
-        raise RuntimeError("Frozen dev.105 comparison counts differ from the requested reviewed state")
 
     source_state = git_source_state()
     status_counts = comparison_summary["statusCounts"]
@@ -320,6 +381,7 @@ def main() -> None:
         "receiptArtifacts": "each mapped provider receipt is copied into package-receipts/ and checked against its source SHA-256",
         "tools": sorted(mapping_tools, key=lambda row: row["sourceToolId"]),
         "packages": package_records,
+        "capabilityProviderConflicts": capability_provider_conflicts(package_records),
     }
     package_map_bytes = json_bytes(package_map, pretty=True)
     change_bytes = json_bytes(comparison_summary, pretty=True)
@@ -342,8 +404,10 @@ def main() -> None:
             f"Source application catalog version: `{source_catalog_version}` (legacy app version; not the directory revision ID)\n\n"
             f"This immutable snapshot contains {len(mapping_tools)} matching source and migration IDs. Status counts: "
             f"implemented {status_counts['implemented']}, in-progress {status_counts['in-progress']}, planned {status_counts['planned']}. "
-            f"Against Studio's frozen dev.105 baseline: 0 added, 0 removed, 76 version/status changes, 70 scope changes, "
-            f"76 discovery changes. It records {len(package_records)} unsigned provider package mappings and "
+            f"Against Studio's frozen dev.105 baseline: {len(comparison_summary['added'])} added, "
+            f"{len(comparison_summary['removed'])} removed, {len(comparison_summary['versionStatusChanged'])} version/status changes, "
+            f"{len(comparison_summary['scopeChanged'])} scope changes, {len(comparison_summary['discoveryChanged'])} discovery changes. "
+            f"It records {len(package_records)} unsigned provider package mappings and "
             f"{migration['acceptedCapabilities']} Host-accepted capabilities.\n\n"
             "The revision ID is content-derived from both source JSON files, the full per-tool package/scope map, and the frozen-baseline comparison. "
             "It does not replace or reinterpret the frozen dev.105 snapshot. Package receipt and directory hashes describe provider bytes only; they do not prove Studio installation, signature, runtime acceptance, or full-tool acceptance.\n"
@@ -386,6 +450,7 @@ def main() -> None:
             "statusCounts": status_counts,
         },
         "packages": package_records,
+        "capabilityProviderConflicts": package_map["capabilityProviderConflicts"],
         "files": files,
         "directoryIndexSha256": index_digest,
         "directoryIndexEncoding": ENCODING,

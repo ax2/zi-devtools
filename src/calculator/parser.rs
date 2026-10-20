@@ -289,6 +289,7 @@ impl Parser<'_> {
                     match name.as_str() {
                         "pi" => Value::Approx(std::f64::consts::PI),
                         "e" => Value::Approx(std::f64::consts::E),
+                        "i" => Value::Complex(0.0, 1.0),
                         _ => match *self
                             .variables
                             .get(&name)
@@ -296,6 +297,7 @@ impl Parser<'_> {
                         {
                             Value::Exact(n, d) => Value::exact(n, d)?,
                             Value::Approx(x) => Value::approximate(x)?,
+                            Value::Complex(real, imaginary) => Value::complex(real, imaginary)?,
                         },
                     }
                 }
@@ -335,6 +337,8 @@ fn function(name: &str, args: &[Value], angle: Angle) -> Result<Value, String> {
         return if name == "xor" {
             Ok(Value::Exact(args[0].integer()? ^ args[1].integer()?, 1))
         } else {
+            args[0].real()?;
+            args[1].real()?;
             let less = super::statistics::compare(args[0], args[1]).is_lt();
             Ok(if less == (name == "min") {
                 args[0]
@@ -347,13 +351,34 @@ fn function(name: &str, args: &[Value], angle: Angle) -> Result<Value, String> {
         return Err(format!("{name} 需要一个参数；min/max/xor 需要两个"));
     }
     let v = args[0];
-    let x = v.float();
-    let radians = match angle {
-        Angle::Degrees => x.to_radians(),
-        Angle::Radians => x,
-    };
     if name == "abs" {
-        return if x < 0.0 { v.neg() } else { Ok(v) };
+        return match v {
+            Value::Complex(real, imaginary) => Value::approximate(real.hypot(imaginary)),
+            _ => {
+                let x = v.real()?;
+                if x < 0.0 { v.neg() } else { Ok(v) }
+            }
+        };
+    }
+    if matches!(name, "real" | "re" | "imag" | "im" | "conj" | "arg") {
+        let (real, imaginary) = v.parts();
+        return match name {
+            "real" | "re" if imaginary == 0.0 => Ok(v),
+            "real" | "re" => Value::approximate(real),
+            "imag" | "im" if imaginary == 0.0 => Ok(Value::Exact(0, 1)),
+            "imag" | "im" => Value::approximate(imaginary),
+            "conj" if imaginary == 0.0 => Ok(v),
+            "conj" => Value::complex(real, -imaginary),
+            "arg" => {
+                let radians = imaginary.atan2(real);
+                Value::approximate(if angle == Angle::Degrees {
+                    radians.to_degrees()
+                } else {
+                    radians
+                })
+            }
+            _ => unreachable!(),
+        };
     }
     if matches!(name, "floor" | "ceil" | "round") {
         return match v {
@@ -376,13 +401,78 @@ fn function(name: &str, args: &[Value], angle: Angle) -> Result<Value, String> {
                     1,
                 ))
             }
-            Value::Approx(_) => Value::approximate(match name {
+            Value::Approx(x) => Value::approximate(match name {
                 "floor" => x.floor(),
                 "ceil" => x.ceil(),
                 _ => x.round(),
             }),
+            Value::Complex(_, 0.0) => {
+                let x = v.real()?;
+                Value::approximate(match name {
+                    "floor" => x.floor(),
+                    "ceil" => x.ceil(),
+                    _ => x.round(),
+                })
+            }
+            Value::Complex(_, _) => Err("floor/ceil/round 仅支持实数".into()),
         };
     }
+    let (x, y) = v.parts();
+    let factor = if angle == Angle::Degrees {
+        std::f64::consts::PI / 180.0
+    } else {
+        1.0
+    };
+    if matches!(name, "sin" | "cos" | "tan") && y != 0.0 {
+        let a = x * factor;
+        let b = y * factor;
+        let result = match name {
+            "sin" => (a.sin() * b.cosh(), a.cos() * b.sinh()),
+            "cos" => (a.cos() * b.cosh(), -a.sin() * b.sinh()),
+            "tan" => {
+                let decay = (-2.0 * b.abs()).exp();
+                let denominator = 1.0 + 2.0 * (2.0 * a).cos() * decay + decay * decay;
+                (
+                    2.0 * (2.0 * a).sin() * decay / denominator,
+                    b.signum() * (1.0 - decay * decay) / denominator,
+                )
+            }
+            _ => unreachable!(),
+        };
+        return Value::complex(result.0, result.1);
+    }
+    if y != 0.0 {
+        return match name {
+            "sqrt" => {
+                let result = super::complex_sqrt(x, y);
+                Value::complex(result.0, result.1)
+            }
+            "ln" => Value::complex(x.hypot(y).ln(), y.atan2(x)),
+            "log10" => Value::complex(x.hypot(y).log10(), y.atan2(x) / std::f64::consts::LN_10),
+            "exp" => {
+                let scale = x.exp();
+                Value::complex(scale * y.cos(), scale * y.sin())
+            }
+            _ => Err(format!("{name} 不支持复数参数")),
+        };
+    }
+    if x < 0.0 && matches!(name, "sqrt" | "ln" | "log10") {
+        return match name {
+            "sqrt" => Value::complex(0.0, (-x).sqrt()),
+            "ln" => Value::complex(x.abs().ln(), std::f64::consts::PI),
+            "log10" => Value::complex(
+                x.abs().log10(),
+                std::f64::consts::PI / std::f64::consts::LN_10,
+            ),
+            _ => unreachable!(),
+        };
+    }
+    let x = v.real()?;
+    let radians = if angle == Angle::Degrees {
+        x.to_radians()
+    } else {
+        x
+    };
     Value::approximate(match name {
         "sin" => radians.sin(),
         "cos" => radians.cos(),

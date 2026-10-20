@@ -251,13 +251,28 @@ impl Definition {
     /// Never mutates the input. Keep only the current table and small step reports.
     /// Cancellation is checked before and after each bounded pure conversion.
     pub fn preview(&self, input: &Dataset, cancel: &AtomicBool) -> Result<Preview> {
+        self.preview_through(input, self.steps.len(), cancel)
+    }
+
+    /// Replays the pure workflow from its original input and returns the result
+    /// after one selected step, without retaining every intermediate table.
+    pub fn preview_through(
+        &self,
+        input: &Dataset,
+        through_step: usize,
+        cancel: &AtomicBool,
+    ) -> Result<Preview> {
         self.validate()?;
+        ensure!(
+            (1..=self.steps.len()).contains(&through_step),
+            "中间结果步骤超出流程范围"
+        );
         input.validate_saved()?;
         check_cancel(cancel)?;
         bounded(input)?;
         let mut current = input.clone();
-        let mut reports = Vec::with_capacity(self.steps.len());
-        for (index, step) in self.steps.iter().enumerate() {
+        let mut reports = Vec::with_capacity(through_step);
+        for (index, step) in self.steps.iter().take(through_step).enumerate() {
             check_cancel(cancel)?;
             let proposal = (|| -> Result<transform::Proposal> {
                 match step {
@@ -453,6 +468,34 @@ mod tests {
     }
 
     #[test]
+    fn intermediate_preview_replays_only_through_the_selected_step() {
+        let source = Dataset::parse("姓名,数量\n Zi ,bad", DataFormat::Csv, b',').unwrap();
+        let original = source.clone();
+        let workflow = definition(vec![
+            column("姓名", ColumnOperation::Trim, ""),
+            column("数量", ColumnOperation::ToInteger, ""),
+        ]);
+
+        let intermediate = workflow
+            .preview_through(&source, 1, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(intermediate.steps.len(), 1);
+        assert_eq!(intermediate.result.rows[0][0], "Zi");
+        assert_eq!(intermediate.result.rows[0][1], "bad");
+        assert_eq!(source, original);
+        assert!(
+            workflow
+                .preview_through(&source, 2, &AtomicBool::new(false))
+                .is_err()
+        );
+        assert!(
+            workflow
+                .preview_through(&source, 0, &AtomicBool::new(false))
+                .is_err()
+        );
+    }
+
+    #[test]
     fn failed_downstream_step_and_pre_cancel_never_modify_input() {
         let source = Dataset::parse("姓名,数量\n Zi ,bad", DataFormat::Csv, b',').unwrap();
         let original = source.clone();
@@ -479,7 +522,7 @@ mod tests {
         );
         let source = Dataset {
             headers: vec!["x".into()],
-            rows: vec![vec![json!(null)]],
+            rows: vec![vec![json!(null)]].into(),
         };
         let missing = definition(vec![column("missing", ColumnOperation::Trim, "")]);
         assert!(missing.preview(&source, &AtomicBool::new(false)).is_err());
@@ -494,7 +537,7 @@ mod tests {
         );
         let huge = Dataset {
             headers: vec!["x".into()],
-            rows: vec![vec![json!("x".repeat(MAX_BYTES))]],
+            rows: vec![vec![json!("x".repeat(MAX_BYTES))]].into(),
         };
         assert!(
             definition(vec![column("x", ColumnOperation::Trim, "")])

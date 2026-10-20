@@ -1,6 +1,8 @@
 use super::*;
 use crate::workspace_store::{Entry, MAX_SNAPSHOT, Store, validate_name};
+use sha2::{Digest, Sha256};
 use std::ops::{Deref, DerefMut};
+use std::time::{Duration, Instant};
 mod ui;
 mod workflows;
 pub use workflows::{WorkflowMatch, WorkflowMatches};
@@ -10,6 +12,9 @@ pub struct Instance {
     pub name: String,
     pub state: DataState,
     saved: Option<(String, i64)>,
+    autosave_enabled: bool,
+    autosave_due: Option<Instant>,
+    saved_digest: Option<[u8; 32]>,
 }
 
 pub struct Workspace {
@@ -22,6 +27,7 @@ pub struct Workspace {
     library_query: String,
     save_confirm: bool,
     save_copy: bool,
+    autosave_confirm: Option<String>,
     close_confirm: Option<String>,
     delete_confirm: Option<Entry>,
     status: String,
@@ -35,9 +41,14 @@ enum Reply {
     Saved {
         live: String,
         saved: String,
+        digest: [u8; 32],
+        autosave: bool,
         result: Result<i64>,
     },
-    Loaded(Result<(Entry, Box<DataState>)>),
+    Unchanged {
+        live: String,
+    },
+    Loaded(Result<(Entry, Box<DataState>, [u8; 32])>),
     Deleted {
         id: String,
         result: Result<()>,
@@ -51,6 +62,7 @@ impl DataState {
             || self.join.job.phase.active()
             || self.sqlite_export.job.phase.active()
             || self.workflow.job.phase.active()
+            || self.workflow.inspect_job_active()
             || self.workflow.files.job.phase.active()
             || self.workflow.output.busy()
     }
@@ -69,6 +81,31 @@ impl DataState {
             "请等待当前实例的解析、合并、操作流程或数据库另存任务结束再保存"
         );
         self.validate_saved()?;
+        self.serialize_snapshot()
+    }
+
+    pub(crate) fn autosave_snapshot(&self) -> Result<Self> {
+        anyhow::ensure!(!self.busy(), "请等待当前实例的任务结束再自动保存");
+        Ok(Self {
+            text_flow: self.text_flow.snapshot_clone(),
+            input: self.input.clone(),
+            format: self.format,
+            output: self.output.clone(),
+            path: self.path.clone(),
+            export_path: self.export_path.clone(),
+            tab_delimiter: self.tab_delimiter,
+            dataset: self.dataset.clone(),
+            transform: self.transform.clone(),
+            join: self.join.snapshot_clone(),
+            query: self.query.clone(),
+            sort: self.sort,
+            descending: self.descending,
+            workflow: self.workflow.snapshot_clone(),
+            ..Self::default()
+        })
+    }
+
+    fn serialize_snapshot(&self) -> Result<Vec<u8>> {
         let bytes = serde_json::to_vec(self)?;
         anyhow::ensure!(
             bytes.len() <= MAX_SNAPSHOT,
@@ -110,6 +147,54 @@ impl DataState {
 }
 
 impl Workspace {
+    const AUTOSAVE_IDLE: Duration = Duration::from_secs(3);
+
+    fn digest(name: &str, bytes: &[u8]) -> [u8; 32] {
+        let mut digest = Sha256::new();
+        digest.update((name.len() as u64).to_le_bytes());
+        digest.update(name.as_bytes());
+        digest.update(bytes);
+        digest.finalize().into()
+    }
+
+    fn note_activity(&mut self, id: &str, now: Instant) {
+        if let Some(instance) = self.instances.iter_mut().find(|item| item.id == id)
+            && instance.autosave_enabled
+        {
+            instance.autosave_due = Some(now + Self::AUTOSAVE_IDLE);
+        }
+    }
+
+    pub fn set_autosave(&mut self, id: &str, enabled: bool) -> Result<()> {
+        let instance = self
+            .instances
+            .iter_mut()
+            .find(|item| item.id == id)
+            .context("该实例已关闭")?;
+        instance.autosave_enabled = enabled;
+        instance.autosave_due = if enabled && instance.state.has_content() {
+            Some(Instant::now() + Self::AUTOSAVE_IDLE)
+        } else {
+            None
+        };
+        Ok(())
+    }
+
+    pub fn autosave_enabled(&self, id: &str) -> bool {
+        self.instances
+            .iter()
+            .find(|item| item.id == id)
+            .is_some_and(|item| item.autosave_enabled)
+    }
+
+    pub fn autosave_wake_after(&self, now: Instant) -> Option<Duration> {
+        self.instances
+            .iter()
+            .filter_map(|item| item.autosave_due)
+            .map(|due| due.saturating_duration_since(now))
+            .min()
+    }
+
     pub(crate) fn import_table(&mut self, data: Dataset, name: &str) -> Result<()> {
         data.validate_saved()?;
         // Column-aware JSON preserves empty tables, order and value types on reparse.
@@ -154,6 +239,7 @@ impl Workspace {
                 )
                 .unwrap();
             i.saved = Some((saved.clone(), revision));
+            i.saved_digest = Some(Self::digest(&i.name, &i.state.snapshot().unwrap()));
             self.entries.push(self.store.load(&saved).unwrap().0);
             i.state.parse_job.begin();
             i.state.parse_job.finish(Phase::Done, "合成预览数据已解析");
@@ -162,6 +248,15 @@ impl Workspace {
         self.library_open = show_library;
         self.save_confirm = show_save;
     }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_autosave_fixture(&mut self, show_confirmation: bool) {
+        let id = self.active_id().to_owned();
+        self.instances[self.active].name = "订单清洗草稿".into();
+        self.instances[self.active].state.input =
+            "order_id,customer,total\nA-1042,星河工作室,128.50".into();
+        self.instances[self.active].autosave_enabled = !show_confirmation;
+        self.autosave_confirm = show_confirmation.then_some(id);
+    }
     pub fn new(path: PathBuf) -> Self {
         Self {
             instances: vec![Instance {
@@ -169,6 +264,9 @@ impl Workspace {
                 name: "未命名数据 1".into(),
                 state: DataState::default(),
                 saved: None,
+                autosave_enabled: false,
+                autosave_due: None,
+                saved_digest: None,
             }],
             active: 0,
             store: Store { path },
@@ -178,6 +276,7 @@ impl Workspace {
             library_query: String::new(),
             save_confirm: false,
             save_copy: false,
+            autosave_confirm: None,
             close_confirm: None,
             delete_confirm: None,
             status: String::new(),
@@ -225,6 +324,9 @@ impl Workspace {
             name: name.trim().into(),
             state: DataState::default(),
             saved: None,
+            autosave_enabled: false,
+            autosave_due: None,
+            saved_digest: None,
         });
         self.active = self.instances.len() - 1;
         Ok(id)
@@ -282,6 +384,30 @@ impl Workspace {
         self.deref_mut().set_active_tool("text-flow");
         Ok(())
     }
+    pub fn import_text_flow_file(
+        &mut self,
+        file: crate::material_files::FileMaterial,
+        name: &str,
+    ) -> Result<()> {
+        let mut state = crate::text_flow::State::default();
+        state.receive_file(file)?;
+        self.create(name)?;
+        self.deref_mut().text_flow = state;
+        self.deref_mut().set_active_tool("text-flow");
+        Ok(())
+    }
+    pub(crate) fn import_text_flow_image(
+        &mut self,
+        image: crate::image_tools::ImageMaterial,
+        name: &str,
+    ) -> Result<()> {
+        let mut state = crate::text_flow::State::default();
+        state.receive_image(image)?;
+        self.create(name)?;
+        self.deref_mut().text_flow = state;
+        self.deref_mut().set_active_tool("text-flow");
+        Ok(())
+    }
     pub(crate) fn take_image_workflow(&mut self) -> Option<crate::image_tools::WorkflowDefinition> {
         self.deref_mut().workflow.files.image_review.take()
     }
@@ -314,6 +440,7 @@ impl Workspace {
                         .workflow
                         .job
                         .snapshot("pipeline", "操作流程预览", true),
+                    instance.state.step_inspection_snapshot(),
                     instance.state.workflow.files.job.snapshot(
                         "workflow-file",
                         "流程文件保存/读取",
@@ -375,6 +502,12 @@ impl Workspace {
             instance.state.workflow.cancel();
         }
     }
+    pub fn cancel_workflow_step_inspection(&mut self, id: &str, generation: u64) -> bool {
+        self.instances
+            .iter_mut()
+            .find(|instance| instance.id == id)
+            .is_some_and(|instance| instance.state.cancel_step_inspection_generation(generation))
+    }
     pub fn cancel_text_flow(&mut self, id: &str, generation: u64) {
         if let Some(instance) = self.instances.iter_mut().find(|i| i.id == id)
             && instance
@@ -401,6 +534,7 @@ impl Workspace {
         }
     }
     pub fn poll(&mut self) {
+        self.poll_autosave(Instant::now());
         for instance in &mut self.instances {
             instance.state.poll();
             let mut loaded_entries = Vec::new();
@@ -450,16 +584,28 @@ impl Workspace {
                 Reply::Saved {
                     live,
                     saved,
+                    digest,
+                    autosave,
                     result,
                 } => {
                     let revision = result?;
                     if let Some(i) = self.instances.iter_mut().find(|i| i.id == live) {
                         i.saved = Some((saved, revision));
+                        i.saved_digest = Some(digest);
                     }
-                    self.status = format!("已保存第 {revision} 版快照；后续修改请再次保存");
+                    self.status = if autosave {
+                        format!("已自动保存第 {revision} 版快照")
+                    } else {
+                        format!("已保存第 {revision} 版快照")
+                    };
+                }
+                Reply::Unchanged { live } => {
+                    if let Some(instance) = self.instances.iter_mut().find(|i| i.id == live) {
+                        instance.autosave_due = None;
+                    }
                 }
                 Reply::Loaded(result) => {
-                    let (entry, state) = result?;
+                    let (entry, state, digest) = result?;
                     if let Some(index) = self
                         .instances
                         .iter()
@@ -472,6 +618,7 @@ impl Workspace {
                         let i = self.instances.iter_mut().find(|i| i.id == id).unwrap();
                         i.state = *state;
                         i.saved = Some((entry.id, entry.revision));
+                        i.saved_digest = Some(digest);
                         self.status = "已恢复为独立实例，没有重新执行任务".into();
                     }
                     self.library_open = false;
@@ -506,6 +653,7 @@ impl Workspace {
         let i = &self.instances[self.active];
         validate_name(&i.name)?;
         let bytes = i.state.snapshot()?;
+        let digest = Self::digest(&i.name, &bytes);
         let (saved, expected) = if !copy {
             i.saved
                 .as_ref()
@@ -525,10 +673,82 @@ impl Workspace {
             let _ = tx.send(Reply::Saved {
                 live,
                 saved,
+                digest,
+                autosave: false,
                 result,
             });
         });
         Ok(())
+    }
+
+    fn poll_autosave(&mut self, now: Instant) {
+        if self.receiver.is_some() {
+            return;
+        }
+        let Some(index) = self.instances.iter().position(|item| {
+            item.autosave_enabled && item.autosave_due.is_some_and(|due| due <= now)
+        }) else {
+            return;
+        };
+        let instance = &mut self.instances[index];
+        let Some((id, expected)) = instance
+            .saved
+            .as_ref()
+            .map(|(id, revision)| (id.clone(), Some(*revision)))
+            .or_else(|| Some((uuid::Uuid::new_v4().to_string(), None)))
+        else {
+            return;
+        };
+        if instance.state.busy() {
+            instance.autosave_due = Some(now + Duration::from_secs(1));
+            return;
+        }
+        instance.autosave_due = None;
+        if !instance.state.has_content() && instance.saved.is_none() {
+            return;
+        }
+        let name = instance.name.clone();
+        let live = instance.id.clone();
+        let store = self.store.clone();
+        let unchanged_digest = instance.saved_digest;
+        let snapshot = match instance.state.autosave_snapshot() {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.status = format!("自动保存失败：{error:#}");
+                return;
+            }
+        };
+        let (tx, rx) = mpsc::channel();
+        self.receiver = Some(rx);
+        std::thread::spawn(move || {
+            let bytes = match snapshot.snapshot() {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    let _ = tx.send(Reply::Saved {
+                        live,
+                        saved: id,
+                        digest: [0; 32],
+                        autosave: true,
+                        result: Err(error),
+                    });
+                    return;
+                }
+            };
+            let digest = Self::digest(&name, &bytes);
+            if unchanged_digest == Some(digest) {
+                let _ = tx.send(Reply::Unchanged { live });
+                return;
+            }
+            let result = DataState::restore(&bytes)
+                .and_then(|_| store.save(&id, &name, "data-v1", &bytes, expected));
+            let _ = tx.send(Reply::Saved {
+                live,
+                saved: id,
+                digest,
+                autosave: true,
+                result,
+            });
+        });
     }
     fn load_saved(&mut self, id: String) {
         let store = self.store.clone();
@@ -537,7 +757,8 @@ impl Workspace {
         std::thread::spawn(move || {
             let result = store.load(&id).and_then(|(e, b)| {
                 anyhow::ensure!(e.kind == "data-v1", "不支持此工作实例类型");
-                Ok((e, Box::new(DataState::restore(&b)?)))
+                let digest = Self::digest(&e.name, &b);
+                Ok((e, Box::new(DataState::restore(&b)?), digest))
             });
             let _ = tx.send(Reply::Loaded(result));
         });
@@ -579,6 +800,34 @@ mod tests {
         assert_eq!(work.instances.len(), 2);
         work.select(&source).unwrap();
         assert_eq!(work.input, "table original");
+    }
+    #[test]
+    fn file_handoff_creates_hash_workflow_without_persisting_path_or_reading_file() {
+        let root =
+            std::env::temp_dir().join(format!("zi-file-flow-handoff-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let path = root.join("source.txt");
+        fs::write(&path, "sensitive file bytes").unwrap();
+        let original = fs::read(&path).unwrap();
+        let mut work = Workspace::new(root.join("workspace.db"));
+        let source = work.active_id().to_owned();
+        let file = crate::material_files::FileMaterial::selected(&path, usize::MAX).unwrap();
+        work.import_text_flow_file(file, "file hash flow").unwrap();
+        assert_ne!(source, work.active_id());
+        assert!(work.text_flow.has_content());
+        assert!(work.text_flow.validate().is_ok());
+        assert!(!work.text_flow.busy());
+        assert_eq!(fs::read(&path).unwrap(), original);
+
+        let snapshot = work.snapshot().unwrap();
+        let snapshot_text = String::from_utf8(snapshot.clone()).unwrap();
+        assert!(!snapshot_text.contains(&path.to_string_lossy().to_string()));
+        assert!(!snapshot_text.contains("sensitive file bytes"));
+        let restored = DataState::restore(&snapshot).unwrap();
+        assert!(restored.text_flow.has_content());
+        assert!(restored.text_flow.validate().is_ok());
+        assert!(!restored.text_flow.busy());
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn old_data_snapshot_without_text_flow_restores_its_existing_table() {
@@ -841,5 +1090,137 @@ mod tests {
         assert_eq!(w.input, "original");
         assert!(w.select("missing").is_err());
         assert_eq!(w.active_id(), first);
+    }
+
+    #[test]
+    fn autosave_capture_shares_rows_and_keeps_a_consistent_copy_on_write_view() {
+        let mut state = DataState::default();
+        state.input = "key,value\n1,source".into();
+        state.dataset = Some(Dataset::parse(&state.input, DataFormat::Csv, b',').unwrap());
+
+        let snapshot = state.autosave_snapshot().unwrap();
+        let live_rows = &state.dataset.as_ref().unwrap().rows.0;
+        let snapshot_rows = &snapshot.dataset.as_ref().unwrap().rows.0;
+        assert!(std::sync::Arc::ptr_eq(live_rows, snapshot_rows));
+
+        state.dataset.as_mut().unwrap().rows[0][1] = Value::from("edited during save");
+        let restored = DataState::restore(&snapshot.snapshot().unwrap()).unwrap();
+        assert_eq!(restored.dataset.as_ref().unwrap().rows[0][1], "source");
+        assert_eq!(
+            state.dataset.as_ref().unwrap().rows[0][1],
+            "edited during save"
+        );
+    }
+
+    #[test]
+    #[ignore = "developer performance diagnostic; constructs a synthetic 32 MiB table"]
+    fn large_autosave_capture_encode_restore_and_concurrent_edit_costs() {
+        let mut state = DataState {
+            dataset: Some(Dataset {
+                headers: vec!["payload".into()],
+                rows: (0..8_192)
+                    .map(|_| vec![Value::String("x".repeat(4_096))])
+                    .collect(),
+            }),
+            ..DataState::default()
+        };
+
+        let started = Instant::now();
+        let snapshot = state.autosave_snapshot().unwrap();
+        let capture = started.elapsed();
+
+        let started = Instant::now();
+        let bytes = snapshot.snapshot().unwrap();
+        let encode = started.elapsed();
+        let size = bytes.len();
+
+        let started = Instant::now();
+        let restored = DataState::restore(&bytes).unwrap();
+        let restore = started.elapsed();
+
+        let started = Instant::now();
+        state.dataset.as_mut().unwrap().rows[0][0] = Value::from("edited while saving");
+        let copy_on_write = started.elapsed();
+
+        assert_eq!(restored.dataset.as_ref().unwrap().rows.len(), 8_192);
+        assert_eq!(
+            snapshot.dataset.as_ref().unwrap().rows[0][0],
+            Value::String("x".repeat(4_096))
+        );
+        assert_eq!(
+            state.dataset.as_ref().unwrap().rows[0][0],
+            "edited while saving"
+        );
+        eprintln!(
+            "synthetic autosave: bytes={size}, capture_ms={}, encode_ms={}, restore_ms={}, concurrent_edit_cow_ms={}",
+            capture.as_millis(),
+            encode.as_millis(),
+            restore.as_millis(),
+            copy_on_write.as_millis()
+        );
+    }
+
+    #[test]
+    fn autosave_is_opt_in_debounced_and_does_not_write_unchanged_revisions() {
+        let root = std::env::temp_dir().join(format!("zi-autosave-{}", uuid::Uuid::new_v4()));
+        let mut workspace = Workspace::new(root.join("workspace.sqlite3"));
+        workspace.input = "initial draft".into();
+        let id = workspace.active_id().to_owned();
+        workspace.poll_autosave(Instant::now() + Duration::from_secs(30));
+        assert!(
+            !root.exists(),
+            "autosave must remain off until explicitly enabled"
+        );
+
+        workspace.set_autosave(&id, true).unwrap();
+        let start = Instant::now();
+        workspace.poll_autosave(start + Duration::from_secs(5));
+        wait(&mut workspace);
+        assert_eq!(workspace.instances[0].saved.as_ref().unwrap().1, 1);
+        assert!(workspace.status.contains("已自动保存"));
+
+        workspace.input = "edited draft".into();
+        workspace.note_activity(&id, start);
+        workspace.poll_autosave(start + Duration::from_secs(2));
+        assert!(
+            workspace.receiver.is_none(),
+            "debounce must wait for idle time"
+        );
+        workspace.poll_autosave(start + Duration::from_secs(5));
+        wait(&mut workspace);
+        assert_eq!(workspace.instances[0].saved.as_ref().unwrap().1, 2);
+
+        workspace.note_activity(&id, start);
+        workspace.poll_autosave(start + Duration::from_secs(5));
+        wait(&mut workspace);
+        assert_eq!(workspace.instances[0].saved.as_ref().unwrap().1, 2);
+        assert_eq!(workspace.store.list().unwrap()[0].revision, 2);
+
+        workspace.instances[0].name = "renamed draft".into();
+        workspace.note_activity(&id, start);
+        workspace.poll_autosave(start + Duration::from_secs(5));
+        wait(&mut workspace);
+        assert_eq!(workspace.store.list().unwrap()[0].name, "renamed draft");
+        assert_eq!(workspace.instances[0].saved.as_ref().unwrap().1, 3);
+
+        workspace.input.clear();
+        workspace.note_activity(&id, start);
+        workspace.poll_autosave(start + Duration::from_secs(5));
+        wait(&mut workspace);
+        let saved_entry = workspace.store.list().unwrap().remove(0);
+        assert_eq!(saved_entry.revision, 4);
+        let (_, saved_bytes) = workspace.store.load(&saved_entry.id).unwrap();
+        assert!(DataState::restore(&saved_bytes).unwrap().input.is_empty());
+
+        workspace.set_autosave(&id, false).unwrap();
+        workspace.input = "paused edit".into();
+        workspace.note_activity(&id, start);
+        workspace.poll_autosave(start + Duration::from_secs(10));
+        assert!(
+            workspace.receiver.is_none(),
+            "paused autosave must not write"
+        );
+        assert_eq!(workspace.store.list().unwrap()[0].revision, 4);
+        fs::remove_dir_all(root).unwrap();
     }
 }

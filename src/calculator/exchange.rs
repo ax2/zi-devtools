@@ -125,11 +125,7 @@ impl NumericTable {
         )
     }
     pub fn description(&self) -> String {
-        let approx = self
-            .cells
-            .iter()
-            .filter(|v| matches!(v, Value::Approx(_)))
-            .count();
+        let approx = self.cells.iter().filter(|v| v.is_approximate()).count();
         format!(
             "{}×{} · {}个精确值 / {}个近似值",
             self.rows,
@@ -177,6 +173,7 @@ pub(super) fn literal(value: Value) -> String {
         Value::Exact(n, 1) => n.to_string(),
         Value::Exact(n, d) => format!("{n}/{d}"),
         Value::Approx(x) => format!("≈ {x:e}"),
+        Value::Complex(_, _) => value.display(),
     }
 }
 impl State {
@@ -185,6 +182,7 @@ impl State {
         self.matrix_mode = true;
         self.plot_mode = false;
         self.date_mode = false;
+        self.time_zone_mode = false;
         self.variables.insert("ans".into(), Value::Exact(7, 1));
         self.history = vec![("old history".into(), Value::Exact(7, 1))];
         if ready {
@@ -211,6 +209,21 @@ impl State {
         if self.date_mode {
             return self.dates.description();
         }
+        if self.root_mode {
+            let result = self
+                .root_solver
+                .current_result(
+                    &self.variables,
+                    if self.degrees {
+                        super::Angle::Degrees
+                    } else {
+                        super::Angle::Radians
+                    },
+                )
+                .filter(|result| result.converged)
+                .ok_or("请先用当前输入计算并收敛一个方程根")?;
+            return Ok(format!("1×1 · 根的近似值 ≈ {:.6e}", result.root));
+        }
         if self.matrix_mode {
             self.matrix
                 .numeric_description(&self.variables, self.degrees)
@@ -218,7 +231,7 @@ impl State {
             let value = self.preview()?.1;
             Ok(format!(
                 "1×1 · {}",
-                if matches!(value, Value::Approx(_)) {
+                if value.is_approximate() {
                     "近似值"
                 } else {
                     "精确值"
@@ -229,6 +242,21 @@ impl State {
     pub fn numeric_result(&self) -> Result<NumericTable, String> {
         if self.date_mode {
             return NumericTable::new(1, 1, vec![Value::Exact(self.dates.number()? as i128, 1)]);
+        }
+        if self.root_mode {
+            let result = self
+                .root_solver
+                .current_result(
+                    &self.variables,
+                    if self.degrees {
+                        super::Angle::Degrees
+                    } else {
+                        super::Angle::Radians
+                    },
+                )
+                .filter(|result| result.converged)
+                .ok_or("请先用当前输入计算并收敛一个方程根")?;
+            return NumericTable::new(1, 1, vec![Value::Approx(result.root)]);
         }
         if self.matrix_mode {
             self.matrix.numeric_result(&self.variables, self.degrees)
@@ -259,6 +287,7 @@ impl State {
         self.matrix_mode = true;
         self.plot_mode = false;
         self.date_mode = false;
+        self.time_zone_mode = false;
         self.message = format!(
             "类型表格已填入{}；保留另一矩阵、算式和变量，尚未计算",
             slot.label()
@@ -374,6 +403,45 @@ mod tests {
         assert_eq!(state.expression, expression);
         assert!(state.dirty() && state.matrix_mode);
         assert!(state.receive_numeric(&table).is_err());
+        assert!(state.numeric_result().is_err());
+    }
+    #[test]
+    fn root_solver_exports_only_a_fresh_converged_approximation() {
+        let mut state = State {
+            root_mode: true,
+            ..Default::default()
+        };
+        let angle = if state.degrees {
+            super::super::Angle::Degrees
+        } else {
+            super::super::Angle::Radians
+        };
+        state.root_solver.last = Some((
+            state.root_solver.saved.clone(),
+            state.variables.clone(),
+            angle,
+            super::super::root_solver::ResultValue {
+                root: 2.0,
+                residual: 0.0,
+                iterations: 1,
+                converged: true,
+            },
+        ));
+        assert_eq!(
+            state.numeric_result().unwrap().cells,
+            vec![Value::Approx(2.0)]
+        );
+        assert!(state.numeric_description().unwrap().contains("根的近似值"));
+        state.root_solver.saved.upper = "4".into();
+        assert!(state.numeric_result().is_err());
+        state.root_solver.saved.upper = "2".into();
+        state.variables.insert("scale".into(), Value::Exact(3, 1));
+        assert!(state.numeric_result().is_err());
+        state.variables.clear();
+        state.degrees = true;
+        assert!(state.numeric_result().is_err());
+        state.degrees = false;
+        state.root_solver.last.as_mut().unwrap().3.converged = false;
         assert!(state.numeric_result().is_err());
     }
 }

@@ -15,7 +15,8 @@ use std::{
 use crate::knowledge_sources::{Kind, Source};
 
 const MAX_HTML: usize = 2 * 1024 * 1024;
-const MAX_BODY: usize = 256 * 1024;
+pub const MAX_HANDOFF_BODY: usize = 256 * 1024;
+const MAX_BODY: usize = MAX_HANDOFF_BODY;
 const MAX_OUTPUT: usize = 512 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -416,6 +417,8 @@ pub struct State {
     html_path: String,
     https_url: String,
     selected_source: String,
+    saved_source: Option<String>,
+    scan_request: Option<String>,
     running: Option<Receiver<Event>>,
     preview: Option<Preview>,
     message: String,
@@ -431,6 +434,8 @@ impl Default for State {
             html_path: String::new(),
             https_url: String::new(),
             selected_source: String::new(),
+            saved_source: None,
+            scan_request: None,
             running: None,
             preview: None,
             message: String::new(),
@@ -438,8 +443,53 @@ impl Default for State {
     }
 }
 impl State {
+    pub fn take_scan_request(&mut self) -> Option<String> {
+        self.scan_request.take()
+    }
+
     pub(crate) fn background_active(&self) -> bool {
         self.running.is_some()
+    }
+
+    /// Receive text into the existing capture form without preparing a preview or writing a file.
+    pub fn receive_handoff(&mut self, source: &str, body: &str) -> Result<()> {
+        self.receive_named_handoff("工具接力结果", source, body)
+    }
+
+    /// Receive a saved memo as an in-memory capture draft; preview and save remain explicit.
+    pub fn receive_memo_handoff(&mut self, title: &str, source: &str, body: &str) -> Result<()> {
+        self.receive_named_handoff(title, source, body)?;
+        self.message =
+            "已接收已保存备忘的临时副本；点击“准备正文预览”检查内容后，再手动保存到知识源。".into();
+        Ok(())
+    }
+
+    fn receive_named_handoff(&mut self, title: &str, source: &str, body: &str) -> Result<()> {
+        ensure!(
+            self.running.is_none(),
+            "正文预览正在运行，请完成后再接收材料"
+        );
+        ensure!(
+            self.title.trim().is_empty()
+                && self.source.trim().is_empty()
+                && self.body.is_empty()
+                && self.preview.is_none(),
+            "当前收集草稿尚未处理；请保存或清空后再接收材料"
+        );
+        bounded_line(title, 180, "标题")?;
+        bounded_line(source, 2048, "来源")?;
+        ensure!(
+            !body.trim().is_empty() && body.len() <= MAX_BODY && !body.contains('\0'),
+            "接力正文为空、超过 256 KiB 或包含 NUL"
+        );
+        self.mode = Mode::Paste;
+        self.title = title.trim().into();
+        self.source = source.trim().into();
+        self.body = body.to_owned();
+        self.html = false;
+        self.preview = None;
+        self.message = "已收到临时接力正文；点击“准备正文预览”检查内容后再保存到知识源。".into();
+        Ok(())
     }
 
     fn start(&mut self) {
@@ -481,8 +531,24 @@ impl State {
             .first()
             .map(|source| source.id.clone())
             .unwrap_or_default();
+        self.saved_source = sources.first().map(|source| source.id.clone());
         self.preview = preview_paste(&self.title, &self.source, &self.body, false).ok();
         self.message = "合成预览：正文尚未写入磁盘。".into();
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_saved_followup_fixture(&mut self, sources: &[Source]) {
+        self.mode = Mode::Paste;
+        self.title = "本机资料整理".into();
+        self.source = "zi-devtools 备忘录 · 本机资料整理".into();
+        self.body = "已保存的示例内容。".into();
+        self.selected_source = sources
+            .first()
+            .map(|source| source.id.clone())
+            .unwrap_or_default();
+        self.saved_source = self.selected_source.clone().into();
+        self.preview = preview_paste(&self.title, &self.source, &self.body, false).ok();
+        self.message = "合成界面：文档已保存；索引尚未同步。".into();
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, sources: &mut crate::knowledge_sources::State) {
@@ -513,6 +579,18 @@ impl State {
         ui.label("把公开网页、浏览器保存的 HTML，或复制的 Agent 对话正文预览后保存到本机目录型知识源。不会读取浏览器 Cookie 或自动抓取登录页。");
         ui.add_space(8.0);
         let mut changed = false;
+        if ui
+            .add_enabled(self.running.is_none(), egui::Button::new("新建收集草稿"))
+            .clicked()
+        {
+            self.title.clear();
+            self.source.clear();
+            self.body.clear();
+            self.html = false;
+            self.preview = None;
+            self.saved_source = None;
+            self.message = "已清空收集草稿；内容仍未写入磁盘。".into();
+        }
         ui.add_enabled_ui(self.running.is_none(), |ui| {
             ui.horizontal(|ui| {
                 for mode in [Mode::Paste, Mode::HtmlFile, Mode::Https] {
@@ -551,6 +629,7 @@ impl State {
         });
         if changed {
             self.preview = None;
+            self.saved_source = None;
             self.message = "输入已变化，请重新准备预览。".into();
         }
         if ui
@@ -635,18 +714,33 @@ impl State {
                     .clicked()
                 {
                     self.message = match save(preview, source) {
-                        Ok(SaveOutcome::Created(path)) => format!(
-                            "已保存：{}。下一步在“本地知识源”扫描/刷新，再到“增量知识索引”同步。",
-                            path.display()
-                        ),
-                        Ok(SaveOutcome::Duplicate(path)) => format!(
-                            "重复内容已跳过：{}。需要查询时检查知识源扫描与索引状态。",
-                            path.display()
-                        ),
-                        Err(error) => format!("保存失败：{error:#}"),
+                        Ok(SaveOutcome::Created(path)) => {
+                            self.saved_source = Some(source.id.clone());
+                            format!("已保存：{}。", path.display())
+                        }
+                        Ok(SaveOutcome::Duplicate(path)) => {
+                            self.saved_source = Some(source.id.clone());
+                            format!("内容已存在，跳过重复保存：{}。", path.display())
+                        }
+                        Err(error) => {
+                            self.saved_source = None;
+                            format!("保存失败：{error:#}")
+                        }
                     };
                 }
             }
+        }
+        if let Some(source_id) = self.saved_source.as_ref() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("下一步：");
+                let response = ui.button("扫描整个知识源…");
+                if response.clicked() {
+                    self.scan_request = Some(source_id.clone());
+                }
+                response.on_hover_text(
+                    "转到本地知识源并读取此来源中符合排除规则的文件，更新文件清单；最多 500 个文档、128 MiB。扫描不会建立正文索引。",
+                );
+            });
         }
         ui.small("内容默认只在内存中预览；点击保存后才写入所选知识源。保存不会自动扫描目录或更新索引，以免读取其他未确认文件。");
     }
@@ -656,6 +750,56 @@ impl State {
 mod tests {
     use super::*;
     use crate::knowledge_sources::add_source;
+
+    #[test]
+    fn tool_handoff_fills_only_an_empty_capture_draft_and_never_previews_or_saves() {
+        let mut state = State::default();
+        state
+            .receive_handoff("agent-runner@1.2.3", "工具结果仅在内存草稿中")
+            .unwrap();
+        assert_eq!(state.mode, Mode::Paste);
+        assert_eq!(state.title, "工具接力结果");
+        assert_eq!(state.source, "agent-runner@1.2.3");
+        assert_eq!(state.body, "工具结果仅在内存草稿中");
+        assert!(state.preview.is_none());
+        assert!(state.message.contains("再保存到知识源"));
+        assert!(state.receive_handoff("tool@1.0.0", "replacement").is_err());
+
+        let mut oversized = State::default();
+        assert!(
+            oversized
+                .receive_handoff("tool@1.0.0", &"x".repeat(MAX_HANDOFF_BODY + 1))
+                .is_err()
+        );
+        assert!(
+            oversized
+                .receive_handoff("tool@1.0.0", "bad\0body")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn memo_handoff_preserves_title_and_remains_an_unpreviewed_memory_draft() {
+        let mut state = State::default();
+        state
+            .receive_memo_handoff(
+                "本机资料整理",
+                "zi-devtools 备忘录 · 本机资料整理",
+                "整理已确认的内容",
+            )
+            .unwrap();
+        assert_eq!(state.title, "本机资料整理");
+        assert_eq!(state.source, "zi-devtools 备忘录 · 本机资料整理");
+        assert_eq!(state.body, "整理已确认的内容");
+        assert!(state.preview.is_none());
+        assert!(state.message.contains("手动保存到知识源"));
+        assert!(
+            state
+                .receive_memo_handoff("替换", "另一来源", "不能覆盖")
+                .is_err()
+        );
+    }
+
     #[test]
     fn html_extraction_and_duplicate_capture_are_bounded() {
         let root = std::env::temp_dir().join(format!("zi-capture-{}", uuid::Uuid::new_v4()));

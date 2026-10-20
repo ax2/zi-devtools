@@ -122,14 +122,7 @@ pub(super) fn encode(
     limit: usize,
 ) -> Result<Vec<u8>> {
     let mut output = Output::new(limit);
-    match format {
-        ImageFormat::Jpeg => {
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, quality.clamp(35, 95))
-                .encode_image(image)?
-        }
-        ImageFormat::Png | ImageFormat::WebP => image.write_to(&mut output, format)?,
-        _ => bail!("不支持该图片格式"),
-    }
+    zi_image_core::encode(image, format, quality, &mut output)?;
     Ok(output.into_bytes()?)
 }
 pub(super) fn encode_tracked(
@@ -140,14 +133,7 @@ pub(super) fn encode_tracked(
     pool: &super::memory::Pool,
 ) -> Result<std::sync::Arc<Vec<u8>>> {
     let mut output = Output::budgeted(limit, pool)?;
-    match format {
-        ImageFormat::Jpeg => {
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, quality.clamp(35, 95))
-                .encode_image(image)?
-        }
-        ImageFormat::Png | ImageFormat::WebP => image.write_to(&mut output, format)?,
-        _ => bail!("不支持该图片格式"),
-    }
+    zi_image_core::encode(image, format, quality, &mut output)?;
     if output.failed {
         bail!("图片输出失败")
     }

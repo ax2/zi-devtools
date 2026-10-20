@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/generated-by.schema.json",
+  "title": "Portable report provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "toolId",
+    "toolVersion",
+    "runtimeFingerprint"
+  ],
+  "properties": {
+    "toolId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "toolVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "runtimeFingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "appVersion",
+        "os",
+        "architecture",
+        "buildProfile",
+        "sha256"
+      ],
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "appVersion": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "os": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "architecture": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "buildProfile": {
+          "enum": [
+            "debug",
+            "plugin"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

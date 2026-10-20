@@ -1,10 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "com.zicode.devtools.transforms",
   "name": "ZiDevTools Transforms",
   "displayName": "ZiDevTools 文本转换",
   "description": "Grouped bounded text transformations; no host resources, files or network.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "zicode",
   "license": "MIT",
   "engines": {
@@ -73,6 +73,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "web",
+          "aliases": [
+            "URL 编码",
+            "URL encode"
+          ],
+          "description": "将输入文本按URL编码规则转换；不访问网址。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -90,6 +98,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "web",
+          "aliases": [
+            "URL 解码",
+            "URL decode"
+          ],
+          "description": "解码输入文本中的URL转义；不访问网址。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -107,6 +123,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "web",
+          "aliases": [
+            "HTML 转义",
+            "HTML escape"
+          ],
+          "description": "将输入文本转为HTML实体；不渲染网页。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -124,6 +148,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "web",
+          "aliases": [
+            "HTML 反转义",
+            "HTML unescape"
+          ],
+          "description": "将输入中的HTML实体还原为文本；不执行HTML。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -141,6 +173,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "字符串转义",
+            "string escape"
+          ],
+          "description": "转义输入文本中的引号、反斜线等字符；不执行代码。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -158,6 +198,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "字符串反转义",
+            "string unescape"
+          ],
+          "description": "将受支持的字符串转义还原为文本；不执行代码。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -175,6 +223,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "小驼峰命名",
+            "camel case"
+          ],
+          "description": "将输入名称转换为小驼峰形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -192,6 +248,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "大驼峰命名",
+            "pascal case"
+          ],
+          "description": "将输入名称转换为大驼峰形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -209,6 +273,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "下划线命名",
+            "snake case"
+          ],
+          "description": "将输入名称转换为下划线形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -226,6 +298,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "短横线命名",
+            "kebab case"
+          ],
+          "description": "将输入名称转换为短横线形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -243,6 +323,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "文本统计",
+            "text statistics"
+          ],
+          "description": "统计显式输入的文本；不读取文件或剪贴板。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -260,6 +348,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "文本行去重",
+            "deduplicate lines"
+          ],
+          "description": "对输入文本按行去重，返回结果文本；不写入文件。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -277,6 +373,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "文本行升序",
+            "sort lines ascending"
+          ],
+          "description": "按既有文本排序规则升序排列输入行；不写入文件。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -294,6 +398,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "文本行降序",
+            "sort lines descending"
+          ],
+          "description": "按既有文本排序规则降序排列输入行；不写入文件。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -311,6 +423,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "删除空白行",
+            "remove empty lines"
+          ],
+          "description": "移除输入文本中的空白行并返回文本；不写入文件。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -328,6 +448,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "清理行首尾空白",
+            "trim lines"
+          ],
+          "description": "清理每行首尾空白；不修改其他本机数据。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -345,6 +473,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "二进制转换",
+            "convert binary number"
+          ],
+          "description": "解析输入的二进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -362,6 +498,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "八进制转换",
+            "convert octal number"
+          ],
+          "description": "解析输入的八进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -379,6 +523,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "十进制转换",
+            "convert decimal number"
+          ],
+          "description": "解析输入的十进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -396,6 +548,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "十六进制转换",
+            "convert hexadecimal number"
+          ],
+          "description": "解析输入的十六进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -413,6 +573,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "文本转十六进制",
+            "text to hex"
+          ],
+          "description": "将输入文本的UTF-8字节编码为十六进制；不读取二进制文件。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -430,6 +598,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "data",
+          "aliases": [
+            "十六进制转文本",
+            "hex to text"
+          ],
+          "description": "将输入十六进制字节解码为UTF-8文本；不读取或写入文件。 每份输入最多8192 UTF-8字节。"
         }
       },
       {
@@ -447,6 +623,14 @@
             "text"
           ],
           "additionalProperties": false
+        },
+        "directory": {
+          "categoryId": "web",
+          "aliases": [
+            "URL 结构分析",
+            "inspect URL"
+          ],
+          "description": "解析输入URL的组成部分；不发送网络请求。 每份输入最多8192 UTF-8字节。"
         }
       }
     ],
@@ -898,5 +1082,8 @@
         "reason": "显式授权后允许当前场景的 AI 使用文本工具"
       }
     ]
+  },
+  "requiredProfiles": {
+    "tool.directory.v1": "=1.0.0-preview.1"
   }
 }

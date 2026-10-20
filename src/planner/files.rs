@@ -14,6 +14,152 @@ pub(super) struct Export {
     pub filename: String,
 }
 
+const MAX_BULK_FILES: usize = 32;
+const MAX_BULK_BYTES: usize = 1024 * 1024;
+
+pub(super) struct BatchImportReview {
+    pub expected: Vec<Item>,
+    pub records: Vec<Item>,
+    pub total_bytes: usize,
+}
+
+#[derive(Clone)]
+pub(super) struct BatchExportRecord {
+    pub title: String,
+    pub body: String,
+    pub filename: String,
+}
+
+pub(super) struct BatchExportReview {
+    pub records: Vec<BatchExportRecord>,
+    pub total_bytes: usize,
+}
+
+fn batch_export_review(items: &[Item]) -> Result<BatchExportReview> {
+    ensure!(!items.is_empty(), "当前筛选没有可导出的备忘");
+    ensure!(
+        items.len() <= MAX_BULK_FILES,
+        "一次最多导出 32 条，请缩小搜索范围"
+    );
+    let mut total_bytes = 0usize;
+    let records = items
+        .iter()
+        .map(|item| {
+            item.validate()?;
+            ensure!(
+                item.revision > 0 && item.schedule.is_none() && !item.trash,
+                "批量导出只接受已保存的正常备忘"
+            );
+            total_bytes = total_bytes
+                .checked_add(item.body.len())
+                .context("导出正文总量溢出")?;
+            ensure!(
+                total_bytes <= MAX_BULK_BYTES,
+                "当前结果正文总量超过 1 MiB，请缩小搜索范围"
+            );
+            let mut stem: String = item
+                .title
+                .chars()
+                .take(40)
+                .map(|c| {
+                    if c.is_control() || "<>:\"/\\|?*".contains(c) {
+                        '_'
+                    } else {
+                        c
+                    }
+                })
+                .collect();
+            stem = stem.trim().trim_end_matches('.').to_owned();
+            if stem.is_empty() {
+                stem = "未命名备忘".into();
+            }
+            let suffix: String = item
+                .id
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .take(8)
+                .collect();
+            let suffix = if suffix.is_empty() {
+                "memo".into()
+            } else {
+                suffix
+            };
+            Ok(BatchExportRecord {
+                title: item.title.clone(),
+                body: item.body.clone(),
+                filename: format!("{stem}-{suffix}.md"),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut filenames = HashSet::new();
+    ensure!(
+        records
+            .iter()
+            .all(|record| filenames.insert(record.filename.to_lowercase())),
+        "导出文件名冲突，请修改标题或记录标识后重试"
+    );
+    Ok(BatchExportReview {
+        records,
+        total_bytes,
+    })
+}
+
+fn write_batch(parent: &Path, review: &BatchExportReview) -> Result<(PathBuf, usize, usize)> {
+    ensure!(
+        review.records.len() <= MAX_BULK_FILES && !review.records.is_empty(),
+        "批量导出记录数量无效"
+    );
+    ensure!(review.total_bytes <= MAX_BULK_BYTES, "批量导出超过 1 MiB");
+    let meta = std::fs::symlink_metadata(parent).context("无法读取所选目标文件夹")?;
+    ensure!(
+        meta.is_dir() && !meta.file_type().is_symlink(),
+        "请选择普通文件夹，不能是文件或符号链接"
+    );
+    let name = format!(
+        "Zi-备忘导出-{}-{}",
+        Local::now().format("%Y%m%d-%H%M%S"),
+        &uuid::Uuid::new_v4().simple().to_string()[..8]
+    );
+    let stage = parent.join(format!(".{name}.partial"));
+    std::fs::create_dir(&stage).context("无法创建新的批量导出暂存目录")?;
+    for record in &review.records {
+        let target = stage.join(&record.filename);
+        if let Err(error) = write_note(&target, &record.body) {
+            anyhow::bail!(
+                "批量导出未完成；已写入的暂存文件保留在 {}，请检查后自行处理：{error:#}",
+                stage.display()
+            );
+        }
+    }
+    let output = parent.join(&name);
+    std::fs::rename(&stage, &output).with_context(|| {
+        format!(
+            "批量文件已写入暂存目录 {}，但无法发布到目标目录；请检查并手动处理",
+            stage.display()
+        )
+    })?;
+    Ok((output, review.records.len(), review.total_bytes))
+}
+
+pub(super) fn read_notes(paths: &[PathBuf]) -> Result<(Vec<Item>, usize)> {
+    ensure!(!paths.is_empty(), "请选择要导入的文件");
+    ensure!(paths.len() <= MAX_BULK_FILES, "一次最多选择 32 个文件");
+    let mut records = Vec::with_capacity(paths.len());
+    let mut total_bytes = 0usize;
+    for path in paths {
+        let item = read_note(path)?;
+        total_bytes = total_bytes
+            .checked_add(item.body.len())
+            .context("导入文件总量溢出")?;
+        ensure!(
+            total_bytes <= MAX_BULK_BYTES,
+            "所选文件正文总量超过 1 MiB，请分批导入"
+        );
+        records.push(item);
+    }
+    Ok((records, total_bytes))
+}
+
 fn text_extension(path: &Path) -> Result<()> {
     let extension = path
         .extension()
@@ -110,6 +256,69 @@ impl State {
         self.start_file(move || read_note(&path).map(Reply::Imported));
         Ok(())
     }
+    pub(super) fn import_files(&mut self, paths: Vec<PathBuf>) -> Result<()> {
+        self.backup_available()?;
+        ensure!(!paths.is_empty(), "请选择要导入的文件");
+        ensure!(paths.len() <= MAX_BULK_FILES, "一次最多选择 32 个文件");
+        let database = self.path.clone();
+        self.start_file(move || {
+            let (records, total_bytes) = read_notes(&paths)?;
+            let expected = store::load(&database)?;
+            Ok(Reply::BatchImportReady(Box::new(BatchImportReview {
+                expected,
+                records,
+                total_bytes,
+            })))
+        });
+        Ok(())
+    }
+    pub(super) fn confirm_batch_import(&mut self) -> Result<()> {
+        ensure!(
+            self.loaded && self.pending.is_none() && !self.has_unsaved(),
+            "正在读写记录或有未保存编辑，请稍后重试"
+        );
+        let Some(backup::Review::Import(review)) = self.backup_review.as_ref() else {
+            anyhow::bail!("请先预览批量导入内容");
+        };
+        let expected = review.expected.clone();
+        let incoming = review.records.clone();
+        let path = self.path.clone();
+        self.backup_review = None;
+        self.start_file(move || {
+            store::insert_batch(&path, &expected, &incoming).map(Reply::BatchImported)
+        });
+        Ok(())
+    }
+    pub(super) fn review_batch_export(&mut self) -> Result<()> {
+        self.backup_available()?;
+        ensure!(!self.calendar && !self.trash, "请切换到备忘列表后批量导出");
+        let items = self
+            .listed_indices()
+            .into_iter()
+            .map(|index| self.items[index].clone())
+            .collect::<Vec<_>>();
+        self.backup_review = Some(backup::Review::BatchExport(batch_export_review(&items)?));
+        Ok(())
+    }
+    pub(super) fn export_batch(&mut self, parent: PathBuf) -> Result<()> {
+        ensure!(
+            self.loaded && self.pending.is_none() && !self.has_unsaved(),
+            "正在读写记录或有未保存编辑，请稍后重试"
+        );
+        let Some(backup::Review::BatchExport(review)) = self.backup_review.as_ref() else {
+            anyhow::bail!("请先预览批量导出内容");
+        };
+        let review = BatchExportReview {
+            records: review.records.clone(),
+            total_bytes: review.total_bytes,
+        };
+        self.backup_review = None;
+        self.start_file(move || {
+            write_batch(&parent, &review)
+                .map(|(path, count, bytes)| Reply::BatchExported(path, count, bytes))
+        });
+        Ok(())
+    }
     pub(super) fn start_file(&mut self, work: impl FnOnce() -> Result<Reply> + Send + 'static) {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
@@ -188,6 +397,41 @@ impl State {
                         .add_filter("Markdown / 文本", &["md", "markdown", "txt"])
                         .pick_file()
                     && let Err(error) = self.import_file(path)
+                {
+                    self.message = format!("{error:#}");
+                    self.error = true;
+                }
+                #[cfg(windows)]
+                if ui
+                    .add_enabled(
+                        self.loaded
+                            && self.pending.is_none()
+                            && !self.has_unsaved()
+                            && !self.trash
+                            && !self.listed_indices().is_empty(),
+                        egui::Button::new("批量导出当前结果…"),
+                    )
+                    .on_hover_text("导出当前搜索/置顶筛选结果中的备忘；预览后写入所选文件夹下的新子文件夹，不覆盖已有内容。")
+                    .clicked()
+                    && let Err(error) = self.review_batch_export()
+                {
+                    self.message = format!("{error:#}");
+                    self.error = true;
+                }
+                #[cfg(windows)]
+                if ui
+                    .add_enabled(
+                        self.loaded && self.pending.is_none() && !self.has_unsaved(),
+                        egui::Button::new("批量导入…"),
+                    )
+                    .on_hover_text(
+                        "多选最多 32 个 UTF-8 Markdown / 文本文件，预览后一次性保存为备忘。",
+                    )
+                    .clicked()
+                    && let Some(paths) = rfd::FileDialog::new()
+                        .add_filter("Markdown / 文本", &["md", "markdown", "txt"])
+                        .pick_files()
+                    && let Err(error) = self.import_files(paths)
                 {
                     self.message = format!("{error:#}");
                     self.error = true;
@@ -314,5 +558,28 @@ impl State {
             _ => unreachable!(),
         }
         true
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_import(&mut self) {
+        self.preview(false, false);
+        let mut first = Item::new(None);
+        first.title = "项目计划.md".into();
+        first.body = "# 本周计划\n\n- 完成复核\n- 整理资料".into();
+        let mut second = Item::new(None);
+        second.title = "会议纪要.txt".into();
+        second.body = "讨论了本机保存与跨工具检索。".into();
+        self.backup_review = Some(backup::Review::Import(BatchImportReview {
+            expected: self.items.clone(),
+            total_bytes: first.body.len() + second.body.len(),
+            records: vec![first, second],
+        }));
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_batch_export(&mut self) {
+        self.preview(false, false);
+        self.review_batch_export()
+            .expect("preview fixture has bounded saved memos");
     }
 }

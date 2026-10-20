@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/studio-host-capabilities/service-http-get-preview-20261015/schemas/sdk-result.schema.json",
+  "title": "Provider proposal for service.http.get.v1 View result",
+  "description": "Provider-facing draft only: Studio's profile specifies these fields and behavior but has not frozen a complete response schema or error-code enumeration.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "status", "contentType", "data", "error"],
+      "properties": {
+        "endpoint": {"type": "string", "enum": ["health", "info", "metrics"]},
+        "status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "contentType": {"type": "string", "maxLength": 256},
+        "data": {},
+        "error": {"type": "null"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "status", "contentType", "data", "error"],
+      "properties": {
+        "endpoint": {"type": "string", "enum": ["health", "info", "metrics"]},
+        "status": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+        "contentType": {"type": ["string", "null"], "maxLength": 256},
+        "data": {"type": "null"},
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code"],
+          "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 64}}
+        }
+      }
+    }
+  ]
+}

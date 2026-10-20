@@ -117,6 +117,8 @@ pub(super) struct Snapshot {
     completed: u32,
     phase: u8,
     notices: Vec<NoticeData>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    window_sizes: Vec<windows::SavedSize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     audio: Option<audio::Settings>,
 }
@@ -133,8 +135,8 @@ fn name(value: &str) -> Result<()> {
 impl Snapshot {
     pub(super) fn capture(s: &State, now: Instant, utc: DateTime<Utc>, policy: Policy) -> Self {
         Self {
-            schema: 2,
-            tool_version: "0.4.0".into(),
+            schema: 3,
+            tool_version: "0.7.0".into(),
             audio: Some(s.audio.settings.clone()),
             saved_at: utc,
             policy,
@@ -184,21 +186,33 @@ impl Snapshot {
                     title: n.title.clone(),
                 })
                 .collect(),
+            window_sizes: s.windows.saved_sizes(),
         }
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            [1, 2].contains(&self.schema),
+            [1, 2, 3].contains(&self.schema),
             "不支持此时钟文件版本，保留原文件"
         );
         ensure!(
             match self.schema {
                 1 => self.audio.is_none(),
-                2 => self.audio.as_ref().is_some_and(audio::Settings::valid),
+                2 | 3 => self.audio.as_ref().is_some_and(audio::Settings::valid),
                 _ => false,
             },
             "声音设置与保存格式不一致或越界"
         );
+        ensure!(
+            self.window_sizes.len() <= 48 && (self.schema == 3 || self.window_sizes.is_empty()),
+            "小窗尺寸数量越界或与保存格式不一致"
+        );
+        let mut window_targets = std::collections::HashSet::new();
+        for size in &self.window_sizes {
+            ensure!(
+                window_targets.insert(size.validate().map_err(anyhow::Error::msg)?),
+                "小窗目标重复"
+            );
+        }
         ensure!(
             !self.tool_version.is_empty()
                 && self.tool_version.len() <= 64
@@ -276,6 +290,7 @@ impl Snapshot {
     ) -> Result<()> {
         self.validate()?;
         s.windows.clear();
+        s.windows.restore_sizes(&self.window_sizes);
         s.audio.restore(self.audio.clone().unwrap_or_default());
         s.pending_audio = false;
         let elapsed = utc
@@ -368,6 +383,7 @@ impl Snapshot {
             });
             s.pending_audio = true;
         }
+        s.notification_wake = !s.notices.is_empty();
         s.next_id = self
             .timers
             .iter()
@@ -465,13 +481,13 @@ fn read(path: &Path) -> Result<Option<(Snapshot, Hash)>> {
     snapshot.validate()?;
     Ok(Some((snapshot, Sha256::digest(&bytes).into())))
 }
-fn backup_schema1(path: &Path, hash: Hash) -> Result<()> {
+fn backup_legacy(path: &Path, schema: u32, hash: Hash) -> Result<()> {
     let bytes = read_bytes(path)?.context("旧版保存记录已不存在")?;
     let actual: Hash = Sha256::digest(&bytes).into();
     ensure!(actual == hash, "旧版记录在迁移前被修改，请重新读取");
     let digest = hash.iter().map(|b| format!("{b:02x}")).collect::<String>();
     let backup = path.with_file_name(format!(
-        "{}.schema1-{digest}.backup.json",
+        "{}.schema{schema}-{digest}.backup.json",
         path.file_name()
             .context("时钟路径无文件名")?
             .to_string_lossy()
@@ -511,10 +527,9 @@ fn write(path: &Path, snapshot: &Snapshot, expected: Option<Hash>) -> Result<Has
         "保存文件被其他进程修改，请重新读取并确认"
     );
     if let Some((old, hash)) = &current
-        && old.schema == 1
-        && snapshot.schema == 2
+        && old.schema < snapshot.schema
     {
-        backup_schema1(path, *hash)?;
+        backup_legacy(path, old.schema, *hash)?;
     }
     let bytes = serde_json::to_vec_pretty(snapshot)?;
     ensure!(bytes.len() as u64 <= LIMIT, "时钟内容超过512KiB");

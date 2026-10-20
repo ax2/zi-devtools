@@ -1,7 +1,8 @@
-param(
+﻿param(
     [switch]$Apply,
     [switch]$Scheduled,
     [switch]$Deep,
+    [switch]$Breakdown,
     [switch]$BudgetOnly,
     [ValidateRange(0, 1024)][double]$BudgetGiB = 0,
     [string]$BuildCacheRoot
@@ -77,6 +78,20 @@ function Size-Bytes([string]$path) {
     if (-not $path) { return [long]0 }
     return [long](Get-ChildItem -LiteralPath $path -Recurse -Force -File | Measure-Object Length -Sum).Sum
 }
+function Size-Breakdown([string]$path) {
+    $root = [IO.Path]::GetFullPath($path).TrimEnd('\')
+    $prefix = $root + '\'
+    $groups = @{}
+    foreach ($file in [IO.Directory]::EnumerateFiles($root, '*', [IO.SearchOption]::AllDirectories)) {
+        $relative = $file.Substring($prefix.Length)
+        $segments = $relative.Split([IO.Path]::DirectorySeparatorChar)
+        $key = if ($segments.Length -gt 1) { "$($segments[0])/$($segments[1])" } else { $segments[0] }
+        $length = [long]([IO.FileInfo]::new($file).Length)
+        if (-not $groups.ContainsKey($key)) { $groups[$key] = [long]0 }
+        $groups[$key] += $length
+    }
+    return $groups
+}
 Assert-NoLinks $projectRoot
 $roots = @([pscustomobject]@{Root=$projectRoot; Relative='target'})
 if ($BuildCacheRoot) {
@@ -97,10 +112,24 @@ $targets = @()
 $usage = @()
 foreach ($root in $roots) {
     $whole = Safe-Target $root.Root $root.Relative
-    $bytes = Size-Bytes $whole
+    $sizeParts = if ($Breakdown -and $whole) { Size-Breakdown $whole } else { $null }
+    $bytes = if ($Breakdown -and $whole) {
+        [long](($sizeParts.Values | Measure-Object -Sum).Sum)
+    } else {
+        Size-Bytes $whole
+    }
     $over = $BudgetGiB -gt 0 -and $bytes -gt ($BudgetGiB * 1GB)
     $usage += [pscustomobject]@{path=(Join-Path $root.Root $root.Relative); bytes=$bytes; overBudget=$over}
     Write-Output ('{0}: {1:N3} GiB；保留缓存，容量不触发删除。' -f $usage[-1].path, ($bytes/1GB))
+    $volumeRoot = [IO.Path]::GetPathRoot($root.Root)
+    $availableBytes = ([IO.DriveInfo]::new($volumeRoot)).AvailableFreeSpace
+    Write-Output ('  所在磁盘可用空间：{0:N3} GiB（仅观察）' -f ($availableBytes/1GB))
+    if ($sizeParts) {
+        Write-Output '  分项（较深目录按前两级合并）：'
+        foreach ($name in ($sizeParts.Keys | Sort-Object { $sizeParts[$_] } -Descending | Select-Object -First 12)) {
+            Write-Output ('    {0}: {1:N3} GiB' -f $name, ($sizeParts[$name]/1GB))
+        }
+    }
     if ($manualDeep) {
         # Never remove the whole project target: release/WASI outputs remain intact.
         $part = if ($root.Relative -eq 'target') { 'target\debug' } else { 'debug' }

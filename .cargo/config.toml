@@ -11,6 +11,7 @@ dt-test = "test --workspace --locked"
 dt-build = "build --bins --locked"
 dt-lint = "clippy --workspace --all-targets --all-features --locked -- -D warnings"
 dt-plugin = "build -p zi-diagnostics-wasi --profile plugin --target wasm32-wasip1 --locked"
+dt-image-plugin = "build -p zi-image-wasi --profile plugin --target wasm32-wasip1 --locked"
 
 # A single bounded WASI configuration for local builds and CI.
 [target.wasm32-wasip1]

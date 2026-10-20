@@ -2,6 +2,7 @@
 mod batch;
 mod editor;
 mod encoding;
+mod entry;
 mod memory;
 mod metadata;
 mod relay;
@@ -9,6 +10,14 @@ mod report;
 mod screenshot;
 mod single;
 mod workflow;
+pub use relay::ImageMaterial;
+pub use relay::Origin;
+pub(crate) fn text_flow_image_report(
+    image: &ImageMaterial,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> anyhow::Result<String> {
+    report::build_material_report(image, cancel)
+}
 pub(crate) use workflow::Definition as WorkflowDefinition;
 #[cfg(all(windows, feature = "ui-preview"))]
 pub fn verify_screenshot_capture() -> anyhow::Result<(u32, u32)> {
@@ -28,7 +37,7 @@ use std::{
 };
 
 const MAX_INPUT_BYTES: u64 = 32 * 1024 * 1024;
-const MAX_PIXELS: u64 = 16_000_000;
+pub(crate) const MAX_PIXELS: u64 = 16_000_000;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
 
 fn save_image_new(
@@ -127,8 +136,33 @@ pub struct State {
     message: String,
     error: bool,
     pending: Option<mpsc::Receiver<Result<Job, String>>>,
+    pending_text_flow_image: Option<ImageMaterial>,
 }
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_entry_fingerprint(&self) -> String {
+        use sha2::{Digest, Sha256};
+        format!(
+            "{}|{}|{}|{}|{}|{:?}|{:x}|{:x}",
+            self.input,
+            self.output,
+            self.source_bytes,
+            self.width,
+            self.jpeg_quality,
+            self.format,
+            Sha256::digest(self.source.as_ref().unwrap().to_rgba8().as_raw()),
+            Sha256::digest(self.encoded.as_ref().unwrap().as_slice())
+        )
+    }
+    pub(crate) fn take_text_flow_image(&mut self) -> Option<ImageMaterial> {
+        self.pending_text_flow_image.take()
+    }
+    fn show_mode(&mut self, mode: Mode) {
+        if self.mode != mode && mode != Mode::Workflow {
+            self.workflow.clear_handoff_selection();
+        }
+        self.mode = mode;
+    }
     pub(crate) fn background_active(&self) -> bool {
         self.pending.is_some()
             || self.reports.busy()
@@ -170,15 +204,22 @@ impl State {
     pub fn request_screenshot_capture(&mut self) {
         self.screenshot.request_capture();
     }
-    pub fn active_tool_id(&self) -> &'static str {
-        match self.mode {
-            Mode::Single => "image-tools",
-            Mode::Batch => "image-batch",
-            Mode::Metadata => "image-metadata",
-            Mode::Editor => "image-crop-annotate",
-            Mode::Screenshot => "screenshot-workbench",
-            Mode::Workflow => "image-workflow",
+    pub(crate) fn workflow_ocr_handoff_text(&self) -> Option<(String, &str)> {
+        if self.mode != Mode::Workflow {
+            return None;
         }
+        self.workflow.handoff_text()
+    }
+    pub(crate) fn workflow_handoff_image(&self) -> Option<ImageMaterial> {
+        if self.mode != Mode::Workflow {
+            return None;
+        }
+        self.workflow.handoff_image()
+    }
+    #[cfg(feature = "ui-preview")]
+    pub(crate) fn preview_common_handoff_fixture(&mut self) {
+        self.mode = Mode::Workflow;
+        self.workflow.preview_common_handoff_fixture();
     }
     pub fn take_relay_route(&mut self) -> Option<&'static str> {
         self.relay_route.take()
@@ -219,19 +260,22 @@ impl State {
     pub fn screenshot_busy(&self) -> bool {
         self.screenshot.busy()
     }
+    pub fn pinned_screenshot_ui(&mut self, ctx: &egui::Context) {
+        self.screenshot.pinned_window_ui(ctx);
+    }
     pub fn screenshot_has_work(&self) -> bool {
         self.screenshot.has_work()
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_screenshot_fixture(&mut self, ctx: &egui::Context) {
-        self.mode = Mode::Screenshot;
+        self.show_mode(Mode::Screenshot);
         self.screenshot.preview_fixture(ctx);
     }
     pub fn show_screenshot(&mut self) {
-        self.mode = Mode::Screenshot;
+        self.show_mode(Mode::Screenshot);
     }
     pub fn show_batch(&mut self) {
-        self.mode = Mode::Batch;
+        self.show_mode(Mode::Batch);
     }
     pub(crate) fn task_snapshots(&self) -> Vec<crate::tasks::Row> {
         self.workflow.snapshots()
@@ -264,12 +308,17 @@ impl State {
         self.workflow.take_loaded()
     }
     pub fn show_workflow(&mut self) {
-        self.mode = Mode::Workflow;
+        self.show_mode(Mode::Workflow);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_fixture(&mut self) {
-        self.mode = Mode::Workflow;
+        self.show_mode(Mode::Workflow);
         self.workflow.preview_fixture();
+    }
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_image_workflow_ocr_fixture(&mut self) {
+        self.show_mode(Mode::Workflow);
+        self.workflow.preview_ocr_fixture();
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_image_workflow_definition(&self) -> Vec<u8> {
@@ -304,25 +353,25 @@ impl State {
         self.workflow.preview_check(phase);
     }
     pub fn show_metadata(&mut self) {
-        self.mode = Mode::Metadata;
+        self.show_mode(Mode::Metadata);
     }
     pub fn show_editor(&mut self) {
-        self.mode = Mode::Editor;
+        self.show_mode(Mode::Editor);
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_batch_fixture(&mut self) {
-        self.mode = Mode::Batch;
+        self.show_mode(Mode::Batch);
         self.batch.preview_fixture();
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_metadata_fixture(&mut self, ctx: &egui::Context) {
-        self.mode = Mode::Metadata;
+        self.show_mode(Mode::Metadata);
         self.metadata
             .preview_fixture(ctx, &self.workflow.memory_pool());
     }
     #[cfg(feature = "ui-preview")]
     pub fn preview_editor_fixture(&mut self, ctx: &egui::Context) {
-        self.mode = Mode::Editor;
+        self.show_mode(Mode::Editor);
         self.editor
             .preview_fixture(ctx, &self.workflow.memory_pool());
     }
@@ -494,6 +543,7 @@ impl State {
         }
     }
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        let previous_mode = self.mode;
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.mode, Mode::Single, "单张图片");
             ui.selectable_value(&mut self.mode, Mode::Batch, "批量处理");
@@ -502,6 +552,9 @@ impl State {
             ui.selectable_value(&mut self.mode, Mode::Screenshot, "截图与透明套索");
             ui.selectable_value(&mut self.mode, Mode::Workflow, "图片流程");
         });
+        if self.mode != previous_mode && self.mode != Mode::Workflow {
+            self.workflow.clear_handoff_selection();
+        }
         self.relay_ui(ui);
         self.image_report_ui(ui);
         ui.add_space(10.0);
@@ -527,7 +580,13 @@ impl State {
                 self.workflow.memory_ui(ui);
                 return self.editor.ui(ui, &self.workflow.memory_pool());
             }
-            Mode::Screenshot => return self.screenshot.ui(ui),
+            Mode::Screenshot => {
+                self.screenshot.ui(ui);
+                if self.screenshot.take_annotation_request() {
+                    self.start_screenshot_annotation(ui.ctx());
+                }
+                return;
+            }
             Mode::Workflow => {
                 let unlocked = !self.relay_active();
                 return self.workflow.ui(ui, unlocked);

@@ -180,7 +180,7 @@ mod tests {
         }
         let bad = Dataset {
             headers: vec!["A".into(), "a".into()],
-            rows: vec![vec![Value::Null, Value::Null]],
+            rows: vec![vec![Value::Null, Value::Null]].into(),
         };
         assert!(Review::prepare(&bad, &[0], "data", &fixture.target(), "筛选").is_err());
         assert_eq!(fs::read_dir(&fixture.0).unwrap().count(), 0);
@@ -201,7 +201,7 @@ mod tests {
         let fixture = Fixture::new();
         let mut data = Dataset {
             headers: (0..128).map(|n| format!("field_{n}")).collect(),
-            rows: vec![vec![Value::Null; 128]],
+            rows: vec![vec![Value::Null; 128]].into(),
         };
         data.headers[0] = "quoted\"; DROP TABLE x;--".into();
         let review = Review::prepare(&data, &[0], "data", &fixture.target(), "全部").unwrap();
@@ -254,7 +254,7 @@ mod tests {
         let fixture = Fixture::new();
         let data = Dataset {
             headers: vec!["text".into()],
-            rows: vec![vec![Value::String("x".repeat(4096))]; 8192],
+            rows: vec![vec![Value::String("x".repeat(4096))]; 8192].into(),
         };
         let indices: Vec<_> = (0..data.rows.len()).collect();
         let error = Review::prepare(&data, &indices, "data", &fixture.target(), "全部")
@@ -325,7 +325,7 @@ impl Review {
         );
         let data = Dataset {
             headers: data.headers.clone(),
-            rows,
+            rows: rows.into(),
         };
         let mut review = Self {
             data,

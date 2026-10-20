@@ -26,6 +26,38 @@ fn windows_reuse_targets_bound_count_and_never_reuse_restored_viewport_ids() {
 }
 
 #[test]
+fn small_window_size_is_reused_by_target_and_cache_stays_bounded() {
+    let mut windows = Windows::default();
+    let ctx = egui::Context::default();
+    let target = Target::Timer(11);
+    windows.open(target, &ctx).unwrap();
+    assert_eq!(windows.panes[0].size, egui::vec2(440.0, 350.0));
+    windows.remember_size(target, egui::vec2(720.0, 480.0));
+    let saved = windows.saved_sizes();
+    windows.clear();
+    windows.restore_sizes(&saved);
+    windows.open(target, &ctx).unwrap();
+    assert_eq!(windows.panes[0].size, egui::vec2(720.0, 480.0));
+
+    windows.remember_size(target, egui::vec2(f32::NAN, 100.0));
+    windows.clear();
+    windows.open(target, &ctx).unwrap();
+    assert_eq!(windows.panes[0].size, egui::vec2(440.0, 260.0));
+    windows.clear();
+
+    for id in 0..49 {
+        windows.remember_size(Target::Timer(id), egui::vec2(400.0, 300.0));
+    }
+    assert_eq!(windows.recent_sizes.len(), 48);
+    assert!(
+        windows
+            .recent_sizes
+            .iter()
+            .all(|(cached_target, _)| *cached_target != Target::Timer(0))
+    );
+}
+
+#[test]
 fn stable_timer_actions_do_not_target_the_next_item_or_repeat_reminders() {
     let mut state = State {
         timer_seconds: 1,

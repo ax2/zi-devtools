@@ -1,7 +1,8 @@
 //! Explicit, bounded model-list queries; never sends a generation request.
 use anyhow::{Context, Result, ensure};
 use std::{
-    io::Read,
+    future::Future,
+    sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
 
@@ -31,9 +32,20 @@ fn destination(source: &str) -> Result<(reqwest::Url, Protocol)> {
 pub fn target(source: &str) -> Result<String> {
     Ok(destination(source)?.0.to_string())
 }
+#[derive(Debug)]
 pub struct Report {
     pub models: Vec<String>,
     pub elapsed_ms: u128,
+}
+async fn cancellable<F: Future>(future: F, cancelled: &AtomicBool) -> Result<F::Output> {
+    let mut future = std::pin::pin!(future);
+    loop {
+        ensure!(!cancelled.load(Ordering::Relaxed), "模型列表查询已取消");
+        if let Ok(value) = tokio::time::timeout(Duration::from_millis(50), future.as_mut()).await {
+            ensure!(!cancelled.load(Ordering::Relaxed), "模型列表查询已取消");
+            return Ok(value);
+        }
+    }
 }
 fn parse(bytes: &[u8], protocol: Protocol) -> Result<Vec<String>> {
     let value: serde_json::Value =
@@ -62,6 +74,13 @@ fn parse(bytes: &[u8], protocol: Protocol) -> Result<Vec<String>> {
     Ok(models.into_iter().collect())
 }
 pub fn fetch(source: &str, temporary: String) -> Result<Report> {
+    fetch_cancellable(source, temporary, &AtomicBool::new(false))
+}
+pub fn fetch_cancellable(
+    source: &str,
+    temporary: String,
+    cancelled: &AtomicBool,
+) -> Result<Report> {
     let (url, protocol) = destination(source)?;
     let secret = if temporary.trim().is_empty() {
         None
@@ -69,31 +88,45 @@ pub fn fetch(source: &str, temporary: String) -> Result<Report> {
         Some(crate::credentials::Secret::new(temporary)?)
     };
     let started = Instant::now();
-    let client = reqwest::blocking::Client::builder()
-        .no_proxy()
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(10))
-        .redirect(reqwest::redirect::Policy::none())
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
         .build()
-        .context("无法创建模型查询客户端")?;
-    let mut request = client.get(url).header("Accept", "application/json");
-    if let Some(secret) = &secret {
-        request = request.bearer_auth(secret.expose());
-    }
-    let response = request
-        .send()
-        .map_err(|_| anyhow::anyhow!("模型列表连接失败或超时（最长 10 秒）"))?;
+        .context("无法创建模型查询运行时")?;
+    let (status, bytes) = runtime.block_on(async {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(10))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .context("无法创建模型查询客户端")?;
+        let mut request = client.get(url).header("Accept", "application/json");
+        if let Some(secret) = &secret {
+            request = request.bearer_auth(secret.expose());
+        }
+        let mut response = cancellable(request.send(), cancelled)
+            .await?
+            .map_err(|_| anyhow::anyhow!("模型列表连接失败或超时（最长 10 秒）"))?;
+        let status = response.status();
+        let mut bytes = Vec::new();
+        loop {
+            let chunk = cancellable(response.chunk(), cancelled)
+                .await?
+                .context("读取模型列表失败")?;
+            let Some(chunk) = chunk else { break };
+            ensure!(
+                bytes.len() + chunk.len() <= 1024 * 1024,
+                "模型列表响应超过 1 MiB"
+            );
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok((status, bytes))
+    })?;
     ensure!(
-        response.status().is_success(),
+        status.is_success(),
         "模型列表接口返回 HTTP {}，请检查地址与认证",
-        response.status().as_u16()
+        status.as_u16()
     );
-    let mut bytes = Vec::new();
-    response
-        .take(1024 * 1024 + 1)
-        .read_to_end(&mut bytes)
-        .context("读取模型列表失败")?;
-    ensure!(bytes.len() <= 1024 * 1024, "模型列表响应超过 1 MiB");
     let models = parse(&bytes, protocol)?;
     // Do not display a token echoed by an untrusted endpoint as a model name.
     ensure!(
@@ -142,7 +175,10 @@ mod tests {
     }
     #[test]
     fn localhost_get_discovery_and_redirect_are_bounded_and_explicit() {
-        use std::{io::Write, net::TcpListener};
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+        };
         for (status, body, expected_ok) in [
             ("200 OK", r#"{"data":[{"id":"fixture-model"}]}"#, true),
             ("302 Found", "", false),
@@ -193,5 +229,57 @@ mod tests {
                 assert!(!error.to_string().contains("fixture-secret"));
             }
         }
+    }
+
+    #[test]
+    fn cancellation_drops_a_pending_model_list_request_promptly() {
+        use std::{io::Read, net::TcpListener, sync::mpsc};
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let source = format!(
+            "http://{}/v1/chat/completions",
+            listener.local_addr().unwrap()
+        );
+        let (accepted, request_seen) = mpsc::channel();
+        let server = std::thread::spawn(move || {
+            listener.set_nonblocking(true).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(3);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline);
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("fixture accept failed: {error}"),
+                }
+            };
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut request = [0; 1024];
+            let size = stream.read(&mut request).unwrap();
+            assert!(String::from_utf8_lossy(&request[..size]).starts_with("GET /v1/models "));
+            accepted.send(()).unwrap();
+            let mut byte = [0; 1];
+            stream.read(&mut byte).unwrap() == 0
+        });
+        let cancelled = std::sync::Arc::new(AtomicBool::new(false));
+        let worker_cancel = std::sync::Arc::clone(&cancelled);
+        let (result_tx, result_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            result_tx
+                .send(fetch_cancellable(&source, String::new(), &worker_cancel))
+                .unwrap();
+        });
+        request_seen.recv_timeout(Duration::from_secs(3)).unwrap();
+        let started = Instant::now();
+        cancelled.store(true, Ordering::Relaxed);
+        let result = result_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        worker.join().unwrap();
+        assert!(result.unwrap_err().to_string().contains("已取消"));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(server.join().unwrap());
     }
 }

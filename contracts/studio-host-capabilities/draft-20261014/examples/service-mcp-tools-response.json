@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "operation": "mcp.tools.list",
+  "result": {
+    "serverRef": "connected-server-ref",
+    "tools": [
+      {
+        "name": "read_status",
+        "description": "Read current project status",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "effectClass": "read_only"
+      },
+      {
+        "name": "write_file",
+        "description": "Mutates a file",
+        "inputSchema": {
+          "type": "object"
+        },
+        "effectClass": "mutating"
+      }
+    ]
+  }
+}

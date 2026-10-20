@@ -4,6 +4,9 @@ use std::time::Duration;
 impl Workspace {
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let active = self.active_id().to_owned();
+        if ctx.input(|input| !input.raw.events.is_empty()) {
+            self.note_activity(&active, Instant::now());
+        }
         let pending = self.operation_pending();
         #[cfg(any(test, feature = "ui-preview"))]
         let header_top = ui.next_widget_position();
@@ -87,12 +90,25 @@ impl Workspace {
                 } else {
                     ui.small("临时实例");
                 }
+                if self.autosave_enabled(&active) {
+                    if ui.button("暂停自动保存").clicked() {
+                        let _ = self.set_autosave(&active, false);
+                        self.status = "已暂停此实例的自动保存；已完成的保存仍保留".into();
+                    }
+                    ui.small("自动保存已启用");
+                } else if ui.button("启用自动保存…").clicked() {
+                    self.autosave_confirm = Some(active.clone());
+                }
                 if pending {
                     ui.spinner();
                     ui.small("读写实例库中…");
                 }
             });
-            ui.small("切换会保留本次工作，后台解析和合并继续运行。修改不会自动保存，退出前请保存需要保留的内容。");
+            ui.small(if self.autosave_enabled(&active) {
+                "切换会保留本次工作，后台解析和合并继续收取结果；停止操作 3 秒后自动保存到本机。"
+            } else {
+                "切换会保留本次工作，后台解析和合并继续运行。修改不会自动保存，退出前请保存需要保留的内容。"
+            });
             if !self.status.is_empty() {
                 ui.label(&self.status);
             }
@@ -121,12 +137,43 @@ impl Workspace {
         #[cfg(not(any(test, feature = "ui-preview")))]
         let _ = content;
         self.dialogs(ctx);
+        if let Some(delay) = self.autosave_wake_after(Instant::now()) {
+            ctx.request_repaint_after(delay);
+        }
         if self.operation_pending() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
     }
 
     fn dialogs(&mut self, ctx: &egui::Context) {
+        if let Some(id) = self.autosave_confirm.clone() {
+            let mut enable = false;
+            let mut cancel = false;
+            egui::Modal::new(egui::Id::new("enable-data-autosave")).show(ctx, |ui| {
+                ui.set_max_width(520.0);
+                ui.heading("为此实例启用自动保存？");
+                if let Some(instance) = self.instances.iter().find(|item| item.id == id) {
+                    ui.label(format!("实例：{}", instance.name));
+                }
+                ui.label("停止操作 3 秒后自动保存；任务运行时会等任务结束。内容写入本机未加密的工作实例库。已保存内容可从“已保存实例”恢复。此选项只在本次运行期间有效，重启后默认关闭。此实例已有的内容也会在启用后保存。");
+                ui.label("限额：单项 64 MiB、总量 128 MiB、最多 256 项。");
+                ui.label("暂停不会删除已保存快照；自动保存的写入无法撤回，可在实例库中单独删除。");
+                ui.horizontal(|ui| {
+                    cancel = ui.button("取消").clicked();
+                    enable = ui.button("确认启用").clicked();
+                });
+            });
+            if cancel {
+                self.autosave_confirm = None;
+            }
+            if enable {
+                self.autosave_confirm = None;
+                match self.set_autosave(&id, true) {
+                    Ok(()) => self.status = "已启用此实例的自动保存；停止操作 3 秒后保存".into(),
+                    Err(error) => self.status = error.to_string(),
+                }
+            }
+        }
         if self.save_confirm {
             let mut save = false;
             let mut cancel = false;

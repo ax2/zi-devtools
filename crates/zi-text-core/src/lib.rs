@@ -1,12 +1,13 @@
 //! Pure text algorithms and the bounded Studio compute contract. No host access.
+pub mod sql;
 pub mod transforms;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{
     Deserialize, Serialize,
-    de::{self, MapAccess, SeqAccess, Visitor},
+    de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor},
 };
-use serde_json::{Value, value::RawValue};
+use serde_json::{Number, Value};
 use sha2::{Digest, Sha256};
 
 pub const REQUEST_LIMIT: usize = 48 * 1024;
@@ -209,6 +210,11 @@ pub fn execute(capability: &str, input: &str) -> ResultEnvelope {
                 }
             })
             .map_err(|_| ("INVALID_INPUT", "JSON 无效、重复键、深度或整数范围超限")),
+        "devtools.text.json.validate" => strict_json(input, 0)
+            .map(|_| "JSON 有效（插件兼容规则）".to_owned())
+            .map_err(|_| ("INVALID_INPUT", "JSON 无效、重复键、深度或整数范围超限")),
+        "devtools.text.sql.format" => sql::format(input, "generic")
+            .map_err(|_| ("INVALID_INPUT", "SQL 为空或方言字面量格式无效")),
         _ => Err(("UNSUPPORTED_OPERATION", "未注册该工具能力")),
     };
     match result {
@@ -232,96 +238,98 @@ pub fn serialize_result(result: &ResultEnvelope) -> Vec<u8> {
 }
 
 fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
-    // RawValue validates the complete syntax without discarding duplicate keys or
-    // rounding integer tokens. Re-parse only children; bounded text/depth keep work finite.
-    let raw: &RawValue = serde_json::from_str(input)?;
-    let input = raw.get();
-    if input.starts_with('{') || input.starts_with('[') {
-        if depth >= 64 {
-            return Err(de::Error::custom("depth"));
+    struct StrictSeed(usize);
+    impl<'de> DeserializeSeed<'de> for StrictSeed {
+        type Value = Value;
+
+        fn deserialize<D: serde::Deserializer<'de>>(
+            self,
+            deserializer: D,
+        ) -> Result<Self::Value, D::Error> {
+            deserializer.deserialize_any(StrictVisitor(self.0))
         }
-        struct Container(usize);
-        impl<'de> Visitor<'de> for Container {
-            type Value = Value;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("container")
-            }
-            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Value, M::Error> {
-                let mut result = serde_json::Map::new();
-                while let Some(key) = map.next_key::<String>()? {
-                    if result.contains_key(&key) {
-                        return Err(de::Error::custom("duplicate"));
-                    }
-                    let raw = map.next_value::<Box<RawValue>>()?;
-                    let value = strict_json(raw.get(), self.0 + 1).map_err(de::Error::custom)?;
-                    result.insert(key, value);
-                }
-                result.sort_keys();
-                Ok(Value::Object(result))
-            }
-            fn visit_seq<S: SeqAccess<'de>>(self, mut seq: S) -> Result<Value, S::Error> {
-                let mut result = Vec::new();
-                while let Some(raw) = seq.next_element::<Box<RawValue>>()? {
-                    result.push(strict_json(raw.get(), self.0 + 1).map_err(de::Error::custom)?);
-                }
-                Ok(Value::Array(result))
-            }
+    }
+
+    struct StrictVisitor(usize);
+    impl<'de> Visitor<'de> for StrictVisitor {
+        type Value = Value;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("JSON value within strict compatibility limits")
         }
-        let mut parser = serde_json::Deserializer::from_str(input);
-        return serde::Deserializer::deserialize_any(&mut parser, Container(depth));
+        fn visit_bool<E: de::Error>(self, value: bool) -> Result<Value, E> {
+            Ok(Value::Bool(value))
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Value, E> {
+            Ok(Value::Null)
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Value, E> {
+            Ok(Value::Null)
+        }
+        fn visit_str<E: de::Error>(self, value: &str) -> Result<Value, E> {
+            Ok(Value::String(value.to_owned()))
+        }
+        fn visit_string<E: de::Error>(self, value: String) -> Result<Value, E> {
+            Ok(Value::String(value))
+        }
+        fn visit_i64<E: de::Error>(self, value: i64) -> Result<Value, E> {
+            if !(-9_007_199_254_740_991..=9_007_199_254_740_991).contains(&value) {
+                return Err(E::custom("unsafe integer"));
+            }
+            Ok(Value::Number(Number::from(value)))
+        }
+        fn visit_u64<E: de::Error>(self, value: u64) -> Result<Value, E> {
+            if value > 9_007_199_254_740_991 {
+                return Err(E::custom("unsafe integer"));
+            }
+            Ok(Value::Number(Number::from(value)))
+        }
+        fn visit_f64<E: de::Error>(self, value: f64) -> Result<Value, E> {
+            if !value.is_finite() || (value.fract() == 0.0 && value.abs() > 9_007_199_254_740_991.0)
+            {
+                return Err(E::custom("unsafe rounded integer"));
+            }
+            Number::from_f64(value)
+                .map(Value::Number)
+                .ok_or_else(|| E::custom("invalid number"))
+        }
+        fn visit_seq<S: SeqAccess<'de>>(self, mut seq: S) -> Result<Value, S::Error> {
+            if self.0 >= 64 {
+                return Err(de::Error::custom("depth"));
+            }
+            let mut result = Vec::new();
+            while let Some(value) = seq.next_element_seed(StrictSeed(self.0 + 1))? {
+                result.push(value);
+            }
+            Ok(Value::Array(result))
+        }
+        fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Value, M::Error> {
+            if self.0 >= 64 {
+                return Err(de::Error::custom("depth"));
+            }
+            let mut result = serde_json::Map::new();
+            while let Some(key) = map.next_key::<String>()? {
+                if result.contains_key(&key) {
+                    return Err(de::Error::custom("duplicate"));
+                }
+                let value = map.next_value_seed(StrictSeed(self.0 + 1))?;
+                result.insert(key, value);
+            }
+            result.sort_keys();
+            Ok(Value::Object(result))
+        }
     }
-    if (input.starts_with('-') || input.as_bytes()[0].is_ascii_digit()) && unsafe_integer(input) {
-        return Err(de::Error::custom("unsafe integer"));
-    }
-    let value: Value = serde_json::from_str(input)?;
-    if let Value::Number(number) = &value
-        && let Some(float) = number.as_f64()
-        && float.fract() == 0.0
-        && float.abs() > 9_007_199_254_740_991.0
-    {
-        return Err(de::Error::custom("unsafe rounded integer"));
-    }
+
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let value = StrictSeed(depth).deserialize(&mut deserializer)?;
+    deserializer.end()?;
     Ok(value)
 }
 
-// Compare mathematical integer tokens BEFORE f64 conversion, including exponent
-// and decimal forms. Avoid allocating an exponent-sized string for hostile input.
-fn unsafe_integer(token: &str) -> bool {
-    let token = token.strip_prefix('-').unwrap_or(token);
-    let (mantissa, exponent) = token.split_once(['e', 'E']).unwrap_or((token, "0"));
-    let exponent = exponent
-        .parse::<i64>()
-        .unwrap_or(if exponent.starts_with('-') {
-            i64::MIN
-        } else {
-            i64::MAX
-        });
-    let fractional = mantissa
-        .split_once('.')
-        .map_or(0, |(_, tail)| tail.len() as i64);
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
-    let digits = digits.trim_start_matches('0');
-    if digits.is_empty() {
-        return false;
-    }
-    let zeros = digits.len() - digits.trim_end_matches('0').len();
-    let shift = exponent.saturating_sub(fractional);
-    if shift < 0 && shift.unsigned_abs() > zeros as u64 {
-        return false;
-    }
-    let length = (digits.len() as i64).saturating_add(shift);
-    if length > 16 {
-        return true;
-    }
-    if length < 16 {
-        return false;
-    }
-    let normalized = if shift >= 0 {
-        format!("{digits}{}", "0".repeat(shift as usize))
-    } else {
-        digits[..length as usize].to_owned()
-    };
-    normalized.as_str() > "9007199254740991"
+/// Parse protocol JSON once while rejecting duplicate keys, unsafe numbers,
+/// and nesting beyond the frozen compute contract.
+pub fn parse_strict_json(input: &str) -> Result<Value, serde_json::Error> {
+    strict_json(input, 0)
 }
 
 #[cfg(test)]
@@ -385,6 +393,48 @@ mod tests {
             assert!(!execute("devtools.text.base64.decode", input).ok);
         }
         assert_eq!(json("9007199254740992", false).unwrap(), "9007199254740992");
+    }
+
+    #[test]
+    fn json_validation_has_its_own_capability_and_strict_semantics() {
+        let valid = execute("devtools.text.json.validate", r#"{"ok":true,"n":1}"#);
+        assert!(valid.ok);
+        assert_eq!(valid.data.unwrap().text, "JSON 有效（插件兼容规则）");
+        for invalid in [
+            "not json",
+            r#"{"x":1,"x":2}"#,
+            "9007199254740992",
+            &format!("{}0{}", "[".repeat(65), "]".repeat(65)),
+        ] {
+            let result = execute("devtools.text.json.validate", invalid);
+            assert!(!result.ok, "{invalid}");
+            assert_eq!(result.error.unwrap().code, "INVALID_INPUT");
+        }
+        assert_eq!(
+            execute("devtools.text.json.format", "{}")
+                .data
+                .unwrap()
+                .text,
+            "{}"
+        );
+    }
+
+    #[test]
+    fn sql_format_capability_uses_the_shared_core_and_bounded_errors() {
+        let result = execute(
+            "devtools.text.sql.format",
+            "select id,name from users where active=true",
+        );
+        assert!(result.ok);
+        let formatted = result.data.unwrap().text;
+        assert_eq!(
+            formatted,
+            "SELECT id, name\nFROM users\nWHERE active = TRUE"
+        );
+
+        let empty = execute("devtools.text.sql.format", " \n");
+        assert!(!empty.ok);
+        assert_eq!(empty.error.unwrap().code, "INVALID_INPUT");
     }
     #[test]
     fn envelope_limits_required_fields_and_no_input_echo() {

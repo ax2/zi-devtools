@@ -2,6 +2,10 @@ use super::*;
 use egui::{RichText, vec2};
 
 impl State {
+    pub(crate) fn reminder_center_requested(&self) -> bool {
+        self.alarm_open
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_navigation_smoke(&mut self, phase: u8, week: bool) {
         if phase == 0 {
@@ -84,7 +88,15 @@ impl State {
         self.preview_delivered
             .store(false, std::sync::atomic::Ordering::Release);
     }
+    pub(crate) fn pending_reminder_count(&self) -> usize {
+        self.alarms.len()
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        self.ui_with_reminder_count(ui, 0);
+    }
+
+    pub fn ui_with_reminder_count(&mut self, ui: &mut egui::Ui, external_reminder_count: usize) {
         let _overview = ui.horizontal(|ui| {
             ui.heading(if self.calendar {
                 "万年历与日程"
@@ -93,7 +105,10 @@ impl State {
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .button(format!("待处理提醒 · {}", self.alarms.len()))
+                    .button(format!(
+                        "待处理提醒 · {}",
+                        self.alarms.len().saturating_add(external_reminder_count)
+                    ))
                     .clicked()
                 {
                     self.alarm_open = true;
@@ -143,7 +158,7 @@ impl State {
             ui.separator();
             ui.add(
                 egui::TextEdit::singleline(&mut self.query)
-                    .hint_text("搜索标题与正文…")
+                    .hint_text("搜索标题、正文与标签…")
                     .desired_width(220.0),
             );
             ui.checkbox(&mut self.trash, "回收站");
@@ -561,7 +576,7 @@ impl State {
                         item.updated,
                         item.schedule.clone(),
                     );
-                    let detail = if let Some(s) = schedule {
+                    let mut detail = if let Some(s) = schedule {
                         let occurrence = if query.is_empty() && !self.trash {
                             s.covering(self.selected).unwrap_or(s.start)
                         } else {
@@ -580,6 +595,19 @@ impl State {
                             .map(|d| d.format("更新于 %m-%d %H:%M").to_string())
                             .unwrap_or_default()
                     };
+                    if let Some(saved) = self.items.iter().find(|i| i.id == id)
+                        && !saved.tags.is_empty()
+                    {
+                        detail.push_str("  ·  ");
+                        detail.push_str(
+                            &saved
+                                .tags
+                                .iter()
+                                .map(|tag| format!("#{tag}"))
+                                .collect::<Vec<_>>()
+                                .join(" "),
+                        );
+                    }
                     let selected = self.draft.as_ref().is_some_and(|i| i.id == id);
                     let row_response = ui
                         .push_id(&id, |ui| {
@@ -645,6 +673,27 @@ impl State {
             #[cfg(feature="ui-preview")] {self.preview_title_rect=Some((title_control.rect,ui.clip_rect()));}
             let _=title_control;
             ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label("标签");
+                if item.trash {
+                    ui.label(if item.tags.is_empty() {
+                        "无".to_owned()
+                    } else {
+                        item.tags
+                            .iter()
+                            .map(|tag| format!("#{tag}"))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    });
+                } else {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.tags_text)
+                            .desired_width(f32::INFINITY)
+                            .hint_text("用逗号分隔，如：工作, 研究"),
+                    );
+                }
+            });
+            ui.small("最多 16 个标签，每个 24 字；标签会参与搜索。使用逗号分隔。");
             if let Some(s) = &mut item.schedule {
                 let was_all_day = s.all_day;
                 let all_day_control = ui.checkbox(&mut s.all_day, "全天事件");
@@ -850,8 +899,15 @@ impl State {
         }
     }
 
-    pub fn reminder_ui(&mut self, ctx: &egui::Context) -> bool {
-        if !self.alarm_open {
+    pub fn reminder_center_ui(
+        &mut self,
+        clock: &mut crate::clock::State,
+        center_open: &mut bool,
+        ctx: &egui::Context,
+        local_now: DateTime<Local>,
+        utc_now: DateTime<chrono::Utc>,
+    ) -> bool {
+        if !*center_open {
             return false;
         }
         let mut open = true;
@@ -860,20 +916,42 @@ impl State {
         let mut snooze_rects = self.preview_snooze_rects;
         let mut action = None;
         let mut selected = None;
+        let mut clock_action = None;
         #[cfg(feature = "ui-preview")]
         let mut open_rect = None;
-        egui::Window::new("日程提醒")
-            .id(egui::Id::new("planner-alarms"))
+        egui::Window::new("提醒中心")
+            .id(egui::Id::new("shared-reminder-center"))
             .open(&mut open)
             .collapsible(false)
-            .default_width(440.0)
+            .default_width(520.0)
             .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label("提醒会保留到你处理。关闭此窗口可稍后从日程页继续查看。");
+                ui.label("时钟、计时器、专注与日程提醒集中在此。关闭窗口不会确认或删除提醒。");
                 egui::ScrollArea::vertical()
                     .max_height(380.0)
                     .show(ui, |ui| {
-                        if self.alarms.is_empty() {
+                        if !clock.notices.is_empty() {
+                            ui.heading("时钟工作台");
+                            for notice in &clock.notices {
+                                ui.group(|ui| {
+                                    ui.strong(&notice.title);
+                                    ui.horizontal_wrapped(|ui| {
+                                        if ui.button("已知晓").clicked() {
+                                            clock_action = Some((notice.source, false));
+                                        }
+                                        if notice.source != crate::clock::Source::Focus
+                                            && ui.button("5 分钟后再提醒").clicked()
+                                        {
+                                            clock_action = Some((notice.source, true));
+                                        }
+                                    });
+                                });
+                            }
+                        }
+                        if !self.alarms.is_empty() {
+                            ui.heading("日程");
+                        }
+                        if self.alarms.is_empty() && clock.notices.is_empty() {
                             ui.label("没有待处理提醒。");
                         }
                         for (id, at) in &self.alarms {
@@ -938,7 +1016,8 @@ impl State {
                     ui.colored_label(ui.visuals().error_fg_color, &self.message);
                 }
             });
-        self.alarm_open = open;
+        *center_open = open;
+        self.alarm_open &= open && !self.alarms.is_empty();
         self.snooze_minutes = snooze_minutes;
         #[cfg(feature = "ui-preview")]
         {
@@ -950,7 +1029,12 @@ impl State {
         }
         if let Some((id, at)) = selected {
             match self.open_event(&id, at) {
-                Ok(()) => return true,
+                Ok(()) => {
+                    if clock.notices.is_empty() {
+                        *center_open = false;
+                    }
+                    return true;
+                }
                 Err(error) => {
                     self.message = error.to_string();
                     self.error = true;
@@ -958,10 +1042,21 @@ impl State {
             }
         }
         if let Some((id, at, action)) = action
-            && let Err(error) = self.respond_reminder(&id, at, action, Local::now())
+            && let Err(error) = self.respond_reminder(&id, at, action, local_now)
         {
             self.message = error.to_string();
             self.error = true;
+        }
+        if let Some((source, snooze)) = clock_action {
+            if snooze {
+                clock.snooze_notice(source, utc_now);
+            } else {
+                clock.acknowledge(source);
+            }
+        }
+        if self.alarms.is_empty() && clock.notices.is_empty() {
+            *center_open = false;
+            self.alarm_open = false;
         }
         false
     }

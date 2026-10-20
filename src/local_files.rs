@@ -124,6 +124,15 @@ pub(crate) fn save_new_moved(path: &Path, bytes: &[u8], cancel: &AtomicBool) -> 
     )
 }
 
+/// Atomically publish a new file from a bounded streaming writer.
+pub(crate) fn save_new_with(
+    path: &Path,
+    cancel: &AtomicBool,
+    write: impl FnOnce(&mut fs::File) -> Result<()>,
+) -> Result<PathBuf> {
+    publish_using(path, cancel, || {}, write, move_new)
+}
+
 fn move_new(temporary: &Path, path: &Path) -> Result<()> {
     #[cfg(windows)]
     {

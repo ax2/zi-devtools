@@ -1,5 +1,6 @@
 //! Versioned definitions and bounded image execution, separate from view state.
 use super::*;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 pub(super) const RECIPE_LIMIT: usize = 65536;
 const RESULT_LIMIT: usize = 256 * 1024 * 1024;
@@ -25,6 +26,8 @@ pub(crate) enum Step {
     },
     #[serde(rename = "image.info")]
     Info { version: u32 },
+    #[serde(rename = "image.ocr")]
+    Ocr { version: u32 },
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -50,6 +53,7 @@ impl Step {
             Self::Resize { .. } => "缩放",
             Self::Encode { .. } => "编码",
             Self::Info { .. } => "信息报告",
+            Self::Ocr { .. } => "本机 OCR",
         }
     }
     pub(super) fn validate(&self) -> Result<()> {
@@ -57,7 +61,8 @@ impl Step {
             Self::Crop { version, .. }
             | Self::Resize { version, .. }
             | Self::Encode { version, .. }
-            | Self::Info { version } => *version,
+            | Self::Info { version }
+            | Self::Ocr { version } => *version,
         };
         ensure!(version == 1, "不支持此图片动作版本");
         match self {
@@ -81,6 +86,7 @@ impl Step {
                 ensure!((35..=95).contains(quality), "JPEG质量需在35..95内")
             }
             Self::Info { .. } => {}
+            Self::Ocr { .. } => {}
         }
         Ok(())
     }
@@ -144,6 +150,7 @@ pub(super) struct Output {
     pub(super) image: Arc<DynamicImage>,
     pub(super) encoded: Option<Arc<Vec<u8>>>,
     pub(super) report: Option<String>,
+    pub(super) report_label: &'static str,
     pub(super) label: &'static str,
 }
 #[derive(Default)]
@@ -193,6 +200,7 @@ pub(super) fn execute_budgeted(
         }
         let result = (|| -> Result<Output> {
             let mut report = None;
+            let mut report_label = "图片信息报告 JSON";
             match step {
                 Step::Crop {
                     x,
@@ -201,30 +209,28 @@ pub(super) fn execute_budgeted(
                     height,
                     ..
                 } => {
-                    let w = u64::from(current.width());
-                    let h = u64::from(current.height());
-                    let x0 = w * u64::from(*x) / 10000;
-                    let y0 = h * u64::from(*y) / 10000;
-                    let x1 = (w * (u64::from(*x) + u64::from(*width))).div_ceil(10000);
-                    let y1 = (h * (u64::from(*y) + u64::from(*height))).div_ceil(10000);
-                    ensure!(x1 > x0 && y1 > y0, "裁剪区域为空");
+                    let region = zi_image_core::CropRegion {
+                        x: *x,
+                        y: *y,
+                        width: *width,
+                        height: *height,
+                    };
+                    let bounds =
+                        zi_image_core::crop_bounds(current.width(), current.height(), region)?;
                     reserve(
                         retained,
-                        ((x1 - x0) * (y1 - y0)) as usize
+                        bounds.width as usize
+                            * bounds.height as usize
                             * usize::from(current.color().bytes_per_pixel()),
                     )?;
                     let guard = memory
                         .reserve(
-                            ((x1 - x0) * (y1 - y0)) as usize
+                            bounds.width as usize
+                                * bounds.height as usize
                                 * usize::from(current.color().bytes_per_pixel()),
                         )
                         .map_err(anyhow::Error::msg)?;
-                    current = Arc::new(current.crop_imm(
-                        x0 as u32,
-                        y0 as u32,
-                        (x1 - x0) as u32,
-                        (y1 - y0) as u32,
-                    ));
+                    current = Arc::new(zi_image_core::crop_percent(&current, region)?);
                     guard
                         .promote(&current, super::super::memory::pixels(&current))
                         .map_err(anyhow::Error::msg)?;
@@ -232,12 +238,12 @@ pub(super) fn execute_budgeted(
                     retained = retained.saturating_add(current.as_bytes().len());
                 }
                 Step::Resize { max_width, .. } => {
-                    let width = current.width().min(*max_width);
+                    let (width, height) = zi_image_core::resize_dimensions(
+                        current.width(),
+                        current.height(),
+                        *max_width,
+                    )?;
                     if width != current.width() {
-                        let height = ((u64::from(current.height()) * u64::from(width)
-                            + u64::from(current.width()) / 2)
-                            / u64::from(current.width()))
-                        .max(1) as u32;
                         reserve(
                             retained,
                             width as usize
@@ -251,8 +257,7 @@ pub(super) fn execute_budgeted(
                                     * usize::from(current.color().bytes_per_pixel()),
                             )
                             .map_err(anyhow::Error::msg)?;
-                        current =
-                            Arc::new(current.resize_exact(width, height, FilterType::Lanczos3));
+                        current = Arc::new(zi_image_core::resize_to_width(&current, *max_width)?);
                         guard
                             .promote(&current, super::super::memory::pixels(&current))
                             .map_err(anyhow::Error::msg)?;
@@ -300,12 +305,33 @@ pub(super) fn execute_budgeted(
                     encoded = Some(bytes);
                 }
                 Step::Info { .. } => {
+                    let generated_by = crate::tool_provenance::current_for_tool("image-workflow")?;
                     report = Some(serde_json::to_string_pretty(&serde_json::json!({
-                        "schemaVersion":1,"material":"image-workflow-report","step":index+1,
+                        "schemaVersion":2,"material":"image-workflow-report","generatedBy":generated_by,"step":index+1,
                         "width":current.width(),"height":current.height(),"hasAlphaChannel":current.color().has_alpha(),
                         "encoding":encoded.as_ref().map(|b|serde_json::json!({"bytes":b.len(),"format":match image::guess_format(b).ok(){Some(ImageFormat::Png)=>"png",Some(ImageFormat::Jpeg)=>"jpeg",Some(ImageFormat::WebP)=>"webp",_=>"unknown"}})),
-                        "actionVersion":1,"toolVersion":relay::origin("image-workflow")?.version
+                        "actionVersion":1
                     }))?);
+                }
+                Step::Ocr { .. } => {
+                    let rgba_bytes = (current.width() as usize)
+                        .checked_mul(current.height() as usize)
+                        .and_then(|pixels| pixels.checked_mul(4))
+                        .context("OCR 图片缓冲尺寸溢出")?;
+                    let _ocr_memory = memory
+                        .reserve(rgba_bytes.saturating_mul(2))
+                        .map_err(anyhow::Error::msg)?;
+                    #[cfg(windows)]
+                    {
+                        let text = crate::clipboard::recognize_image(&current)
+                            .map_err(anyhow::Error::msg)?;
+                        reserve(retained, text.len())?;
+                        retained = retained.saturating_add(text.len());
+                        report = Some(text);
+                        report_label = "本机 OCR 识别文字";
+                    }
+                    #[cfg(not(windows))]
+                    anyhow::bail!("本机 OCR 目前仅支持 Windows");
                 }
             }
             ensure!(
@@ -317,6 +343,7 @@ pub(super) fn execute_budgeted(
                 image: current.clone(),
                 encoded: encoded.clone(),
                 report,
+                report_label,
                 label: step.label(),
             })
         })();

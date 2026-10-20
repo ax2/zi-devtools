@@ -8,6 +8,7 @@ import ctypes
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -22,8 +23,12 @@ def main():
         raise RuntimeError('Optimized Python disables validation; installer fixture refused')
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true', help='Build fixtures without installing')
+    parser.add_argument('--keep-artifacts', action='store_true',
+                        help='Keep compile-only MSI fixtures under the build directory')
     parser.add_argument('--rust-updater', action='store_true', help='CI only: invoke authenticated Rust updater test')
     args = parser.parse_args()
+    if args.keep_artifacts and not args.compile_only:
+        parser.error('--keep-artifacts requires --compile-only')
     build_root = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
     probe = build_root / 'debug/examples/inspect_installer.exe'
     assert probe.is_file(), 'Build the read-only probe first'
@@ -82,6 +87,11 @@ def main():
         print('PASS: production Rust updater transaction verified on disposable runner', flush=True)
         return
     if args.compile_only:
+        if args.keep_artifacts:
+            print(f'Compile-only fixtures retained at {folder}', flush=True)
+        else:
+            shutil.rmtree(folder)
+            print('Temporary compile-only MSI fixtures removed', flush=True)
         return
 
     # Native installer APIs accept a property string, without a shell or msiexec quoting.

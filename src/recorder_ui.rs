@@ -1,9 +1,11 @@
 use crate::recorder::{
     self, AudioGains, AudioMode, DisplayInfo, Event, RecordingQuality, Region, Session,
 };
+mod selection;
 mod tutorial_ui;
-use eframe::egui::{self, Color32, RichText, Sense, Stroke, StrokeKind};
+use eframe::egui::{self, Color32, RichText, Sense};
 use std::{
+    io::Write,
     path::{Path, PathBuf},
     sync::atomic::Ordering,
     time::{Duration, Instant},
@@ -206,7 +208,9 @@ pub struct RecorderState {
     gains: AudioGains,
     quality: RecordingQuality,
     tutorial: recorder::tutorial::Settings,
+    tutorial_shortcut_text: String,
     tutorial_preview: tutorial_ui::Preview,
+    teleprompter: tutorial_ui::TeleprompterState,
     tutorial_open_requested: bool,
     size_preview_minutes: u16,
     countdown_seconds: u64,
@@ -216,10 +220,15 @@ pub struct RecorderState {
     minimize_requested: bool,
     restore_after_finish: bool,
     restore_requested: bool,
+    selection_snapshot_pending: bool,
+    selection_snapshot_after: Option<Instant>,
+    restore_after_selection: bool,
     session: Option<Session>,
     started: Option<Instant>,
     pause_started: Option<Instant>,
     paused_time: Duration,
+    chapters: Vec<recorder::chapters::Marker>,
+    recorded_duration: Option<Duration>,
     status: String,
     error: bool,
     last_file: Option<PathBuf>,
@@ -245,7 +254,9 @@ impl Default for RecorderState {
             gains: AudioGains::default(),
             quality: RecordingQuality::default(),
             tutorial: recorder::tutorial::Settings::default(),
+            tutorial_shortcut_text: String::new(),
             tutorial_preview: tutorial_ui::Preview::default(),
+            teleprompter: tutorial_ui::TeleprompterState::default(),
             tutorial_open_requested: false,
             size_preview_minutes: 5,
             countdown_seconds: 3,
@@ -255,10 +266,15 @@ impl Default for RecorderState {
             minimize_requested: false,
             restore_after_finish: false,
             restore_requested: false,
+            selection_snapshot_pending: false,
+            selection_snapshot_after: None,
+            restore_after_selection: false,
             session: None,
             started: None,
             pause_started: None,
             paused_time: Duration::ZERO,
+            chapters: Vec::new(),
+            recorded_duration: None,
             status: String::new(),
             error: false,
             last_file: None,
@@ -271,6 +287,13 @@ impl Default for RecorderState {
 }
 
 impl RecorderState {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_navigation_audio(&self) -> AudioMode {
+        self.audio
+    }
+    pub(crate) fn navigation_blocked(&self) -> bool {
+        self.selecting || self.selection_snapshot_pending
+    }
     pub fn active_tool_id(&self) -> &str {
         &self.entry_id
     }
@@ -306,6 +329,20 @@ impl RecorderState {
         if self.auto_minimize && tray_available {
             self.minimize_requested = true;
             self.restore_after_finish = true;
+        }
+    }
+    fn request_selection_snapshot(&mut self) {
+        self.selection_snapshot_pending = true;
+        self.selection_snapshot_after = Some(Instant::now() + Duration::from_millis(150));
+        self.minimize_requested = true;
+        self.restore_after_selection = true;
+    }
+    fn finish_selection_snapshot(&mut self) {
+        self.selection_snapshot_pending = false;
+        self.selection_snapshot_after = None;
+        if self.restore_after_selection {
+            self.restore_requested = true;
+            self.restore_after_selection = false;
         }
     }
     fn finish_auto_minimize(&mut self) {
@@ -391,6 +428,65 @@ impl RecorderState {
         })
     }
 
+    fn add_chapter_marker(&mut self) {
+        if self.tray_status() != TrayRecordingStatus::Recording {
+            return;
+        }
+        let Some(elapsed) = self.elapsed_duration() else {
+            return;
+        };
+        if recorder::chapters::push_marker(&mut self.chapters, elapsed) {
+            self.status = format!(
+                "已标记章节 {} · {}",
+                self.chapters.len(),
+                recorder::chapters::timestamp(
+                    self.chapters.last().map_or(0, |marker| marker.start_ms)
+                )
+            );
+            self.error = false;
+        } else if self.chapters.len() >= recorder::chapters::MAX_CHAPTERS {
+            self.status = "章节标记已达 256 项上限".into();
+            self.error = true;
+        } else {
+            self.status = "标记间隔不足 1 毫秒，未添加重复章节".into();
+            self.error = true;
+        }
+    }
+
+    fn export_chapters_to(&mut self, path: &Path) {
+        let Some(duration) = self.recorded_duration else {
+            self.status = "录制结束后才能导出章节".into();
+            self.error = true;
+            return;
+        };
+        let text = match recorder::chapters::ffmetadata(&self.chapters, duration) {
+            Ok(text) => text,
+            Err(error) => {
+                self.status = format!("章节导出失败：{error:#}");
+                self.error = true;
+                return;
+            }
+        };
+        let result = crate::local_files::save_new_with(
+            path,
+            &std::sync::atomic::AtomicBool::new(false),
+            |file| {
+                file.write_all(text.as_bytes())?;
+                Ok(())
+            },
+        );
+        match result {
+            Ok(saved) => {
+                self.status = format!("章节元数据已另存：{}", saved.display());
+                self.error = false;
+            }
+            Err(error) => {
+                self.status = format!("章节导出失败：{error:#}");
+                self.error = true;
+            }
+        }
+    }
+
     pub fn select_audio_mode(&mut self, mode: AudioMode) {
         if self.session.is_none() && self.countdown_deadline.is_none() {
             self.audio = mode;
@@ -424,9 +520,12 @@ impl RecorderState {
             self.finish_auto_minimize();
             return;
         }
-        if let Some(session) = &self.session
-            && !session.stop.swap(true, Ordering::AcqRel)
-        {
+        let should_stop = self
+            .session
+            .as_ref()
+            .is_some_and(|session| !session.stop.swap(true, Ordering::AcqRel));
+        if should_stop {
+            self.recorded_duration = self.elapsed_duration();
             self.status = "正在完成 MP4 文件…".into();
         }
     }
@@ -574,10 +673,14 @@ impl RecorderState {
                         self.started = Some(Instant::now());
                         self.paused_time = Duration::ZERO;
                         self.pause_started = None;
+                        self.chapters.clear();
+                        self.recorded_duration = None;
                         self.status = "正在录制…".into();
                         self.error = false;
                     }
                     Event::Finished(result) => {
+                        self.recorded_duration =
+                            self.recorded_duration.or_else(|| self.elapsed_duration());
                         self.started = None;
                         self.pause_started = None;
                         self.session = None;
@@ -610,6 +713,8 @@ impl RecorderState {
                         break;
                     }
                     Event::Interrupted { path, reason } => {
+                        self.recorded_duration =
+                            self.recorded_duration.or_else(|| self.elapsed_duration());
                         self.started = None;
                         self.pause_started = None;
                         self.session = None;
@@ -754,25 +859,15 @@ impl RecorderState {
                 {
                     Ok(_) => {
                         #[cfg(windows)]
-                        match capture_display_snapshot(self.display.as_ref().unwrap()) {
-                            Ok(image) => {
-                                self.selection_texture = Some(ui.ctx().load_texture(
-                                    "recorder-selection-snapshot",
-                                    image,
-                                    egui::TextureOptions::LINEAR,
-                                ));
-                                self.selecting = true;
-                            }
-                            Err(error) => {
-                                self.status = format!("无法预览当前屏幕：{error:#}");
-                                self.error = true;
-                            }
-                        }
-                        self.drag_start = None;
-                        if self.selecting {
-                            self.status = "当前屏幕画面已显示，按住鼠标拖出区域；Esc 取消".into();
+                        {
+                            self.selection_texture = None;
+                            self.selecting = false;
+                            self.request_selection_snapshot();
+                            ui.ctx().request_repaint_after(Duration::from_millis(30));
+                            self.status = "正在准备当前屏幕画面…".into();
                             self.error = false;
                         }
+                        self.drag_start = None;
                     }
                     Err(e) => {
                         self.status = format!("无法选择显示器：{e:#}");
@@ -1032,6 +1127,16 @@ impl RecorderState {
             }
             if ui
                 .add_enabled(
+                    self.tray_status() == TrayRecordingStatus::Recording,
+                    egui::Button::new("⚑ 标记章节"),
+                )
+                .on_hover_text("记录当前有效录制时刻；暂停时间不会计入章节位置")
+                .clicked()
+            {
+                self.add_chapter_marker();
+            }
+            if ui
+                .add_enabled(
                     self.session
                         .as_ref()
                         .is_some_and(|s| !s.stop.load(Ordering::Acquire)),
@@ -1100,6 +1205,59 @@ impl RecorderState {
                 .on_hover_text(path.display().to_string());
             });
         }
+        if !self.chapters.is_empty() {
+            egui::CollapsingHeader::new(format!("章节标记 · {}", self.chapters.len()))
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.small("时间基于视频有效时长，已排除暂停；编辑标题后可导出 FFmpeg 章节元数据。最多 256 项。");
+                    let mut remove = None;
+                    for (index, chapter) in self.chapters.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.monospace(recorder::chapters::timestamp(chapter.start_ms));
+                            ui.add(
+                                egui::TextEdit::singleline(&mut chapter.title)
+                                    .hint_text("章节标题")
+                                    .char_limit(120)
+                                    .desired_width(220.0),
+                            );
+                            if ui.small_button("删除").clicked() {
+                                remove = Some(index);
+                            }
+                        });
+                    }
+                    if let Some(index) = remove {
+                        self.chapters.remove(index);
+                    }
+                    ui.horizontal(|ui| {
+                        let ready = self.recorded_duration.is_some() && self.last_file.is_some();
+                        if ui
+                            .add_enabled(ready, egui::Button::new("导出 FFmpeg 章节…"))
+                            .clicked()
+                            && let Some(video) = self.last_file.as_ref()
+                        {
+                            let stem = video
+                                .file_stem()
+                                .and_then(|value| value.to_str())
+                                .unwrap_or("recording");
+                            let suggested = format!("{stem}-chapters.ffmeta");
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("FFmpeg 章节元数据", &["ffmeta"])
+                                .set_file_name(suggested)
+                                .save_file()
+                            {
+                                self.export_chapters_to(&path);
+                            }
+                        }
+                        if ui.small_button("清空").clicked() {
+                            self.chapters.clear();
+                            self.recorded_duration = None;
+                        }
+                    });
+                    if self.recorded_duration.is_none() {
+                        ui.small("录制结束并保存视频后可导出章节文件。");
+                    }
+                });
+        }
         ui.add_space(12.0);
         ui.small(
             "录制所选屏幕的画面和鼠标光标，可录系统声音、麦克风或两者混音。已有同名文件不会被覆盖。",
@@ -1107,27 +1265,56 @@ impl RecorderState {
     }
 
     pub fn selection_overlay(&mut self, ctx: &egui::Context) {
+        #[cfg(windows)]
+        if self.selection_snapshot_pending {
+            let Some(display) = self.display.clone() else {
+                self.finish_selection_snapshot();
+                self.status = "没有可用的显示器，请刷新屏幕列表".into();
+                self.error = true;
+                ctx.request_repaint();
+                return;
+            };
+            let ready_at = self.selection_snapshot_after.unwrap_or_else(Instant::now);
+            if Instant::now() < ready_at {
+                ctx.request_repaint_after(
+                    (ready_at - Instant::now()).min(Duration::from_millis(30)),
+                );
+                return;
+            }
+            match capture_display_snapshot(&display) {
+                Ok(image) => {
+                    self.selection_texture = Some(ctx.load_texture(
+                        "recorder-selection-snapshot",
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    ));
+                    self.selecting = true;
+                    self.selection_snapshot_pending = false;
+                    self.selection_snapshot_after = None;
+                    self.status = "当前屏幕画面已显示，按住鼠标拖出区域；Esc 取消".into();
+                    self.error = false;
+                }
+                Err(error) => {
+                    self.finish_selection_snapshot();
+                    self.status = format!("无法预览当前屏幕：{error:#}");
+                    self.error = true;
+                    ctx.request_repaint();
+                    return;
+                }
+            }
+        }
         if !self.selecting {
             return;
         }
         let Some(display) = self.display.clone() else {
             self.selecting = false;
             self.selection_texture = None;
+            self.finish_selection_snapshot();
             self.status = "没有可用的显示器，请刷新屏幕列表".into();
             self.error = true;
             return;
         };
         let placement_error = place_selection_overlay(&display).err();
-        if self.selection_texture.is_none() {
-            #[cfg(windows)]
-            if let Ok(image) = capture_display_snapshot(&display) {
-                self.selection_texture = Some(ctx.load_texture(
-                    "recorder-selection-snapshot",
-                    image,
-                    egui::TextureOptions::LINEAR,
-                ));
-            }
-        }
         let id = egui::ViewportId::from_hash_of("zi-recorder-select");
         let builder = egui::ViewportBuilder::default()
             .with_title("选择录制区域 · Esc 取消")
@@ -1142,6 +1329,7 @@ impl RecorderState {
             if let Some(error) = &placement_error {
                 self.selecting = false;
                 self.selection_texture = None;
+                self.finish_selection_snapshot();
                 self.status = format!("无法在所选屏幕框选区域：{error:#}");
                 self.error = true;
                 panel.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1151,97 +1339,26 @@ impl RecorderState {
                 self.selecting = false;
                 self.selection_texture = None;
                 self.drag_start = None;
+                self.finish_selection_snapshot();
                 self.status = "已取消区域选择".into();
+                self.error = false;
                 panel.send_viewport_cmd(egui::ViewportCommand::Close);
                 return;
             }
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().fill(Color32::TRANSPARENT))
                 .show(panel, |ui| {
-                    let (rect, response) =
-                        ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-                    if let Some(texture) = &self.selection_texture {
-                        ui.painter().image(
-                            texture.id(),
-                            rect,
-                            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                            Color32::WHITE,
-                        );
-                    }
-                    ui.painter().rect_filled(
-                        rect,
-                        0.0,
-                        Color32::from_rgba_unmultiplied(9, 17, 29, 58),
-                    );
-                    let pointer = response.interact_pointer_pos();
-                    if response.drag_started() {
-                        self.drag_start = pointer;
-                    }
-                    if let (Some(a), Some(b)) = (self.drag_start, pointer) {
-                        let selection = egui::Rect::from_two_pos(a, b).intersect(rect);
-                        if let Some(texture) = &self.selection_texture {
-                            ui.painter().with_clip_rect(selection).image(
-                                texture.id(),
-                                rect,
-                                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                                Color32::WHITE,
-                            );
-                        }
-                        ui.painter().rect_filled(
-                            selection,
-                            2.0,
-                            Color32::from_rgba_unmultiplied(80, 160, 245, 18),
-                        );
-                        ui.painter().rect_stroke(
-                            selection,
-                            2.0,
-                            Stroke::new(2.0, Color32::from_rgb(120, 195, 255)),
-                            StrokeKind::Inside,
-                        );
-                        ui.painter().text(
-                            selection.right_bottom() + egui::vec2(-8.0, -8.0),
-                            egui::Align2::RIGHT_BOTTOM,
-                            format!("{:.0} × {:.0}", selection.width(), selection.height()),
-                            egui::FontId::proportional(16.0),
-                            Color32::WHITE,
-                        );
-                    }
-                    ui.painter().text(
-                        rect.center_top() + egui::vec2(0.0, 48.0),
-                        egui::Align2::CENTER_TOP,
-                        "按住鼠标拖出录制区域  ·  Esc 取消",
-                        egui::FontId::proportional(24.0),
-                        Color32::WHITE,
-                    );
-                    if response.drag_stopped() {
-                        if let (Some(a), Some(b)) = (self.drag_start.take(), pointer) {
-                            let view = rect.size();
-                            match recorder::validate_display(&display).ok().and_then(|_| {
-                                Region::from_points(
-                                    (a.x - rect.left(), a.y - rect.top()),
-                                    (b.x - rect.left(), b.y - rect.top()),
-                                    (display.width, display.height),
-                                    (view.x, view.y),
-                                )
-                            }) {
-                                Some(region) => {
-                                    self.region = Some(region);
-                                    self.status = "区域已选好，点击“开始录制”".into();
-                                    self.error = false;
-                                    self.selecting = false;
-                                    self.selection_texture = None;
-                                    panel.send_viewport_cmd(egui::ViewportCommand::Close);
-                                }
-                                None => {
-                                    self.status = "区域太小，请至少选择 32 × 32 像素".into();
-                                    self.error = true;
-                                }
-                            }
-                        }
+                    if let Some(region) = self.selection_canvas(ui, &display) {
+                        self.complete_selection(region, recorder::validate_display(&display));
+                        panel.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
         });
         ctx.request_repaint_after(Duration::from_millis(30));
+    }
+
+    pub fn teleprompter_overlay(&mut self, ctx: &egui::Context) {
+        self.teleprompter_ui(ctx);
     }
 }
 
@@ -1255,6 +1372,41 @@ impl Drop for RecorderState {
 
 #[cfg(test)]
 mod tests {
+    use super::{RecorderState, recorder};
+    use std::time::Duration;
+
+    #[test]
+    fn chapter_metadata_export_writes_new_file_and_never_overwrites() {
+        let directory =
+            std::env::temp_dir().join(format!("zi-recorder-chapters-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("recording-chapters.ffmeta");
+        let mut state = RecorderState::default();
+        state.chapters = vec![
+            recorder::chapters::Marker {
+                start_ms: 500,
+                title: "Opening".into(),
+            },
+            recorder::chapters::Marker {
+                start_ms: 1500,
+                title: "Main section".into(),
+            },
+        ];
+        state.recorded_duration = Some(Duration::from_secs(4));
+        state.export_chapters_to(&path);
+        assert!(!state.error, "{}", state.status);
+        let original = std::fs::read(&path).unwrap();
+        let text = String::from_utf8(original.clone()).unwrap();
+        assert!(text.contains("START=500\nEND=1500\ntitle=Opening\n"));
+        assert!(text.contains("START=1500\nEND=4000\ntitle=Main section\n"));
+
+        state.chapters[0].title = "Changed title".into();
+        state.export_chapters_to(&path);
+        assert!(state.error);
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
     #[test]
     fn consecutive_recordings_get_new_names_without_overwriting() {
         let folder =
@@ -1301,6 +1453,30 @@ mod tests {
         state.begin_recording();
         assert!(state.error);
         assert!(state.take_restore_request());
+    }
+    #[test]
+    fn selection_snapshot_hides_main_window_and_restores_after_completion() {
+        let mut state = RecorderState::default();
+        state.request_selection_snapshot();
+        assert!(state.selection_snapshot_pending);
+        assert!(state.take_minimize_request());
+        assert!(!state.take_restore_request());
+
+        state.finish_selection_snapshot();
+        assert!(!state.selection_snapshot_pending);
+        assert!(state.take_restore_request());
+        assert!(!state.take_restore_request());
+    }
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires an unlocked interactive Windows desktop"]
+    fn captures_primary_display_snapshot_in_memory() {
+        let display = recorder::primary_display().expect("enumerate primary display");
+        let image = super::capture_display_snapshot(&display).expect("capture primary display");
+        let expected_size = [display.width as usize, display.height as usize];
+        assert_eq!(image.size, expected_size);
+        assert_eq!(image.pixels.len(), expected_size[0] * expected_size[1]);
+        assert!(image.pixels.iter().all(|pixel| pixel.a() == 255));
     }
     #[test]
     fn switching_or_resizing_display_discards_a_stale_region() {

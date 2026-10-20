@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import socket
 from pathlib import Path
 import subprocess
@@ -126,12 +127,16 @@ def main():
         raise RuntimeError('Assertions required')
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true')
+    parser.add_argument('--keep-artifacts', action='store_true',
+                        help='Keep compile-only MSI fixtures under the build directory')
     parser.add_argument('--outer-transaction-probe', action='store_true')
     parser.add_argument('--outer-commit-probe', action='store_true')
     parser.add_argument('--real-payload', action='store_true')
     parser.add_argument('--installed-shell-invoke', action='store_true')
     parser.add_argument('--explorer-visible', action='store_true')
     args = parser.parse_args()
+    if args.keep_artifacts and not args.compile_only:
+        parser.error('--keep-artifacts requires --compile-only')
     actual_payload = args.real_payload or args.explorer_visible
     assert not (args.real_payload and (args.outer_transaction_probe or args.outer_commit_probe))
     assert not ((args.installed_shell_invoke or args.explorer_visible)
@@ -275,7 +280,11 @@ def main():
     (folder / 'compile-proof.json').write_text(json.dumps(dict(sequences=compile_orders,
         dllSha256=hashlib.sha256(actions.read_bytes()).hexdigest()), indent=2) + '\n')
     if args.compile_only:
-        print('PASS: eight candidate DLL fixtures compiled, no installation performed')
+        if args.keep_artifacts:
+            print(f'PASS: eight candidate DLL fixtures compiled, no installation performed; evidence {folder}')
+        else:
+            shutil.rmtree(folder)
+            print('PASS: eight candidate DLL fixtures compiled; temporary MSI fixtures removed')
         return
 
     native = ctypes.WinDLL(str(actions))

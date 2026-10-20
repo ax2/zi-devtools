@@ -8,6 +8,76 @@ fn bounded(input: &str) -> Result<()> {
     }
     Ok(())
 }
+
+/// Build a bounded, object-valued summary shared by the standalone JSON tool
+/// and the `result.json.v1` provider. The original object remains intact so a
+/// Host may transfer it as an object without a text conversion.
+pub fn object_summary(value: &Value) -> Result<Value> {
+    let object = value.as_object().context("根值必须是 JSON object")?;
+    ensure!(object.len() <= 128, "根对象最多允许 128 个字段");
+    let serialized = serde_json::to_vec(value)?;
+    ensure!(serialized.len() <= 8 * 1024, "JSON object 超过 8 KiB");
+
+    fn inspect(
+        value: &Value,
+        depth: usize,
+        max_depth: &mut usize,
+        nodes: &mut usize,
+    ) -> Result<()> {
+        *nodes += 1;
+        ensure!(*nodes <= 4096, "JSON object 节点超过 4096 个");
+        ensure!(depth <= 64, "JSON object 嵌套超过 64 层");
+        *max_depth = (*max_depth).max(depth);
+        match value {
+            Value::Array(items) => {
+                for item in items {
+                    inspect(item, depth + 1, max_depth, nodes)?;
+                }
+            }
+            Value::Object(items) => {
+                for item in items.values() {
+                    inspect(item, depth + 1, max_depth, nodes)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    fn value_type(value: &Value) -> &'static str {
+        match value {
+            Value::Null => "null",
+            Value::Bool(_) => "boolean",
+            Value::Number(number) if number.is_i64() || number.is_u64() => "integer",
+            Value::Number(_) => "number",
+            Value::String(_) => "string",
+            Value::Array(_) => "array",
+            Value::Object(_) => "object",
+        }
+    }
+
+    let mut max_depth = 0;
+    let mut nodes = 0;
+    inspect(value, 1, &mut max_depth, &mut nodes)?;
+    let keys: Vec<_> = object.keys().cloned().collect();
+    let value_types: serde_json::Map<String, Value> = object
+        .iter()
+        .map(|(key, value)| (key.clone(), Value::String(value_type(value).into())))
+        .collect();
+    Ok(serde_json::json!({
+        "value": value,
+        "keyCount": object.len(),
+        "keys": keys,
+        "valueTypes": value_types,
+        "maxDepth": max_depth,
+        "serializedBytes": serialized.len()
+    }))
+}
+
+pub fn object_summary_text(input: &str) -> Result<String> {
+    ensure!(input.len() <= 8 * 1024, "JSON object 输入最多 8 KiB");
+    let value: Value = serde_json::from_str(input).context("输入不是有效 JSON")?;
+    pretty(&object_summary(&value)?)
+}
 fn pretty(value: &Value) -> Result<String> {
     let text = serde_json::to_string_pretty(value)?;
     ensure!(

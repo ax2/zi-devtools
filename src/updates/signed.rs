@@ -37,6 +37,20 @@ pub struct Tool {
     pub version: Option<String>,
     pub status: String,
 }
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ToolChangeSummary {
+    pub added: Vec<String>,
+    pub updated: Vec<String>,
+    pub removed: Vec<String>,
+}
+impl ToolChangeSummary {
+    pub fn len(&self) -> usize {
+        self.added.len() + self.updated.len() + self.removed.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.updated.is_empty() && self.removed.is_empty()
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -269,22 +283,25 @@ fn status(value: &str) -> &str {
         _ => "未知",
     }
 }
-pub fn changes(next: &[Tool]) -> Result<Vec<String>> {
+pub fn changes(next: &[Tool]) -> Result<ToolChangeSummary> {
     let current = tools(
         include_bytes!("../../docs/tools.json"),
         env!("CARGO_PKG_VERSION"),
     )?;
-    let mut changes = Vec::new();
+    Ok(diff_tools(&current, next))
+}
+fn diff_tools(current: &[Tool], next: &[Tool]) -> ToolChangeSummary {
+    let mut changes = ToolChangeSummary::default();
     for tool in next {
         match current.iter().find(|old| old.id == tool.id) {
-            None => changes.push(format!(
+            None => changes.added.push(format!(
                 "新增目录项 · {} · {} · {}",
                 tool.name,
                 tool.version.as_deref().unwrap_or("未记录"),
                 status(&tool.status)
             )),
             Some(old) if old.version != tool.version || old.status != tool.status => {
-                changes.push(format!(
+                changes.updated.push(format!(
                     "{} · {} → {} · {} → {}",
                     tool.name,
                     old.version.as_deref().unwrap_or("未记录"),
@@ -296,16 +313,39 @@ pub fn changes(next: &[Tool]) -> Result<Vec<String>> {
             _ => {}
         }
     }
-    for old in &current {
+    for old in current {
         if !next.iter().any(|t| t.id == old.id) {
-            changes.push(format!(
+            changes.removed.push(format!(
                 "目标清单移除 · {} · {}",
                 old.name,
                 old.version.as_deref().unwrap_or("未记录")
             ));
         }
     }
-    Ok(changes)
+    changes
+}
+pub fn changes_ui(ui: &mut eframe::egui::Ui, changes: &ToolChangeSummary, max_height: f32) {
+    eframe::egui::ScrollArea::vertical()
+        .max_height(max_height)
+        .show(ui, |ui| {
+            for (label, rows) in [
+                ("新增工具", &changes.added),
+                ("版本或状态变化", &changes.updated),
+                ("从目录移除", &changes.removed),
+            ] {
+                if rows.is_empty() {
+                    continue;
+                }
+                ui.strong(format!("{label}（{}）", rows.len()));
+                for row in rows {
+                    ui.label(row);
+                }
+                ui.add_space(4.0);
+            }
+            if changes.is_empty() {
+                ui.label("目标与当前工具版本清单一致。");
+            }
+        });
 }
 #[cfg(test)]
 mod tests {
@@ -413,6 +453,70 @@ mod tests {
         let mut changed = current;
         changed[0].version = Some("99.0.0".into());
         assert!(!changes(&changed).unwrap().is_empty());
+    }
+    #[test]
+    fn tool_changes_are_grouped_by_add_update_and_removal() {
+        let current = vec![
+            Tool {
+                id: "calculator".into(),
+                name: "计算器".into(),
+                version: Some("1.0.0".into()),
+                status: "implemented".into(),
+            },
+            Tool {
+                id: "clock".into(),
+                name: "时钟".into(),
+                version: Some("0.2.0".into()),
+                status: "in-progress".into(),
+            },
+            Tool {
+                id: "recorder".into(),
+                name: "录屏".into(),
+                version: Some("1.0.0".into()),
+                status: "implemented".into(),
+            },
+        ];
+        let next = vec![
+            Tool {
+                id: "calculator".into(),
+                name: "计算器".into(),
+                version: Some("1.1.0".into()),
+                status: "implemented".into(),
+            },
+            Tool {
+                id: "clock".into(),
+                name: "时钟".into(),
+                version: Some("0.2.0".into()),
+                status: "implemented".into(),
+            },
+            Tool {
+                id: "calendar".into(),
+                name: "万年历".into(),
+                version: Some("0.1.0".into()),
+                status: "in-progress".into(),
+            },
+        ];
+
+        let changes = diff_tools(&current, &next);
+        assert_eq!(changes.added.len(), 1);
+        assert_eq!(changes.updated.len(), 2);
+        assert_eq!(changes.removed.len(), 1);
+        assert_eq!(changes.len(), 4);
+        assert!(changes.added[0].contains("万年历"));
+        assert!(
+            changes
+                .updated
+                .iter()
+                .any(|row| { row.contains("计算器") && row.contains("1.0.0 → 1.1.0") })
+        );
+        assert!(
+            changes
+                .updated
+                .iter()
+                .any(|row| { row.contains("时钟") && row.contains("开发中 → 已实现") })
+        );
+        assert!(changes.removed[0].contains("录屏"));
+        assert!(!changes.is_empty());
     }
     #[test]
     fn legacy_missing_versions_remain_unknown_and_binding_rejects_wrong_release() {

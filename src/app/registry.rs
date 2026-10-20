@@ -1,5 +1,6 @@
 //! Built-in discovery comes from the versioned catalog; routes stay executable Rust.
 use super::ToolKind;
+use crate::plugins::PluginToolVersionRecord;
 use serde::Deserialize;
 use std::sync::{Arc, OnceLock};
 use unicode_normalization::UnicodeNormalization;
@@ -14,6 +15,8 @@ struct Definition {
     id: String,
     tool_version: String,
     status: String,
+    #[serde(default)]
+    version_history: Vec<PluginToolVersionRecord>,
     discovery: Option<Discovery>,
 }
 
@@ -30,20 +33,26 @@ struct Discovery {
 pub(super) struct ToolEntry {
     pub id: String,
     pub version: Option<String>,
+    pub version_history: Arc<[PluginToolVersionRecord]>,
     pub title: String,
     pub description: String,
     pub category: String,
     pub page: Page,
     pub kind: Option<ToolKind>,
     pub in_progress: bool,
+    pub exact_match_alternatives: usize,
     search: Arc<SearchText>,
 }
 
+#[derive(Clone)]
 struct SearchText {
     id: String,
     title: String,
     aliases: Vec<String>,
     text: String,
+    version: Option<String>,
+    historical_versions: Vec<String>,
+    history_text: String,
     words: Vec<String>,
     name_words: Vec<String>,
 }
@@ -88,11 +97,15 @@ impl ToolEntry {
             .collect();
         Self {
             version: None,
+            version_history: Arc::from([]),
             search: Arc::new(SearchText {
                 id: normalized(&id),
                 title,
                 aliases,
                 text,
+                version: None,
+                historical_versions: Vec::new(),
+                history_text: String::new(),
                 words,
                 name_words,
             }),
@@ -103,6 +116,7 @@ impl ToolEntry {
             page,
             kind,
             in_progress,
+            exact_match_alternatives: 0,
         }
     }
 
@@ -114,14 +128,49 @@ impl ToolEntry {
                 summary: tool.description.clone(),
                 category: tool.category.clone(),
                 keywords: tool.keywords.join(" "),
-                aliases: Vec::new(),
+                aliases: tool.aliases.clone(),
             },
             Page::Plugins,
             None,
             false,
         );
-        entry.version.clone_from(&tool.version);
+        entry.set_version(tool.version.clone());
+        entry.set_version_history(&tool.version_history);
         entry
+    }
+
+    fn set_version(&mut self, version: Option<String>) {
+        self.version.clone_from(&version);
+        let Some(version) = version else {
+            return;
+        };
+        let version = normalized(&version);
+        let search = Arc::make_mut(&mut self.search);
+        search.text.push(' ');
+        search.text.push_str(&version);
+        search.version = Some(version);
+    }
+
+    fn set_version_history(&mut self, history: &[PluginToolVersionRecord]) {
+        self.version_history = Arc::from(history.to_vec());
+        let historical_versions = history
+            .iter()
+            .map(|record| normalized(&record.version))
+            .collect::<Vec<_>>();
+        let history_text = normalized(
+            &history
+                .iter()
+                .map(|record| format!("{} {}", record.version, record.changes))
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+        let search = Arc::make_mut(&mut self.search);
+        if !history_text.is_empty() {
+            search.text.push(' ');
+            search.text.push_str(&history_text);
+        }
+        search.historical_versions = historical_versions;
+        search.history_text = history_text;
     }
 
     pub fn score(&self, query: &str) -> Option<u32> {
@@ -139,13 +188,75 @@ impl ToolEntry {
         if search.aliases.iter().any(|a| a == query) {
             return Some(900);
         }
+        if search.version.as_deref() == Some(query) {
+            return Some(850);
+        }
+        if search
+            .historical_versions
+            .iter()
+            .any(|version| version == query)
+        {
+            return Some(820);
+        }
+        if query.contains('.')
+            && search
+                .version
+                .as_deref()
+                .is_some_and(|version| version.starts_with(query))
+        {
+            return Some(650);
+        }
+        if query.contains('.')
+            && search
+                .historical_versions
+                .iter()
+                .any(|version| version.starts_with(query))
+        {
+            return Some(630);
+        }
         if search.title.starts_with(query) {
             return Some(700);
         }
-        if query
+        let all_terms_match = query
             .split_whitespace()
-            .all(|word| search.text.contains(word))
+            .all(|word| search.text.contains(word));
+        // Keep every term as a filter. Once they all match, distinguish a named
+        // tool plus context from incidental mentions in descriptions/history.
+        // Single-word, exact alias and version ranking retain their old rules.
+        if all_terms_match && query.contains(' ') {
+            if query
+                .split_whitespace()
+                .any(|word| word == search.id || word == search.title)
+            {
+                return Some(550);
+            }
+            if query
+                .split_whitespace()
+                .all(|word| search.title.contains(word))
+            {
+                return Some(500);
+            }
+            if query
+                .split_whitespace()
+                .any(|word| search.title.contains(word) || search.id.contains(word))
+            {
+                return Some(450);
+            }
+            if query
+                .split_whitespace()
+                .any(|word| search.aliases.iter().any(|alias| alias.contains(word)))
+            {
+                return Some(425);
+            }
+        }
+        if !search.history_text.is_empty()
+            && query
+                .split_whitespace()
+                .all(|word| search.history_text.contains(word))
         {
+            return Some(400);
+        }
+        if all_terms_match {
             return Some(if search.title.contains(query) {
                 500
             } else {
@@ -186,10 +297,32 @@ impl ToolEntry {
         match self.score(query) {
             Some(1000) => "名称匹配",
             Some(900) => "用途 / 别名匹配",
+            Some(850) => "版本匹配",
+            Some(820) => "历史版本匹配",
+            Some(650) => "版本前缀匹配",
+            Some(630) => "历史版本前缀匹配",
+            Some(400) => "版本历史匹配",
             Some(700 | 500) => "名称包含",
+            Some(550 | 450) => "名称与关键词匹配",
+            Some(425) => "别名与关键词匹配",
             Some(100 | 180 | 230) => "近似拼写",
             Some(300) => "说明 / 关键词匹配",
             _ => "",
+        }
+    }
+
+    fn is_exact_name_or_alias(&self, query: &str) -> bool {
+        self.search.id == query
+            || self.search.title == query
+            || self.search.aliases.iter().any(|alias| alias == query)
+    }
+
+    pub fn match_detail(&self, query: &str) -> String {
+        let hint = self.match_hint(query);
+        if self.exact_match_alternatives == 0 {
+            hint.to_owned()
+        } else {
+            format!("{hint} · 同词还有 {} 个入口", self.exact_match_alternatives)
         }
     }
 
@@ -253,7 +386,8 @@ pub(super) fn catalog() -> &'static [ToolEntry] {
                     kind,
                     definition.status == "in-progress",
                 );
-                entry.version = Some(definition.tool_version);
+                entry.set_version(Some(definition.tool_version));
+                entry.set_version_history(&definition.version_history);
                 Some(entry)
             })
             .collect()
@@ -266,7 +400,14 @@ pub(super) fn ranked<'a>(
     preferences: &crate::preferences::Preferences,
 ) -> Vec<ToolEntry> {
     let query = normalized(query);
+    let entries: Vec<_> = entries.collect();
+    let exact_count = entries
+        .iter()
+        .filter(|entry| entry.is_exact_name_or_alias(&query))
+        .count();
+    let alternatives = exact_count.saturating_sub(1);
     let mut scored: Vec<_> = entries
+        .iter()
         .filter_map(|e| {
             e.score_normalized(&query).map(|score| {
                 let rank = score * 100
@@ -282,7 +423,11 @@ pub(super) fn ranked<'a>(
                         .map(|i| 20_u32.saturating_sub(i as u32))
                         .unwrap_or(0)
                     + preferences.usage.get(&e.id).copied().unwrap_or(0).min(10);
-                (rank, e)
+                let mut entry = (**e).clone();
+                if alternatives > 0 && entry.is_exact_name_or_alias(&query) {
+                    entry.exact_match_alternatives = alternatives;
+                }
+                (rank, entry)
             })
         })
         .collect();
@@ -292,7 +437,7 @@ pub(super) fn ranked<'a>(
             .then_with(|| left.title.cmp(&right.title))
             .then_with(|| left.id.cmp(&right.id))
     });
-    scored.into_iter().map(|(_, e)| e.clone()).collect()
+    scored.into_iter().map(|(_, entry)| entry).collect()
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -300,6 +445,7 @@ pub(super) enum Page {
     #[default]
     Home,
     Library,
+    Artifacts,
     Intake,
     Tasks,
     Notes,
@@ -307,6 +453,7 @@ pub(super) enum Page {
     Calculator,
     Clipboard,
     Clock,
+    TimeZone,
     Updates,
     DeltaUpdate,
     Commands,
@@ -321,6 +468,8 @@ pub(super) enum Page {
     Images,
     Markdown,
     FileEncoding,
+    FileRename,
+    LogViewer,
     ChecksumManifest,
     DiskInspector,
     DuplicateFinder,
@@ -375,11 +524,13 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
     Some((
         match id {
             "task-center" => Page::Tasks,
+            "artifact-hub" => Page::Artifacts,
             "memos" => Page::Notes,
             "calendar-planner" => Page::Calendar,
             "advanced-calculator" => Page::Calculator,
             "super-clipboard" => Page::Clipboard,
             "clock-workbench" => Page::Clock,
+            "time-zone" => Page::TimeZone,
             "app-update-check" => Page::Updates,
             "app-delta-update" => Page::DeltaUpdate,
             "screenshot-workbench" => Page::Images,
@@ -409,6 +560,8 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "image-crop-annotate" => Page::Images,
             "markdown" => Page::Markdown,
             "encoding-detect" => Page::FileEncoding,
+            "file-rename" => Page::FileRename,
+            "log-viewer" => Page::LogViewer,
             "checksum-manifest" => Page::ChecksumManifest,
             "disk-inspector" => Page::DiskInspector,
             "duplicate-files" => Page::DuplicateFinder,
@@ -419,6 +572,7 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
             "ascii-art" => Page::AsciiArt,
             "rag-sources" => Page::KnowledgeSources,
             "rag-ingestion" => Page::DocumentIngestion,
+            "ocr-documents" => Page::DocumentIngestion,
             "rag-index" => Page::KnowledgeIndex,
             "rag-keyword-search" => Page::KnowledgeSearch,
             "rag-vectors" => Page::VectorIndex,
@@ -446,6 +600,23 @@ fn route(id: &str) -> Option<(Page, Option<ToolKind>)> {
 mod tests {
     use super::*;
     use crate::preferences::Preferences;
+
+    #[test]
+    fn every_registered_image_entry_selects_its_exact_view() {
+        let mut images = crate::image_tools::State::default();
+        let entries: Vec<_> = catalog()
+            .iter()
+            .filter(|entry| entry.page == Page::Images)
+            .collect();
+        assert_eq!(entries.len(), 6);
+        for source in &entries {
+            for target in &entries {
+                assert!(images.select_entry(&source.id));
+                assert!(images.select_entry(&target.id));
+                assert_eq!(images.active_tool_id(), target.id);
+            }
+        }
+    }
 
     #[test]
     fn every_visible_definition_has_an_executable_route_and_valid_discovery() {
@@ -512,6 +683,56 @@ mod tests {
     }
 
     #[test]
+    fn routed_aliases_are_unique_and_disambiguated_queries_have_one_exact_match() {
+        let mut alias_owners = std::collections::HashMap::new();
+        for entry in catalog() {
+            for alias in &entry.search.aliases {
+                if let Some(owner) = alias_owners.insert(alias.clone(), entry.id.as_str()) {
+                    assert_eq!(
+                        owner,
+                        entry.id.as_str(),
+                        "normalized alias {alias:?} is shared by routed tools"
+                    );
+                }
+            }
+        }
+
+        for (query, expected) in [
+            ("数据转换管线", "pipeline"),
+            ("表格流程", "text-flow"),
+            ("闹钟", "clock-workbench"),
+            ("事件提醒", "calendar-planner"),
+        ] {
+            let exact_matches: Vec<_> = catalog()
+                .iter()
+                .filter(|entry| entry.score(query) == Some(900))
+                .map(|entry| entry.id.as_str())
+                .collect();
+            assert_eq!(exact_matches, vec![expected], "{query}");
+        }
+    }
+
+    #[test]
+    fn every_routed_id_name_and_alias_searches_back_to_its_tool() {
+        let entries = catalog();
+        let preferences = Preferences::default();
+        for entry in entries {
+            let terms = std::iter::once(entry.id.as_str())
+                .chain(std::iter::once(entry.title.as_str()))
+                .chain(entry.search.aliases.iter().map(String::as_str));
+            for term in terms {
+                let found = ranked(entries.iter(), term, &preferences);
+                assert_eq!(
+                    found.first().map(|candidate| candidate.id.as_str()),
+                    Some(entry.id.as_str()),
+                    "exact catalog term {term:?} should resolve to {}",
+                    entry.id
+                );
+            }
+        }
+    }
+
+    #[test]
     fn common_task_queries_find_expected_tools_in_top_three() {
         // Product-level examples include spacing, width/case, purpose, abbreviation,
         // typo, and mixed Chinese/English; they do not just compare alias strings.
@@ -524,6 +745,11 @@ mod tests {
             ("json格式化", "json"),
             ("JSON FORMAT", "json"),
             ("jsno", "json"),
+            ("正则替换", "regex-replace"),
+            ("批量替换文本", "regex-replace"),
+            ("regex replace", "regex-replace"),
+            ("批量重命名", "file-rename"),
+            ("文件名替换", "file-rename"),
             ("提取json字段", "json-path"),
             ("比较两个json", "json-diff"),
             ("合并表格", "csv-merge"),
@@ -579,10 +805,23 @@ mod tests {
         let plugin = crate::plugins::PluginTool {
             id: "helper".into(),
             version: Some("1.2.3".into()),
+            version_history: vec![
+                PluginToolVersionRecord {
+                    version: "1.1.0".into(),
+                    date: "2026-10-10".into(),
+                    changes: "增加 JSON 校验规则".into(),
+                },
+                PluginToolVersionRecord {
+                    version: "1.2.3".into(),
+                    date: "2026-10-16".into(),
+                    changes: "修复示例工具行为".into(),
+                },
+            ],
             name: "JSON Helper".into(),
             description: "处理 JSON 文本".into(),
             category: "数据与格式".into(),
             keywords: vec!["json".into()],
+            aliases: vec!["translate text".into(), "翻译文本".into()],
             sample: String::new(),
             model: String::new(),
             adapter: crate::plugins::Adapter::Builtin {
@@ -593,6 +832,51 @@ mod tests {
         };
         let entry = ToolEntry::plugin("plugin:test/helper".into(), &plugin);
         assert_eq!(entry.version.as_deref(), Some("1.2.3"));
+        assert_eq!(
+            entry.version_history.as_ref(),
+            plugin.version_history.as_slice()
+        );
+        assert_eq!(entry.score("translate text"), Some(900));
+        assert_eq!(entry.score("翻译文本"), Some(900));
+        assert_eq!(entry.score("1.2.3"), Some(850));
+        assert_eq!(entry.score("1.2"), Some(650));
+        assert_eq!(entry.score("1.1.0"), Some(820));
+        assert_eq!(entry.score("1.1"), Some(630));
+        assert_eq!(entry.score("校验规则"), Some(400));
+        assert_eq!(entry.match_hint("翻译文本"), "用途 / 别名匹配");
+        assert_eq!(entry.match_hint("1.2.3"), "版本匹配");
+        assert_eq!(entry.match_hint("1.2"), "版本前缀匹配");
+        assert_eq!(entry.match_hint("1.1.0"), "历史版本匹配");
+        assert_eq!(entry.match_hint("校验规则"), "版本历史匹配");
+        assert!(
+            ranked(
+                catalog().iter().chain(std::iter::once(&entry)),
+                "1.2.3",
+                &Preferences::default()
+            )
+            .iter()
+            .any(|candidate| candidate.id == entry.id)
+        );
+        assert!(
+            ranked(
+                catalog().iter().chain(std::iter::once(&entry)),
+                "校验规则",
+                &Preferences::default()
+            )
+            .iter()
+            .any(|candidate| candidate.id == entry.id)
+        );
+        for alias in ["translate text", "翻译文本"] {
+            let found = ranked(
+                catalog().iter().chain(std::iter::once(&entry)),
+                alias,
+                &Preferences::default(),
+            );
+            assert_eq!(
+                found.first().map(|tool| tool.id.as_str()),
+                Some(entry.id.as_str())
+            );
+        }
         let mut preferences = Preferences::default();
         preferences.favorites.push(entry.id.clone());
         preferences.visit(&entry.id);
@@ -609,6 +893,193 @@ mod tests {
                 .any(|e| e.id == entry.id)
         );
         assert_eq!(entry.match_hint("JSON"), "名称包含");
+    }
+
+    #[test]
+    fn exact_name_or_alias_collisions_are_visible_when_plugins_extend_the_directory() {
+        let duplicate = crate::plugins::PluginTool {
+            id: "formatter".into(),
+            version: Some("1.0.0".into()),
+            version_history: Vec::new(),
+            name: "JSON Formatter Plugin".into(),
+            description: "格式化 JSON 内容".into(),
+            category: "数据与格式".into(),
+            keywords: vec!["json".into()],
+            aliases: vec!["json格式化".into()],
+            sample: String::new(),
+            model: String::new(),
+            adapter: crate::plugins::Adapter::Builtin {
+                tool: "json".into(),
+                action: 0,
+                pattern: String::new(),
+            },
+        };
+        let plugin = ToolEntry::plugin("plugin:test/formatter".into(), &duplicate);
+        let found = ranked(
+            catalog().iter().chain(std::iter::once(&plugin)),
+            "json格式化",
+            &Preferences::default(),
+        );
+        let exact: Vec<_> = found
+            .iter()
+            .filter(|entry| entry.exact_match_alternatives > 0)
+            .collect();
+        assert_eq!(exact.len(), 2);
+        assert!(
+            exact
+                .iter()
+                .all(|entry| entry.exact_match_alternatives == 1)
+        );
+        assert!(exact.iter().all(|entry| {
+            entry
+                .match_detail("json格式化")
+                .contains("同词还有 1 个入口")
+        }));
+        assert_eq!(found[0].id, "json");
+
+        let mut title_duplicate = duplicate;
+        title_duplicate.id = "formatter-by-name".into();
+        title_duplicate.name = "json格式化".into();
+        title_duplicate.aliases.clear();
+        let title_plugin =
+            ToolEntry::plugin("plugin:test/formatter-by-name".into(), &title_duplicate);
+        let title_found = ranked(
+            catalog().iter().chain(std::iter::once(&title_plugin)),
+            "json格式化",
+            &Preferences::default(),
+        );
+        let exact_title: Vec<_> = title_found
+            .iter()
+            .filter(|entry| entry.exact_match_alternatives > 0)
+            .collect();
+        assert_eq!(exact_title.len(), 2);
+        assert!(
+            exact_title
+                .iter()
+                .all(|entry| entry.exact_match_alternatives == 1)
+        );
+        assert_eq!(title_found[0].id, "plugin:test/formatter-by-name");
+    }
+
+    #[test]
+    fn built_in_catalog_exposes_append_only_tool_version_history() {
+        let entry = catalog()
+            .iter()
+            .find(|entry| entry.id == "sql-format")
+            .unwrap();
+        assert_eq!(entry.version.as_deref(), Some("0.3.1"));
+        assert_eq!(entry.score("0.3.1"), Some(850));
+        assert_eq!(entry.score("0.3.0"), Some(820));
+        assert_eq!(entry.score("0.3"), Some(650));
+        assert_eq!(entry.score("0.2.0"), Some(820));
+        assert_eq!(entry.score("0.2"), Some(630));
+        assert_eq!(entry.score("sqlformat"), Some(400));
+        assert_eq!(entry.match_hint("0.3.1"), "版本匹配");
+        assert_eq!(entry.match_hint("0.3.0"), "历史版本匹配");
+        assert_eq!(entry.match_hint("0.2.0"), "历史版本匹配");
+        assert_eq!(entry.match_hint("sqlformat"), "版本历史匹配");
+        assert!(
+            ranked(catalog().iter(), "0.3.1", &Preferences::default())
+                .iter()
+                .any(|candidate| candidate.id == entry.id)
+        );
+        assert!(
+            ranked(catalog().iter(), "0.3.0", &Preferences::default())
+                .iter()
+                .any(|candidate| candidate.id == entry.id)
+        );
+        assert!(
+            ranked(catalog().iter(), "0.2.0", &Preferences::default())
+                .iter()
+                .any(|candidate| candidate.id == entry.id)
+        );
+        assert!(
+            ranked(catalog().iter(), "sqlformat", &Preferences::default())
+                .iter()
+                .any(|candidate| candidate.id == entry.id)
+        );
+        assert_eq!(
+            entry
+                .version_history
+                .last()
+                .map(|record| record.version.as_str()),
+            entry.version.as_deref()
+        );
+        assert!(!entry.version_history.is_empty());
+    }
+
+    #[test]
+    fn multi_word_search_keeps_the_named_tool_ahead_of_history_mentions() {
+        for query in ["JSON 工具", "  ＪＳＯＮ   工具  "] {
+            let found = ranked(catalog().iter(), query, &Preferences::default());
+            assert_eq!(found.first().map(|entry| entry.id.as_str()), Some("json"));
+        }
+        assert!(
+            ranked(
+                catalog().iter(),
+                "json unmatched987654",
+                &Preferences::default()
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn name_relevance_beats_favorite_history_mentions_without_dropping_terms() {
+        let make = |id: &str, title: &str, summary: &str| {
+            ToolEntry::new(
+                id.into(),
+                Discovery {
+                    label: title.into(),
+                    summary: summary.into(),
+                    category: "fixture".into(),
+                    keywords: String::new(),
+                    aliases: Vec::new(),
+                },
+                Page::Data,
+                None,
+                false,
+            )
+        };
+        let named = make("json", "JSON", "offline parse");
+        let mut history = make("history", "AAA history", "unrelated");
+        history.set_version_history(&[PluginToolVersionRecord {
+            version: "1.0.0".into(),
+            date: "2026-10-18".into(),
+            changes: "json offline parse".into(),
+        }]);
+        let mut preferences = Preferences::default();
+        preferences.favorites.push(history.id.clone());
+        preferences.visit(&history.id);
+        preferences.usage.insert(history.id.clone(), u32::MAX);
+        let entries = [history, named];
+        let found = ranked(entries.iter(), "json parse", &preferences);
+        assert_eq!(found[0].id, "json");
+        assert_eq!(found[0].match_hint("json parse"), "名称与关键词匹配");
+        assert_eq!(found[1].match_hint("json parse"), "版本历史匹配");
+        assert!(ranked(entries.iter(), "json missing-term", &preferences).is_empty());
+    }
+
+    #[test]
+    fn scattered_name_words_and_alias_context_have_distinct_match_reasons() {
+        let entry = ToolEntry::new(
+            "formatter".into(),
+            Discovery {
+                label: "Structured JSON Validator".into(),
+                summary: "offline conversion".into(),
+                category: "fixture".into(),
+                keywords: String::new(),
+                aliases: vec!["prettify".into()],
+            },
+            Page::Data,
+            None,
+            false,
+        );
+        assert_eq!(entry.score("validator structured"), Some(500));
+        assert_eq!(entry.match_hint("validator structured"), "名称包含");
+        assert_eq!(entry.match_hint("json offline"), "名称与关键词匹配");
+        assert_eq!(entry.match_hint("prettify offline"), "别名与关键词匹配");
+        assert_eq!(entry.score("prettify missing-term"), None);
     }
 
     #[test]

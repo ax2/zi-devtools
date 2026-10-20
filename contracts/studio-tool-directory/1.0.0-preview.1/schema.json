@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zicode:tool-directory:1.0.0-preview.1",
+  "title": "tool.directory.v1 capability metadata",
+  "description": "Host additionally enforces UTF-8 byte limits, control-character rejection and normalized alias uniqueness. JSON Schema length is not byte length.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["categoryId"],
+  "properties": {
+    "categoryId": {
+      "type": "string",
+      "enum": ["text", "data", "web", "code", "files", "media", "system", "ai", "knowledge", "automation", "security", "other"]
+    },
+    "aliases": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Maximum 128 UTF-8 bytes; nonblank and no controls. NFKC/lowercase/trim aliases must be unique."}
+    },
+    "description": {"type": "string", "minLength": 1, "maxLength": 512, "description": "Maximum 512 UTF-8 bytes; nonblank and no controls. Render as text."}
+  }
+}

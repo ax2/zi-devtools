@@ -33,6 +33,7 @@ struct Review {
     source: Dataset,
     definition: workflow::Definition,
     result: Dataset,
+    result_label: String,
     path: PathBuf,
     format: Format,
     payload: Payload,
@@ -40,6 +41,7 @@ struct Review {
     table: Option<String>,
 }
 impl Review {
+    #[cfg(test)]
     fn prepare(
         source: &Dataset,
         definition: &workflow::Definition,
@@ -49,6 +51,26 @@ impl Review {
         table: &str,
         safe: bool,
     ) -> Result<Self> {
+        Self::prepare_labeled(
+            source,
+            definition,
+            (result, "完整流程结果"),
+            path,
+            format,
+            table,
+            safe,
+        )
+    }
+    fn prepare_labeled(
+        source: &Dataset,
+        definition: &workflow::Definition,
+        labeled_result: (&Dataset, &str),
+        path: &Path,
+        format: Format,
+        table: &str,
+        safe: bool,
+    ) -> Result<Self> {
+        let (result, result_label) = labeled_result;
         result.validate_saved()?;
         struct Counter(usize);
         impl Write for Counter {
@@ -87,7 +109,7 @@ impl Review {
                 &(0..result.rows.len()).collect::<Vec<_>>(),
                 table,
                 &path,
-                "完整流程结果 · 未应用",
+                "流程结果 · 未应用",
             )?),
         };
         let samples = result
@@ -105,6 +127,7 @@ impl Review {
             source: source.clone(),
             definition: definition.clone(),
             result: result.clone(),
+            result_label: result_label.to_owned(),
             path,
             format,
             payload,
@@ -202,7 +225,7 @@ fn csv_write(
     })
 }
 enum Reply {
-    Done(Format, sqlite_export::Receipt),
+    Done(Format, sqlite_export::Receipt, String),
     Cancelled,
     Failed(String),
 }
@@ -211,6 +234,7 @@ pub(super) struct State {
     pub(super) reveal: bool,
     scroll_until: Option<std::time::Instant>,
     format: Format,
+    selected_result: Option<(String, Dataset)>,
     path: String,
     table: String,
     safe: bool,
@@ -231,6 +255,7 @@ impl Default for State {
             reveal: false,
             scroll_until: None,
             format: Format::Csv,
+            selected_result: None,
             path: String::new(),
             table: "workflow_result".into(),
             safe: true,
@@ -266,6 +291,7 @@ impl State {
     pub(super) fn load_settings(&mut self, output: Option<&workflow::Output>) {
         self.path.clear();
         self.review = None;
+        self.selected_result = None;
         self.format = Format::Csv;
         self.safe = true;
         self.table = "workflow_result".into();
@@ -330,11 +356,49 @@ impl State {
             "import must not start another output"
         );
     }
+    #[cfg(feature = "ui-preview")]
+    pub(super) fn preview_step_result_check(&self, phase: u8, target: &Path) {
+        match phase {
+            1 => {
+                let (label, result) = self.selected_result.as_ref().expect("step result selected");
+                assert_eq!(label, "第1步结果");
+                assert_eq!(result.rows.len(), 2);
+                assert!(self.review.is_none());
+            }
+            2 => {
+                let review = self.review.as_ref().expect("step result review");
+                assert_eq!(review.result_label, "第1步结果");
+                assert_eq!(review.result.rows.len(), 2);
+                assert_eq!(review.path, target);
+                assert!(!target.exists(), "review must not write the target");
+            }
+            3 => {
+                assert!(self.review.is_none(), "returning must close the review");
+                assert!(!target.exists(), "returning must not write the target");
+                assert_eq!(
+                    self.selected_result
+                        .as_ref()
+                        .map(|(label, _)| label.as_str()),
+                    Some("第1步结果")
+                );
+            }
+            _ => panic!("unknown intermediate output fixture phase"),
+        }
+    }
     pub(super) fn busy(&self) -> bool {
         self.job.phase.active() || self.review.is_some()
     }
     pub(super) fn invalidate(&mut self) {
         self.review = None;
+        self.selected_result = None;
+    }
+    pub(super) fn select_result(&mut self, label: String, result: Dataset) {
+        self.review = None;
+        self.receipt = None;
+        self.receipt_format = None;
+        self.status.clear();
+        self.selected_result = Some((label, result));
+        self.reveal = true;
     }
     pub(super) fn cancel(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);
@@ -352,9 +416,9 @@ impl State {
         self.receiver = None;
         self.reveal = true;
         match reply {
-            Reply::Done(format, receipt) => {
+            Reply::Done(format, receipt, result_label) => {
                 self.status = format!(
-                    "已保存完整流程结果：{}行 · {}字节 · {}；原表与预览保留",
+                    "已保存{result_label}：{}行 · {}字节 · {}；原表与预览保留",
                     receipt.rows,
                     receipt.bytes,
                     display_path(&receipt.path)
@@ -386,6 +450,7 @@ impl State {
         self.open_request = None;
         self.job.begin();
         let cancel = self.cancel.clone();
+        let result_label = review.result_label.clone();
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         std::thread::spawn(move || {
@@ -395,7 +460,7 @@ impl State {
                 Payload::Sqlite(sqlite) => sqlite_export::write(&sqlite, &cancel),
             };
             let reply = match result {
-                Ok(receipt) => Reply::Done(format, receipt),
+                Ok(receipt) => Reply::Done(format, receipt, result_label),
                 Err(e) if e.downcast_ref::<sqlite_export::Cancelled>().is_some() => {
                     Reply::Cancelled
                 }
@@ -411,8 +476,17 @@ impl State {
         definition: &mut workflow::Definition,
         result: Option<&Dataset>,
     ) {
+        let selected_result = self.selected_result.clone();
+        let result = selected_result
+            .as_ref()
+            .map(|(_, result)| result)
+            .or(result);
+        let result_label = selected_result
+            .as_ref()
+            .map_or("完整流程结果", |(label, _)| label.as_str());
         if definition.steps.is_empty()
             && result.is_none()
+            && self.selected_result.is_none()
             && self.review.is_none()
             && self.status.is_empty()
             && !self.job.phase.active()
@@ -431,7 +505,9 @@ impl State {
             .open(scroll.then_some(true))
             .default_open(false)
             .show(ui, |ui| {
-                ui.small("使用完整预览结果；选择新文件并确认。保存位置和授权不写入流程定义。");
+                ui.small(format!(
+                    "使用{result_label}；选择新文件并确认。保存位置和授权不写入流程定义。"
+                ));
                 if !self.status.is_empty() {
                     ui.label(&self.status);
                 }
@@ -509,10 +585,10 @@ impl State {
                         if preview.clicked()
                             && let (Some(source), Some(result)) = (source, result)
                         {
-                            match Review::prepare(
+                            match Review::prepare_labeled(
                                 source,
                                 definition,
-                                result,
+                                (result, result_label),
                                 Path::new(self.path.trim()),
                                 self.format,
                                 self.table.trim(),
@@ -558,7 +634,7 @@ impl State {
             let modal=egui::Modal::new(ui.id().with("workflow-output-review")).show(ui.ctx(),|ui| {
                 ui.set_max_width(620.0);ui.heading("确认保存流程结果为新文件");
                 ui.label(display_path(&review.path));
-                ui.label(format!("{} · 全部{}行 / {}列 · {}步流程；尚未应用到原表",review.format.label(),review.result.rows.len(),review.result.headers.len(),review.definition.steps.len()));
+                ui.label(format!("{} · {} · {}行 / {}列 · {}步流程；尚未应用到原表",review.format.label(),review.result_label,review.result.rows.len(),review.result.headers.len(),review.definition.steps.len()));
                 if let Some(table)=&review.table {ui.label(format!("表名：{table}"));}
                 match &review.payload {
                     Payload::Csv(_,safe)=>{ui.label(format!("CSV不保留JSON类型；null写为空单元格，数组/对象写为JSON文本；{}。",if *safe {"公式前缀防护开启，相关文本会增加单引号"} else {"公式前缀防护关闭，原文本保留"}));}
@@ -672,7 +748,7 @@ mod tests {
     fn workflow_output_rejects_oversize_snapshot_before_creating_a_file() {
         let fixture = Fixture::new();
         let (source, definition, mut result) = frozen();
-        result.rows = vec![result.rows[0].clone()];
+        result.rows = vec![result.rows[0].clone()].into();
         result.rows[0][0] = serde_json::Value::String("x".repeat(32 * 1024 * 1024));
         assert!(
             Review::prepare(
@@ -726,7 +802,7 @@ mod tests {
     }
     fn frozen() -> (Dataset, workflow::Definition, Dataset) {
         let mut source=Dataset::parse(r#"[{"id":"001","name":" 中文🦀 ","formula":"=1+1","flag":true,"large":18446744073709551615,"empty":null,"number":-2}]"#,DataFormat::Json,b',').unwrap();
-        source.rows = vec![source.rows[0].clone(); 300];
+        source.rows = vec![source.rows[0].clone(); 300].into();
         let definition = workflow::Definition {
             output: None,
             version: 2,
@@ -829,6 +905,93 @@ mod tests {
             .is_err()
         );
         assert_eq!(std::fs::read_to_string(target).unwrap(), "owner");
+    }
+    #[test]
+    fn intermediate_step_result_can_be_saved_under_its_own_label_without_applying() {
+        let fixture = Fixture::new();
+        let (source, definition, final_result) = frozen();
+        let mut step_result = final_result.clone();
+        step_result.rows.truncate(1);
+        let name_column = step_result
+            .headers
+            .iter()
+            .position(|header| header == "name")
+            .unwrap();
+        step_result.rows[0][name_column] = Value::String("第1步值".into());
+        let path = fixture.file("step-1.csv");
+        let review = Review::prepare_labeled(
+            &source,
+            &definition,
+            (&step_result, "第1步结果"),
+            &path,
+            Format::Csv,
+            "data",
+            true,
+        )
+        .unwrap();
+        assert_eq!(review.result_label, "第1步结果");
+        assert_eq!(review.result.rows.len(), 1);
+        assert_eq!(review.result.rows[0][name_column], "第1步值");
+        assert!(review.current(Some(&source), &definition, Some(&step_result)));
+        assert!(!review.current(Some(&source), &definition, Some(&final_result)));
+        assert!(!path.exists(), "preview does not write the target");
+
+        let mut output = State::default();
+        output.select_result("第1步结果".into(), step_result.clone());
+        assert_eq!(
+            output
+                .selected_result
+                .as_ref()
+                .map(|(label, result)| (label.as_str(), result)),
+            Some(("第1步结果", &step_result))
+        );
+        assert!(output.reveal);
+        output.invalidate();
+        assert!(output.selected_result.is_none());
+        assert!(output.review.is_none());
+    }
+    #[test]
+    fn intermediate_step_sqlite_output_uses_the_selected_snapshot() {
+        let fixture = Fixture::new();
+        let (source, definition, final_result) = frozen();
+        let original_source = source.clone();
+        let mut step_result = final_result.clone();
+        step_result.rows.truncate(1);
+        let name_column = step_result
+            .headers
+            .iter()
+            .position(|header| header == "name")
+            .unwrap();
+        step_result.rows[0][name_column] = Value::String("第1步值".into());
+        let path = fixture.file("step-1.sqlite");
+        let review = Review::prepare_labeled(
+            &source,
+            &definition,
+            (&step_result, "第1步结果"),
+            &path,
+            Format::Sqlite,
+            "data",
+            true,
+        )
+        .unwrap();
+        assert!(!path.exists(), "preview does not write the target");
+        let Payload::Sqlite(sqlite) = review.payload else {
+            panic!("SQLite payload expected")
+        };
+        let receipt = sqlite_export::write(&sqlite, &AtomicBool::new(false)).unwrap();
+        let connection = rusqlite::Connection::open_with_flags(
+            receipt.path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let actual: (usize, String) = connection
+            .query_row("SELECT COUNT(*), name FROM data", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(actual, (1, "第1步值".into()));
+        assert_eq!(source, original_source);
+        assert_ne!(step_result.rows, final_result.rows);
     }
     #[test]
     fn workflow_csv_cancel_and_destination_race_publish_nothing_or_preserve_owner() {

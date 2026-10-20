@@ -5,6 +5,7 @@ public class Fixture {
   Thread x = new Thread(() -> { synchronized(a) {try {Thread.sleep(150);}catch(Exception ignored){} synchronized(b) {} }}, "fixture-lock-a");
   Thread y = new Thread(() -> { synchronized(b) {try {Thread.sleep(150);}catch(Exception ignored){} synchronized(a) {} }}, "fixture-lock-b");
   x.setDaemon(true); y.setDaemon(true); x.start(); y.start();
+  Thread.ofVirtual().name("fixture-virtual-thread").start(() -> {try {Thread.sleep(20000);}catch(InterruptedException ignored){} });
   long until = System.currentTimeMillis()+3000;
   while (System.currentTimeMillis()<until) { for(int i=0;i<50;i++) {sink=new byte[1024*1024];} Thread.sleep(20); }
   Thread.sleep(3000);

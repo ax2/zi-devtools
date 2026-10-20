@@ -3,6 +3,109 @@ use anyhow::{Context, Result, anyhow};
 mod empty;
 mod literal_repeat;
 
+const REPLACE_INPUT_LIMIT: usize = 2 * 1024 * 1024;
+const REPLACE_PATTERN_LIMIT: usize = 4096;
+const REPLACE_TEMPLATE_LIMIT: usize = 64 * 1024;
+const REPLACE_MATCH_LIMIT: usize = 1000;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ReplacePreview {
+    pub output: String,
+    pub matches: usize,
+}
+
+/// Build an in-memory replacement preview. The input is never modified, and
+/// the full result is refused if it exceeds the same 2 MiB boundary as input.
+pub fn preview_replacements(
+    pattern: &str,
+    input: &str,
+    replacement: &str,
+) -> Result<ReplacePreview> {
+    anyhow::ensure!(
+        pattern.len() <= REPLACE_PATTERN_LIMIT,
+        "正则表达式超过 4096 UTF-8 字节"
+    );
+    anyhow::ensure!(input.len() <= REPLACE_INPUT_LIMIT, "输入文本超过 2 MiB");
+    anyhow::ensure!(
+        replacement.len() <= REPLACE_TEMPLATE_LIMIT,
+        "替换模板超过 64 KiB"
+    );
+    let expression = regex::Regex::new(pattern).context("正则表达式无效")?;
+    let mut output = String::with_capacity(input.len().min(64 * 1024));
+    let mut copied = 0;
+    let mut matches = 0;
+    for captures in expression.captures_iter(input) {
+        anyhow::ensure!(
+            matches < REPLACE_MATCH_LIMIT,
+            "匹配数超过 1000 条，请缩小输入范围或收紧正则表达式"
+        );
+        let found = captures.get(0).expect("capture 0 always exists");
+        append_replacement_part(&mut output, &input[copied..found.start()])?;
+        append_expanded_replacement(&captures, replacement, &mut output)?;
+        copied = found.end();
+        matches += 1;
+    }
+    append_replacement_part(&mut output, &input[copied..])?;
+    Ok(ReplacePreview { output, matches })
+}
+
+fn append_expanded_replacement(
+    captures: &regex::Captures<'_>,
+    mut template: &str,
+    output: &mut String,
+) -> Result<()> {
+    while let Some(dollar) = template.find('$') {
+        append_replacement_part(output, &template[..dollar])?;
+        template = &template[dollar..];
+        if template.starts_with("$$") {
+            append_replacement_part(output, "$")?;
+            template = &template[2..];
+            continue;
+        }
+        let (reference, consumed) = if let Some(braced) = template.strip_prefix("${") {
+            if let Some(end) = braced.find('}') {
+                (Some(&braced[..end]), end + 3)
+            } else {
+                (None, 1)
+            }
+        } else {
+            let name_len = template[1..]
+                .bytes()
+                .take_while(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+                .count();
+            if name_len == 0 {
+                (None, 1)
+            } else {
+                (Some(&template[1..1 + name_len]), 1 + name_len)
+            }
+        };
+        let Some(reference) = reference else {
+            append_replacement_part(output, "$")?;
+            template = &template[consumed..];
+            continue;
+        };
+        let matched = reference
+            .parse::<usize>()
+            .ok()
+            .and_then(|index| captures.get(index))
+            .or_else(|| captures.name(reference));
+        if let Some(matched) = matched {
+            append_replacement_part(output, matched.as_str())?;
+        }
+        template = &template[consumed..];
+    }
+    append_replacement_part(output, template)
+}
+
+fn append_replacement_part(output: &mut String, part: &str) -> Result<()> {
+    anyhow::ensure!(
+        output.len().saturating_add(part.len()) <= REPLACE_INPUT_LIMIT,
+        "替换预览结果超过 2 MiB"
+    );
+    output.push_str(part);
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct ReportTooLarge;
 impl std::fmt::Display for ReportTooLarge {

@@ -80,5 +80,25 @@ fn main() -> Result<()> {
         fs::write(root.join(format!("report-{id}.json")), text)?;
         println!("PASS real fixture: {id}");
     }
+    let threads_json = analyze(
+        Tool::Threads,
+        &fs::read_to_string(root.join("threads.json"))?,
+        "",
+    )?;
+    let report: Value = serde_json::from_str(&threads_json)?;
+    ensure!(
+        report["sourceFormat"] == "jcmd-json",
+        "JSON thread dump format"
+    );
+    ensure!(
+        report["threadCount"].as_u64().unwrap_or_default() > 0,
+        "JSON threads"
+    );
+    ensure!(
+        report["containerCount"].as_u64().unwrap_or_default() > 0,
+        "thread containers"
+    );
+    fs::write(root.join("report-java-thread-dump-json.json"), threads_json)?;
+    println!("PASS real fixture: java-thread-dump-json");
     Ok(())
 }

@@ -223,6 +223,7 @@ pub struct State {
     pub timers: Vec<Timer>,
     pub alarms: Vec<Alarm>,
     pub notices: Vec<Notice>,
+    notification_wake: bool,
     pub focus: Focus,
     pub timer_name: String,
     pub timer_seconds: u64,
@@ -258,6 +259,7 @@ impl Default for State {
             timers: Vec::new(),
             alarms: Vec::new(),
             notices: Vec::new(),
+            notification_wake: false,
             focus: Focus::default(),
             timer_name: "倒计时".into(),
             timer_seconds: 300,
@@ -453,6 +455,21 @@ impl State {
     fn notify(&mut self, source: Source, title: String) {
         self.notices.retain(|n| n.source != source);
         self.notices.push(Notice { source, title });
+        self.notification_wake = true;
+    }
+    pub fn take_notification_wake(&mut self) -> bool {
+        std::mem::take(&mut self.notification_wake)
+    }
+    pub fn pending_notice_count(&self) -> usize {
+        self.notices.len()
+    }
+    pub fn acknowledge(&mut self, source: Source) {
+        self.notices.retain(|n| n.source != source);
+        self.changed();
+    }
+    pub fn snooze_notice(&mut self, source: Source, utc: DateTime<Utc>) {
+        self.snooze(source, utc);
+        self.changed();
     }
     pub fn poll(&mut self, now: Instant, utc: DateTime<Utc>) -> bool {
         self.audio.tick();
@@ -543,6 +560,12 @@ pub fn duration_text(duration: Duration) -> String {
 }
 #[cfg(feature = "ui-preview")]
 impl State {
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_reminder(&mut self) {
+        self.timers.push(Timer::new(1, "示例计时器".into(), 300));
+        self.notify(Source::Timer(1), "示例计时器：计时结束".into());
+    }
+
     pub fn preview_fixture(&mut self, index: usize) {
         let storage = self.storage.take();
         *self = Self::default();

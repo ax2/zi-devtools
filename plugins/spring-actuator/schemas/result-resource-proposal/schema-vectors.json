@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "vectors": [
+    {
+      "id": "facts-valid-minimal",
+      "schema": "schemas/result-resource-proposal/prepare.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 0,
+            "topLevelFieldCount": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "facts-boolean-response-bytes-rejected",
+      "schema": "schemas/result-resource-proposal/prepare.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": true,
+            "topLevelFieldCount": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "facts-boolean-field-count-rejected",
+      "schema": "schemas/result-resource-proposal/prepare.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 0,
+            "topLevelFieldCount": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "facts-info-503-rejected",
+      "schema": "schemas/result-resource-proposal/prepare.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "info",
+            "httpStatus": 503,
+            "responseBytes": 0,
+            "topLevelFieldCount": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "facts-unknown-field-rejected",
+      "schema": "schemas/result-resource-proposal/prepare.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "operation": "resource.create.prepare",
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 0,
+            "topLevelFieldCount": 0,
+            "generatedAt": "2020-01-01T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "report-valid-date-time",
+      "schema": "schemas/result-resource-proposal/report.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-16T12:00:00Z",
+        "sourceToolId": "spring-actuator",
+        "summary": {
+          "endpointCount": 1,
+          "healthStatus": "UP"
+        },
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 10,
+            "topLevelFieldCount": 1
+          }
+        ],
+        "provenance": {
+          "pluginId": "com.zicode.devtools.spring-actuator",
+          "pluginVersion": "0.1.1",
+          "toolVersion": "1.1.1",
+          "applicationVersion": "0.82.0-dev.105",
+          "runtimeFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "report-invalid-calendar-date-rejected",
+      "schema": "schemas/result-resource-proposal/report.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "generatedAt": "2026-02-30T12:00:00Z",
+        "sourceToolId": "spring-actuator",
+        "summary": {
+          "endpointCount": 1,
+          "healthStatus": "UP"
+        },
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 10,
+            "topLevelFieldCount": 1
+          }
+        ],
+        "provenance": {
+          "pluginId": "com.zicode.devtools.spring-actuator",
+          "pluginVersion": "0.1.1",
+          "toolVersion": "1.1.1",
+          "applicationVersion": "0.82.0-dev.105",
+          "runtimeFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "report-date-time-requires-zone",
+      "schema": "schemas/result-resource-proposal/report.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-16T12:00:00",
+        "sourceToolId": "spring-actuator",
+        "summary": {
+          "endpointCount": 1,
+          "healthStatus": "UP"
+        },
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 10,
+            "topLevelFieldCount": 1
+          }
+        ],
+        "provenance": {
+          "pluginId": "com.zicode.devtools.spring-actuator",
+          "pluginVersion": "0.1.1",
+          "toolVersion": "1.1.1",
+          "applicationVersion": "0.82.0-dev.105",
+          "runtimeFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "report-duplicate-checks-rejected",
+      "schema": "schemas/result-resource-proposal/report.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "generatedAt": "2026-10-16T12:00:00Z",
+        "sourceToolId": "spring-actuator",
+        "summary": {
+          "endpointCount": 2
+        },
+        "checks": [
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 10,
+            "topLevelFieldCount": 1
+          },
+          {
+            "endpoint": "health",
+            "httpStatus": 200,
+            "responseBytes": 10,
+            "topLevelFieldCount": 1
+          }
+        ],
+        "provenance": {
+          "pluginId": "com.zicode.devtools.spring-actuator",
+          "pluginVersion": "0.1.1",
+          "toolVersion": "1.1.1",
+          "applicationVersion": "0.82.0-dev.105",
+          "runtimeFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "task-submit-user-action-payload",
+      "schema": "schemas/task-api-proposal/submit.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "idempotencyKey": "a1c02b42-b3e3-4b37-a86d-cf4b39998210",
+        "operationId": "devtools.spring-actuator.run.v1",
+        "input": {
+          "origin": "https://service.example.test",
+          "endpoints": [
+            "health",
+            "info"
+          ]
+        }
+      }
+    },
+    {
+      "id": "task-submit-caller-owner-rejected",
+      "schema": "schemas/task-api-proposal/submit.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "idempotencyKey": "a1c02b42-b3e3-4b37-a86d-cf4b39998210",
+        "operationId": "devtools.spring-actuator.run.v1",
+        "workspaceId": "attacker-workspace",
+        "input": {
+          "origin": "https://service.example.test",
+          "endpoints": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "id": "task-submit-grant-rejected",
+      "schema": "schemas/task-api-proposal/submit.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "idempotencyKey": "a1c02b42-b3e3-4b37-a86d-cf4b39998210",
+        "operationId": "devtools.spring-actuator.run.v1",
+        "grant": "secret",
+        "input": {
+          "origin": "https://service.example.test",
+          "endpoints": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "id": "task-submit-path-origin-rejected",
+      "schema": "schemas/task-api-proposal/submit.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "idempotencyKey": "a1c02b42-b3e3-4b37-a86d-cf4b39998210",
+        "operationId": "devtools.spring-actuator.run.v1",
+        "input": {
+          "origin": "https://service.example.test/actuator",
+          "endpoints": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "id": "task-submit-arbitrary-endpoint-rejected",
+      "schema": "schemas/task-api-proposal/submit.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "idempotencyKey": "a1c02b42-b3e3-4b37-a86d-cf4b39998210",
+        "operationId": "devtools.spring-actuator.run.v1",
+        "input": {
+          "origin": "https://service.example.test",
+          "endpoints": [
+            "env"
+          ]
+        }
+      }
+    },
+    {
+      "id": "task-confirm-step-decision",
+      "schema": "schemas/task-api-proposal/confirm.request.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01",
+        "operationStepId": "actuator.health",
+        "decision": "approve",
+        "confirmationId": "cnf_opaque_01"
+      }
+    },
+    {
+      "id": "task-confirm-host-grant-rejected",
+      "schema": "schemas/task-api-proposal/confirm.request.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01",
+        "operationStepId": "actuator.health",
+        "decision": "approve",
+        "grantId": "host-secret",
+        "confirmationId": "cnf_opaque_01"
+      }
+    },
+    {
+      "id": "task-cancel-opaque-reference",
+      "schema": "schemas/task-api-proposal/cancel.request.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01"
+      }
+    },
+    {
+      "id": "task-cancel-pending-not-terminal",
+      "schema": "schemas/task-api-proposal/cancel.response.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01",
+        "status": "requested",
+        "executionFinished": false
+      }
+    },
+    {
+      "id": "task-cancel-requested-cannot-be-finished",
+      "schema": "schemas/task-api-proposal/cancel.response.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01",
+        "status": "requested",
+        "executionFinished": true
+      }
+    },
+    {
+      "id": "task-confirm-response-terminal-decline",
+      "schema": "schemas/task-api-proposal/confirm.response.schema.json",
+      "valid": true,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01",
+        "operationStepId": "actuator.health",
+        "decision": "decline",
+        "taskState": "declined",
+        "latestSequence": 4
+      }
+    },
+    {
+      "id": "task-confirm-id-required",
+      "schema": "schemas/task-api-proposal/confirm.request.schema.json",
+      "valid": false,
+      "instance": {
+        "schemaVersion": 1,
+        "taskRef": "opaque-task-reference-01",
+        "operationStepId": "actuator.health",
+        "decision": "approve"
+      }
+    }
+  ]
+}

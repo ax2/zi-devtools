@@ -31,6 +31,54 @@ impl Schedule {
         self.repeat_until
             .unwrap_or_else(|| NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap())
     }
+    /// Return the local date of the nth occurrence for a supported recurrence.
+    /// The calendar horizon bounds monthly/yearly scans to fewer than 2400 steps.
+    pub(super) fn occurrence_date(&self, count: u32) -> Option<NaiveDate> {
+        if count == 0 || !(MIN_YEAR..=MAX_YEAR).contains(&self.start.year()) {
+            return None;
+        }
+        if count == 1 {
+            return Some(self.start.date());
+        }
+        match self.repeat {
+            Repeat::Once => None,
+            Repeat::Daily | Repeat::Weekly => {
+                let interval = if self.repeat == Repeat::Daily { 1 } else { 7 };
+                let offset = u64::from(count - 1).checked_mul(interval)?;
+                let date = self.start.date().checked_add_days(Days::new(offset))?;
+                (date.year() <= MAX_YEAR).then_some(date)
+            }
+            Repeat::Monthly => {
+                let mut remaining = count;
+                for offset in 0..((MAX_YEAR - self.start.year() + 1) as u32 * 12) {
+                    let month = self
+                        .start
+                        .date()
+                        .with_day(1)?
+                        .checked_add_months(chrono::Months::new(offset))?;
+                    if let Some(date) = self.date_in_month(month.year(), month.month()) {
+                        remaining -= 1;
+                        if remaining == 0 {
+                            return Some(date);
+                        }
+                    }
+                }
+                None
+            }
+            Repeat::Yearly => {
+                let mut remaining = count;
+                for year in self.start.year()..=MAX_YEAR {
+                    if let Some(date) = self.date_in_month(year, self.start.month()) {
+                        remaining -= 1;
+                        if remaining == 0 {
+                            return Some(date);
+                        }
+                    }
+                }
+                None
+            }
+        }
+    }
     pub(super) fn on_day(&self, date: NaiveDate) -> bool {
         if date < self.start.date()
             || date > self.last_repeat_day()

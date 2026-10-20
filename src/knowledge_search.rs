@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    knowledge_index::{self, SearchHit, SearchResults},
+    knowledge_index::{self, SearchHit, SearchMode, SearchResults},
     knowledge_sources::Source,
 };
 
@@ -31,8 +31,16 @@ pub fn verified_result_path(hit: &SearchHit, sources: &[Source]) -> anyhow::Resu
 fn excerpt(text: &str, query: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     let lower = text.to_lowercase();
+    let lowered_query = query.to_lowercase();
     let pos = lower
-        .find(&query.to_lowercase())
+        .find(&lowered_query)
+        .or_else(|| {
+            query
+                .split_whitespace()
+                .filter(|term| !term.is_empty())
+                .filter_map(|term| lower.find(&term.to_lowercase()))
+                .min()
+        })
         .map(|byte| lower[..byte].chars().count())
         .unwrap_or(0);
     let start = pos.saturating_sub(60).min(chars.len());
@@ -58,6 +66,8 @@ pub struct State {
     query: String,
     source_id: String,
     limit: usize,
+    mode: SearchMode,
+    result_mode: SearchMode,
     running: Option<Receiver<Result<SearchResults, String>>>,
     results: Option<SearchResults>,
     result_query: String,
@@ -86,13 +96,16 @@ impl State {
         let query = self.query.clone();
         let source = (!self.source_id.is_empty()).then(|| self.source_id.clone());
         let limit = self.limit;
+        let mode = self.mode;
         self.running = Some(rx);
         self.results = None;
         self.result_query = query.clone();
+        self.result_mode = mode;
         self.message = "正在检索本机索引…".into();
         std::thread::spawn(move || {
-            let result = knowledge_index::search(&path, &query, source.as_deref(), limit)
-                .map_err(|e| format!("{e:#}"));
+            let result =
+                knowledge_index::search_with_mode(&path, &query, source.as_deref(), limit, mode)
+                    .map_err(|e| format!("{e:#}"));
             let _ = tx.send(result);
         });
     }
@@ -110,7 +123,8 @@ impl State {
             chunk_sha256: "b".repeat(64),
             text: "本机知识库把手动选择的 Markdown、PDF 和 Word 文档统一建立索引。检索结果保留来源位置，方便回到原文件核对。".into(),
         }).into_iter().collect() });
-        self.message = "显示 1 个片段；中文查询使用字面包含匹配。".into();
+        self.message =
+            "显示 1 个片段（最多 25 个），中文按完整短语匹配；结果为本次查询快照。".into();
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, sources: &[Source]) {
@@ -120,15 +134,18 @@ impl State {
         if let Some(rx) = &self.running {
             match rx.try_recv() {
                 Ok(Ok(results)) => {
+                    let match_description = match self.result_mode {
+                        SearchMode::Auto if results.literal_match => "中文按完整短语匹配",
+                        SearchMode::Auto => "按所有关键词匹配并依相关度排序",
+                        SearchMode::ExactPhrase => "按完整短语匹配",
+                        SearchMode::AllTerms => "包含所有词并依相关度排序",
+                        SearchMode::AnyTerm => "包含任一词并依相关度排序",
+                    };
                     self.message = format!(
-                        "显示 {} 个片段（最多 {} 个）{}；结果为本次查询快照。",
+                        "显示 {} 个片段（最多 {} 个），{}；结果为本次查询快照。",
                         results.hits.len(),
                         self.limit,
-                        if results.literal_match {
-                            "，中文使用字面包含匹配"
-                        } else {
-                            "，按 FTS 相关度排序"
-                        }
+                        match_description,
                     );
                     self.results = Some(results);
                     self.running = None;
@@ -179,6 +196,19 @@ impl State {
                         ui.selectable_value(&mut self.limit, limit, format!("最多 {limit} 条"));
                     }
                 });
+            egui::ComboBox::from_id_salt("knowledge-search-mode")
+                .selected_text(match self.mode {
+                    SearchMode::Auto => "自动",
+                    SearchMode::ExactPhrase => "完整短语",
+                    SearchMode::AllTerms => "包含所有词",
+                    SearchMode::AnyTerm => "包含任一词",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.mode, SearchMode::Auto, "自动（推荐）");
+                    ui.selectable_value(&mut self.mode, SearchMode::ExactPhrase, "完整短语");
+                    ui.selectable_value(&mut self.mode, SearchMode::AllTerms, "包含所有词");
+                    ui.selectable_value(&mut self.mode, SearchMode::AnyTerm, "包含任一词");
+                });
             if ui
                 .add_enabled(self.running.is_none(), egui::Button::new("检索"))
                 .clicked()
@@ -193,7 +223,7 @@ impl State {
         if !self.message.is_empty() {
             ui.label(&self.message);
         }
-        ui.small("英文词项使用 FTS5 相关度排序；含中文的查询使用字面包含匹配。当前不含向量语义检索。索引内容可能落后于源文件，以打开前校验为准。");
+        ui.small("自动模式下，英文按所有词检索并按相关度排序，中文使用完整短语；可切换完整短语、所有词或任一词。当前不含向量语义检索；打开原文件前会校验快照。");
         ui.add_space(10.0);
         if let Some(results) = &self.results {
             for (index, hit) in results.hits.iter().enumerate() {
@@ -242,6 +272,18 @@ mod tests {
     use super::*;
     use crate::knowledge_sources::{add_source, scan};
     use std::{fs, sync::atomic::AtomicBool};
+
+    #[test]
+    fn excerpts_center_on_a_matching_query_term_when_the_full_query_is_not_contiguous() {
+        let text = format!(
+            "开头内容。{}目标词位于这段文档的中间位置。{}",
+            "背景内容。".repeat(30),
+            "结尾内容。".repeat(40)
+        );
+        let excerpt = excerpt(&text, "missing 目标词");
+        assert!(excerpt.contains("目标词位于"));
+        assert!(!excerpt.starts_with("开头内容"));
+    }
 
     #[test]
     fn result_open_requires_current_source_and_file_hash() {

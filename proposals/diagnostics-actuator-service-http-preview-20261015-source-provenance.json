@@ -1,0 +1,206 @@
+{
+  "bundle": "proposals\\diagnostics-actuator-service-http-preview-20261015",
+  "status": "provider review bundle only; not an installable plugin",
+  "sourceRevision": "65f9aa63c831a4540bdd5731aa4da3de76dbd4b8",
+  "sourceTreeDirty": true,
+  "sourceTool": {
+    "id": "spring-actuator",
+    "tool_version": "1.1.1",
+    "name": "Spring Actuator 只读诊断",
+    "scope": "显式选择基础地址和 health/info/metrics GET；支持 503 health JSON，不跟随重定向、不读取 env/configprops；异步状态进入后台任务中心；只显示通用摘要，详细报告留在工作台。 导出 JSON 报告包含工具版本与便携运行环境指纹。"
+  },
+  "upstreamProfile": {
+    "source": "E:\\zicode-studio-desktop\\docs\\plugins\\service-http-get-preview.md",
+    "observedOn": "2026-10-15",
+    "sha256": "bb3e9e49bf8ee6c33577c994331d2216c7c67a7b29d3e2388e04753e409775e5",
+    "status": "unimplemented Studio preview; this local contract snapshot is sufficient for provider-side work and does not import the sibling checkout at build time"
+  },
+  "pluginManifestSha256": "7e54ad0d019c9680376220af8c1d759634f3c81a3e23ce88c02857dbd459018f",
+  "viewSha256": "f283ebd6ce6340995416aa4a479c56a5f330edadbce0a13afb658a36aad4a4d7",
+  "fixtureFileSha256": "78ef37188bdbda80a72f08fb9a87828c228759f7d7d63cc57bd3be4c978cd9fd",
+  "desktopProof": {
+    "pass": true,
+    "profile": "service.http.get.v1@1.0.0-preview.1",
+    "cases": [
+      "health-loopback-confirmed-200",
+      "health-loopback-confirmed-503",
+      "info-https-200",
+      "metrics-https-200",
+      "reject-base-path",
+      "reject-userinfo",
+      "reject-query",
+      "reject-fragment",
+      "reject-unlisted-endpoint",
+      "reject-auth-field",
+      "dns-change-error",
+      "cancel-discards-late-result"
+    ],
+    "sdkCalls": 6,
+    "requestKeys": [
+      "endpoint,origin"
+    ],
+    "hostConfirmation": "SDK handoff observed; confirmation itself requires Studio Host",
+    "directNetworkPrimitives": false,
+    "connectSrcNone": true,
+    "lateResultIgnored": true,
+    "errors": [],
+    "viewport": {
+      "width": 1180,
+      "height": 900,
+      "devicePixelRatio": 1,
+      "prefersDark": false
+    },
+    "pageErrors": [],
+    "browser": "msedge.exe",
+    "viewSha256": "f283ebd6ce6340995416aa4a479c56a5f330edadbce0a13afb658a36aad4a4d7",
+    "fixturesSha256": "78ef37188bdbda80a72f08fb9a87828c228759f7d7d63cc57bd3be4c978cd9fd",
+    "limitations": [
+      "Injected SDK-shaped mock; no Studio Host, HTTP server, DNS, TLS, proxy, or confirmation was exercised",
+      "This proof validates View request/response handling only and is not Host conformance"
+    ],
+    "screenshot": "view-desktop.png",
+    "screenshotSha256": "82988d5ac0a33b6f88caaa3ff8a0f4f45bdd8834df5efcb4287df67f26ce873f"
+  },
+  "mobileProof": {
+    "pass": true,
+    "profile": "service.http.get.v1@1.0.0-preview.1",
+    "cases": [
+      "health-loopback-confirmed-200",
+      "health-loopback-confirmed-503",
+      "info-https-200",
+      "metrics-https-200",
+      "reject-base-path",
+      "reject-userinfo",
+      "reject-query",
+      "reject-fragment",
+      "reject-unlisted-endpoint",
+      "reject-auth-field",
+      "dns-change-error",
+      "cancel-discards-late-result"
+    ],
+    "sdkCalls": 6,
+    "requestKeys": [
+      "endpoint,origin"
+    ],
+    "hostConfirmation": "SDK handoff observed; confirmation itself requires Studio Host",
+    "directNetworkPrimitives": false,
+    "connectSrcNone": true,
+    "lateResultIgnored": true,
+    "errors": [],
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "devicePixelRatio": 1,
+      "prefersDark": true
+    },
+    "pageErrors": [],
+    "browser": "msedge.exe",
+    "viewSha256": "f283ebd6ce6340995416aa4a479c56a5f330edadbce0a13afb658a36aad4a4d7",
+    "fixturesSha256": "78ef37188bdbda80a72f08fb9a87828c228759f7d7d63cc57bd3be4c978cd9fd",
+    "limitations": [
+      "Injected SDK-shaped mock; no Studio Host, HTTP server, DNS, TLS, proxy, or confirmation was exercised",
+      "This proof validates View request/response handling only and is not Host conformance"
+    ],
+    "screenshot": "view-mobile.png",
+    "screenshotSha256": "92ce1acb37667406525ecd4da6bb94882fc47cb3434b8f563dd40998d81c5829"
+  },
+  "files": [
+    {
+      "path": "contracts/studio-host-capabilities/service-http-get-preview-20261015/fixtures/view-cases.json",
+      "size": 4576,
+      "sha256": "78ef37188bdbda80a72f08fb9a87828c228759f7d7d63cc57bd3be4c978cd9fd"
+    },
+    {
+      "path": "contracts/studio-host-capabilities/service-http-get-preview-20261015/README.md",
+      "size": 2417,
+      "sha256": "e5189b7d5868e3691144fb819369c5fb87bb8e3bf5b5a8729de149bee7434432"
+    },
+    {
+      "path": "contracts/studio-host-capabilities/service-http-get-preview-20261015/schemas/sdk-request.schema.json",
+      "size": 723,
+      "sha256": "8dfc0ab3f65fe8d95596fe43c7bfb6f6bfdf94319011a7347a9af568c7bc6cee"
+    },
+    {
+      "path": "contracts/studio-host-capabilities/service-http-get-preview-20261015/schemas/sdk-result.schema.json",
+      "size": 1565,
+      "sha256": "a6bcce03048c1ab44cf46b568751a8215c55134d2641cde69e754138a752aa77"
+    },
+    {
+      "path": "contracts/studio-host-capabilities/service-http-get-preview-20261015/source-tool.json",
+      "size": 408,
+      "sha256": "32a35dcb4b705a838b602a191a9e77cbe637a8cfd53bc1087af444bcaf679726"
+    },
+    {
+      "path": "contracts/studio-host-capabilities/service-http-get-preview-20261015/upstream-source.json",
+      "size": 364,
+      "sha256": "bab42ef9761a95f33f81a5a9a0bb3d98dc62424fc7845e95c6cb12cb963d489f"
+    },
+    {
+      "path": "docs/diagnostics-plugin-coverage.md",
+      "size": 8221,
+      "sha256": "058c761eb3d2cea5b14716b27922c5a7ebba3d3334b6f619ced21a77e60cef70"
+    },
+    {
+      "path": "plugins/diagnostics/catalog.json",
+      "size": 7537,
+      "sha256": "6d472dab5986ca785bf60930649ee43554b03e270488f3d1441478f7a2dcac25"
+    },
+    {
+      "path": "plugins/diagnostics/plugin.json",
+      "size": 22032,
+      "sha256": "7e54ad0d019c9680376220af8c1d759634f3c81a3e23ce88c02857dbd459018f"
+    },
+    {
+      "path": "plugins/diagnostics/views/spring-actuator-preview.html",
+      "size": 11240,
+      "sha256": "f283ebd6ce6340995416aa4a479c56a5f330edadbce0a13afb658a36aad4a4d7"
+    },
+    {
+      "path": "README.md",
+      "size": 2473,
+      "sha256": "1787c94b2158426435ca14f99851f2b7fcb3dc00da8a0e41bc2339ed2e9ca58f"
+    },
+    {
+      "path": "review-bundle.json",
+      "size": 797,
+      "sha256": "ae4fbfbe07932bc4e8638b5b79b9d583c864aa5178282581acc85a5032a42942"
+    },
+    {
+      "path": "scripts/cdp_client.py",
+      "size": 2980,
+      "sha256": "c26a1b1c5e5a0ca540792713d5c3c8aea18c01da9eb783d8dd60eb5c7e6513a6"
+    },
+    {
+      "path": "scripts/verify_actuator_view.py",
+      "size": 15316,
+      "sha256": "adcbc2402f959edecf6a19f72f509a6401c18be69a9341f597085b49d24277ef"
+    },
+    {
+      "path": "verification/desktop-proof.json",
+      "size": 1404,
+      "sha256": "34c3beb78c5085868c0c242ead9dc8487318552685d6544456790ef427c27e46"
+    },
+    {
+      "path": "verification/mobile-proof.json",
+      "size": 1400,
+      "sha256": "2849fa622bdcccde61d2b876e04b272123223018b2c4a572b062f9fd1976e231"
+    },
+    {
+      "path": "verification/view-desktop.png",
+      "size": 68891,
+      "sha256": "82988d5ac0a33b6f88caaa3ff8a0f4f45bdd8834df5efcb4287df67f26ce873f"
+    },
+    {
+      "path": "verification/view-mobile.png",
+      "size": 48338,
+      "sha256": "92ce1acb37667406525ecd4da6bb94882fc47cb3434b8f563dd40998d81c5829"
+    }
+  ],
+  "directoryIndexSha256": "a4eab1dddcc392d7fd355ed34bb0dfef5ecb78241b3e71fa4d20185a3d366103",
+  "externalChecksNotPerformed": [
+    "Studio service.http.get Host conformance",
+    "Host confirmation and authorization lifecycle",
+    "DNS rebinding/pinning, address classification, TLS, redirects, proxy exclusion, response streaming limits",
+    "Installed plugin lifecycle, revoke/uninstall, Pi/browser network separation"
+  ]
+}

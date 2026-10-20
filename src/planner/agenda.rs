@@ -22,7 +22,7 @@ pub(super) fn rows(
         if item.trash
             || (!done && schedule.done)
             || (!query.is_empty()
-                && !format!("{} {}", item.title, item.body)
+                && !format!("{} {} {}", item.title, item.body, item.tags.join(" "))
                     .to_lowercase()
                     .contains(&query))
         {

@@ -1,0 +1,29 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.json-object",
+  "packageVersion": "0.1.1",
+  "source": {
+    "revision": "REPLACED_BY_PACKAGE_BUILDER",
+    "dirty": true
+  },
+  "tools": [
+    {
+      "sourceToolId": "json",
+      "toolId": "devtools.json.object.inspect",
+      "capabilityId": "devtools.json.object.inspect",
+      "version": "1.3.0",
+      "status": "candidate",
+      "profile": "result.json.v1",
+      "title": "JSON 对象摘要"
+    },
+    {
+      "sourceToolId": "json",
+      "toolId": "devtools.json.object.receive",
+      "capabilityId": "devtools.json.object.receive",
+      "version": "1.3.0",
+      "status": "candidate",
+      "profile": "result.json.v1",
+      "title": "接收 JSON 对象"
+    }
+  ]
+}

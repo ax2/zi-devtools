@@ -1,0 +1,10 @@
+{
+  "confirmedExecutionReported": true,
+  "destination": "\\\\?\\C:\\Users\\ax2\\AppData\\Local\\Temp\\zi-directory-copy-smoke-review-20261017\\directory-copy-fixture-8bbde217-8acd-4819-869f-382b0cfbc364\\output",
+  "destinationMatchesSelectedLeftSource": true,
+  "mouseEvents": true,
+  "previewCreatedBeforeWrite": true,
+  "screenshot": "directory-copy-smoke.png",
+  "selectedDifference": true,
+  "sourcePreserved": true
+}

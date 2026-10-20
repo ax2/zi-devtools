@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "pluginId": "com.zicode.devtools.spring-actuator",
+  "pluginVersion": "0.1.3",
+  "sourceTool": {
+    "id": "spring-actuator",
+    "version": "1.1.1",
+    "applicationVersion": "0.82.0-dev.105",
+    "scopeComplete": false,
+    "migrationStatus": "partial-await-host"
+  },
+  "operations": [
+    {
+      "id": "devtools.spring-actuator.health",
+      "sourceScope": "Read the fixed /actuator/health endpoint from an explicitly selected origin; retain HTTP 503 JSON as diagnostic data.",
+      "endpoint": "health",
+      "status": "candidate",
+      "profile": "service.http.get.v1@=1.0.0-preview.1",
+      "inputSchema": "schemas/http-get-input.schema.json",
+      "resultSchema": "schemas/http-get-result.schema.json"
+    },
+    {
+      "id": "devtools.spring-actuator.info",
+      "sourceScope": "Read the fixed /actuator/info endpoint from an explicitly selected origin.",
+      "endpoint": "info",
+      "status": "candidate",
+      "profile": "service.http.get.v1@=1.0.0-preview.1",
+      "inputSchema": "schemas/http-get-input.schema.json",
+      "resultSchema": "schemas/http-get-result.schema.json"
+    },
+    {
+      "id": "devtools.spring-actuator.metrics",
+      "sourceScope": "Read the fixed /actuator/metrics endpoint from an explicitly selected origin.",
+      "endpoint": "metrics",
+      "status": "candidate",
+      "profile": "service.http.get.v1@=1.0.0-preview.1",
+      "inputSchema": "schemas/http-get-input.schema.json",
+      "resultSchema": "schemas/http-get-result.schema.json"
+    },
+    {
+      "id": "devtools.spring-actuator.summary",
+      "sourceScope": "Display only a general response summary in the View; detailed response capture remains owned by the Studio workbench/Host result interface.",
+      "status": "candidate",
+      "implementation": "views/main.html",
+      "resultCapture": "Host-managed; the View never receives resultRef or writes files"
+    },
+    {
+      "id": "devtools.spring-actuator.background-task",
+      "sourceScope": "Send asynchronous request state to the task center; support progress, cancellation, terminal status, and revocation.",
+      "status": "not-delivered",
+      "blockingProfileProposal": "schemas/task-api-proposal/README.md"
+    },
+    {
+      "id": "devtools.spring-actuator.report-export",
+      "sourceScope": "Export a JSON report containing source tool version and portable runtime fingerprint after user confirmation.",
+      "status": "not-delivered",
+      "blockingProfileProposal": "schemas/result-resource-proposal/README.md"
+    }
+  ],
+  "delivery": {
+    "fullSourceToolDelivered": false,
+    "deliveredScope": [
+      "Fixed health/info/metrics JSON GET through Studio Host confirmation",
+      "View-only general response summary",
+      "Health 503 JSON presented as diagnostic data"
+    ],
+    "notDelivered": [
+      "Desktop source tool optional Bearer authentication",
+      "Arbitrary single metric endpoint selection",
+      "Spring context path support",
+      "Asynchronous task-center lifecycle",
+      "Detailed workbench report capture conformance",
+      "JSON report export with tool provenance and portable runtime fingerprint",
+      "OS-root TLS, public DNS and full Pi-to-Host-to-View acceptance"
+    ]
+  }
+}

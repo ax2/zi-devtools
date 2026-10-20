@@ -4,12 +4,15 @@ Installation is allowed only on disposable GitHub-hosted Windows runners.
 The historical checksum proves download integrity, not publisher authentication.
 """
 import argparse
+import base64
 import ctypes
 import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
+import sys
 import tempfile
 import tomllib
 
@@ -25,9 +28,13 @@ def main():
         raise RuntimeError('Assertions required')
     parser = argparse.ArgumentParser()
     parser.add_argument('--compile-only', action='store_true')
+    parser.add_argument('--keep-artifacts', action='store_true',
+                        help='Keep the compile-only MSI fixture under target')
     parser.add_argument('--baseline-dir', type=Path)
     parser.add_argument('--ui-probe', action='store_true')
     args = parser.parse_args()
+    if args.keep_artifacts and not args.compile_only:
+        parser.error('--keep-artifacts requires --compile-only')
     build = ROOT / 'target'
     observer = build / 'debug/examples/msi_fixture_state.exe'
     inspector = build / 'debug/examples/capability_inspect.exe'
@@ -58,6 +65,30 @@ def main():
                     '-d', f"AppMenuCapabilities={inspection['declarationProperty']}",
                     '-d', f'MenuActionsDll={build / "release/zi_msi_actions.dll"}', '-o', str(package)],
                    cwd=ROOT, check=True, timeout=180)
+    manifest_proof = folder / 'menu-manifest-proof.json'
+    verify_manifest = [
+        sys.executable, str(ROOT / 'scripts/verify_msi_menu_manifest.py'),
+        '--msi', str(package), '--exe', str(build / 'release/ZiDevTools.exe'),
+        '--menu-actions-dll', str(build / 'release/zi_msi_actions.dll'),
+        '--app-version', version, '--exe-sha256', digest,
+        '--capabilities-base64', base64.b64encode(inspection['declarationProperty'].encode('utf-8')).decode('ascii'),
+    ]
+    subprocess.run(verify_manifest + ['--output', str(manifest_proof)],
+                   cwd=ROOT, check=True, timeout=30)
+    tampered_dll = folder / 'menu-actions-tampered.dll'
+    tampered = bytearray((build / 'release/zi_msi_actions.dll').read_bytes())
+    assert tampered, 'The built menu actions DLL is empty'
+    tampered[len(tampered) // 2] ^= 1
+    tampered_dll.write_bytes(tampered)
+    rejected_manifest = folder / 'menu-manifest-tamper-proof.json'
+    tampered_verification = verify_manifest.copy()
+    dll_argument = tampered_verification.index('--menu-actions-dll')
+    tampered_verification[dll_argument + 1] = str(tampered_dll)
+    rejected = subprocess.run(
+        tampered_verification + ['--output', str(rejected_manifest)],
+        cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert rejected.returncode != 0 and 'MSI menu transaction DLL differs from the built DLL' in rejected.stderr
+    assert not rejected_manifest.exists(), 'A mismatched menu DLL unexpectedly produced proof'
     metadata = observe('--package', package)
     assert metadata['version'] == version and metadata['transactional_upgrade']
     order = action_sequence(package)
@@ -67,11 +98,17 @@ def main():
     assert all(order[a] < order[b] for a, b in zip(required, required[1:]))
     proof = dict(productionTemplateUnmodified=True, appVersionUnchanged=True, msiFixtureVersion=version,
                  desktopSha256=digest, actionOrder={name: order[name] for name in required},
+                 msiMenuManifest=json.loads(manifest_proof.read_text(encoding='utf-8')),
+                 msiMenuDllTamperRejected=True,
                  installationPerformed=False, legacyReleaseUpgradeVerified=False)
     proof['menuUiTables'] = verify_tables(package)
     (folder / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
     if args.compile_only:
-        print(f'PASS: unmodified production template compiled; no installation; evidence {folder}')
+        if args.keep_artifacts:
+            print(f'PASS: unmodified production template compiled; no installation; evidence {folder}')
+        else:
+            shutil.rmtree(folder)
+            print('PASS: unmodified production template compiled; temporary MSI fixture removed; no installation')
         return
     old = args.baseline_dir.resolve() / 'ZiDevTools-0.81.0-windows-x64.msi'
     previous = observe('--package', old)

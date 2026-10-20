@@ -1,6 +1,6 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
-  "sourceCatalogVersion": "0.82.0-dev.105",
+  "sourceCatalogVersion": "0.82.0",
   "acceptedCapabilities": 0,
   "categories": {
     "compute_candidate": "可迁移候选",
@@ -47,6 +47,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
@@ -69,6 +70,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
@@ -91,6 +93,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned提供方候选；Studio真实安装/权限/PI/Host生命周期仍待验收"
@@ -105,10 +108,11 @@
           "core": "zi-json-core/0.1.0",
           "adapter": "zi-json-object-wasi/0.1.0",
           "packageId": "com.zicode.devtools.json-object",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "requiredProfiles": {
             "output.schema.v1": "=1.0.0-rc.1",
-            "result.json.v1": "=1.0.0-preview.1"
+            "result.json.v1": "=1.0.0-preview.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
           "limits": {
             "inputObjectBytes": 8192,
@@ -118,9 +122,9 @@
             "depth": 64,
             "nodes": 4096
           },
-          "candidateDirectory": "release/plugin-candidates/json-object-0.1.0-candidate-07",
-          "verificationReceipt": "release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
-          "runtimeVerification": "10_native_wasi_byte_parity_cases_duplicate_key_and_size_rejection",
+          "candidateDirectory": "release/plugin-candidates/json-object-0.1.1-candidate-03",
+          "verificationReceipt": "release/plugin-candidates/json-object-0.1.1-candidate-03-verification.json",
+          "runtimeVerification": "10_baseline_native_wasi_parity_and_current_packaged_wasi_replay",
           "viewVerification": "no_plugin_view; standalone_JSON_object_summary_action_uses_same_native_adapter",
           "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
         },
@@ -134,10 +138,11 @@
           "core": "zi-json-core/0.1.0",
           "adapter": "zi-json-object-wasi/0.1.0",
           "packageId": "com.zicode.devtools.json-object",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
           "requiredProfiles": {
             "output.schema.v1": "=1.0.0-rc.1",
-            "result.json.v1": "=1.0.0-preview.1"
+            "result.json.v1": "=1.0.0-preview.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
           "limits": {
             "inputObjectBytes": 8192,
@@ -147,14 +152,14 @@
             "depth": 64,
             "nodes": 4096
           },
-          "candidateDirectory": "release/plugin-candidates/json-object-0.1.0-candidate-07",
-          "verificationReceipt": "release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
-          "runtimeVerification": "10_native_wasi_byte_parity_cases_duplicate_key_and_size_rejection",
+          "candidateDirectory": "release/plugin-candidates/json-object-0.1.1-candidate-03",
+          "verificationReceipt": "release/plugin-candidates/json-object-0.1.1-candidate-03-verification.json",
+          "runtimeVerification": "10_baseline_native_wasi_parity_and_current_packaged_wasi_replay",
           "viewVerification": "no_plugin_view; standalone_JSON_object_summary_action_uses_same_native_adapter",
           "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
         }
       ],
-      "reason": "JSON 格式化/压缩/校验仍由 Text 0.4.1 候选提供；对象摘要另由 JSON Object 0.1.0 候选声明 result.json.v1，对象接收能力用于显式接力。提供方字节一致验证已完成，Studio Host/Pi 和结果接力仍待接收方验收。",
+      "reason": "JSON 格式化/压缩/校验仍由 Text 0.4.1 候选提供；对象摘要另由 JSON Object 0.1.1 候选声明 result.json.v1 与 tool.directory.v1，对象接收能力用于显式接力。提供方字节一致验证已完成，Studio Host/Pi 和结果接力仍待接收方验收。",
       "scopeComplete": true,
       "packageId": "com.zicode.devtools.text",
       "packageVersion": "0.4.1",
@@ -175,9 +180,9 @@
         },
         {
           "packageId": "com.zicode.devtools.json-object",
-          "packageVersion": "0.1.0",
-          "candidateDirectory": "release/plugin-candidates/json-object-0.1.0-candidate-07",
-          "verificationReceipt": "release/plugin-candidates/json-object-0.1.0-candidate-07-verification-revision-01.json",
+          "packageVersion": "0.1.1",
+          "candidateDirectory": "release/plugin-candidates/json-object-0.1.1-candidate-03",
+          "verificationReceipt": "release/plugin-candidates/json-object-0.1.1-candidate-03-verification.json",
           "capabilities": [
             "devtools.json.object.inspect",
             "devtools.json.object.receive"
@@ -219,6 +224,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
@@ -241,6 +247,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
@@ -276,13 +283,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -297,23 +307,45 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
+        },
+        {
+          "operationId": "devtools.transforms.url.encode",
+          "title": "URL 编码共享文本资源",
+          "scopeKind": "explicit_text_resource_receiver",
+          "sourceVersion": "1.0.2",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.url-text-resource",
+          "packageVersion": "0.1.1",
+          "candidateDirectory": "release/plugin-candidates/url-text-resource-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/url-text-resource-0.1.1-candidate-01-verification.json",
+          "requiredProfiles": {
+            "resource.input.types.v1": "=1.0.0-preview.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
+          "scope": "单个用户授权的text/plain资源，1至8192 UTF-8字节；返回编码文本、源字节数或7种明确业务错误。",
+          "runtimeVerification": "13_actual_wasi_schema_and_budget_cases_same_frozen_runtime",
+          "blockingReason": "与transforms共享同一能力ID，隔离接收测试只启用一个提供方；真实Host资源授权、撤权、取消和跨工具接力尚未验收。"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "sha256",
@@ -347,6 +379,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收"
@@ -501,13 +534,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -522,13 +558,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -543,13 +582,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -564,23 +606,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "ascii-codes",
@@ -745,23 +790,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "html-escape",
@@ -786,13 +834,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -807,23 +858,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "text-escape",
@@ -848,13 +902,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -869,23 +926,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "case-convert",
@@ -912,13 +972,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -933,13 +996,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -954,13 +1020,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -975,23 +1044,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "yaml",
@@ -1090,13 +1162,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1111,23 +1186,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "lines",
@@ -1155,13 +1233,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1176,13 +1257,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1197,13 +1281,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1218,13 +1305,16 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
@@ -1239,23 +1329,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "url-inspect",
@@ -1279,23 +1372,26 @@
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.transforms",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
           "runtimeVerification": "174_independent_expected_vectors_native_wasi_parity_and_wasmtime_36_0_2_budget",
           "viewVerification": "public_sdk_fixture_actual_wasi_23_actions_desktop_mobile_light_dark",
           "blockingReason": "unsigned提供方候选；完整Host安装/权限/生命周期/Pi待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/transforms-0.1.0-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/transforms-0.1.0-candidate-02-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/transforms-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/transforms-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.transforms",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "cidr",
@@ -1348,7 +1444,7 @@
     {
       "sourceToolId": "data",
       "title": "CSV / JSON 数据工作台",
-      "sourceVersion": "1.10.0",
+      "sourceVersion": "1.13.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1357,9 +1453,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出；导出结果发送到其他文本工具，接收结果后本地解析预览；整列去空白/大小写、空值处理与重命名，预览应用及单步撤销；开发版支持命名多实例与主动保存/恢复快照 接收计算器数值类型JSON表格，默认新实例保留已有工作；类型对象经JSON导出可确认送回矩阵A，文本或近似数字模式明确显示类型/精度变化。 从已解析筛选排序视图选择行范围、具名列和列顺序，预览最多8×8数值后接力；CSV字面量精确或显式近似转换，JSON浮点明确近似，拒绝非数字/函数/赋值/空值，保留源工作。；首屏独立数值选取窗口、固定取消/预览操作，取消不发送；接收SQLite当前页类型化表格为新实例，保留已有工作；验证形状/2MiB输入预算后创建，直接可用并刷新可见行，空页保留列；不自动运行流程。 类型化表格接力草稿使用列结构JSON保留空表、列序和值类型，原实例保留。 新增可保存文本流程草稿，独立实例接收不自动运行，后台任务/取消/实例归属和快照恢复；不覆盖既有表格。 共用数据页面按实例当前入口显示导航名称，旧快照默认数据工作台。 JSON输入同时支持严格headers/rows列结构；所有类型化表格接力草稿使用列结构JSON，空表/列序/值类型在保存恢复后重解析保留，宽列名不再因对象数组重复列名而超限。拒绝重复模式字段、非法形状与空列名；流程表格审核后接收新实例。；固定工作实例管理栏，工具内容独立滚动，每实例每工作台保留滚动位置",
+          "scope": "CSV/TSV、JSON 对象数组导入，筛选、排序、预览和导出；导出结果发送到其他文本工具，接收结果后本地解析预览；整列去空白/大小写、空值处理与重命名，预览应用及单步撤销；开发版支持命名多实例与主动保存/恢复快照 接收计算器数值类型JSON表格，默认新实例保留已有工作；类型对象经JSON导出可确认送回矩阵A，文本或近似数字模式明确显示类型/精度变化。 从已解析筛选排序视图选择行范围、具名列和列顺序，预览最多8×8数值后接力；CSV字面量精确或显式近似转换，JSON浮点明确近似，拒绝非数字/函数/赋值/空值，保留源工作。；首屏独立数值选取窗口、固定取消/预览操作，取消不发送；接收SQLite当前页类型化表格为新实例，保留已有工作；验证形状/2MiB输入预算后创建，直接可用并刷新可见行，空页保留列；不自动运行流程。 类型化表格接力草稿使用列结构JSON保留空表、列序和值类型，原实例保留。 新增可保存文本流程草稿，独立实例接收不自动运行，后台任务/取消/实例归属和快照恢复；不覆盖既有表格。 共用数据页面按实例当前入口显示导航名称，旧快照默认数据工作台。 JSON输入同时支持严格headers/rows列结构；所有类型化表格接力草稿使用列结构JSON，空表/列序/值类型在保存恢复后重解析保留，宽列名不再因对象数组重复列名而超限。拒绝重复模式字段、非法形状与空列名；流程表格审核后接收新实例。；固定工作实例管理栏，工具内容独立滚动，每实例每工作台保留滚动位置 统一结果接力对128 KiB内、非空且至少两列的CSV/TSV按数据工作台规则推荐目标；分隔符歧义、无效表头或超限不推荐。用户仍须选目标并确认，新实例保留原有工作。 修复统一接力弹窗保留上次滚动位置：新接力正文和目标回顶，规范化查询或分类变化重置目标列表及滚动惯性；普通重绘和选择目标保留滚动。 统一结果接力增加全部/收藏/最近/常用范围，复用工具库的工具ID偏好快照；保持格式入口区分、搜索相关度、材料兼容与显式确认，不另存接力正文或访问历史。 接力成功按实际接收工具ID记录一次访问，共用工作台不再归入通用入口；失败或取消不增加最近/常用记录。；接力目标搜索支持上下方向键选择、自动滚动和 Tab 到确认按钮，输入法组合期间不抢占方向键 接收目录差异与复制结果后默认折叠原始输入，直接展示可筛选排序的表格；可展开编辑，保留其他实例。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.10.0",
+          "sourceVersion": "1.13.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -1661,7 +1757,7 @@
     {
       "sourceToolId": "file-compare",
       "title": "目录内容对比",
-      "sourceVersion": "1.2.7",
+      "sourceVersion": "1.8.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1670,9 +1766,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "选择两个本机目录，按相对路径和类型对照；文件先比大小，同大小再流式计算 SHA-256；支持筛选、无覆盖 CSV 导出，以及对完整比较报告中所选差异文件生成摘要校验预览并确认后安全复制；仅在用户明确执行后写入目标目录，不覆盖、移动或删除；复制计划预览明确列出需要新建的目标子目录并去重；当前筛选可见差异批量选择、清空、已选大小估算；来源侧或目标目录变化会作废旧预览，后台任务期间锁定设置；执行时校验来源与目标目录对象都与预览一致；退出程序时取消未完成的复制任务；长路径输入框可悬停查看完整值；每份复制预览仅执行一次，取消或完成后须重新预览才能重试",
+          "scope": "按相对路径、类型、大小及同大小文件SHA-256比较两个本机目录；部分扫描不推断单侧缺失。支持筛选、分页和无覆盖CSV导出。完整报告中可跨页选择最多1,000个普通文件/2GiB，重新校验来源并预览目标冲突及待建目录后明确执行；复制检查来源/目标身份与摘要，采用流式暂存和原子无覆盖提交，不移动或删除来源。取消或退出保留已提交文件，清除未提交暂存。每份预览仅执行一次，可仅选择未复制项再生成新预览。扫描、预览和复制接入任务中心，支持离页查看、取消与返回，忙碌时阻止升级重启；复制进度区分暂存与成功提交。目录页适应窗口宽度和长路径；差异、文件预览、待建目录与执行结果各自分页，跨页保留选择。执行后收起旧计划，默认突出未复制项，可按结果类别及路径/错误筛选；翻页和筛选不改变写入范围、不自动重试。 目录差异与复制结果支持当前筛选全部匹配行的表格接力，审核冻结快照后创建独立CSV/JSON实例；保留类型、覆盖和取消状态，超限拒绝，失败可重试。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.2.7",
+          "sourceVersion": "1.8.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -1753,6 +1849,7 @@
             "serializedResultBytes": 49152
           },
           "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
           "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
           "blockingReason": "unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收"
@@ -1936,7 +2033,7 @@
     {
       "sourceToolId": "image-tools",
       "title": "图片工作台",
-      "sourceVersion": "1.7.0",
+      "sourceVersion": "1.7.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -1945,9 +2042,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "本机读取 PNG/JPEG/WebP，查看尺寸、缩小宽度并按比例输出，转换格式及 JPEG 质量；显示最终编码预览和精确预览文件大小，明确另存新文件且拒绝覆盖原图；单文件 32 MiB、1600 万像素上限 内存图片接力：实际编码结果/透明选区优先、后台有界准备、来源工具版本链与预览确认，目标后台任务/已有工作保护，不创建临时图片、不自动保存。 支持选中剪贴板PNG图片接力，无临时文件。 另存先完整写入同目录暂存，再无覆盖发布，不暴露半成品；失败清理暂存并保留已有目标。 主动生成冻结图片信息JSON报告：尺寸/透明度/已有编码格式与精确大小；统一接力到JSON、备忘等，源材料变化拒绝发送旧报告，不自动读写。 开发版图片流程接收目标可明确新建或选择已有实例，按稳定身份/修订核对并重新确认替换；核心回归与明暗1100×900受控交互通过，小窗口和物理验收仍待继续。 接力弹窗有界滚动正文，确认/取消位于滚动区外，预览按窗口高度缩小；760×520明暗受控交互通过。 编码输出增长前检查上限，失败无可保存半成品；不宣称编码器临时内存或全局进程内存受该限制。 开发版单图与流程共享载荷池：读取缓冲、缩放新像素、编码增长与实际预览解码先预留，未收取编码结果持续计入。失败保留旧图片与有效结果；待输入路径和已载入来源独立，保存核对已载入来源。单图页可直接调整同一预算。其他图片入口、接力准备、thumbnail/GPU及编解码器内部临时内存未统一，不是进程总内存上限。 单图信息报告 schema2 增加来源工具独立版本、程序版本和不含机器名/用户名/路径的 SHA-256 运行环境指纹。 Image relay can create a new text-flow instance with bounded in-memory pixels; image.info creates a report without auto-run or persistence.",
+          "scope": "本机读取 PNG/JPEG/WebP，查看尺寸、缩小宽度并按比例输出，转换格式及 JPEG 质量；显示最终编码预览和精确预览文件大小，明确另存新文件且拒绝覆盖原图；单文件 32 MiB、1600 万像素上限 内存图片接力：实际编码结果/透明选区优先、后台有界准备、来源工具版本链与预览确认，目标后台任务/已有工作保护，不创建临时图片、不自动保存。 支持选中剪贴板PNG图片接力，无临时文件。 另存先完整写入同目录暂存，再无覆盖发布，不暴露半成品；失败清理暂存并保留已有目标。 主动生成冻结图片信息JSON报告：尺寸/透明度/已有编码格式与精确大小；统一接力到JSON、备忘等，源材料变化拒绝发送旧报告，不自动读写。 开发版图片流程接收目标可明确新建或选择已有实例，按稳定身份/修订核对并重新确认替换；核心回归与明暗1100×900受控交互通过，小窗口和物理验收仍待继续。 接力弹窗有界滚动正文，确认/取消位于滚动区外，预览按窗口高度缩小；760×520明暗受控交互通过。 编码输出增长前检查上限，失败无可保存半成品；不宣称编码器临时内存或全局进程内存受该限制。 开发版单图与流程共享载荷池：读取缓冲、缩放新像素、编码增长与实际预览解码先预留，未收取编码结果持续计入。失败保留旧图片与有效结果；待输入路径和已载入来源独立，保存核对已载入来源。单图页可直接调整同一预算。其他图片入口、接力准备、thumbnail/GPU及编解码器内部临时内存未统一，不是进程总内存上限。 单图信息报告 schema2 增加来源工具独立版本、程序版本和不含机器名/用户名/路径的 SHA-256 运行环境指纹。 Image relay can create a new text-flow instance with bounded in-memory pixels; image.info creates a report without auto-run or persistence. 从工具库、搜索或公共启动入口打开图片转换时明确回到单张转换视图，保留已有原图、编码结果和转换参数，不自动执行。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.7.0",
+          "sourceVersion": "1.7.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -2624,7 +2721,7 @@
     {
       "sourceToolId": "screen-recorder",
       "title": "屏幕录制",
-      "sourceVersion": "1.1.0",
+      "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -2633,9 +2730,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "显示当前屏幕画面的鼠标框选或整屏，H.264 MP4 与光标，4/8/16 Mbps 质量档位及按时长大小估算、保存后实际大小，倒计时、自动停止、自动最小化与恢复、托盘/快捷面板及全局录屏热键，可选静音、系统声、麦克风或双声源；中断时尽可能保存已录片段；主屏实测",
+          "scope": "显示当前屏幕画面的鼠标框选或整屏，H.264 MP4 与光标，4/8/16 Mbps 质量档位及按时长大小估算、保存后实际大小，倒计时、自动停止、自动最小化与恢复、托盘/快捷面板及全局录屏热键，可选静音、系统声、麦克风或双声源；中断时尽可能保存已录片段；主屏实测 框选预览与最终裁剪共用物理像素换算，保持真实按下起点；显示器变化时退出并解释原因，旧选区不被覆盖。比例换算及合成原生UI已验证，真实多屏/混合DPI仍待验收。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.1.0",
+          "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -2645,7 +2742,7 @@
     {
       "sourceToolId": "screen-recorder-multimonitor",
       "title": "显示器选择录屏",
-      "sourceVersion": "0.1.1",
+      "sourceVersion": "0.1.2",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -2654,9 +2751,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "已接入按设备名选择、物理边界框选及录制前和录制中的拓扑复核；仅主屏完成实测，非主屏、物理热拔插、跨屏合成和混合 DPI 待验收",
+          "scope": "已接入按设备名选择、物理边界框选及录制前和录制中的拓扑复核；仅主屏完成实测，非主屏、物理热拔插、跨屏合成和混合 DPI 待验收 框选预览与最终裁剪共用物理像素换算，保持真实按下起点；显示器变化时退出并解释原因，旧选区不被覆盖。比例换算及合成原生UI已验证，真实多屏/混合DPI仍待验收。",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.1.1",
+          "sourceVersion": "0.1.2",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }
@@ -2806,6 +2903,34 @@
           "sourceVersion": "1.10.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.agent-assist.models",
+          "scopeKind": "single_turn_model_assistance_view",
+          "pluginStatus": "candidate",
+          "sourceVersion": "1.10.0",
+          "packageId": "com.zicode.devtools.agent-assist",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01-verification.json",
+          "executionSurface": "view",
+          "viewId": "devtools.agent-assist.main",
+          "scope": "用户主动读取模型目录或逐次确认后进行一轮文字生成；不包含MCP、RAG和自动执行。",
+          "blockingReason": "unsigned页面候选；真实Studio权限、模型请求、安装与完整Agent范围尚未验收"
+        },
+        {
+          "operationId": "devtools.agent-assist.generate",
+          "scopeKind": "single_turn_model_assistance_view",
+          "pluginStatus": "candidate",
+          "sourceVersion": "1.10.0",
+          "packageId": "com.zicode.devtools.agent-assist",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01-verification.json",
+          "executionSurface": "view",
+          "viewId": "devtools.agent-assist.main",
+          "scope": "用户主动读取模型目录或逐次确认后进行一轮文字生成；不包含MCP、RAG和自动执行。",
+          "blockingReason": "unsigned页面候选；真实Studio权限、模型请求、安装与完整Agent范围尚未验收"
         }
       ],
       "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。",
@@ -2815,19 +2940,21 @@
           "scopeKind": "single_turn_model_assistance_view",
           "sourceToolVersion": "1.10.0",
           "packageId": "com.zicode.devtools.agent-assist",
-          "packageVersion": "0.1.0",
-          "candidateDirectory": "release/agent-assist-preview-0.1.0-candidate-03",
-          "verificationFile": "release/agent-assist-preview-0.1.0-candidate-03-verification.json",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01",
+          "verificationFile": "release/plugin-candidates/agent-assist-preview-0.1.3-candidate-01-verification.json",
           "view": "self_contained_html_in_srcdoc_no_external_assets",
           "requiredProfiles": {
             "model.catalog.read.v1": "1.0.0-preview.1",
-            "model.generate.v1": "1.0.0-preview.1"
+            "model.generate.v1": "1.0.0-preview.1",
+            "application.directory.v1": "1.0.0-preview.1",
+            "view.operation.directory.v1": "1.0.0-preview.1"
           },
           "requiredPermissions": [
             "model.catalog.read",
             "model.generate"
           ],
-          "validation": "three_utf8_limit_tests_jsdom_csp_meta_mock_host_and_installable_root_external_proof_pass",
+          "validation": "public_sdk_mock_sandbox_navigation_two_themes_and_original_model_result_regression",
           "nativeStudioEndToEnd": "pending",
           "deliveryStatus": "unsigned_candidate_not_Host_accepted",
           "design": "docs/agent-model-preview.md",
@@ -2840,6 +2967,10 @@
             "task_resume_and_cancellation"
           ]
         }
+      ],
+      "candidateViewOperations": [
+        "devtools.agent-assist.models",
+        "devtools.agent-assist.generate"
       ]
     },
     {
@@ -3307,7 +3438,7 @@
     {
       "sourceToolId": "global-launcher",
       "title": "全局快捷启动器",
-      "sourceVersion": "1.6.8",
+      "sourceVersion": "1.8.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -3316,9 +3447,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "Windows 可配置系统热键、冲突提示与旧绑定保留；独立托盘快捷面板、搜索/收藏/最近、键盘导航、主题切换和录屏控制。开发版新增固定主导航、开始页与连续工具库；统一目录为已接入路由的工具提供用途别名与关键词，内置 ID、名称和别名保持精确唯一，插件动态重名时提示其他匹配入口，支持有限英文拼写纠正；搜索展示说明与匹配原因，打开仅导航不执行；输入识别、通用拼音和工作实例检索待续；托盘右键为跟随系统主题的可搜索轻量面板，含收藏/最近/常用/服务状态与启停日志入口，主窗口手动主题独立；工具库可生成各工具桌面/任务栏快捷方式，--tool稳定ID直达内置子工具与启用插件，独立任务栏身份，工具启动不自动恢复服务；任务栏由Windows确认固定，未验证全部系统实际固定交互；多工具窗口协作保存收藏/最近/频次，Windows排队文件锁内合并本窗口增量，发现字段定时刷新，损坏最新偏好拒绝覆盖；不等于其他用户数据的跨进程保护；托盘快捷面板增加分类筛选，可与关键词及收藏/最近/常用组合；分类随可用工具更新，不存在的筛选自动回到全部分类；托盘面板背景与控件根据系统主题成套设色，不受主程序手动主题影响；常用工具按使用频次排序，频次相同时优先显示最近使用的工具。",
+          "scope": "Windows 可配置系统热键、冲突提示与旧绑定保留；独立托盘快捷面板、搜索/收藏/最近、键盘导航、主题切换和录屏控制。开发版新增固定主导航、开始页与连续工具库；统一目录为已接入路由的工具提供用途别名与关键词，内置 ID、名称和别名保持精确唯一，插件动态重名时提示其他匹配入口，支持有限英文拼写纠正；搜索展示说明与匹配原因，打开仅导航不执行；输入识别和通用拼音待续；托盘右键为跟随系统主题的可搜索轻量面板，含收藏/最近/常用/服务状态与启停日志入口，主窗口手动主题独立；工具库可生成各工具桌面/任务栏快捷方式，--tool稳定ID直达内置子工具与启用插件，独立任务栏身份，工具启动不自动恢复服务；任务栏由Windows确认固定，未验证全部系统实际固定交互；多工具窗口协作保存收藏/最近/频次，Windows排队文件锁内合并本窗口增量，发现字段定时刷新，损坏最新偏好拒绝覆盖；不等于其他用户数据的跨进程保护；托盘快捷面板增加分类筛选，可与关键词及收藏/最近/常用组合；分类随可用工具更新，不存在的筛选自动回到全部分类；托盘面板背景与控件根据系统主题成套设色，不受主程序手动主题影响；常用工具按使用频次排序，频次相同时优先显示最近使用的工具。 统一六种图片工具ID到实际视图的选择，修复从裁剪等工具打开图片转换仍停留旧视图的问题；未知ID不改变图片工作台。 主窗口搜索与托盘快捷面板在输入法组合、提交和关闭同帧保留候选按键，避免Esc关闭或Enter误打开；普通导航不接管Shift/Alt/Ctrl修饰键。 开发版提供本次运行内后退/前进与Alt方向键，按具体子工具和数据/图片流程实例返回，保留工具库查询、筛选与滚动位置；最多64个位置，关闭实例或停用插件后跳过，审核和输入法组合期间不跳转。不重建关闭实例、不重跑接力处理、不改变录屏音频设置或后台任务。共页OCR/导入与MCP服务/导出保留实际入口身份。 Ctrl K新增工作实例范围（Ctrl 5），快捷面板和全部搜索可按名称找到当前数据/图片流程实例；按稳定ID切换并保留当前视图、草稿、结果和后台任务。名称相关度优先、会话访问顺序辅助排序，重名显示类型与短标识；改名/关闭导致选中目标消失后须重新选择，执行前重新检查目标与审核状态。输入法组合或无有效目标时Enter不丢失搜索焦点；嵌入式快捷面板适配最小窗口，长名称截断并提供完整悬停提示。已保存未打开快照仍通过实例库恢复；不扩大16数据/8图片实例上限。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.6.8",
+          "sourceVersion": "1.8.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -3452,25 +3583,30 @@
           "core": "zi-trace-core/0.1.0",
           "adapter": "zi-trace-wasi/0.1.0",
           "packageId": "com.zicode.devtools.trace",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "compute.wasi.v1": "=1.0.0-rc.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/trace-0.1.0-candidate-01",
-          "verificationReceipt": "release/trace-0.1.0-candidate-01-verification.json",
+          "candidateDirectory": "release/plugin-candidates/trace-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/trace-0.1.1-candidate-01-verification.json",
           "moduleSha256": "bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e",
-          "directoryIndexSha256": "45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+          "directoryIndexSha256": "2e8b35249384757bc1c809bf971e2feccfc9396211a4efde7ca4f29fda9820c0",
           "runtimeVerification": "59_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
           "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
         }
       ],
       "reason": "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。",
-      "candidateDirectory": "release/trace-0.1.0-candidate-01",
-      "verificationReceipt": "release/trace-0.1.0-candidate-01-verification.json",
+      "candidateDirectory": "release/plugin-candidates/trace-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/trace-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.trace",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "django-trace",
@@ -3494,25 +3630,30 @@
           "core": "zi-trace-core/0.1.0",
           "adapter": "zi-trace-wasi/0.1.0",
           "packageId": "com.zicode.devtools.trace",
-          "packageVersion": "0.1.0",
+          "packageVersion": "0.1.1",
+          "requiredProfiles": {
+            "compute.wasi.v1": "=1.0.0-rc.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
           "limits": {
             "inputUtf8Bytes": 8192,
             "serializedResultBytes": 49152
           },
-          "candidateDirectory": "release/trace-0.1.0-candidate-01",
-          "verificationReceipt": "release/trace-0.1.0-candidate-01-verification.json",
+          "candidateDirectory": "release/plugin-candidates/trace-0.1.1-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/trace-0.1.1-candidate-01-verification.json",
           "moduleSha256": "bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e",
-          "directoryIndexSha256": "45dfdda2bb48f4878cc4166241db343bfc7a91c942e4fce3d7c6dd668b848ecd",
+          "directoryIndexSha256": "2e8b35249384757bc1c809bf971e2feccfc9396211a4efde7ca4f29fda9820c0",
           "runtimeVerification": "59_native_wasi_byte_parity_wasmtime_36_0_2_budget_and_fresh_process_cold_pass",
           "viewVerification": "public_sdk_fixture_final_wasi_2_actions_two_themes_not_Host_acceptance",
           "blockingReason": "unsigned提供方候选已冻结；实际Host安装/权限/生命周期/Worker/Pi待验收"
         }
       ],
       "reason": "完整文本堆栈操作共享核心，unsigned提供方候选已冻结；实际Host及Pi待验收。",
-      "candidateDirectory": "release/trace-0.1.0-candidate-01",
-      "verificationReceipt": "release/trace-0.1.0-candidate-01-verification.json",
+      "candidateDirectory": "release/plugin-candidates/trace-0.1.1-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/trace-0.1.1-candidate-01-verification.json",
       "packageId": "com.zicode.devtools.trace",
-      "packageVersion": "0.1.0"
+      "packageVersion": "0.1.1"
     },
     {
       "sourceToolId": "java-thread-dump",
@@ -3532,29 +3673,30 @@
           "scope": "jstack/jcmd导入文本分析；进程采集另需Host",
           "sourceVersion": "1.3.0",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "java-dependencies",
@@ -3574,29 +3716,30 @@
           "scope": "Maven/Gradle依赖导入文本分析；构建执行另需Host",
           "sourceVersion": "1.3.0",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "java-environment",
@@ -3637,29 +3780,30 @@
           "scope": "GC日志导入文本分析；文件获取/进程采集另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "java-jfr",
@@ -3679,29 +3823,30 @@
           "scope": "JFR导入JSON分析；二进制读取/导出另需Host",
           "sourceVersion": "1.3.0",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "spring-config",
@@ -3721,29 +3866,30 @@
           "scope": "两份JSON/YAML配置差异与脱敏；在线Actuator另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "spring-actuator",
@@ -3752,12 +3898,7 @@
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "candidate",
-      "candidateCapabilities": [
-        "devtools.spring-actuator.health",
-        "devtools.spring-actuator.info",
-        "devtools.spring-actuator.metrics",
-        "devtools.spring-actuator.summary"
-      ],
+      "candidateCapabilities": [],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3768,12 +3909,21 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "candidate",
           "packageId": "com.zicode.devtools.spring-actuator",
-          "packageVersion": "0.1.1",
+          "packageVersion": "0.1.3",
           "hostProfile": "service.http.get.v1@=1.0.0-preview.1",
           "inputSchema": "plugins/spring-actuator/schemas/http-get-input.schema.json",
           "resultSchema": "plugins/spring-actuator/schemas/http-get-result.schema.json",
           "verification": "plugins/spring-actuator/scripts/test-view.cjs",
-          "blockingReason": "真实Pi到Host到View、系统根证书和公网DNS尚未验收"
+          "blockingReason": "真实Pi到Host到View、系统根证书和公网DNS尚未验收",
+          "candidateDirectory": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01-verification.json",
+          "executionSurface": "view",
+          "viewId": "devtools.spring-actuator.main",
+          "requiredProfiles": {
+            "service.http.get.v1": "=1.0.0-preview.1",
+            "application.directory.v1": "=1.0.0-preview.1",
+            "view.operation.directory.v1": "=1.0.0-preview.1"
+          }
         },
         {
           "operationId": "devtools.spring-actuator.info",
@@ -3783,12 +3933,21 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "candidate",
           "packageId": "com.zicode.devtools.spring-actuator",
-          "packageVersion": "0.1.1",
+          "packageVersion": "0.1.3",
           "hostProfile": "service.http.get.v1@=1.0.0-preview.1",
           "inputSchema": "plugins/spring-actuator/schemas/http-get-input.schema.json",
           "resultSchema": "plugins/spring-actuator/schemas/http-get-result.schema.json",
           "verification": "plugins/spring-actuator/scripts/test-view.cjs",
-          "blockingReason": "真实Pi到Host到View、系统根证书和公网DNS尚未验收"
+          "blockingReason": "真实Pi到Host到View、系统根证书和公网DNS尚未验收",
+          "candidateDirectory": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01-verification.json",
+          "executionSurface": "view",
+          "viewId": "devtools.spring-actuator.main",
+          "requiredProfiles": {
+            "service.http.get.v1": "=1.0.0-preview.1",
+            "application.directory.v1": "=1.0.0-preview.1",
+            "view.operation.directory.v1": "=1.0.0-preview.1"
+          }
         },
         {
           "operationId": "devtools.spring-actuator.metrics",
@@ -3798,12 +3957,21 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "candidate",
           "packageId": "com.zicode.devtools.spring-actuator",
-          "packageVersion": "0.1.1",
+          "packageVersion": "0.1.3",
           "hostProfile": "service.http.get.v1@=1.0.0-preview.1",
           "inputSchema": "plugins/spring-actuator/schemas/http-get-input.schema.json",
           "resultSchema": "plugins/spring-actuator/schemas/http-get-result.schema.json",
           "verification": "plugins/spring-actuator/scripts/test-view.cjs",
-          "blockingReason": "真实Pi到Host到View、系统根证书和公网DNS尚未验收"
+          "blockingReason": "真实Pi到Host到View、系统根证书和公网DNS尚未验收",
+          "candidateDirectory": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01-verification.json",
+          "executionSurface": "view",
+          "viewId": "devtools.spring-actuator.main",
+          "requiredProfiles": {
+            "service.http.get.v1": "=1.0.0-preview.1",
+            "application.directory.v1": "=1.0.0-preview.1",
+            "view.operation.directory.v1": "=1.0.0-preview.1"
+          }
         },
         {
           "operationId": "devtools.spring-actuator.summary",
@@ -3811,7 +3979,18 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "candidate",
           "implementation": "plugins/spring-actuator/views/main.html",
-          "resultCapture": "Studio可信父页面/工作台接力；View不接触resultRef、不写路径"
+          "resultCapture": "Studio可信父页面/工作台接力；View不接触resultRef、不写路径",
+          "packageId": "com.zicode.devtools.spring-actuator",
+          "packageVersion": "0.1.3",
+          "candidateDirectory": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01-verification.json",
+          "executionSurface": "view",
+          "viewId": "devtools.spring-actuator.main",
+          "requiredProfiles": {
+            "service.http.get.v1": "=1.0.0-preview.1",
+            "application.directory.v1": "=1.0.0-preview.1",
+            "view.operation.directory.v1": "=1.0.0-preview.1"
+          }
         },
         {
           "operationId": "devtools.spring-actuator.background-task",
@@ -3831,15 +4010,24 @@
           "blockingReason": "Studio未发布经用户预览/确认的结果资源创建profile；不得自行写路径"
         }
       ],
-      "reason": "0.1.1仅有固定health/info/metrics HTTP View候选；Studio任务生命周期profile仍是未实现草案，provider schema/vectors待Studio复核；报告资源profile亦未发布。无正式包/收据、真实Pi到Host到View未验收，完整来源范围未交付。",
+      "reason": "0.1.3增加四项页面操作的搜索定位，保留原应用分类与用途；已有冻结HTTP View候选目录及外部校验收据，包含health/info/metrics与摘要4项页面操作；manifest未声明Agent可调用capability。任务中心、认证、context path、单项指标和报告导出未交付；真实Host端到端未验收，完整来源范围未交付。",
+      "candidateViewOperations": [
+        "devtools.spring-actuator.health",
+        "devtools.spring-actuator.info",
+        "devtools.spring-actuator.metrics",
+        "devtools.spring-actuator.summary"
+      ],
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.spring-actuator",
-      "packageVersion": "0.1.1",
-      "candidateDirectory": "plugins/spring-actuator",
-      "reviewCandidateDirectory": "release/plugin-candidates/spring-actuator-0.1.1-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/spring-actuator-0.1.1-candidate-02-verification.json",
+      "packageVersion": "0.1.3",
+      "sourceDirectory": "plugins/spring-actuator",
+      "candidateDirectory": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01",
+      "reviewCandidateDirectory": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/spring-actuator-0.1.3-candidate-01-verification.json",
       "requiredProfile": {
-        "service.http.get.v1": "=1.0.0-preview.1"
+        "service.http.get.v1": "=1.0.0-preview.1",
+        "application.directory.v1": "=1.0.0-preview.1",
+        "view.operation.directory.v1": "=1.0.0-preview.1"
       },
       "optionalPermissions": [
         "service.http.read"
@@ -3905,29 +4093,30 @@
           "scope": "迁移计划/SQL导入文本分析；数据库/迁移执行另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "django-sql",
@@ -3947,29 +4136,30 @@
           "scope": "SQL查询日志JSON数组归一化与重复分析；执行另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "django-urls",
@@ -3989,34 +4179,35 @@
           "scope": "URL导入列表检索；项目加载另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "django-drf",
       "title": "DRF OpenAPI 契约对比",
-      "sourceVersion": "1.3.0",
+      "sourceVersion": "1.3.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
@@ -4029,31 +4220,32 @@
           "operationId": "django.openapi",
           "scopeKind": "completed_imported_report_subset",
           "scope": "两份OpenAPI JSON差异；联网另需Host",
-          "sourceVersion": "1.3.0",
+          "sourceVersion": "1.3.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "django-checks",
@@ -4073,29 +4265,30 @@
           "scope": "检查输出导入分析；manage.py执行另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "celery-diagnostics",
@@ -4115,29 +4308,30 @@
           "scope": "Celery任务日志导入分析；Broker/Worker操作另需Host",
           "sourceVersion": "1.2.1",
           "pluginStatus": "candidate",
-          "core": "zi-diagnostics-core/0.1.3",
-          "adapter": "zi-diagnostics-wasi/0.1.3",
+          "core": "zi-diagnostics-core/0.1.4",
+          "adapter": "zi-diagnostics-wasi/0.1.4",
           "packageId": "com.zicode.devtools.diagnostics",
-          "packageVersion": "0.1.3",
+          "packageVersion": "0.1.4",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "diagnosticsProfile": "diagnostics.compute.wasi.v1.proposal",
           "diagnosticsSchemaVersion": "2.0.0-rc.1",
           "requiredProfiles": {
             "compute.wasi.v1": "=1.0.0-rc.1",
-            "output.schema.v1": "=1.0.0-rc.1"
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
           },
-          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+          "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
           "runtimeVerification": "native_wasi_byte_parity_and_independent_wasmtime_budget_fixtures",
           "viewVerification": "public_sdk_fixture_actual_wasi_11_actions_two_viewports",
           "blockingReason": "unsigned提供方候选目录；诊断schema/profile/错误码及完整Host生命周期待验收"
         }
       ],
       "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。",
-      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.3-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.3-candidate-01-verification-revision-01.json",
+      "candidateDirectory": "release/plugin-candidates/diagnostics-0.1.4-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/diagnostics-0.1.4-candidate-02-verification.json",
       "packageId": "com.zicode.devtools.diagnostics",
-      "packageVersion": "0.1.3"
+      "packageVersion": "0.1.4"
     },
     {
       "sourceToolId": "file-intake",
@@ -4163,7 +4357,7 @@
     {
       "sourceToolId": "task-center",
       "title": "后台任务中心",
-      "sourceVersion": "1.13.1",
+      "sourceVersion": "1.14.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
       "pluginStatus": "not_delivered",
@@ -4172,9 +4366,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "数据、文件、服务、图片流程、网络诊断、HTTP 请求、Java/Django 诊断、剪贴板 OCR 及本机 Agent 的跨页面任务状态、完成反馈；内存最近50条记录、取消和返回工具。图片任务绑定实例与运行代次，打开所属实例、拒绝过期请求、关闭后保留终态，清空记录不重现；OCR 与 Agent 仅展示通用阶段/终态摘要；Java/Django 诊断报告留在诊断工作台。JDK/Python 环境探测和 JFR 文件转换支持按代次取消；插件请求、模型列表与用户指定 HTTPS 更新清单检查纳入跨页状态，适用时支持取消。HTTP 请求按标签编号关联任务，只显示请求状态/HTTP 状态/耗时，不显示 URL、请求头、请求体或错误原文；任务中心可返回仍打开的原请求标签，标签已关闭则打开 HTTP 工作台并提示，运行期间不允许关闭标签。DNS/TCP 诊断显示固定类型与通用结果/耗时，不展示主机、端口、解析结果或错误原文；可返回网络诊断工作台。任务中心不保存识别正文、任务目标、模型输出、诊断报告正文、工具参数或凭据。MCP stdio/HTTP 协议操作加入跨页状态跟踪与返回协议调试台；仅短会话可从中心取消，持续连接需在工作台断开。固定摘要不记录服务地址、工具名、参数、结果、错误或凭据。插件请求取消不代表远端回滚；更新清单检查只显示通用阶段/终态。；签名插件目录检查纳入跨页状态并可取消，仅保留通用摘要 本次运行内可按任务/实例名称搜索并按全部、运行中、失败、已结束筛选；只搜索标题与实例名，不搜索摘要，不持久化查询。",
+          "scope": "数据、文件、服务、图片流程、网络诊断、HTTP 请求、Java/Django 诊断、剪贴板 OCR 及本机 Agent 的跨页面任务状态、完成反馈；内存最近50条记录、取消和返回工具。图片任务绑定实例与运行代次，打开所属实例、拒绝过期请求、关闭后保留终态，清空记录不重现；OCR 与 Agent 仅展示通用阶段/终态摘要；Java/Django 诊断报告留在诊断工作台。JDK/Python 环境探测和 JFR 文件转换支持按代次取消；插件请求、模型列表与用户指定 HTTPS 更新清单检查纳入跨页状态，适用时支持取消。HTTP 请求按标签编号关联任务，只显示请求状态/HTTP 状态/耗时，不显示 URL、请求头、请求体或错误原文；任务中心可返回仍打开的原请求标签，标签已关闭则打开 HTTP 工作台并提示，运行期间不允许关闭标签。DNS/TCP 诊断显示固定类型与通用结果/耗时，不展示主机、端口、解析结果或错误原文；可返回网络诊断工作台。任务中心不保存识别正文、任务目标、模型输出、诊断报告正文、工具参数或凭据。MCP stdio/HTTP 协议操作加入跨页状态跟踪与返回协议调试台；仅短会话可从中心取消，持续连接需在工作台断开。固定摘要不记录服务地址、工具名、参数、结果、错误或凭据。插件请求取消不代表远端回滚；更新清单检查只显示通用阶段/终态。；签名插件目录检查纳入跨页状态并可取消，仅保留通用摘要 本次运行内可按任务/实例名称搜索并按全部、运行中、失败、已结束筛选；只搜索标题与实例名，不搜索摘要，不持久化查询。；目录扫描、复制预览和执行复制接入统一后台任务中心，支持离页收取结果、按完整运行标识取消、返回原工具；升级检查识别复制忙碌，冲突与部分完成不标为全成功。；目录复制提供实时处理进度、成功/冲突/失败计数、当前文件暂存量和已提交量；任务中心与目录页共享快照，校验和原子提交前不把暂存计为成功，取消清除当前暂存并保留已提交文件。",
           "sourceStatus": "implemented",
-          "sourceVersion": "1.13.1",
+          "sourceVersion": "1.14.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
         }
@@ -4373,7 +4567,7 @@
     {
       "sourceToolId": "recorder-tutorial",
       "title": "教程录屏辅助",
-      "sourceVersion": "0.10.0",
+      "sourceVersion": "0.11.2",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -4382,9 +4576,9 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "编码与预览共用BGRA：固定/跟随放大、全景＋鼠标放大窗（四角可选）、平滑过渡、鼠标高亮/左右键波纹、默认关闭的高对比方向箭头、可调聚光灯、录制中可递增并置于四角的1–99步骤编号；用户手动填写的ASCII按键组合可置于四角并写入预览和导出视频。可选实时组合键显示默认关闭，仅逐帧采样Ctrl/Alt/Win加一个白名单键，不显示无修饰文字或同时按下的多个键，不记录或保存按键，暂停时停止采样。显式开启的临时画笔用左键绘制、支持红/黄/青/白四种颜色，单次录制最多保留24条、每条最多256个采样点；线条留在视频直至用户清除，暂停期间不绘制，恢复时需先释放按键。默认前缀R F读取一次当前物理鼠标位置并聚焦到选区内固定放大位置，越界时保持原设置。录制中最多添加256个章节标记，时间排除暂停、标题可编辑，录制结束后由用户选择位置另存不覆盖的FFMETADATA1章节文件。新增独立置顶提词器窗口：讲稿最多12000字符，仅留在本次运行内存；播放、暂停、速度/字号调整、回到开头均在浮窗操作。Windows使用SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)并读取回验成功后才显示正文，失败时正文隐藏。Windows本机API状态已验证；真实录制像素排除、其他采集接口/外部拍摄、真实桌面/物理输入/混合DPI/高分辨率性能继续验收。静态源重新合成、暂停清除瞬态；1600万像素上限。",
+          "scope": "编码与预览共用BGRA：固定/跟随放大、全景＋鼠标放大窗（四角可选）、平滑过渡、鼠标高亮/左右键波纹、默认关闭的高对比方向箭头、可调聚光灯、录制中可递增并置于四角的1–99步骤编号；用户手动填写的ASCII按键组合可置于四角并写入预览和导出视频。可选实时组合键显示默认关闭，仅逐帧采样Ctrl/Alt/Win加一个白名单键，不显示无修饰文字或同时按下的多个键，不记录或保存按键，暂停时停止采样。显式开启的临时画笔用左键绘制、支持红/黄/青/白四种颜色，单次录制最多保留24条、每条最多256个采样点；线条留在视频直至用户清除，暂停期间不绘制，恢复时需先释放按键。默认前缀R F读取一次当前物理鼠标位置并聚焦到选区内固定放大位置，越界时保持原设置。录制中最多添加256个章节标记，时间排除暂停、标题可编辑，录制结束后由用户选择位置另存不覆盖的FFMETADATA1章节文件。新增独立置顶提词器窗口：讲稿最多12000字符，仅留在本次运行内存；播放、暂停、速度/字号调整、回到开头均在浮窗操作。Windows使用SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)并读取回验成功后才显示正文，失败时正文隐藏。Windows本机API状态已验证；真实录制像素排除、其他采集接口/外部拍摄、真实桌面/物理输入/混合DPI/高分辨率性能继续验收。选区开始前隐藏主窗口并等待桌面重绘后抓取屏幕快照，框选完成、取消或失败时恢复主窗口；无效小选区会在浮层内显示错误并在重试时清除。静态源重新合成、暂停清除瞬态；1600万像素上限。 框选预览与最终裁剪共用物理像素换算，保持真实按下起点；显示器变化时退出并解释原因，旧选区不被覆盖。比例换算及合成原生UI已验证，真实多屏/混合DPI仍待验收。",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.10.0",
+          "sourceVersion": "0.11.2",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }
@@ -4608,7 +4802,9 @@
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "candidateCapabilities": [
+        "devtools.image.resize"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -4618,9 +4814,25 @@
           "sourceVersion": "0.12.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.image.resize",
+          "title": "缩放授权图片",
+          "scopeKind": "single_image_resource_resize",
+          "sourceVersion": "0.12.0",
+          "candidateSourceVersion": "0.12.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.image",
+          "packageVersion": "0.2.0",
+          "candidateDirectory": "release/plugin-candidates/image-resize-0.2.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/image-resize-0.2.0-candidate-01-verification.json",
+          "scope": "运行模块来源0.12.0，仅单图PNG/JPEG/WebP缩放；宽度1–4096，JPEG质量35–95，PNG/WebP无损。不含批处理、裁剪、OCR和文件保存。",
+          "runtimeVerification": "23_direct_wasi_numeric_legacy_format_parameter_and_zero_output_error_cases",
+          "blockingReason": "unsigned候选；Host真实授权、资源登记、接力、取消及全尺寸/跨平台验收未由本轮证明。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "已有0.2.0单图缩放资源候选，使用当前0.12.0图片核心与整数参数适配器；当前独立版的完整图片工作流并未迁移。目录/MIME发现与参数schema已验证，真实Host生命周期、全尺寸/跨平台验收仍待完成。",
+      "scopeComplete": false
     }
   ]
 }

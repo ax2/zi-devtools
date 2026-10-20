@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "msi": "ZiDevTools-0.82.0-dev.105-windows-x64.msi",
+  "msiSha256": "973c7e0c577200c4942fa8fa4b624abca2aafd98cf5060af4d9e327294562798",
+  "productVersion": "0.82.0",
+  "desktopExeSha256": "b0022a448f38474efc24ecb0a1fdb6d4e59915d3dc6971074dd568b174043d65",
+  "capabilityCount": 11,
+  "capabilityDeclarationSha256": "178f0c83c491674db5688602a2716e7536b24688d04c72e3a59f97ec334a61cf",
+  "capabilityPropertyExact": true,
+  "transactionActions": [
+    "ZiMenuPrepare",
+    "ZiMenuRollback",
+    "ZiMenuExecute",
+    "ZiMenuCommitReady",
+    "ZiMenuCommitReceipt",
+    "ZiMenuFinalize"
+  ],
+  "embeddedMenuActionDll": true,
+  "desktopExeInPackage": true,
+  "scope": "MSI database content check only; install/upgrade/repair/uninstall behavior is covered by separate disposable-runner smoke tests."
+}

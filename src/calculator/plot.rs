@@ -149,6 +149,10 @@ pub(super) fn sample(key: Key, cancel: &AtomicBool) -> Result<Output, String> {
         let mut evaluate = |at: f64| -> Option<f64> {
             vars.insert("x".into(), Value::Approx(at));
             match prepared.evaluate(&vars, angle) {
+                Ok(Value::Complex(_, imaginary)) if imaginary != 0.0 => {
+                    diagnostic = "绘图仅支持实数结果；请使用 real(z) 提取实部".into();
+                    None
+                }
                 Ok(v) if v.float().is_finite() => Some(v.float()),
                 Ok(_) => {
                     diagnostic = "非有限结果".into();
@@ -279,10 +283,14 @@ mod tests {
         let output = sample(Key::new(&saved, &vars, true), &AtomicBool::new(false)).unwrap();
         assert_eq!(output.series[0].y[16], Some(2.0));
         assert_eq!(output.key.variables, vars);
-        for expression in ["price=3", "missing*x", "sin(x", "x;quit", "", "sqrt(-1)"] {
+        for expression in ["price=3", "missing*x", "sin(x", "x;quit", ""] {
             assert!(run(expression).is_err(), "{expression}");
         }
         assert!(sample(output.key, &AtomicBool::new(true)).is_err());
+    }
+    #[test]
+    fn complex_outputs_fail_with_a_real_only_message() {
+        assert!(matches!(run("sqrt(-1)"), Err(error) if error.contains("绘图仅支持实数结果")));
     }
     #[test]
     fn limits_and_csv_precision() {

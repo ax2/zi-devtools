@@ -97,6 +97,9 @@ fn statistics(name: &str, args: &[Value]) -> Result<Value, String> {
     if args.is_empty() || args.len() > 64 {
         return Err(format!("{name} 需要 1–64 个数值"));
     }
+    for value in args {
+        value.real()?;
+    }
     let sample = matches!(name, "vars" | "stds");
     if sample && args.len() < 2 {
         return Err("样本方差/标准差至少需要 2 个值；分母为 n−1".into());

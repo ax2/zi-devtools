@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'">
+<title>Spring Actuator Host 服务预览</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6fa;--card:#fff;--text:#18253a;--muted:#52627a;--line:#d9e0ec;--accent:#245bd7;--error:#ae2436;--soft:#e9efff;--warn:#825014;--warn-bg:#fff5df}
+@media(prefers-color-scheme:dark){:root{--bg:#101622;--card:#192233;--text:#edf2fb;--muted:#abb9d0;--line:#35435b;--accent:#91b1ff;--error:#ffadba;--soft:#263650;--warn:#f0cf8b;--warn-bg:#3e321e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,"Microsoft YaHei",sans-serif}main{max-width:880px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;align-items:start;gap:18px}h1{font-size:25px;margin:0}p{margin:6px 0;color:var(--muted)}.tag{border-radius:18px;padding:5px 12px;background:var(--soft);color:var(--accent);white-space:nowrap;font-size:12px}.panel{margin-top:20px;background:var(--card);padding:20px;border:1px solid var(--line);border-radius:14px}label{font-weight:650;display:block;margin-bottom:6px}.fields{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(170px,.7fr);gap:14px}input,select,button{font:inherit;color:var(--text);min-height:44px;border:1px solid var(--line);border-radius:9px;background:var(--card);padding:9px 12px;width:100%}button{cursor:pointer;width:auto;padding-inline:16px}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.primary{background:var(--accent);color:var(--bg);font-weight:700;border-color:var(--accent)}.buttons{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.notice{padding:13px 14px;border-radius:9px;background:var(--warn-bg);color:var(--warn);margin-top:15px}.status{margin-top:16px;padding:12px 14px;background:var(--soft);border-radius:9px;overflow-wrap:anywhere;min-height:48px}.status[data-error=true]{color:var(--error)}.status[data-warning=true]{background:var(--warn-bg);color:var(--warn)}.result-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.result-head strong{font-size:16px}.count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:460px;overflow:auto;margin:0;padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:9px;font:13px/1.7 ui-monospace,Consolas,monospace;min-height:100px}footer{font-size:13px;color:var(--muted);margin-top:16px}[hidden]{display:none!important}@media(max-width:600px){main{padding:18px 14px}header{display:block}.tag{display:inline-block;margin-top:10px}.panel{padding:15px}.fields{grid-template-columns:1fr}.buttons button{flex:1}.result-head{align-items:start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>Spring Actuator 只读诊断</h1><p>请求由 Studio Host 发出；每次请求都需在 Studio 确认。</p></div><span class="tag">Host profile 预览</span></header>
+<section class="panel" aria-labelledby="request-title">
+<h2 id="request-title" style="font-size:18px;margin:0 0 14px">选择目标与固定端点</h2>
+<div class="fields">
+<div><label for="origin">服务 Origin</label><input id="origin" type="url" autocomplete="url" spellcheck="false" placeholder="https://service.example.com 或 http://127.0.0.1:8080" aria-describedby="origin-help"></div>
+<div><label for="endpoint">Actuator 端点</label><select id="endpoint"><option value="health">健康状态 · /actuator/health</option><option value="info">服务信息 · /actuator/info</option><option value="metrics">指标目录 · /actuator/metrics</option></select></div>
+</div>
+<p id="origin-help" class="count">只填写 scheme、主机和端口；不输入路径、用户名、密码、查询参数或片段。</p>
+<div class="notice">仅 HTTPS 公网目标可请求；HTTP 仅限回环或 RFC1918 私网，并会在 Studio 中额外提示。Studio Host 会校验 DNS 与目标地址、展示固定 GET 路径并逐次请求确认。插件不接收认证信息。</div>
+<div class="buttons"><button id="run" class="primary" disabled>请求诊断</button><button id="cancel" disabled>取消请求</button></div>
+<div id="status" class="status" role="status" aria-live="polite">正在连接 Studio Host…</div>
+</section>
+<section class="panel" aria-labelledby="result-title"><div class="result-head"><strong id="result-title">诊断结果</strong><span id="result-meta" class="count">尚无结果</span></div><pre id="result" tabindex="0" aria-label="Spring Actuator 诊断结果">结果将在这里显示。</pre><p class="count">health 的 HTTP 503 JSON 会保留为健康状态证据。插件只显示 JSON 和 Host 错误码，不展示响应中的 HTML 或任意 Host 文本。</p></section>
+<footer>此预览只调用公开的 <code>window.zicode.services.http.get</code> 提案接口；没有浏览器网络回退、任意 URL 路径、请求头、请求体或凭据输入。Host profile 尚未实现，本页不属于当前 0.1.4 插件清单。</footer>
+</main>
+<script>
+(() => {
+'use strict';
+const el=id=>document.getElementById(id), encoder=new TextEncoder();
+const originInput=el('origin'), endpointInput=el('endpoint'), runButton=el('run'), cancelButton=el('cancel');
+const result=el('result'), meta=el('result-meta');
+const paths={health:'/actuator/health',info:'/actuator/info',metrics:'/actuator/metrics'};
+const messages={dns_changed:'目标解析地址发生变化，Host 已拒绝本次请求。',timeout:'请求超时。',cancelled:'请求已取消。',redirect_blocked:'Host 拒绝重定向。',non_json:'目标未返回允许的 JSON 内容。',response_too_large:'响应超过 Host 限额。',permission_denied:'Studio 未授予本次服务读取权限。',tls_error:'TLS 验证失败。',profile_unavailable:'Studio Host 尚未支持该服务 profile。'};
+let sdk=null,active=null,generation=0,ready=false;
+function status(text,kind='') { const node=el('status');node.textContent=text;node.dataset.error=String(kind==='error');node.dataset.warning=String(kind==='warning'); }
+function canonicalOrigin(value) {
+  const input=value.trim(); if(!input) throw Error('请输入服务 Origin。');
+  let url;try{url=new URL(input)}catch{throw Error('Origin 格式无效。')}
+  if(!['http:','https:'].includes(url.protocol)) throw Error('只允许 HTTP 或 HTTPS。');
+  if(url.username||url.password) throw Error('Origin 不能包含用户名或密码。');
+  if(url.pathname!=='/'||url.search||url.hash) throw Error('只填写 Origin，不能包含路径、查询参数或片段。');
+  return url.origin;
+}
+function setBusy(value) { runButton.disabled=value||!ready;cancelButton.disabled=!value;originInput.disabled=value;endpointInput.disabled=value; }
+function changed() { generation++;if(active){active.abort();active=null;setBusy(false)};meta.textContent='尚无结果';result.textContent='结果将在这里显示。';if(ready)status('目标已更新；请求前 Studio 仍会逐次确认。'); }
+originInput.addEventListener('input',changed);endpointInput.addEventListener('change',changed);
+function validateResponse(value,endpoint) {
+  if(!value||typeof value!=='object'||Array.isArray(value)||value.endpoint!==endpoint) throw Error('Host 响应结构异常。');
+  if(value.error!==null) {
+    if(!value.error||typeof value.error.code!=='string'||value.data!==null) throw Error('Host 错误响应结构异常。');
+    const code=value.error.code;
+    status(messages[code]||`请求失败（Host 错误码：${code}）。`,'error');
+    meta.textContent='请求未完成';result.textContent=`Host error code: ${code}`;return false;
+  }
+  if(!Number.isInteger(value.status)||value.status<100||value.status>599||typeof value.contentType!=='string') throw Error('Host 响应结构异常。');
+  const contentType=value.contentType.split(';',1)[0].trim().toLowerCase();
+  if(!(contentType==='application/json'||contentType.endsWith('+json'))) throw Error('Host 返回了非 JSON 响应。');
+  const json=JSON.stringify(value.data);if(encoder.encode(json).length>1024*1024) throw Error('Host 结果超过页面显示上限。');
+  const isHealthUnavailable=endpoint==='health'&&value.status===503;
+  if(!(value.status>=200&&value.status<300)&&!isHealthUnavailable) throw Error(`HTTP ${value.status} 未被此端点接受。`);
+  meta.textContent=`HTTP ${value.status} · ${encoder.encode(json).length} 字节`;
+  result.textContent=JSON.stringify(value.data,null,2);
+  status(isHealthUnavailable?'收到 health 503 JSON，已保留为健康状态结果。':`已收到 ${endpoint} JSON 结果。`,isHealthUnavailable?'warning':'');
+  return true;
+}
+async function request() {
+  if(!ready||active)return;
+  let origin;try{origin=canonicalOrigin(originInput.value)}catch(error){status(error.message,'error');originInput.focus();return}
+  const endpoint=endpointInput.value;if(!Object.hasOwn(paths,endpoint)){status('此端点不在 Host profile 允许列表中。','error');return}
+  const service=sdk?.services?.http?.get;if(typeof service!=='function'){status('Studio Host 尚未提供 service.http.get.v1；没有网络回退。','warning');return}
+  const controller=new AbortController(),stamp=++generation;active=controller;setBusy(true);meta.textContent='等待 Studio 确认';
+  status(`等待 Studio 确认：GET ${origin}${paths[endpoint]}。确认前不会发出请求。`,'warning');
+  try{
+    const response=await service({origin,endpoint},{signal:controller.signal});
+    if(stamp!==generation||controller.signal.aborted)return;
+    validateResponse(response,endpoint);
+  }catch(error){
+    if(stamp!==generation)return;
+    if(controller.signal.aborted||error?.name==='AbortError'||error?.code==='cancelled'){status('请求已取消；迟到结果不会覆盖当前页面。','warning');meta.textContent='已取消';}
+    else {const code=typeof error?.code==='string'?error.code:'request_failed';status(messages[code]||`请求失败（Host 错误码：${code}）。`,'error');meta.textContent='请求未完成';result.textContent=`Host error code: ${code}`;}
+  }finally{if(stamp===generation){active=null;setBusy(false)}}
+}
+runButton.addEventListener('click',request);
+cancelButton.addEventListener('click',()=>{if(!active)return;generation++;active.abort();active=null;setBusy(false);meta.textContent='已取消';status('已向 Studio Host 请求取消；最终连接状态由 Host 返回。','warning')});
+(async()=>{try{sdk=window.zicode;if(!sdk)throw Error('host');await sdk.ready();await sdk.context.get();ready=true;setBusy(false);if(typeof sdk.services?.http?.get==='function')status('Host 服务 API 可用。每次请求都会由 Studio 确认。');else status('Studio Host 尚未提供 service.http.get.v1；当前只显示预览界面，没有网络回退。','warning')}catch{status('请在 Studio 插件页面中打开。Host 尚未连接。','warning')}})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/diagnostics/v2/operations/celery.report.input.schema.json",
+  "title": "Celery 任务故障分析 input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "text"
+  ],
+  "properties": {
+    "text": {
+      "type": "string",
+      "maxLength": 8192,
+      "description": "Runtime additionally limits UTF-8 bytes to 8192."
+    }
+  }
+}

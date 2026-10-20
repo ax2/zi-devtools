@@ -246,6 +246,8 @@ impl RestoreReview {
 pub(super) enum Review {
     Export(Document),
     Restore(RestoreReview),
+    Import(files::BatchImportReview),
+    BatchExport(files::BatchExportReview),
 }
 
 impl State {
@@ -352,7 +354,7 @@ impl State {
         }
         true
     }
-    fn backup_available(&self) -> Result<()> {
+    pub(super) fn backup_available(&self) -> Result<()> {
         ensure!(
             self.loaded && self.pending.is_none() && !self.has_unsaved(),
             "请先保存或放弃当前编辑，并等待读写完成"

@@ -1,7 +1,7 @@
 {
   "contract": "zicode.devtools-plugin/1.0.0-rc.1",
   "packageId": "com.zicode.devtools.trace",
-  "packageVersion": "0.1.0",
+  "packageVersion": "0.1.1",
   "source": {
     "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
     "dirty": true

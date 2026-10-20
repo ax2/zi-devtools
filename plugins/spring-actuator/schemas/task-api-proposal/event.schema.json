@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/event.schema.json",
+  "title": "plugin.task.lifecycle.v1 event proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef", "sequence", "eventType", "state", "at"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256},
+    "sequence": {"type": "integer", "minimum": 1},
+    "eventType": {"enum": ["state_changed", "step_changed", "cancel_requested", "terminal"]},
+    "state": {"enum": ["queued", "running", "awaiting_confirmation", "succeeded", "partial", "declined", "failed", "cancelled", "revoked", "interrupted"]},
+    "at": {"type": "string", "format": "date-time"},
+    "operationStepId": {"enum": ["actuator.health", "actuator.info", "actuator.metrics"]},
+    "confirmationId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "httpStatus": {"type": "integer", "minimum": 100, "maximum": 599},
+    "resultAvailable": {"type": "boolean"},
+    "errorCode": {"type": "string", "maxLength": 96},
+    "summary": {"type": "string", "maxLength": 512},
+    "terminal": {"$ref": "terminal.schema.json"}
+  },
+  "allOf": [
+    {"if": {"properties": {"eventType": {"const": "terminal"}}, "required": ["eventType"]}, "then": {"required": ["terminal"]}},
+    {"if": {"properties": {"eventType": {"const": "step_changed"}}, "required": ["eventType"]}, "then": {"required": ["operationStepId"]}},
+    {"if": {"properties": {"state": {"const": "awaiting_confirmation"}}, "required": ["state"]}, "then": {"required": ["operationStepId", "confirmationId"]}}
+  ]
+}

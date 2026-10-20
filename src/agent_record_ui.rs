@@ -406,7 +406,7 @@ impl State {
         }
         let Some(record) = &self.record else {
             ui.add_space(8.0);
-            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，支持 schema v1/v2/v3。");
+            ui.weak("尚未打开记录。单份文件最多 1 MiB；目录仅扫描顶层 JSON，最多 64 份、累计 16 MiB，支持 schema v1–v5。");
             return;
         };
         ui.add_space(8.0);
@@ -414,12 +414,31 @@ impl State {
             ui.set_min_width(ui.available_width());
             ui.strong("01 执行概览");
             ui.label(format!("文件：{}", self.file_name));
+            ui.label(format!("记录格式：schema v{}", record.schema_version));
             let status = agent_record_library::status_label(&record.status);
             ui.label(format!(
                 "状态：{status}  ·  完成时间（UTC）：{}",
                 record.finished_at_utc
             ));
             ui.label(format!("模型：{}  ·  人工批准：是", record.model));
+            if let Some(provenance) = &record.generated_by {
+                let runtime = &provenance.runtime_fingerprint;
+                ui.label(format!(
+                    "生成工具：{} v{}  ·  Zi DevTools {}  ·  {} / {} / {}",
+                    provenance.tool_id,
+                    provenance.tool_version,
+                    runtime.app_version,
+                    runtime.os,
+                    runtime.architecture,
+                    runtime.build_profile
+                ));
+                ui.monospace(format!(
+                    "运行环境指纹 SHA-256：{}…（摘要不是发布签名）",
+                    &runtime.sha256[..16]
+                ));
+            } else {
+                ui.weak("旧版记录未记录工具独立版本或运行环境指纹。");
+            }
             ui.label(format!(
                 "调用：{} / {}  ·  模型报告用量：{}",
                 record.calls_made,
@@ -458,7 +477,7 @@ impl State {
                 ));
                 if let Some(references) = &step.references {
                     if self.show_content {
-                        if record.schema_version == 3 {
+                        if record.schema_version >= 3 {
                             ui.weak("记录声明这些来源已选入模型消息；失败或取消时可能尚未发送。导入文件不能认证来源或证明答案事实正确。");
                         } else {
                             ui.weak("旧版记录只保存工具返回的来源，无法确认每条是否送入模型。");
@@ -486,7 +505,7 @@ impl State {
             if let Some(content) = &record.content {
                 ui.checkbox(
                     &mut self.show_content,
-                    "显示目标、计划、答案、错误文字与来源路径（可能含本机资料）",
+                    "显示目标、计划、答案、错误文字、接力资料与来源路径（可能含本机资料）",
                 );
                 if self.show_content {
                     if let Some(citations) = &content.citations {
@@ -516,6 +535,17 @@ impl State {
                                 .max_height(180.0)
                                 .show(ui, |ui| {
                                     ui.label(value);
+                                });
+                        }
+                    }
+                    if let Some(context) = &content.context {
+                        for (index, item) in context.iter().enumerate() {
+                            ui.strong(format!("接力资料 {} · {}", index + 1, item.source));
+                            egui::ScrollArea::vertical()
+                                .id_salt(("agent-record-context", index))
+                                .max_height(180.0)
+                                .show(ui, |ui| {
+                                    ui.label(&item.content);
                                 });
                         }
                     }

@@ -54,7 +54,7 @@ fn check(cancel: &AtomicBool) -> Result<()> {
 
 /// In-memory reference captured only after the caller's explicit file selection.
 /// No file contents, grants or user credentials are serialized here.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileMaterial {
     path: PathBuf,
     identity: Identity,
@@ -74,6 +74,13 @@ impl FileMaterial {
     }
     pub fn path(&self) -> &Path {
         &self.path
+    }
+    pub fn display_name(&self) -> String {
+        self.path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "已选文件".into())
     }
     pub fn bytes(&self) -> u64 {
         self.identity.bytes

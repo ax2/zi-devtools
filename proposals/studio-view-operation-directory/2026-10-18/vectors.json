@@ -1,0 +1,1181 @@
+{
+  "status": "specification_only_not_runtime_evidence",
+  "vectors": [
+    {
+      "id": "devtools.agent-assist.models:located",
+      "scenario": "located",
+      "declaredOperationId": "devtools.agent-assist.models",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.models"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "opened",
+        "focusTarget": "refresh-models"
+      }
+    },
+    {
+      "id": "devtools.agent-assist.models:unknown",
+      "scenario": "unknown",
+      "declaredOperationId": "devtools.agent-assist.models",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.unknown.operation"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "not_found",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "not_found",
+        "focusChanged": false
+      }
+    },
+    {
+      "id": "devtools.agent-assist.models:slow_callback",
+      "scenario": "slow_callback",
+      "declaredOperationId": "devtools.agent-assist.models",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.models"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 1000,
+          "event": "deadline"
+        },
+        {
+          "atMs": 1500,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "timeout",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.agent-assist.models:disabled",
+      "scenario": "disabled",
+      "declaredOperationId": "devtools.agent-assist.models",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.models"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "plugin_disabled"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.agent-assist.models:version_changed",
+      "scenario": "version_changed",
+      "declaredOperationId": "devtools.agent-assist.models",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.models"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "package_changed",
+          "packageVersion": "0.1.3"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.agent-assist.generate:located",
+      "scenario": "located",
+      "declaredOperationId": "devtools.agent-assist.generate",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.generate"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "opened",
+        "focusTarget": "generate"
+      }
+    },
+    {
+      "id": "devtools.agent-assist.generate:unknown",
+      "scenario": "unknown",
+      "declaredOperationId": "devtools.agent-assist.generate",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.unknown.operation"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "not_found",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "not_found",
+        "focusChanged": false
+      }
+    },
+    {
+      "id": "devtools.agent-assist.generate:slow_callback",
+      "scenario": "slow_callback",
+      "declaredOperationId": "devtools.agent-assist.generate",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.generate"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 1000,
+          "event": "deadline"
+        },
+        {
+          "atMs": 1500,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "timeout",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.agent-assist.generate:disabled",
+      "scenario": "disabled",
+      "declaredOperationId": "devtools.agent-assist.generate",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.generate"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "plugin_disabled"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.agent-assist.generate:version_changed",
+      "scenario": "version_changed",
+      "declaredOperationId": "devtools.agent-assist.generate",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.agent-assist",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.agent-assist.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.agent-assist.generate"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "package_changed",
+          "packageVersion": "0.1.3"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.health:located",
+      "scenario": "located",
+      "declaredOperationId": "devtools.spring-actuator.health",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.health"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "opened",
+        "focusTarget": "endpoint"
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.health:unknown",
+      "scenario": "unknown",
+      "declaredOperationId": "devtools.spring-actuator.health",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.unknown.operation"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "not_found",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "not_found",
+        "focusChanged": false
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.health:slow_callback",
+      "scenario": "slow_callback",
+      "declaredOperationId": "devtools.spring-actuator.health",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.health"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 1000,
+          "event": "deadline"
+        },
+        {
+          "atMs": 1500,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "timeout",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.health:disabled",
+      "scenario": "disabled",
+      "declaredOperationId": "devtools.spring-actuator.health",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.health"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "plugin_disabled"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.health:version_changed",
+      "scenario": "version_changed",
+      "declaredOperationId": "devtools.spring-actuator.health",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.health"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "package_changed",
+          "packageVersion": "0.1.3"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.info:located",
+      "scenario": "located",
+      "declaredOperationId": "devtools.spring-actuator.info",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.info"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "opened",
+        "focusTarget": "endpoint"
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.info:unknown",
+      "scenario": "unknown",
+      "declaredOperationId": "devtools.spring-actuator.info",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.unknown.operation"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "not_found",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "not_found",
+        "focusChanged": false
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.info:slow_callback",
+      "scenario": "slow_callback",
+      "declaredOperationId": "devtools.spring-actuator.info",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.info"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 1000,
+          "event": "deadline"
+        },
+        {
+          "atMs": 1500,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "timeout",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.info:disabled",
+      "scenario": "disabled",
+      "declaredOperationId": "devtools.spring-actuator.info",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.info"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "plugin_disabled"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.info:version_changed",
+      "scenario": "version_changed",
+      "declaredOperationId": "devtools.spring-actuator.info",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.info"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "package_changed",
+          "packageVersion": "0.1.3"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.metrics:located",
+      "scenario": "located",
+      "declaredOperationId": "devtools.spring-actuator.metrics",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.metrics"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "opened",
+        "focusTarget": "endpoint"
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.metrics:unknown",
+      "scenario": "unknown",
+      "declaredOperationId": "devtools.spring-actuator.metrics",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.unknown.operation"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "not_found",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "not_found",
+        "focusChanged": false
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.metrics:slow_callback",
+      "scenario": "slow_callback",
+      "declaredOperationId": "devtools.spring-actuator.metrics",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.metrics"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 1000,
+          "event": "deadline"
+        },
+        {
+          "atMs": 1500,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "timeout",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.metrics:disabled",
+      "scenario": "disabled",
+      "declaredOperationId": "devtools.spring-actuator.metrics",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.metrics"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "plugin_disabled"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.metrics:version_changed",
+      "scenario": "version_changed",
+      "declaredOperationId": "devtools.spring-actuator.metrics",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.metrics"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "package_changed",
+          "packageVersion": "0.1.3"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.summary:located",
+      "scenario": "located",
+      "declaredOperationId": "devtools.spring-actuator.summary",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.summary"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "opened",
+        "focusTarget": "result-title"
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.summary:unknown",
+      "scenario": "unknown",
+      "declaredOperationId": "devtools.spring-actuator.summary",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.unknown.operation"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "not_found",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "not_found",
+        "focusChanged": false
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.summary:slow_callback",
+      "scenario": "slow_callback",
+      "declaredOperationId": "devtools.spring-actuator.summary",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.summary"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 1000,
+          "event": "deadline"
+        },
+        {
+          "atMs": 1500,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "timeout",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.summary:disabled",
+      "scenario": "disabled",
+      "declaredOperationId": "devtools.spring-actuator.summary",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.summary"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "plugin_disabled"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    },
+    {
+      "id": "devtools.spring-actuator.summary:version_changed",
+      "scenario": "version_changed",
+      "declaredOperationId": "devtools.spring-actuator.summary",
+      "fixtureDeadlineMs": 1000,
+      "request": {
+        "requestId": "fixture-request-1",
+        "packageId": "com.zicode.devtools.spring-actuator",
+        "packageVersion": "0.1.2",
+        "sceneId": "fixture-scene",
+        "workspaceId": "fixture-workspace",
+        "viewId": "devtools.spring-actuator.main",
+        "viewInstanceId": "fixture-view-1",
+        "operationId": "devtools.spring-actuator.summary"
+      },
+      "events": [
+        {
+          "atMs": 0,
+          "event": "request"
+        },
+        {
+          "atMs": 5,
+          "event": "package_changed",
+          "packageVersion": "0.1.3"
+        },
+        {
+          "atMs": 10,
+          "event": "view_reply",
+          "status": "opened",
+          "requestId": "fixture-request-1"
+        }
+      ],
+      "expected": {
+        "modelCalls": 0,
+        "httpCalls": 0,
+        "draftChanged": false,
+        "permissionsGranted": false,
+        "status": "cancelled",
+        "lateReplyIgnored": true,
+        "lateFocusForbidden": true
+      }
+    }
+  ]
+}

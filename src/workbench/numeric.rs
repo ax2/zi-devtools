@@ -543,4 +543,32 @@ mod tests {
             assert!(number(&v, TextMode::Exact).is_err());
         }
     }
+
+    #[test]
+    fn complete_numeric_dataset_can_be_snapshotted_without_changing_column_order() {
+        let data = Dataset {
+            headers: vec!["right".into(), "left".into()],
+            rows: vec![vec![
+                serde_json::json!({"kind":"exact","numerator":"1","denominator":"3"}),
+                serde_json::json!(12),
+            ]]
+            .into(),
+        };
+        let table = data.numeric_snapshot().unwrap();
+        assert_eq!((table.rows, table.cols), (1, 2));
+        assert_eq!(table.cells, vec![Number::Exact(1, 3), Number::Exact(12, 1)]);
+
+        let nonnumeric = Dataset::parse("name,count\nitem,7", DataFormat::Csv, b',').unwrap();
+        assert!(nonnumeric.numeric_snapshot().is_err());
+        let too_wide = Dataset::parse(
+            "a,b,c,d,e,f,g,h,i\n1,2,3,4,5,6,7,8,9",
+            DataFormat::Csv,
+            b',',
+        )
+        .unwrap();
+        assert!(too_wide.numeric_snapshot().is_err());
+        let too_many_rows =
+            Dataset::parse("n\n1\n2\n3\n4\n5\n6\n7\n8\n9", DataFormat::Csv, b',').unwrap();
+        assert!(too_many_rows.numeric_snapshot().is_err());
+    }
 }

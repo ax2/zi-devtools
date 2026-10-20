@@ -1,0 +1,27 @@
+{
+  "contract": "zicode.devtools-plugin/1.0.0-rc.1",
+  "packageId": "com.zicode.devtools.url-text-resource",
+  "packageVersion": "0.1.1",
+  "source": {
+    "revision": "REPLACE_WITH_PROVIDER_SOURCE_REVISION",
+    "dirty": true
+  },
+  "requiredProfiles": {
+    "resource.input.types.v1": "=1.0.0-preview.1",
+    "output.schema.v1": "=1.0.0-rc.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
+  },
+  "tools": [
+    {
+      "sourceToolId": "url",
+      "toolId": "devtools.transforms.url.encode",
+      "capabilityId": "devtools.transforms.url.encode",
+      "version": "1.0.2",
+      "status": "candidate",
+      "profile": "resource.wasi.input.draft2",
+      "title": "URL 编码共享文本",
+      "scope": "对用户明确授权的一项 UTF-8 text/plain 文本资源执行原有 URL 编码；输入 1 至 8192 字节，输出编码文本与源字节数；不保存、不联网、不自动衔接其他工具。"
+    }
+  ],
+  "deliveryStatus": "unsigned_provider_candidate_not_host_accepted"
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/http-get-error.schema.json",
+  "title": "service.http.get.v1 stable error subset",
+  "type": "object",
+  "required": ["code"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "permission_denied",
+        "http_service_dns_timeout",
+        "http_service_dns_failed",
+        "http_service_address_blocked",
+        "http_service_mixed_addresses",
+        "http_service_address_changed",
+        "http_service_dns_changed",
+        "http_service_https_required",
+        "http_service_request_failed",
+        "http_service_timeout",
+        "http_service_request_cancelled",
+        "http_service_redirect_blocked",
+        "http_service_status_error",
+        "http_service_content_type_invalid",
+        "http_service_json_invalid",
+        "http_service_response_too_large",
+        "http_service_json_complexity_exceeded",
+        "http_service_authorization_changed",
+        "http_service_profile_required",
+        "http_service_grant_unavailable",
+        "http_service_unavailable"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

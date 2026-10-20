@@ -1,4 +1,5 @@
 //! Pure imported-report diagnostics. No process, filesystem, network or desktop APIs.
+mod catalog;
 mod config_json;
 pub mod contracts;
 pub mod django;
@@ -138,7 +139,7 @@ pub const ACTIONS: &[Action] = &[
     Action {
         id: "java.threads",
         source_tool_id: "java-thread-dump",
-        scope: "导入jstack/jcmd文本分析，不采集进程",
+        scope: "导入jstack/jcmd文本或Thread.dump_to_file JSON分析，不采集进程",
     },
     Action {
         id: "java.dependencies",
@@ -217,7 +218,15 @@ pub fn execute_plugin(
 ) -> Result<String> {
     bounded(input)?;
     bounded(secondary)?;
-    match id {
+    let action = ACTIONS
+        .iter()
+        .find(|action| action.id == id)
+        .ok_or_else(|| anyhow::anyhow!("未知报告分析能力"))?;
+    ensure!(
+        supports_secondary(id) || secondary.is_empty(),
+        "此操作不接受secondary输入"
+    );
+    let data = match id {
         "java.threads" => java::threads_limited(input, report_limit),
         "java.dependencies" => java::dependencies_limited(input, report_limit),
         "java.gc" => java::gc_limited(input, report_limit),
@@ -230,7 +239,53 @@ pub fn execute_plugin(
         "django.checks" => django::checks_limited(input, report_limit),
         "celery.report" => django::celery_limited(input, report_limit),
         _ => anyhow::bail!("未知报告分析能力"),
-    }
+    }?;
+    let data: Value = serde_json::from_str(&data)?;
+    let generated_by = generated_by(action)?;
+    let report = serde_json::json!({
+        "diagnosticsProtocol": "2.0.0-rc.1",
+        "generatedBy": generated_by,
+        "data": data,
+    });
+    // The report is nested as a JSON string in the Host envelope, so account
+    // for both the report and its escaped representation before returning it.
+    report_limited(report, report_limit)
+}
+
+pub fn supports_secondary(id: &str) -> bool {
+    matches!(
+        id,
+        "spring.config" | "django.migrations" | "django.urls" | "django.openapi"
+    )
+}
+
+fn generated_by(action: &Action) -> Result<Value> {
+    use sha2::{Digest, Sha256};
+    let tool_version = catalog::SOURCE_TOOL_VERSIONS
+        .iter()
+        .find(|(id, _)| *id == action.source_tool_id)
+        .map(|(_, version)| *version)
+        .ok_or_else(|| anyhow::anyhow!("诊断来源工具未登记版本"))?;
+    // This describes the portable module profile, not the machine running the
+    // native/WASI parity verifier or the eventual Host process.
+    let fingerprint_fields = (catalog::PROGRAM_VERSION, "wasi", "wasm32", "plugin");
+    let canonical = format!(
+        "ZiDevTools runtime environment v1\0{}\0{}\0{}\0{}",
+        fingerprint_fields.0, fingerprint_fields.1, fingerprint_fields.2, fingerprint_fields.3
+    );
+    let fingerprint = format!("{:x}", Sha256::digest(canonical.as_bytes()));
+    Ok(serde_json::json!({
+        "toolId": action.source_tool_id,
+        "toolVersion": tool_version,
+        "runtimeFingerprint": {
+            "schema": 1,
+            "appVersion": catalog::PROGRAM_VERSION,
+            "os": fingerprint_fields.1,
+            "architecture": fingerprint_fields.2,
+            "buildProfile": fingerprint_fields.3,
+            "sha256": fingerprint,
+        }
+    }))
 }
 
 #[cfg(test)]
@@ -255,5 +310,54 @@ mod tests {
         let migration = django::migrations("[ ] a.0001\n[X] a.0002 ... (a.0001)", "").unwrap();
         assert!(migration.contains("a.0001") && migration.contains("a.0002"));
         assert!(java::jfr("not JSON").is_err());
+    }
+
+    #[test]
+    fn plugin_reports_bind_source_tool_version_and_portable_runtime() {
+        for action in ACTIONS {
+            let (input, secondary) = match action.id {
+                "java.threads" => (
+                    "\"worker\" #1 nid=0x1\n java.lang.Thread.State: RUNNABLE\n at app.Main.run(Main.java:1)",
+                    "",
+                ),
+                "java.dependencies" => ("[INFO] demo:app:jar:1.0", ""),
+                "java.gc" => (
+                    "[0.002s][info][gc] Using G1\n[1.020s][info][gc] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 24M->3M(256M) 4.500ms",
+                    "",
+                ),
+                "java.jfr_json" => ("{\"recording\":{\"events\":[]}}", ""),
+                "spring.config" => ("{}", "{}"),
+                "django.migrations" => ("[X] app.0001", ""),
+                "django.sql" => ("[]", ""),
+                "django.urls" => ("[]", ""),
+                "django.openapi" => (
+                    "{\"openapi\":\"3.0.3\",\"paths\":{}}",
+                    "{\"openapi\":\"3.0.3\",\"paths\":{}}",
+                ),
+                "django.checks" => ("?: (security.W018) DEBUG enabled", ""),
+                "celery.report" => ("Task demo.send[task-1] received", ""),
+                _ => unreachable!(),
+            };
+            let report: Value = serde_json::from_str(
+                &execute_plugin(action.id, input, secondary, 48 * 1024).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(report["diagnosticsProtocol"], "2.0.0-rc.1");
+            assert_eq!(report["generatedBy"]["toolId"], action.source_tool_id);
+            assert!(
+                !report["generatedBy"]["toolVersion"]
+                    .as_str()
+                    .unwrap()
+                    .is_empty()
+            );
+            let runtime = &report["generatedBy"]["runtimeFingerprint"];
+            assert_eq!(runtime["schema"], 1);
+            assert_eq!(runtime["appVersion"], catalog::PROGRAM_VERSION);
+            assert_eq!(runtime["os"], "wasi");
+            assert_eq!(runtime["architecture"], "wasm32");
+            assert_eq!(runtime["buildProfile"], "plugin");
+            assert_eq!(runtime["sha256"].as_str().unwrap().len(), 64);
+        }
+        assert!(execute_plugin("java.threads", "", "ignored", 48 * 1024).is_err());
     }
 }

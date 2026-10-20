@@ -9,12 +9,99 @@ fn every_offline_sample_runs_and_ids_are_unique() {
     for tool in Tool::ALL {
         assert!(ids.insert(tool.id()));
         if !tool.environment() && tool != Tool::Actuator {
-            assert!(
-                analyze(tool, tool.sample(), tool.second_sample()).is_ok(),
+            let report = value(analyze(tool, tool.sample(), tool.second_sample()));
+            assert_eq!(report["generatedBy"]["toolId"], tool.id(), "{tool:?}");
+            let provenance = crate::tool_provenance::current_for_tool(tool.id()).unwrap();
+            assert_eq!(
+                report["generatedBy"]["toolVersion"], provenance.tool_version,
                 "{tool:?}"
             );
+            assert_eq!(report["generatedBy"]["runtimeFingerprint"]["schema"], 1);
         }
     }
+}
+
+#[test]
+fn generated_reports_require_json_objects_and_preserve_the_report_body() {
+    let generated = value(generated_report(
+        Tool::Threads,
+        r#"{"threadCount":2}"#.into(),
+    ));
+    assert_eq!(generated["threadCount"], 2);
+    assert_eq!(generated["generatedBy"]["toolId"], "java-thread-dump");
+    assert!(generated_report(Tool::Threads, "not json".into()).is_err());
+    assert!(generated_report(Tool::Threads, "[]".into()).is_err());
+}
+
+#[test]
+fn generated_report_provenance_covers_all_diagnostic_tools() {
+    for tool in Tool::ALL {
+        let generated = value(generated_report(tool, r#"{"fixture":true}"#.into()));
+        let expected = crate::tool_provenance::current_for_tool(tool.id()).unwrap();
+        assert_eq!(generated["generatedBy"]["toolId"], tool.id(), "{tool:?}");
+        assert_eq!(
+            generated["generatedBy"]["toolVersion"], expected.tool_version,
+            "{tool:?}"
+        );
+        let fingerprint: crate::tool_provenance::RuntimeFingerprint =
+            serde_json::from_value(generated["generatedBy"]["runtimeFingerprint"].clone()).unwrap();
+        fingerprint.validate().unwrap();
+    }
+}
+
+#[test]
+fn framework_jobs_expose_only_generic_status_and_advance_per_tool_generation() {
+    let mut state = State::default();
+    state.select(Tool::Jfr);
+    let mut history = crate::tasks::Center::default();
+
+    let (sender, receiver) = std::sync::mpsc::channel::<Result<String, String>>();
+    state.running = Some((
+        Tool::Jfr,
+        receiver,
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    ));
+    state.jobs.entry(Tool::Jfr).or_default().begin();
+    sender.send(Err("sensitive report detail".into())).unwrap();
+    state.poll().unwrap();
+    let failed = state.task_snapshots().pop().unwrap();
+    assert_eq!(failed.key, "java-jfr");
+    assert_eq!(failed.title, Tool::Jfr.label());
+    assert_eq!(failed.phase, crate::tasks::Phase::Failed);
+    assert!(failed.cancellable);
+    assert_eq!(failed.summary, "处理失败；详细原因保留在诊断工作台");
+    assert!(!failed.summary.contains("sensitive report detail"));
+    assert!(state.result_text().contains("sensitive report detail"));
+    history.observe(Some(failed.clone()));
+
+    let (sender, receiver) = std::sync::mpsc::channel::<Result<String, String>>();
+    state.running = Some((
+        Tool::Jfr,
+        receiver,
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    ));
+    state.jobs.entry(Tool::Jfr).or_default().begin();
+    sender
+        .send(Ok(analyze(Tool::Jfr, Tool::Jfr.sample(), "").unwrap()))
+        .unwrap();
+    state.poll().unwrap();
+    let completed = state.task_snapshots().pop().unwrap();
+    assert_eq!(completed.phase, crate::tasks::Phase::Done);
+    assert_eq!(completed.generation, failed.generation + 1);
+    history.observe(Some(completed));
+    assert_eq!(history.rows.len(), 2);
+    assert!(
+        history
+            .rows
+            .iter()
+            .any(|row| row.phase == crate::tasks::Phase::Failed)
+    );
+    assert!(
+        history
+            .rows
+            .iter()
+            .any(|row| row.phase == crate::tasks::Phase::Done)
+    );
 }
 #[test]
 fn thread_wait_cycles_are_not_declared_deadlocks() {
@@ -146,12 +233,63 @@ fn url_names_checks_and_celery_are_evidence_limited() {
 fn background_results_follow_the_original_tool() {
     let mut state = State::default();
     let (tx, rx) = mpsc::channel();
-    state.running = Some((Tool::Threads, rx));
+    state.running = Some((
+        Tool::Threads,
+        rx,
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    ));
     state.select(Tool::Sql);
     tx.send(Ok("fixture report".into())).unwrap();
     assert!(state.poll().is_some());
     assert_eq!(state.drafts[&Tool::Threads].output, "fixture report");
     assert_eq!(state.selected, Tool::Sql);
+}
+
+#[test]
+fn task_center_cancellation_is_generation_bound_and_preserves_previous_report() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    let mut state = State::default();
+    state.select(Tool::JavaEnvironment);
+    state
+        .drafts
+        .entry(Tool::JavaEnvironment)
+        .or_default()
+        .output = "previous report".into();
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let (sender, receiver) = mpsc::channel();
+    state.jobs.entry(Tool::JavaEnvironment).or_default().begin();
+    let generation = state.jobs[&Tool::JavaEnvironment]
+        .snapshot(
+            Tool::JavaEnvironment.id(),
+            Tool::JavaEnvironment.label(),
+            true,
+        )
+        .unwrap()
+        .generation;
+    state.running = Some((Tool::JavaEnvironment, receiver, Arc::clone(&cancelled)));
+
+    assert!(!state.cancel_task(Tool::JavaEnvironment.id(), generation + 1));
+    assert!(!state.cancel_task(Tool::Actuator.id(), generation));
+    assert!(state.cancel_task(Tool::JavaEnvironment.id(), generation));
+    assert!(cancelled.load(Ordering::Relaxed));
+    assert_eq!(
+        state.task_snapshots()[0].phase,
+        crate::tasks::Phase::Cancelling
+    );
+
+    sender.send(Ok("new report".into())).unwrap();
+    state.poll().unwrap();
+    assert_eq!(
+        state.drafts[&Tool::JavaEnvironment].output,
+        "previous report"
+    );
+    let row = state.task_snapshots().pop().unwrap();
+    assert_eq!(row.phase, crate::tasks::Phase::Cancelled);
+    assert_eq!(row.summary, "任务已取消；原有报告保留在诊断工作台");
 }
 #[test]
 fn object_wait_releases_monitor_and_celery_failure_hides_arguments() {
@@ -177,7 +315,11 @@ fn imported_text_does_not_replace_a_running_diagnostic() {
     let mut state = State::default();
     state.import_text(Tool::Threads, "original".into()).unwrap();
     let (_tx, rx) = std::sync::mpsc::channel();
-    state.running = Some((Tool::Threads, rx));
+    state.running = Some((
+        Tool::Threads,
+        rx,
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    ));
     assert!(
         state
             .import_text(Tool::Threads, "replacement".into())

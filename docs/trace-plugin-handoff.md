@@ -1,6 +1,6 @@
 # Java / Django 堆栈插件交付（2026-10-09）
 
-`com.zicode.devtools.trace/0.1.0` 是未签名的提供方候选，源码修订 `9c8b38916d81cd47a98e9bcfac3cba796a66e0ad`。独立程序固定 `0.82.0-dev.105`，两项源工具为 `1.0.3`。不创建正式 Release、安装包或 ZIP。
+当前清单版本为 `com.zicode.devtools.trace/0.1.1`。新版 unsigned 候选目录为 `release/plugin-candidates/trace-0.1.1-candidate-01`：352 文件、1,428,569 字节，目录索引 SHA-256 `2e8b35249384757bc1c809bf971e2feccfc9396211a4efde7ca4f29fda9820c0`。新增 `tool.directory.v1@1.0.0-preview.1` 搜索目录元数据；59 条结果 Schema、59 条 fuel 和冷启动记录均绑定模块 `bb77ecac41351a9a8c3886dc0400c2705dd2003d3cfb52aa29e011d3ff43a35e`。旧 `release/trace-0.1.0-candidate-01` 与收据未修改。独立程序固定 `0.82.0-dev.105`，两项源工具为 `1.0.3`。不创建正式 Release、安装包或 ZIP。
 
 ## 完整范围与边界
 

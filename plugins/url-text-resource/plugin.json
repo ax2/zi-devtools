@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 2,
+  "id": "com.zicode.devtools.url-text-resource",
+  "name": "ZiDevTools URL Text Resource",
+  "displayName": "ZiDevTools URL 编码（文本资源）",
+  "description": "对用户明确授权的一项 UTF-8 text/plain 资源进行本地 URL 编码。",
+  "version": "0.1.1",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.4.2 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "requiredProfiles": {
+    "resource.input.types.v1": "=1.0.0-preview.1",
+    "output.schema.v1": "=1.0.0-rc.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
+  },
+  "activationEvents": [
+    "onCapability:devtools.transforms.url.encode"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm",
+    "resourceInputProfile": "resource.wasi.input.draft2"
+  },
+  "contributes": {
+    "activities": [],
+    "views": [],
+    "capabilities": [
+      {
+        "id": "devtools.transforms.url.encode",
+        "title": "URL 编码共享文本",
+        "description": "对当前调用中用户明确授权的一项 UTF-8 文本资源执行 URL 编码；最多 8192 字节，不保存、不联网。",
+        "resourceInputMimeTypes": [
+          "text/plain"
+        ],
+        "directory": {
+          "categoryId": "text",
+          "aliases": [
+            "URL 编码",
+            "文本资源 URL 编码",
+            "URL encode resource"
+          ],
+          "description": "接收用户授权的 UTF-8 文本资源并进行 URL 编码；保留源字节数与明确错误结果。"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "encodedText": {
+                  "type": "string",
+                  "maxLength": 24576
+                },
+                "sourceByteCount": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8192
+                }
+              },
+              "required": [
+                "ok",
+                "encodedText",
+                "sourceByteCount"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "const": false
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "INVALID_REQUEST",
+                        "INVALID_RESOURCE",
+                        "EMPTY_RESOURCE",
+                        "INPUT_TOO_LARGE",
+                        "UNSUPPORTED_MIME",
+                        "INVALID_UTF8",
+                        "RESOURCE_READ_FAILED"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "ok",
+                "error"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "maxResultBytes": 32768
+      }
+    ],
+    "commands": [],
+    "piTools": []
+  },
+  "permissions": {
+    "required": [
+      {
+        "name": "resource.read",
+        "reason": "Read the single text resource you explicitly shared with this tool."
+      }
+    ]
+  }
+}

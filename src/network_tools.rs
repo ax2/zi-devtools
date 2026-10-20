@@ -19,6 +19,8 @@ pub struct NetworkState {
     pub output: String,
     pub busy: bool,
     pub request_id: u64,
+    pub task_pane: NetworkPane,
+    pub job: crate::tasks::Job,
 }
 
 impl Default for NetworkState {
@@ -30,7 +32,21 @@ impl Default for NetworkState {
             output: String::new(),
             busy: false,
             request_id: 0,
+            task_pane: NetworkPane::Dns,
+            job: crate::tasks::Job::default(),
         }
+    }
+}
+
+impl NetworkState {
+    pub fn task_snapshot(&self) -> Option<crate::tasks::Row> {
+        let mut row = self.job.snapshot("network-diagnostic", "网络诊断", false)?;
+        row.instance = Some(self.request_id.to_string());
+        row.instance_name = Some(match self.task_pane {
+            NetworkPane::Dns => "DNS 解析".into(),
+            NetworkPane::Tcp => "TCP 连通性".into(),
+        });
+        Some(row)
     }
 }
 
@@ -126,5 +142,42 @@ mod tests {
                 .contains("连接成功")
         );
         assert!(test_tcp("127.0.0.1", "0").is_err());
+    }
+
+    #[test]
+    fn task_snapshot_exposes_safe_status_and_fixed_diagnostic_kind_only() {
+        let mut state = NetworkState {
+            host: "private-host.example".into(),
+            port: "8443".into(),
+            output: "private host output and socket error".into(),
+            task_pane: NetworkPane::Tcp,
+            request_id: 7,
+            ..Default::default()
+        };
+        state.job.begin();
+
+        let running = state.task_snapshot().unwrap();
+        assert_eq!(running.key, "network-diagnostic");
+        assert_eq!(running.instance.as_deref(), Some("7"));
+        assert_eq!(running.instance_name.as_deref(), Some("TCP 连通性"));
+        assert!(running.phase.active());
+        assert!(!running.cancellable);
+        let visible = format!(
+            "{} {} {}",
+            running.title,
+            running.instance_name.as_deref().unwrap_or_default(),
+            running.summary
+        );
+        assert!(!visible.contains("private-host.example"));
+        assert!(!visible.contains("8443"));
+        assert!(!visible.contains("socket error"));
+
+        state
+            .job
+            .finish(crate::tasks::Phase::Failed, "检查失败 · 25 ms");
+        let failed = state.task_snapshot().unwrap();
+        assert_eq!(failed.phase, crate::tasks::Phase::Failed);
+        assert_eq!(failed.summary, "检查失败 · 25 ms");
+        assert!(!failed.summary.contains("private host"));
     }
 }

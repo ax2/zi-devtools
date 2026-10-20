@@ -4,6 +4,7 @@ import copy
 import json
 from pathlib import Path
 import re
+from tool_directory import apply_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -16,7 +17,7 @@ assert len(actions) == 2 and {a['id'] for a in actions} == {'java.trace', 'djang
 versions = {t['id']: t['tool_version'] for t in json.loads((ROOT / 'docs/tools.json').read_text(encoding='utf-8'))['tools']}
 manifest = json.loads((ROOT / 'contracts/studio-devtools/v1/plugin.example.json').read_text(encoding='utf-8'))
 manifest.update(id='com.zicode.devtools.trace', name='ZiDevTools Trace', displayName='ZiDevTools 堆栈分析',
-                description='Pasted Java and Python trace analysis; development build, not Host acceptance.', version='0.1.0')
+                description='Pasted Java and Python trace analysis; development build, not Host acceptance.', version='0.1.1')
 manifest['activationEvents'] = ['onView:devtools.trace.main'] + ['onCapability:devtools.trace.' + a['id'] for a in actions]
 schema = dict(type='object', properties=dict(text=dict(type='string', maxLength=8192)), required=['text'], additionalProperties=False)
 manifest['contributes'] = dict(
@@ -26,6 +27,7 @@ manifest['contributes'] = dict(
     piTools=[dict(name='devtools_trace_' + a['id'].replace('.', '_'), title=a['title'],
                   description='Analyze pasted trace locally, at most 8192 UTF-8 bytes. Paths remain text; no file/process/network access. Clues are not confirmed causes.',
                   capability='devtools.trace.' + a['id'], inputSchema=copy.deepcopy(schema)) for a in actions])
+apply_manifest(manifest)
 catalog = dict(contract='zicode.devtools-plugin/1.0.0-rc.1', packageId=manifest['id'], packageVersion=manifest['version'],
                source=dict(revision='REPLACE_WITH_PROVIDER_SOURCE_REVISION', dirty=True),
                tools=[dict(sourceToolId=a['sourceToolId'], toolId='devtools.trace.' + a['id'], capabilityId='devtools.trace.' + a['id'],

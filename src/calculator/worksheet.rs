@@ -15,6 +15,10 @@ enum Number {
     Approx {
         value: String,
     },
+    Complex {
+        real: String,
+        imaginary: String,
+    },
 }
 impl Serialize for Value {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -26,6 +30,10 @@ impl Serialize for Value {
             },
             Self::Approx(value) => Number::Approx {
                 value: format!("{value:e}"),
+            },
+            Self::Complex(real, imaginary) => Number::Complex {
+                real: format!("{real:e}"),
+                imaginary: format!("{imaginary:e}"),
             },
         }
         .serialize(serializer)
@@ -57,6 +65,22 @@ impl<'de> Deserialize<'de> for Value {
                 }
                 Self::Approx(value.parse::<f64>().map_err(serde::de::Error::custom)?)
             }
+            Number::Complex { real, imaginary } => {
+                if real.len() > 64 || imaginary.len() > 64 {
+                    return Err(serde::de::Error::custom("复数分量文本过长"));
+                }
+                let parse = |text: String| -> Result<f64, String> {
+                    let value = text.parse::<f64>().map_err(|_| "复数分量无效")?;
+                    if !value.is_finite() || format!("{value:e}") != text {
+                        return Err("复数分量必须是有限规范科学计数法".into());
+                    }
+                    Ok(value)
+                };
+                Self::Complex(
+                    parse(real).map_err(serde::de::Error::custom)?,
+                    parse(imaginary).map_err(serde::de::Error::custom)?,
+                )
+            }
         };
         validate_value(value).map_err(serde::de::Error::custom)?;
         Ok(value)
@@ -66,6 +90,7 @@ fn validate_value(value: Value) -> Result<(), String> {
     match value {
         Value::Exact(n, d) if d > 0 && Value::exact(n, d)? == value => Ok(()),
         Value::Approx(x) if x.is_finite() => Ok(()),
+        Value::Complex(real, imaginary) if real.is_finite() && imaginary.is_finite() => Ok(()),
         _ => Err("工作表数值必须是约分后的正分母有理数或有限近似值".into()),
     }
 }
@@ -108,6 +133,10 @@ pub(super) struct Data {
     #[serde(default)]
     pub date_mode: bool,
     #[serde(default)]
+    pub root_mode: bool,
+    #[serde(default)]
+    pub root_solver: super::root_solver::Saved,
+    #[serde(default)]
     pub dates: super::dates::Saved,
     #[serde(default)]
     pub plot: super::plot::Saved,
@@ -140,11 +169,17 @@ impl Data {
         }
         self.plot.validate().map_err(anyhow::Error::msg)?;
         self.dates.validate().map_err(anyhow::Error::msg)?;
+        self.root_solver.validate().map_err(anyhow::Error::msg)?;
         ensure!(
-            [self.matrix_mode, self.plot_mode, self.date_mode]
-                .into_iter()
-                .filter(|b| *b)
-                .count()
+            [
+                self.matrix_mode,
+                self.plot_mode,
+                self.date_mode,
+                self.root_mode
+            ]
+            .into_iter()
+            .filter(|b| *b)
+            .count()
                 <= 1,
             "计算器只能选中一个工作区"
         );
@@ -157,23 +192,37 @@ pub(super) struct Document {
     format: String,
     schema: u32,
     pub tool_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_fingerprint: Option<crate::tool_provenance::RuntimeFingerprint>,
     pub created_utc: i64,
     pub data: Data,
 }
 impl Document {
     pub fn new(data: Data) -> Result<Self> {
         data.validate()?;
+        let catalog: serde_json::Value =
+            serde_json::from_str(include_str!("../../docs/tools.json"))?;
+        let tool_version = catalog["tools"]
+            .as_array()
+            .and_then(|tools| {
+                tools
+                    .iter()
+                    .find(|tool| tool["id"].as_str() == Some("advanced-calculator"))
+            })
+            .and_then(|tool| tool["tool_version"].as_str())
+            .ok_or_else(|| anyhow::anyhow!("计算器工具版本未登记"))?;
         Ok(Self {
             format: "zi-devtools-calculator".into(),
-            schema: 5,
-            tool_version: "0.10.0".into(),
+            schema: 8,
+            tool_version: tool_version.into(),
+            runtime_fingerprint: Some(crate::tool_provenance::RuntimeFingerprint::current()),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=5),
+            self.format == "zi-devtools-calculator" && matches!(self.schema, 1..=8),
             "不支持的计算工作表格式或版本"
         );
         ensure!(
@@ -186,6 +235,27 @@ impl Document {
             "区域统计操作要求工作表schema4"
         );
         ensure!(
+            self.schema >= 7
+                || (!self
+                    .data
+                    .variables
+                    .values()
+                    .any(|v| matches!(v, Value::Complex(_, _)))
+                    && !self
+                        .data
+                        .history
+                        .iter()
+                        .any(|(_, v)| matches!(v, Value::Complex(_, _)))
+                    && !self.data.matrix.has_complex()),
+            "复数工作表要求schema7"
+        );
+        ensure!(
+            self.schema >= 8
+                || (!self.data.root_mode
+                    && self.data.root_solver == super::root_solver::Saved::default()),
+            "非线性求解器工作区要求schema8"
+        );
+        ensure!(
             self.tool_version.len() <= 32
                 && !self.tool_version.is_empty()
                 && self
@@ -194,6 +264,12 @@ impl Document {
                     .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-'),
             "工具版本无效"
         );
+        if self.schema >= 6 {
+            self.runtime_fingerprint
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("工作表缺少运行环境指纹"))?
+                .validate()?;
+        }
         ensure!(
             chrono::DateTime::from_timestamp(self.created_utc, 0).is_some(),
             "工作表UTC时间无效"
@@ -241,6 +317,8 @@ mod tests {
         let restored: Document = serde_json::from_slice(&bytes).unwrap();
         restored.validate().unwrap();
         assert_eq!(restored.data, source);
+        assert_eq!(restored.schema, 8);
+        assert_eq!(restored.runtime_fingerprint.as_ref().unwrap().schema, 1);
         let mut json = serde_json::to_value(doc).unwrap();
         for schema in 1..=4 {
             json["schema"] = schema.into();
@@ -254,6 +332,10 @@ mod tests {
         for schema in 1..=4 {
             let mut legacy = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
             legacy["schema"] = schema.into();
+            legacy
+                .as_object_mut()
+                .unwrap()
+                .remove("runtime_fingerprint");
             legacy["data"].as_object_mut().unwrap().remove("dates");
             legacy["data"].as_object_mut().unwrap().remove("date_mode");
             let restored: Document = serde_json::from_value(legacy).unwrap();
@@ -283,7 +365,7 @@ mod tests {
         let restored = serde_json::from_value::<Document>(document).unwrap();
         restored.validate().unwrap();
         assert!(restored.data.matrix.uses_statistics());
-        assert_eq!(Document::new(restored.data).unwrap().schema, 5);
+        assert_eq!(Document::new(restored.data).unwrap().schema, 8);
     }
     #[test]
     fn plot_settings_roundtrip_and_legacy_defaults_do_not_store_sample_results() {
@@ -293,13 +375,17 @@ mod tests {
         settings.plot.curves[0].expression = "factor*sin(x)".into();
         settings.plot.points = 1025;
         let document = Document::new(settings.clone()).unwrap();
-        assert_eq!(document.schema, 5);
+        assert_eq!(document.schema, 8);
         let bytes = serde_json::to_vec(&document).unwrap();
         let restored: Document = serde_json::from_slice(&bytes).unwrap();
         restored.validate().unwrap();
         assert_eq!(restored.data, settings);
         let mut legacy = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
         legacy["schema"] = 2.into();
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("runtime_fingerprint");
         legacy["data"].as_object_mut().unwrap().remove("plot");
         legacy["data"].as_object_mut().unwrap().remove("plot_mode");
         let restored: Document = serde_json::from_value(legacy).unwrap();
@@ -318,6 +404,8 @@ mod tests {
             matrix_mode: true,
             plot_mode: false,
             date_mode: false,
+            root_mode: false,
+            root_solver: Default::default(),
             dates: Default::default(),
             plot: Default::default(),
             variables: BTreeMap::from([
@@ -362,6 +450,28 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn complex_values_roundtrip_and_require_schema_seven() {
+        let value = Value::Complex(-1.25, 3.5);
+        let json = serde_json::to_string(&value).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&json).unwrap(), value);
+        assert!(
+            serde_json::from_str::<Value>(r#"{"kind":"complex","real":"NaN","imaginary":"1e0"}"#)
+                .is_err()
+        );
+        let mut source = data();
+        source
+            .variables
+            .insert("complex".into(), Value::Complex(-1.25, 3.5));
+        let mut doc = serde_json::to_value(Document::new(source).unwrap()).unwrap();
+        doc["schema"] = 6.into();
+        assert!(
+            serde_json::from_value::<Document>(doc)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+    }
+    #[test]
     fn untrusted_protocol_and_number_invariants_are_rejected() {
         for text in [
             r#"{"kind":"exact","numerator":"2","denominator":"4"}"#,
@@ -374,9 +484,28 @@ mod tests {
             assert!(serde_json::from_str::<Value>(text).is_err(), "{text}");
         }
         let mut doc = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
-        doc["schema"] = 6.into();
+        doc["schema"] = 9.into();
         assert!(
             serde_json::from_value::<Document>(doc.clone())
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+        let mut missing_fingerprint = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
+        missing_fingerprint
+            .as_object_mut()
+            .unwrap()
+            .remove("runtime_fingerprint");
+        assert!(
+            serde_json::from_value::<Document>(missing_fingerprint)
+                .unwrap()
+                .validate()
+                .is_err()
+        );
+        let mut corrupt_fingerprint = serde_json::to_value(Document::new(data()).unwrap()).unwrap();
+        corrupt_fingerprint["runtime_fingerprint"]["os"] = "other".into();
+        assert!(
+            serde_json::from_value::<Document>(corrupt_fingerprint)
                 .unwrap()
                 .validate()
                 .is_err()

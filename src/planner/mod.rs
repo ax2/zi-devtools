@@ -117,6 +117,8 @@ struct Item {
     revision: i64,
     title: String,
     body: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
     pinned: bool,
     trash: bool,
     updated: i64,
@@ -131,6 +133,7 @@ impl Item {
             revision: 0,
             title: String::new(),
             body: String::new(),
+            tags: Vec::new(),
             pinned: false,
             trash: false,
             updated: 0,
@@ -174,6 +177,7 @@ impl Item {
             "标题需要 1–120 个字符，不能包含换行"
         );
         ensure!(self.body.len() <= MAX_BODY, "正文最多 128 KiB");
+        validate_tags(&self.tags)?;
         if let Some(s) = &self.schedule {
             s.validate_interval()?;
             ensure!(
@@ -208,6 +212,40 @@ impl Item {
 
 fn valid_timestamp(value: i64) -> bool {
     DateTime::from_timestamp(value, 0).is_some_and(|time| (1..=9999).contains(&time.year()))
+}
+
+fn parse_tags(input: &str) -> Result<Vec<String>> {
+    let mut tags = Vec::new();
+    for raw in input.split(',') {
+        let tag = raw.trim();
+        if tag.is_empty() {
+            continue;
+        }
+        ensure!(tags.len() < 16, "每条记录最多 16 个标签");
+        tags.push(tag.to_owned());
+    }
+    validate_tags(&tags)?;
+    Ok(tags)
+}
+
+fn validate_tags(tags: &[String]) -> Result<()> {
+    ensure!(tags.len() <= 16, "每条记录最多 16 个标签");
+    let mut seen = HashSet::new();
+    for tag in tags {
+        ensure!(
+            !tag.trim().is_empty()
+                && tag == tag.trim()
+                && tag.chars().count() <= 24
+                && !tag.chars().any(|c| c.is_control() || c == ',' || c == '#'),
+            "标签须为 1–24 个字符，不能包含逗号、# 或控制字符"
+        );
+        ensure!(seen.insert(tag.to_lowercase()), "标签不能重复");
+    }
+    ensure!(
+        tags.iter().map(String::len).sum::<usize>() <= 1024,
+        "标签总长度超过限制"
+    );
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -254,6 +292,9 @@ enum Reply {
     Loaded(Vec<Item>),
     SavedCopy(Box<Item>, std::result::Result<Vec<Item>, String>),
     Imported(Item),
+    BatchImportReady(Box<files::BatchImportReview>),
+    BatchImported(Vec<Item>),
+    BatchExported(PathBuf, usize, usize),
     Exported(PathBuf, usize),
     BackupReady(Box<backup::Review>),
     BackupSaved(PathBuf, usize),
@@ -276,6 +317,7 @@ pub struct State {
     loaded: bool,
     draft: Option<Item>,
     original: Option<Item>,
+    tags_text: String,
     date_text: String,
     time_text: String,
     end_date_text: String,
@@ -319,6 +361,7 @@ pub struct State {
     #[cfg(feature = "ui-preview")]
     pub preview_overview_rect: Option<(egui::Rect, egui::Rect)>,
     editor_action: Option<(String, actions::Action)>,
+    knowledge_handoff: Option<(String, String, String)>,
     #[cfg(feature = "ui-preview")]
     pub preview_convert_rect: Option<(egui::Rect, egui::Rect)>,
     #[cfg(feature = "ui-preview")]
@@ -363,6 +406,9 @@ pub struct State {
     preview_action_y: Option<(f32, f32)>,
 }
 impl State {
+    pub fn take_knowledge_handoff(&mut self) -> Option<(String, String, String)> {
+        self.knowledge_handoff.take()
+    }
     pub fn transfer_text(&self) -> Option<(String, &str)> {
         self.draft.as_ref().filter(|item| !item.trash).map(|item| {
             (
@@ -470,6 +516,7 @@ impl State {
             loaded: false,
             draft: None,
             original: None,
+            tags_text: String::new(),
             date_text: String::new(),
             time_text: String::new(),
             end_date_text: String::new(),
@@ -513,6 +560,7 @@ impl State {
             #[cfg(feature = "ui-preview")]
             preview_overview_rect: None,
             editor_action: None,
+            knowledge_handoff: None,
             #[cfg(feature = "ui-preview")]
             preview_convert_rect: None,
             #[cfg(feature = "ui-preview")]
@@ -593,8 +641,13 @@ impl State {
             return true;
         }
         self.draft.as_ref().is_some_and(|item| {
-            item.revision == 0 && (!item.title.is_empty() || !item.body.is_empty())
+            item.revision == 0
+                && (!item.title.is_empty() || !item.body.is_empty() || !self.tags_text.is_empty())
         }) || self.draft != self.original
+            || self
+                .draft
+                .as_ref()
+                .is_some_and(|item| self.tags_text != item.tags.join(", "))
             || self
                 .draft
                 .as_ref()
@@ -643,6 +696,7 @@ impl State {
             .map(|day| day.to_string())
             .unwrap_or_default();
         self.original = Some(item.clone());
+        self.tags_text = item.tags.join(", ");
         self.draft = Some(item);
     }
     fn discard(&mut self) {
@@ -688,6 +742,7 @@ impl State {
             .draft
             .clone()
             .ok_or_else(|| anyhow::anyhow!("请先打开记录"))?;
+        item.tags = parse_tags(&self.tags_text)?;
         if as_copy {
             item.id = uuid::Uuid::new_v4().to_string();
             item.revision = 0;
@@ -810,6 +865,18 @@ impl State {
     }
     /// Runs before hidden-window early returns. Returns true only for newly due alarms.
     pub fn poll(&mut self, ctx: &egui::Context) -> bool {
+        self.poll_at(ctx, Instant::now(), Local::now())
+    }
+
+    pub(crate) fn poll_at(
+        &mut self,
+        ctx: &egui::Context,
+        monotonic_now: Instant,
+        local_now: DateTime<Local>,
+    ) -> bool {
+        let retry_tick = monotonic_now
+            .checked_sub(std::time::Duration::from_secs(2))
+            .unwrap_or(monotonic_now);
         if let Some(rx) = &self.pending {
             let reply = match rx.try_recv() {
                 Ok(r) => Some(r),
@@ -849,11 +916,30 @@ impl State {
                             "已导入 / 更新 {count} 条日程；这些条目的提醒已关闭。可打开日程设置提醒后保存。"
                         );
                         self.error = false;
-                        self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
+                        self.last_tick = retry_tick;
                     }
                     Ok(Reply::BackupReady(review)) => {
                         self.backup_review = Some(*review);
                         self.message = "已读取已保存记录的快照，请核对范围后继续。".into();
+                        self.error = false;
+                    }
+                    Ok(Reply::BatchImportReady(review)) => {
+                        self.backup_review = Some(backup::Review::Import(*review));
+                        self.message = "文件已读取；请核对批量导入预览后确认写入。".into();
+                        self.error = false;
+                    }
+                    Ok(Reply::BatchImported(items)) => {
+                        self.replace_items(items);
+                        self.loaded = true;
+                        self.query.clear();
+                        self.calendar = false;
+                        self.trash = false;
+                        self.message = "批量导入已完成；原文件保持不变。".into();
+                        self.error = false;
+                    }
+                    Ok(Reply::BatchExported(path, count, bytes)) => {
+                        self.message =
+                            format!("已导出 {count} 条备忘 · {bytes} 字节 · {}", path.display());
                         self.error = false;
                     }
                     Ok(Reply::BackupSaved(path, count)) => {
@@ -872,7 +958,7 @@ impl State {
                             "备份恢复已完成。日程按本机时区安排，已启用的到期提醒可能立即显示。"
                                 .into();
                         self.error = false;
-                        self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
+                        self.last_tick = retry_tick;
                     }
                     Ok(Reply::Imported(item)) => {
                         self.finish_import(item);
@@ -915,7 +1001,7 @@ impl State {
                             }
                             self.shown.retain(|(saved, _)| saved != &id);
                         }
-                        self.last_tick = Instant::now() - std::time::Duration::from_secs(2);
+                        self.last_tick = retry_tick;
                     }
                     Err(error) => {
                         self.message = error;
@@ -930,16 +1016,24 @@ impl State {
         ctx.request_repaint_after(std::time::Duration::from_millis(
             if self.pending.is_some() { 100 } else { 1000 },
         ));
-        if self.last_tick.elapsed().as_secs() < 1 {
+        if monotonic_now
+            .saturating_duration_since(self.last_tick)
+            .as_secs()
+            < 1
+        {
             return false;
         }
-        self.last_tick = Instant::now();
-        let now = Local::now();
+        self.last_tick = monotonic_now;
         self.alarms = self
             .items
             .iter()
             .filter(|i| !i.trash)
-            .filter_map(|i| i.schedule.as_ref()?.due(now).map(|at| (i.id.clone(), at)))
+            .filter_map(|i| {
+                i.schedule
+                    .as_ref()?
+                    .due(local_now)
+                    .map(|at| (i.id.clone(), at))
+            })
             .collect();
         self.alarms.sort_by_key(|(_, at)| *at);
         let due: HashSet<_> = self.alarms.iter().cloned().collect();

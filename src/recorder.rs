@@ -1,4 +1,5 @@
 //! Local monitor capture. Encoding stays on a worker thread.
+pub mod chapters;
 pub mod tutorial;
 use anyhow::{Context as _, Result, anyhow, bail};
 use crossbeam_channel::{Receiver, unbounded};
@@ -166,11 +167,30 @@ impl Region {
         display: (u32, u32),
         view: (f32, f32),
     ) -> Option<Self> {
+        Self::selection_bounds(a, b, display, view)
+            .filter(|region| region.fits(display.0, display.1))
+    }
+
+    // The preview and accepted crop share rounding, clipping and H.264 alignment.
+    // A small or empty preview is valid here, but cannot pass `from_points`.
+    pub(crate) fn selection_bounds(
+        a: (f32, f32),
+        b: (f32, f32),
+        display: (u32, u32),
+        view: (f32, f32),
+    ) -> Option<Self> {
         let (ax, ay) = a;
         let (bx, by) = b;
         let (display_width, display_height) = display;
         let (view_width, view_height) = view;
-        if view_width <= 0.0 || view_height <= 0.0 {
+        if [ax, ay, bx, by, view_width, view_height]
+            .iter()
+            .any(|value| !value.is_finite())
+            || view_width <= 0.0
+            || view_height <= 0.0
+            || display_width == 0
+            || display_height == 0
+        {
             return None;
         }
         let map_x = |x: f32| {
@@ -192,7 +212,7 @@ impl Region {
         // H.264 hardware encoders generally require even output dimensions.
         x2 -= (x2 - x1) % 2;
         y2 -= (y2 - y1) % 2;
-        (x2 - x1 >= 32 && y2 - y1 >= 32).then_some(Self {
+        Some(Self {
             x: x1,
             y: y1,
             width: x2 - x1,
@@ -381,13 +401,20 @@ impl Capture {
     fn compose_frame(&mut self, elapsed: Duration) -> Result<()> {
         let r = self.region;
         let settings = self.tutorial.snapshot();
-        let pixels = if settings.active() {
-            self.effects.render(
+        let pixels = if settings.active() || self.effects.has_drawings() {
+            let pressed_shortcut = settings
+                .show_pressed_shortcuts
+                .then(|| tutorial::physical_shortcut(settings.pressed_shortcut_corner))
+                .flatten();
+            self.effects.render_with_shortcut(
                 &self.source,
                 [r.width, r.height],
                 settings,
                 self.tutorial.pointer(self.origin, r),
-                elapsed,
+                tutorial::ShortcutFrame {
+                    pressed: pressed_shortcut,
+                    elapsed,
+                },
                 &mut self.composed,
             )?;
             &self.composed
@@ -405,7 +432,7 @@ impl Capture {
         Ok(())
     }
     fn keep_video_alive(&mut self, elapsed: Duration) -> Result<()> {
-        let interval = if self.tutorial.snapshot().active() {
+        let interval = if self.tutorial.snapshot().active() || self.effects.has_drawings() {
             33
         } else {
             250
@@ -1119,6 +1146,58 @@ impl AudioTimeline {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "ui-preview")]
+    #[test]
+    fn captured_encoder_buffer_contains_and_flips_manual_drawing() {
+        use super::{Capture, PauseClock, Region, tutorial};
+        use std::{
+            sync::Arc,
+            time::{Duration, Instant},
+        };
+        let size = [80u32, 80u32];
+        let source = [0, 0, 0, 255].repeat((size[0] * size[1]) as usize);
+        let control = Arc::new(tutorial::Control::new(true));
+        control
+            .set(tutorial::Settings {
+                draw_enabled: true,
+                ..tutorial::Settings::default()
+            })
+            .unwrap();
+        let region = Region {
+            x: 0,
+            y: 0,
+            width: size[0],
+            height: size[1],
+        };
+        let mut capture = Capture {
+            encoder: None,
+            region,
+            started: Instant::now(),
+            scratch: Vec::new(),
+            flipped: Vec::new(),
+            pause: Arc::new(PauseClock::default()),
+            last_frame_elapsed: None,
+            source: source.clone(),
+            composed: Vec::new(),
+            effects: tutorial::Compositor::default(),
+            tutorial: control.clone(),
+            origin: [0, 0],
+        };
+        control.preview_pointer(tutorial::Pointer {
+            position: Some([10.0, 10.0]),
+            buttons: 1,
+        });
+        capture.compose_frame(Duration::ZERO).unwrap();
+        control.preview_pointer(tutorial::Pointer {
+            position: Some([40.0, 40.0]),
+            buttons: 1,
+        });
+        capture.compose_frame(Duration::from_millis(33)).unwrap();
+        let pixel = ((54 * size[0] + 25) * 4) as usize;
+        assert_eq!(&capture.flipped[pixel..pixel + 4], &[65, 55, 255, 255]);
+        assert_eq!(capture.source, source);
+    }
+
     #[test]
     fn quality_presets_increase_estimated_size_and_audio_adds_capacity() {
         use super::{AudioMode, RecordingQuality};
@@ -1231,6 +1310,51 @@ mod tests {
         .unwrap();
         assert_eq!((region.x, region.y), (0, 0));
         assert!(region.fits(display.width, display.height));
+    }
+    #[test]
+    fn selection_rejects_nonfinite_coordinates_and_clips_preview_before_acceptance() {
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            for slot in 0..6 {
+                let mut values = [0.0, 0.0, 100.0, 100.0, 960.0, 540.0];
+                values[slot] = invalid;
+                assert!(
+                    Region::selection_bounds(
+                        (values[0], values[1]),
+                        (values[2], values[3]),
+                        (1920, 1080),
+                        (values[4], values[5])
+                    )
+                    .is_none()
+                );
+            }
+        }
+        let preview = Region::selection_bounds(
+            (-20.0, -30.0),
+            (2000.0, 1000.0),
+            (1920, 1080),
+            (960.0, 540.0),
+        )
+        .unwrap();
+        assert_eq!(
+            preview,
+            Region {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080
+            }
+        );
+        let tiny =
+            Region::selection_bounds((10.0, 20.0), (20.0, 30.0), (1920, 1080), (960.0, 540.0))
+                .unwrap();
+        assert_eq!((tiny.width, tiny.height), (20, 20));
+        assert!(
+            Region::from_points((10.0, 20.0), (20.0, 30.0), (1920, 1080), (960.0, 540.0)).is_none()
+        );
+        assert!(
+            Region::selection_bounds((0.0, 0.0), (100.0, 100.0), (0, 1080), (960.0, 540.0))
+                .is_none()
+        );
     }
     #[test]
     fn display_snapshot_is_checked_before_recording() {

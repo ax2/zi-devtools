@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "type": "clipboard.snapshot",
+  "subscriptionId": "subscription-from-host",
+  "revision": "rev-42",
+  "formats": [
+    {
+      "kind": "text",
+      "text": "selected clipboard text"
+    },
+    {
+      "kind": "image",
+      "resourceRef": "opaque-resource-ref"
+    }
+  ]
+}

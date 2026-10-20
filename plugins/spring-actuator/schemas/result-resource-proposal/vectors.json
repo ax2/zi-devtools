@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "profile": "result.resource.create.v1@1.0.0-preview.1",
+  "status": "provider proposal; not implemented by Studio",
+  "vectors": [
+    {"id":"preview-no-write","prepareAccepted":true,"userConfirmed":false,"saved":false,"localPathRequested":false},
+    {"id":"user-confirmed-resource","prepareAccepted":true,"userConfirmed":true,"saved":true,"hostShowsPreview":true,"resourceRefExposedToView":false,"localPathRequested":false},
+    {"id":"declined-no-resource","prepareAccepted":true,"userConfirmed":false,"saved":false,"resourceRef":null},
+    {"id":"revoked-before-commit","prepareAccepted":true,"permissionRevoked":true,"commitAccepted":false,"saved":false},
+    {"id":"invalid-runtime-fingerprint","prepareAccepted":false,"saved":false,"errorCode":"resource_provenance_invalid"},
+    {"id":"arbitrary-path-rejected","requestContainsPath":true,"prepareAccepted":false,"saved":false,"errorCode":"resource_input_invalid"},
+    {"id":"privacy-filter","fields":["endpoint","httpStatus","responseBytes","topLevelFieldCount","healthStatus","toolVersion","applicationVersion","runtimeFingerprint"],"containsOrigin":false,"containsResponseValues":false,"containsMetricNames":false,"containsCredentials":false,"containsLocalPath":false},
+    {"id":"collision-never-overwrites","existingResourceCollision":true,"overwriteExisting":false,"result":"new opaque identity or user-visible preview conflict"},
+    {"id":"commit-replay-after-ack-loss","sameCommitId":true,"createdResources":1,"sameTerminalResult":true},
+    {"id":"restart-before-commit","preparedDraftExpired":true,"saved":false},
+    {"id":"duplicate-json-key-rejected","file":"fixtures/duplicate-json-key.input.txt","prepareAccepted":false,"saved":false,"errorCode":"resource_input_invalid"}
+  ]
+}

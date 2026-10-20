@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/cancel.response.schema.json",
+  "title": "plugin.task.lifecycle.v1 cancel response proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef", "status", "executionFinished"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256},
+    "status": {"enum": ["requested", "finished"]},
+    "executionFinished": {"type": "boolean"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "requested"}}, "required": ["status"]}, "then": {"properties": {"executionFinished": {"const": false}}}},
+    {"if": {"properties": {"status": {"const": "finished"}}, "required": ["status"]}, "then": {"properties": {"executionFinished": {"const": true}}}}
+  ]
+}

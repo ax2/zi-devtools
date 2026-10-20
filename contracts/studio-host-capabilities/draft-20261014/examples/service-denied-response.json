@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "operation": "mcp.tool.call",
+  "accepted": false,
+  "error": {
+    "code": "CONSENT_REQUIRED",
+    "retryable": false
+  }
+}

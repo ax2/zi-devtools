@@ -1,0 +1,26 @@
+{
+  "profile": "application.directory.v1",
+  "version": "=1.0.0-preview.1",
+  "applications": {
+    "com.zicode.devtools.agent-assist": {
+      "categoryId": "ai",
+      "aliases": [
+        "模型辅助",
+        "AI问答",
+        "Agent Assist",
+        "model assistant"
+      ],
+      "description": "选择当前场景模型，对目标与文字资料进行一轮生成；发送前逐次确认，不自动调用工具。"
+    },
+    "com.zicode.devtools.spring-actuator": {
+      "categoryId": "system",
+      "aliases": [
+        "Spring健康检查",
+        "Actuator诊断",
+        "Spring health",
+        "service diagnostics"
+      ],
+      "description": "逐次确认读取Spring Actuator的health、info或metrics端点，并查看响应摘要。"
+    }
+  }
+}

@@ -28,6 +28,14 @@ fn side(item: &Item) -> Side {
         ),
         ("置顶", flag(item.pinned)),
         ("回收站", flag(item.trash)),
+        (
+            "标签",
+            item.tags
+                .iter()
+                .map(|tag| format!("#{tag}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
     ];
     if let Some(s) = &item.schedule {
         fields.extend([
@@ -102,6 +110,16 @@ impl State {
             return None;
         }
         let mut local = side(draft);
+        if let Some((_, value)) = local.fields.iter_mut().find(|(key, _)| *key == "标签") {
+            *value = self
+                .tags_text
+                .split(',')
+                .map(str::trim)
+                .filter(|tag| !tag.is_empty())
+                .map(|tag| format!("#{tag}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+        }
         if let Some(s) = &draft.schedule {
             for (key, value) in &mut local.fields {
                 match *key {

@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "profile": "plugin.task.lifecycle.v1@1.0.0-preview.1",
+  "vectors": [
+    {
+      "id": "monotonic-terminal-chain",
+      "accepted": true,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "state_changed",
+          "state": "queued",
+          "at": "2026-10-16T12:00:00Z"
+        },
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 2,
+          "eventType": "state_changed",
+          "state": "awaiting_confirmation",
+          "at": "2026-10-16T12:00:01Z",
+          "operationStepId": "actuator.health",
+          "confirmationId": "cnf_opaque_01"
+        },
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 3,
+          "eventType": "step_changed",
+          "state": "running",
+          "operationStepId": "actuator.health",
+          "at": "2026-10-16T12:00:02Z"
+        },
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 4,
+          "eventType": "terminal",
+          "state": "succeeded",
+          "at": "2026-10-16T12:00:03Z",
+          "terminal": {
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "sequence": 4,
+            "state": "succeeded",
+            "executionFinished": true,
+            "finishedAt": "2026-10-16T12:00:03Z",
+            "resultAvailable": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "sequence-gap-rejected",
+      "accepted": false,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "state_changed",
+          "state": "queued",
+          "at": "2026-10-16T12:00:00Z"
+        },
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 3,
+          "eventType": "state_changed",
+          "state": "running",
+          "at": "2026-10-16T12:00:02Z"
+        }
+      ]
+    },
+    {
+      "id": "terminal-taskref-mismatch-rejected",
+      "accepted": false,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "terminal",
+          "state": "cancelled",
+          "at": "2026-10-16T12:00:00Z",
+          "terminal": {
+            "schemaVersion": 1,
+            "taskRef": "taskref_other",
+            "sequence": 1,
+            "state": "cancelled",
+            "executionFinished": true,
+            "finishedAt": "2026-10-16T12:00:00Z",
+            "resultAvailable": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "terminal-sequence-mismatch-rejected",
+      "accepted": false,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "terminal",
+          "state": "cancelled",
+          "at": "2026-10-16T12:00:00Z",
+          "terminal": {
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "sequence": 2,
+            "state": "cancelled",
+            "executionFinished": true,
+            "finishedAt": "2026-10-16T12:00:00Z",
+            "resultAvailable": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "second-terminal-rejected",
+      "accepted": false,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "terminal",
+          "state": "cancelled",
+          "at": "2026-10-16T12:00:00Z",
+          "terminal": {
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "sequence": 1,
+            "state": "cancelled",
+            "executionFinished": true,
+            "finishedAt": "2026-10-16T12:00:00Z",
+            "resultAvailable": false
+          }
+        },
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 2,
+          "eventType": "terminal",
+          "state": "succeeded",
+          "at": "2026-10-16T12:00:01Z",
+          "terminal": {
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "sequence": 2,
+            "state": "succeeded",
+            "executionFinished": true,
+            "finishedAt": "2026-10-16T12:00:01Z",
+            "resultAvailable": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "post-terminal-event-rejected",
+      "accepted": false,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "terminal",
+          "state": "cancelled",
+          "at": "2026-10-16T12:00:00Z",
+          "terminal": {
+            "schemaVersion": 1,
+            "taskRef": "taskref_opaque_example_01",
+            "sequence": 1,
+            "state": "cancelled",
+            "executionFinished": true,
+            "finishedAt": "2026-10-16T12:00:00Z",
+            "resultAvailable": false
+          }
+        },
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 2,
+          "eventType": "state_changed",
+          "state": "running",
+          "at": "2026-10-16T12:00:01Z"
+        }
+      ]
+    },
+    {
+      "id": "event-result-reference-rejected-by-schema",
+      "accepted": false,
+      "events": [
+        {
+          "schemaVersion": 1,
+          "taskRef": "taskref_opaque_example_01",
+          "sequence": 1,
+          "eventType": "state_changed",
+          "state": "running",
+          "at": "2026-10-16T12:00:00Z",
+          "resultRef": "local://private"
+        }
+      ]
+    }
+  ]
+}

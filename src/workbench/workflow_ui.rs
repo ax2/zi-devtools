@@ -1,4 +1,5 @@
 use super::{workflow::*, *};
+use crate::tasks::{Job, Phase};
 
 mod inspector;
 #[cfg(feature = "ui-preview")]
@@ -40,9 +41,11 @@ pub(super) struct State {
     reveal: bool,
     scroll_until: Option<std::time::Instant>,
     inspect: inspector::State,
+    inspect_job: StepInspection,
+    table_send: Option<(String, Dataset)>,
     pub(super) output: super::workflow_output::State,
     #[cfg(feature = "ui-preview")]
-    buttons: [Option<(egui::Rect, egui::Rect)>; 10],
+    buttons: [Option<(egui::Rect, egui::Rect)>; 12],
 }
 impl Default for State {
     fn default() -> Self {
@@ -63,18 +66,42 @@ impl Default for State {
             reveal: false,
             scroll_until: None,
             inspect: inspector::State::default(),
+            inspect_job: StepInspection::default(),
+            table_send: None,
             output: super::workflow_output::State::default(),
             #[cfg(feature = "ui-preview")]
-            buttons: [None; 10],
+            buttons: [None; 12],
         }
+    }
+}
+
+#[derive(Default)]
+struct StepInspection {
+    receiver: Option<Receiver<std::result::Result<Dataset, String>>>,
+    cancel: Arc<AtomicBool>,
+    job: Job,
+    definition: Option<Definition>,
+    step: usize,
+}
+impl StepInspection {
+    fn cancel(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        self.job.cancelling();
     }
 }
 impl Drop for State {
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);
+        self.inspect_job.cancel.store(true, Ordering::Relaxed);
     }
 }
 impl State {
+    pub(super) fn snapshot_clone(&self) -> Self {
+        let mut snapshot = Self::default();
+        snapshot.definition = self.definition.clone();
+        snapshot
+    }
+
     pub(super) fn validate_saved(&self) -> Result<()> {
         self.definition.validate_draft()?;
         anyhow::ensure!(
@@ -91,6 +118,7 @@ impl State {
     }
     pub(super) fn invalidate(&mut self) {
         self.output.invalidate();
+        self.inspect_job.cancel();
         self.inspect = inspector::State::default();
         self.proposal = None;
         self.source = None;
@@ -102,9 +130,49 @@ impl State {
         self.cancel.store(true, Ordering::Relaxed);
         self.job.cancelling();
     }
+    pub(super) fn cancel_step_inspection(&mut self) {
+        self.inspect_job.cancel();
+    }
+    pub(super) fn inspect_job_active(&self) -> bool {
+        self.inspect_job.job.phase.active()
+    }
+    pub(super) fn step_inspection_snapshot(&self) -> Option<crate::tasks::Row> {
+        self.inspect_job
+            .job
+            .snapshot("pipeline-step-inspect", "流程中间结果预览", true)
+    }
+    pub(super) fn cancel_step_inspection_generation(&mut self, generation: u64) -> bool {
+        if self
+            .inspect_job
+            .job
+            .snapshot("pipeline-step-inspect", "", true)
+            .is_some_and(|row| row.generation == generation && row.phase.active())
+        {
+            self.inspect_job.cancel();
+            true
+        } else {
+            false
+        }
+    }
+    fn queue_table_send(&mut self, label: String, data: Dataset) {
+        self.table_send = Some((label, data));
+    }
+    pub(super) fn take_table_send(&mut self) -> Option<(String, Dataset)> {
+        self.table_send.take()
+    }
 }
 
 impl DataState {
+    pub(super) fn step_inspection_snapshot(&self) -> Option<crate::tasks::Row> {
+        self.workflow.step_inspection_snapshot()
+    }
+    pub(super) fn cancel_step_inspection_generation(&mut self, generation: u64) -> bool {
+        self.workflow.cancel_step_inspection_generation(generation)
+    }
+    pub fn take_workflow_table_send(&mut self) -> Option<(String, Dataset)> {
+        self.workflow.take_table_send()
+    }
+
     #[cfg(feature = "ui-preview")]
     pub fn preview_flow_snapshot_check(&self, ran: bool) {
         assert_eq!(self.workflow.definition.steps.len(), 2);
@@ -228,6 +296,13 @@ impl DataState {
     }
 
     #[cfg(feature = "ui-preview")]
+    pub fn preview_workflow_step_inspection(&mut self) {
+        self.preview_workflow();
+        self.start_step_inspection(1)
+            .expect("synthetic intermediate result inspection starts");
+    }
+
+    #[cfg(feature = "ui-preview")]
     pub fn preview_workflow_import(&mut self) {
         self.preview_workflow();
         let mut imported = self.workflow.definition.clone();
@@ -281,9 +356,96 @@ impl DataState {
         Ok(())
     }
 
+    pub(super) fn start_step_inspection(&mut self, step: usize) -> Result<()> {
+        ensure_not_busy(self)?;
+        let source = self.workflow.source.clone().context("流程预览输入已失效")?;
+        anyhow::ensure!(self.workflow.proposal.is_some(), "请先完成全流程预览");
+        anyhow::ensure!(
+            (1..=self.workflow.definition.steps.len()).contains(&step),
+            "中间结果步骤超出流程范围"
+        );
+        anyhow::ensure!(
+            self.dataset.as_ref() == Some(&source),
+            "来源已变化，请重新预览"
+        );
+        let definition = self.workflow.definition.clone();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let (tx, rx) = mpsc::channel();
+        let inspection = &mut self.workflow.inspect_job;
+        inspection.cancel = cancel;
+        inspection.definition = Some(definition.clone());
+        inspection.step = step;
+        inspection.receiver = Some(rx);
+        inspection.job.begin();
+        self.workflow.error.clear();
+        std::thread::spawn(move || {
+            let result = definition
+                .preview_through(&source, step, &worker_cancel)
+                .map(|preview| preview.result)
+                .map_err(|error| format!("{error:#}"));
+            let _ = tx.send(result);
+        });
+        Ok(())
+    }
+
+    fn poll_step_inspection(&mut self) {
+        let reply =
+            self.workflow
+                .inspect_job
+                .receiver
+                .as_ref()
+                .and_then(|rx| match rx.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(mpsc::TryRecvError::Empty) => None,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Some(Err("中间结果计算任务意外结束".into()))
+                    }
+                });
+        let Some(reply) = reply else {
+            return;
+        };
+        let inspection = &mut self.workflow.inspect_job;
+        inspection.receiver = None;
+        if inspection.cancel.load(Ordering::Relaxed) {
+            inspection
+                .job
+                .finish(Phase::Cancelled, "中间结果预览已取消；输入和流程保留");
+            inspection.definition = None;
+            return;
+        }
+        if self.dataset != self.workflow.source
+            || Some(&self.workflow.definition) != inspection.definition.as_ref()
+        {
+            inspection
+                .job
+                .finish(Phase::Failed, "流程或来源已变化，请重新预览");
+            self.workflow.error = "流程或来源已变化，请重新生成预览".into();
+            inspection.definition = None;
+            return;
+        }
+        match reply {
+            Ok(result) => {
+                let step = inspection.step;
+                inspection
+                    .job
+                    .finish(Phase::Done, format!("第{step}步结果已就绪；原始预览保留"));
+                self.workflow.inspect.open_step(step, result);
+            }
+            Err(error) => {
+                inspection
+                    .job
+                    .finish(Phase::Failed, "中间结果预览失败；原始预览保留");
+                self.workflow.error = error;
+            }
+        }
+        inspection.definition = None;
+    }
+
     pub(super) fn poll_workflow(&mut self) {
         self.workflow.output.poll();
         self.workflow.files.poll();
+        self.poll_step_inspection();
         if self.workflow.files.loaded_tool == Some("pipeline")
             || self.workflow.files.image_review.is_some()
         {
@@ -371,11 +533,14 @@ impl DataState {
         let schemas = step_schemas(&headers, &self.workflow.definition.steps);
         let running = self.workflow.job.phase.active();
         let active = running
+            || self.workflow.inspect_job.job.phase.active()
             || self.workflow.files.job.phase.active()
             || self.workflow.files.review.is_some();
         let mut changed = false;
         let mut start = false;
         let mut apply = false;
+        let mut inspect_step = None;
+        let mut table_send = None;
         if self.workflow.reveal {
             self.workflow.scroll_until =
                 Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
@@ -620,6 +785,16 @@ impl DataState {
                     {
                         self.workflow.cancel();
                     }
+                    if self.workflow.inspect_job.job.phase.active() {
+                        ui.spinner();
+                        ui.label(format!(
+                            "正在计算第{}步结果…",
+                            self.workflow.inspect_job.step
+                        ));
+                        if ui.button("取消中间结果预览").clicked() {
+                            self.workflow.cancel_step_inspection();
+                        }
+                    }
                     if running {
                         ui.spinner();
                         ui.label(self.workflow.job.phase.label());
@@ -659,6 +834,14 @@ impl DataState {
                     if inspect.clicked() {
                         self.workflow.inspect.open(&preview.result);
                     }
+                    let send = ui.button("发送流程结果到工具…");
+                    #[cfg(feature = "ui-preview")]
+                    {
+                        self.workflow.buttons[11] = Some((send.rect, ui.clip_rect()));
+                    }
+                    if send.clicked() {
+                        table_send = Some(("流程最终结果".to_owned(), preview.result.clone()));
+                    }
                     ui.strong(format!(
                         "预览完成：{}行 · {}列；尚未应用",
                         preview.result.rows.len(),
@@ -677,6 +860,15 @@ impl DataState {
                             ));
                             for (before, after) in &report.examples {
                                 ui.label(format!("{before} → {after}"));
+                            }
+                            if ui
+                                .add_enabled(
+                                    !self.workflow.inspect_job.job.phase.active(),
+                                    egui::Button::new("查看此步完整结果…"),
+                                )
+                                .clicked()
+                            {
+                                inspect_step = Some(report.step);
                             }
                         });
                     }
@@ -702,6 +894,14 @@ impl DataState {
             &mut self.workflow.definition,
             self.workflow.proposal.as_ref().map(|p| &p.result),
         );
+        if let Some(step) = inspect_step
+            && let Err(error) = self.start_step_inspection(step)
+        {
+            self.workflow.error = format!("{error:#}");
+        }
+        if let Some((label, result)) = table_send {
+            self.workflow.queue_table_send(label, result);
+        }
         if start && let Err(error) = self.start_workflow() {
             self.workflow.error = format!("{error:#}");
         }
@@ -1229,6 +1429,14 @@ mod tests {
             std::thread::yield_now();
         }
     }
+    fn wait_step_inspection(state: &mut DataState) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while state.workflow.inspect_job.receiver.is_some() {
+            state.poll_workflow();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
     fn wait_files(state: &mut DataState) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
         while state.workflow.files.job.phase.active() {
@@ -1268,6 +1476,157 @@ mod tests {
         state.workflow.invalidate();
         assert!(!state.workflow.inspect.open);
         assert!(state.workflow.proposal.is_none());
+    }
+
+    #[test]
+    fn selected_step_result_is_recomputed_async_without_replacing_final_preview() {
+        let mut state = fixture();
+        state.workflow.definition.steps = vec![
+            Step::Column {
+                column: "数量".into(),
+                operation: ColumnOperation::ToInteger,
+                value: String::new(),
+            },
+            Step::Column {
+                column: "数量".into(),
+                operation: ColumnOperation::ToText,
+                value: String::new(),
+            },
+        ];
+        let input_table = state.dataset.clone();
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        let final_table = state.workflow.proposal.as_ref().unwrap().result.clone();
+        assert_eq!(final_table.rows[0][1], "2");
+
+        state.start_step_inspection(1).unwrap();
+        assert!(state.busy());
+        let task = state.step_inspection_snapshot().unwrap();
+        assert_eq!(task.key, "pipeline-step-inspect");
+        assert!(task.cancellable);
+        wait_step_inspection(&mut state);
+
+        let step_table = state.workflow.inspect.step_snapshot().unwrap();
+        assert_eq!(step_table.rows[0][1], 2);
+        assert_eq!(
+            state.workflow.proposal.as_ref().unwrap().result,
+            final_table
+        );
+        assert_eq!(state.dataset, input_table);
+        assert!(!state.busy());
+    }
+
+    #[test]
+    fn selected_step_can_be_queued_for_typed_handoff_without_applying_or_replacing_results() {
+        let mut state = fixture();
+        state.workflow.definition.steps = vec![
+            Step::Column {
+                column: "数量".into(),
+                operation: ColumnOperation::ToInteger,
+                value: String::new(),
+            },
+            Step::Column {
+                column: "数量".into(),
+                operation: ColumnOperation::ToText,
+                value: String::new(),
+            },
+        ];
+        let input = state.dataset.clone();
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        let final_result = state.workflow.proposal.as_ref().unwrap().result.clone();
+        state.start_step_inspection(1).unwrap();
+        wait_step_inspection(&mut state);
+        let step_result = state.workflow.inspect.step_snapshot().unwrap().clone();
+
+        state
+            .workflow
+            .queue_table_send("第1步结果".into(), step_result.clone());
+        let (label, sent) = state.take_workflow_table_send().unwrap();
+        assert_eq!(label, "第1步结果");
+        assert_eq!(sent, step_result);
+        assert!(state.take_workflow_table_send().is_none());
+        assert_eq!(state.dataset, input);
+        assert_eq!(
+            state.workflow.proposal.as_ref().unwrap().result,
+            final_result
+        );
+    }
+
+    #[test]
+    fn cancelling_step_result_preview_keeps_the_full_preview_and_input() {
+        let mut state = fixture();
+        state.start_workflow().unwrap();
+        wait(&mut state);
+        let input_table = state.dataset.clone();
+        let final_table = state.workflow.proposal.as_ref().unwrap().result.clone();
+        state.start_step_inspection(1).unwrap();
+        let generation = state.step_inspection_snapshot().unwrap().generation;
+        assert!(state.cancel_step_inspection_generation(generation));
+        wait_step_inspection(&mut state);
+        assert_eq!(state.workflow.inspect_job.job.phase, Phase::Cancelled);
+        assert!(!state.workflow.inspect.open);
+        assert_eq!(state.dataset, input_table);
+        assert_eq!(
+            state.workflow.proposal.as_ref().unwrap().result,
+            final_table
+        );
+        assert!(!state.cancel_step_inspection_generation(generation));
+    }
+
+    #[test]
+    fn workspace_publishes_and_cancels_step_inspection_with_its_instance_id() {
+        let mut workspace =
+            crate::workbench::sessions::Workspace::new(std::path::PathBuf::from("unused.sqlite3"));
+        workspace.input = "id,value\n001,2".into();
+        workspace.dataset = Some(Dataset::parse(&workspace.input, DataFormat::Csv, b',').unwrap());
+        workspace.workflow.definition.steps = vec![Step::Column {
+            column: "value".into(),
+            operation: ColumnOperation::ToInteger,
+            value: String::new(),
+        }];
+        workspace.start_workflow().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while workspace.busy() {
+            workspace.poll();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "workflow preview timed out"
+            );
+            std::thread::yield_now();
+        }
+        let source = workspace.dataset.clone();
+        let final_result = workspace.workflow.proposal.as_ref().unwrap().result.clone();
+        workspace.start_step_inspection(1).unwrap();
+
+        let id = workspace.active_id().to_owned();
+        let task = workspace
+            .snapshots()
+            .into_iter()
+            .find(|row| row.key == "pipeline-step-inspect")
+            .unwrap();
+        assert_eq!(task.instance.as_deref(), Some(id.as_str()));
+        assert!(task.cancellable && task.phase.active());
+        assert!(workspace.cancel_workflow_step_inspection(&id, task.generation));
+        while workspace.busy() {
+            workspace.poll();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "step inspection timed out"
+            );
+            std::thread::yield_now();
+        }
+        let task = workspace
+            .snapshots()
+            .into_iter()
+            .find(|row| row.key == "pipeline-step-inspect")
+            .unwrap();
+        assert_eq!(task.phase, Phase::Cancelled);
+        assert_eq!(workspace.dataset, source);
+        assert_eq!(
+            workspace.workflow.proposal.as_ref().unwrap().result,
+            final_result
+        );
     }
     #[test]
     fn definition_loads_without_input_and_survives_later_parsing() {

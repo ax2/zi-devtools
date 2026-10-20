@@ -77,6 +77,7 @@ pub(super) fn plan(current: &[Item], incoming: &[Item], update: bool) -> Result<
                 let mut replacement = item.clone();
                 replacement.pinned = old.pinned;
                 replacement.trash = old.trash;
+                replacement.tags.clone_from(&old.tags);
                 replacement.schedule.as_mut().unwrap().done = old.schedule.as_ref().unwrap().done;
                 result.records[index] = replacement;
                 result.updated += 1;

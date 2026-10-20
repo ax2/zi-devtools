@@ -185,9 +185,23 @@ impl State {
                         & WS_EX_TOPMOST as isize,
                     0
                 );
+                ctx.send_viewport_cmd_to(
+                    self.windows.panes[0].viewport(),
+                    egui::ViewportCommand::InnerSize(egui::vec2(720.0, 480.0)),
+                );
             }
             6 => {
                 assert!(self.timers[0].running());
+                self.windows.preview_size_before_reopen = self
+                    .windows
+                    .recent_sizes
+                    .iter()
+                    .find_map(|(target, size)| (*target == Target::Timer(1)).then_some(*size));
+                let remembered = self.windows.preview_size_before_reopen.unwrap();
+                assert!(
+                    (remembered.x - 720.0).abs() <= 1.0 && (remembered.y - 480.0).abs() <= 1.0,
+                    "first native viewport did not retain the requested 720x480 size: {remembered:?}"
+                );
                 return handle(self.windows.panes[0].id) as isize;
             }
             7 => {
@@ -195,9 +209,22 @@ impl State {
                 assert!(self.timers[0].running());
                 self.open_window(Target::Timer(1), ctx);
                 assert_eq!(self.windows.panes[0].id, 2);
+                assert_eq!(
+                    Some(self.windows.panes[0].size),
+                    self.windows.preview_size_before_reopen,
+                    "reopened viewport must use the target's remembered size"
+                );
             }
             8 => {
                 assert!(self.timers[0].running());
+                let expected =
+                    self.windows.preview_size_before_reopen.unwrap() * self.windows.scale;
+                let actual = self.preview_window_dimensions();
+                assert!(
+                    (actual[0] as f32 - expected.x).abs() <= 8.0
+                        && (actual[1] as f32 - expected.y).abs() <= 8.0,
+                    "reopened native client dimensions {actual:?} do not match remembered {expected:?}"
+                );
                 return handle(2) as isize;
             }
             9 => {

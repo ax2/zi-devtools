@@ -1,0 +1,389 @@
+{
+  "$schema": "./schema.json",
+  "profile": "tool.directory.v1",
+  "profileVersion": "1.0.0-preview.1",
+  "capabilities": {
+    "devtools.inspect.color.convert": {
+      "categoryId": "data",
+      "aliases": [
+        "color converter",
+        "convert color code",
+        "颜色转换",
+        "HEX RGB HSL"
+      ],
+      "description": "Convert supplied HEX, RGB, or HSL color text locally; this is not a screen color picker."
+    },
+    "devtools.inspect.yaml.to_json": {
+      "categoryId": "data",
+      "aliases": [
+        "YAML to JSON",
+        "convert YAML",
+        "YAML 转 JSON",
+        "YAML 转换"
+      ],
+      "description": "Convert one supplied YAML document to JSON locally; duplicate keys use the last value."
+    },
+    "devtools.inspect.yaml.from_json": {
+      "categoryId": "data",
+      "aliases": [
+        "JSON to YAML",
+        "convert JSON to YAML",
+        "JSON 转 YAML",
+        "转成 YAML"
+      ],
+      "description": "Convert supplied JSON text to YAML locally while preserving large integer text."
+    },
+    "devtools.inspect.cidr.inspect": {
+      "categoryId": "web",
+      "aliases": [
+        "IPv4 CIDR calculator",
+        "subnet calculator",
+        "CIDR 子网计算",
+        "网段计算"
+      ],
+      "description": "Calculate IPv4 CIDR network details from pasted text; does not connect to or scan a network."
+    },
+    "devtools.inspect.jwt.inspect": {
+      "categoryId": "security",
+      "aliases": [
+        "JWT decoder",
+        "JWT payload",
+        "JWT 解码",
+        "令牌内容查看"
+      ],
+      "description": "Decode JWT header and payload locally; does not verify signature, expiry, or trust."
+    },
+    "devtools.inspect.unicode.inspect": {
+      "categoryId": "text",
+      "aliases": [
+        "Unicode code points",
+        "invisible characters",
+        "Unicode 码点",
+        "不可见字符检查"
+      ],
+      "description": "Inspect code points, UTF-8 bytes, and common invisible characters in supplied text."
+    },
+    "devtools.inspect.unicode.nfc": {
+      "categoryId": "text",
+      "aliases": [
+        "Unicode NFC",
+        "normalize NFC",
+        "Unicode NFC 规范化",
+        "NFC 文本规范化"
+      ],
+      "description": "Normalize supplied text to Unicode NFC; this changes the text representation."
+    },
+    "devtools.inspect.unicode.nfkc": {
+      "categoryId": "text",
+      "aliases": [
+        "Unicode NFKC",
+        "normalize NFKC",
+        "Unicode NFKC 规范化",
+        "NFKC 文本规范化"
+      ],
+      "description": "Normalize supplied text to Unicode NFKC; compatibility normalization may change meaning."
+    },
+    "devtools.trace.java.trace": {
+      "categoryId": "code",
+      "aliases": [
+        "Java stack trace",
+        "Java exception chain",
+        "Java 堆栈分析",
+        "Java 异常链"
+      ],
+      "description": "Analyze pasted Java printStackTrace text and show exception and frame clues; findings are not confirmed causes."
+    },
+    "devtools.trace.django.trace": {
+      "categoryId": "code",
+      "aliases": [
+        "Django traceback",
+        "Python stack trace",
+        "Django 堆栈分析",
+        "Python 异常追踪"
+      ],
+      "description": "Analyze pasted Python or Django traceback text; paths remain text and the project is not executed."
+    },
+    "devtools.text.json.format": {
+      "categoryId": "data",
+      "aliases": [
+        "JSON formatter",
+        "pretty print JSON",
+        "JSON 格式化",
+        "JSON 美化"
+      ],
+      "description": "Format supplied JSON text locally using the plugin's bounded compatibility rules."
+    },
+    "devtools.text.json.minify": {
+      "categoryId": "data",
+      "aliases": [
+        "JSON minifier",
+        "compact JSON",
+        "JSON 压缩",
+        "JSON 最小化"
+      ],
+      "description": "Remove insignificant whitespace from supplied JSON text locally using bounded compatibility rules."
+    },
+    "devtools.text.json.validate": {
+      "categoryId": "data",
+      "aliases": [
+        "JSON validator",
+        "check JSON",
+        "JSON 校验",
+        "JSON 验证"
+      ],
+      "description": "Validate supplied JSON text against the plugin's duplicate-key, depth, and safe-integer restrictions."
+    },
+    "devtools.text.sql.format": {
+      "categoryId": "code",
+      "aliases": [
+        "SQL formatter",
+        "format SQL query",
+        "SQL 格式化",
+        "SQL 美化"
+      ],
+      "description": "Format pasted SQL using the generic default dialect; does not connect to a database or validate semantics."
+    },
+    "devtools.text.base64.encode": {
+      "categoryId": "data",
+      "aliases": [
+        "Base64 encoder",
+        "encode Base64",
+        "Base64 编码",
+        "文本转 Base64"
+      ],
+      "description": "Encode supplied UTF-8 text as standard Base64 locally; no file input is read."
+    },
+    "devtools.text.base64.decode": {
+      "categoryId": "data",
+      "aliases": [
+        "Base64 decoder",
+        "decode Base64",
+        "Base64 解码",
+        "Base64 转文本"
+      ],
+      "description": "Decode standard Base64 text locally and return UTF-8 text; no file input is read."
+    },
+    "devtools.text.sha256": {
+      "categoryId": "security",
+      "aliases": [
+        "SHA-256 hash",
+        "text checksum",
+        "SHA-256 哈希",
+        "文本摘要"
+      ],
+      "description": "Calculate SHA-256 for supplied UTF-8 text; this does not verify files or establish authenticity."
+    },
+    "devtools.transforms.url.encode": {
+      "categoryId": "web",
+      "aliases": [
+        "URL 编码",
+        "URL encode"
+      ],
+      "description": "将输入文本按URL编码规则转换；不访问网址。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.url.decode": {
+      "categoryId": "web",
+      "aliases": [
+        "URL 解码",
+        "URL decode"
+      ],
+      "description": "解码输入文本中的URL转义；不访问网址。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.html.escape": {
+      "categoryId": "web",
+      "aliases": [
+        "HTML 转义",
+        "HTML escape"
+      ],
+      "description": "将输入文本转为HTML实体；不渲染网页。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.html.unescape": {
+      "categoryId": "web",
+      "aliases": [
+        "HTML 反转义",
+        "HTML unescape"
+      ],
+      "description": "将输入中的HTML实体还原为文本；不执行HTML。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.string.escape": {
+      "categoryId": "text",
+      "aliases": [
+        "字符串转义",
+        "string escape"
+      ],
+      "description": "转义输入文本中的引号、反斜线等字符；不执行代码。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.string.unescape": {
+      "categoryId": "text",
+      "aliases": [
+        "字符串反转义",
+        "string unescape"
+      ],
+      "description": "将受支持的字符串转义还原为文本；不执行代码。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.case.camel": {
+      "categoryId": "text",
+      "aliases": [
+        "小驼峰命名",
+        "camel case"
+      ],
+      "description": "将输入名称转换为小驼峰形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.case.pascal": {
+      "categoryId": "text",
+      "aliases": [
+        "大驼峰命名",
+        "pascal case"
+      ],
+      "description": "将输入名称转换为大驼峰形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.case.snake": {
+      "categoryId": "text",
+      "aliases": [
+        "下划线命名",
+        "snake case"
+      ],
+      "description": "将输入名称转换为下划线形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.case.kebab": {
+      "categoryId": "text",
+      "aliases": [
+        "短横线命名",
+        "kebab case"
+      ],
+      "description": "将输入名称转换为短横线形式；不修改文件或源码。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.stats.inspect": {
+      "categoryId": "text",
+      "aliases": [
+        "文本统计",
+        "text statistics"
+      ],
+      "description": "统计显式输入的文本；不读取文件或剪贴板。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.lines.deduplicate": {
+      "categoryId": "text",
+      "aliases": [
+        "文本行去重",
+        "deduplicate lines"
+      ],
+      "description": "对输入文本按行去重，返回结果文本；不写入文件。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.lines.ascending": {
+      "categoryId": "text",
+      "aliases": [
+        "文本行升序",
+        "sort lines ascending"
+      ],
+      "description": "按既有文本排序规则升序排列输入行；不写入文件。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.lines.descending": {
+      "categoryId": "text",
+      "aliases": [
+        "文本行降序",
+        "sort lines descending"
+      ],
+      "description": "按既有文本排序规则降序排列输入行；不写入文件。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.lines.nonempty": {
+      "categoryId": "text",
+      "aliases": [
+        "删除空白行",
+        "remove empty lines"
+      ],
+      "description": "移除输入文本中的空白行并返回文本；不写入文件。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.lines.trim": {
+      "categoryId": "text",
+      "aliases": [
+        "清理行首尾空白",
+        "trim lines"
+      ],
+      "description": "清理每行首尾空白；不修改其他本机数据。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.number.from2": {
+      "categoryId": "data",
+      "aliases": [
+        "二进制转换",
+        "convert binary number"
+      ],
+      "description": "解析输入的二进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.number.from8": {
+      "categoryId": "data",
+      "aliases": [
+        "八进制转换",
+        "convert octal number"
+      ],
+      "description": "解析输入的八进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.number.from10": {
+      "categoryId": "data",
+      "aliases": [
+        "十进制转换",
+        "convert decimal number"
+      ],
+      "description": "解析输入的十进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.number.from16": {
+      "categoryId": "data",
+      "aliases": [
+        "十六进制转换",
+        "convert hexadecimal number"
+      ],
+      "description": "解析输入的十六进制整数，输出其他进制表示；不执行表达式。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.hex.encode": {
+      "categoryId": "data",
+      "aliases": [
+        "文本转十六进制",
+        "text to hex"
+      ],
+      "description": "将输入文本的UTF-8字节编码为十六进制；不读取二进制文件。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.hex.decode": {
+      "categoryId": "data",
+      "aliases": [
+        "十六进制转文本",
+        "hex to text"
+      ],
+      "description": "将输入十六进制字节解码为UTF-8文本；不读取或写入文件。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.transforms.url.inspect": {
+      "categoryId": "web",
+      "aliases": [
+        "URL 结构分析",
+        "inspect URL"
+      ],
+      "description": "解析输入URL的组成部分；不发送网络请求。 每份输入最多8192 UTF-8字节。"
+    },
+    "devtools.json.object.inspect": {
+      "categoryId": "data",
+      "aliases": [
+        "JSON 对象摘要",
+        "JSON object summary",
+        "对象字段类型"
+      ],
+      "description": "分析显式提供的JSON对象，保留对象值并统计字段类型、深度和字节；不读取文件、不自动保存结果。"
+    },
+    "devtools.json.object.receive": {
+      "categoryId": "data",
+      "aliases": [
+        "接收 JSON 对象",
+        "receive JSON object",
+        "结构化结果接力"
+      ],
+      "description": "接收用户明确选择接力的JSON对象并返回有界摘要；接力确认与授权由Host负责，不读取文件、不自动保存。"
+    },
+    "devtools.image.resize": {
+      "categoryId": "media",
+      "aliases": [
+        "图片缩放",
+        "调整图片大小",
+        "image resize",
+        "resize PNG JPEG WebP"
+      ],
+      "description": "缩放用户授权的一张图片并生成派生资源；PNG/WebP无损，质量设置仅影响JPEG。"
+    }
+  }
+}

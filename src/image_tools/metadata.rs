@@ -551,6 +551,7 @@ impl State {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("原图摘要不可用"))?;
         let origin = super::relay::origin("image-metadata")?;
+        let generated_by = crate::tool_provenance::current_for_tool("image-metadata")?;
         let blocks = |v: &Summary| serde_json::json!({"format":v.label(),"exif":v.exif,"hasExifGpsDirectory":v.gps,"icc":v.icc,"xmp":v.xmp,"text":v.text,"iptc":v.iptc,"other":v.other,"animation":v.animation,"hasRecognizedMetadata":v.has_source_metadata()});
         let cleaned = match (&self.encoded, &self.cleaned_summary) {
             (Some(bytes), Some(summary)) => Some(
@@ -560,7 +561,7 @@ impl State {
             _ => bail!("清理预览与复检摘要不一致，请重新生成预览"),
         };
         let text = serde_json::to_string_pretty(&serde_json::json!({
-            "schemaVersion":1,"material":"image-metadata-report",
+            "schemaVersion":2,"material":"image-metadata-report","generatedBy":generated_by,
             "origin":{"toolId":origin.id,"version":origin.version,"utc":origin.utc},
             "source":{"bytes":self.source_bytes,"displayWidth":image.width(),"displayHeight":image.height(),"metadata":blocks(source)},
             "cleanedPreview":cleaned,
@@ -1036,6 +1037,14 @@ mod tests {
             assert!(state.relay_source().is_none());
             let source_report = state.build_report().unwrap();
             let value: serde_json::Value = serde_json::from_str(&source_report).unwrap();
+            assert_eq!(value["schemaVersion"], 2);
+            assert_eq!(value["generatedBy"]["toolId"], "image-metadata");
+            let provenance = crate::tool_provenance::current_for_tool("image-metadata").unwrap();
+            assert_eq!(
+                value["generatedBy"]["toolVersion"].as_str(),
+                Some(provenance.tool_version.as_str())
+            );
+            assert_eq!(value["generatedBy"]["runtimeFingerprint"]["schema"], 1);
             assert!(value["cleanedPreview"].is_null());
             assert_eq!(value["source"]["bytes"], bytes.len());
             assert_eq!(

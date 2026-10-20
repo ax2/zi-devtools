@@ -112,7 +112,7 @@ pub struct Downloaded {
     pub version: semver::Version,
     pub sha256: String,
     pub bytes: Arc<[u8]>,
-    pub tool_changes: Arc<[String]>,
+    pub tool_changes: Arc<signed::ToolChangeSummary>,
     pub authentication: Option<Arc<signed::Authenticated>>,
     pub signed_metadata: Option<Arc<(Vec<u8>, Vec<u8>)>>,
 }
@@ -309,7 +309,7 @@ pub fn download(
     cancelled(cancel)?;
     let tool_changes = match &authentication {
         Some(authenticated) => signed::changes(&authenticated.manifest.tools)?,
-        None => Vec::new(),
+        None => signed::ToolChangeSummary::default(),
     };
     Ok(Downloaded {
         name: asset.name.clone(),
@@ -519,21 +519,16 @@ impl State {
                 ));
                 {
                     let changes = &preview.tool_changes;
-                    egui::CollapsingHeader::new(format!("内置工具版本差异（{}项）", changes.len()))
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            if changes.is_empty() {
-                                ui.label("目标与当前工具版本清单一致。");
-                            }
-                            egui::ScrollArea::vertical()
-                                .id_salt("signed-tool-changes")
-                                .max_height(220.0)
-                                .show(ui, |ui| {
-                                    for change in changes.iter() {
-                                        ui.label(change);
-                                    }
-                                });
+                    egui::CollapsingHeader::new(format!(
+                        "内置工具版本与目录变化（{}项）",
+                        changes.len()
+                    ))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.push_id("signed-tool-changes", |ui| {
+                            signed::changes_ui(ui, changes, 220.0);
                         });
+                    });
                 }
             } else {
                 ui.weak("该发布未提供签名清单，仅验证SHA-256完整性，未认证发布者签名。");
@@ -562,7 +557,14 @@ impl State {
                 .iter_mut()
                 .find(|t| t.id == "app-update-check")
                 .expect("updates fixture");
-            changed.version = Some("0.6.0".into());
+            changed.version = Some("0.9.0".into());
+            tools.pop().expect("removal fixture");
+            tools.push(signed::Tool {
+                id: "preview-only-new-tool".into(),
+                name: "演示：新增工具".into(),
+                version: Some("0.1.0".into()),
+                status: "planned".into(),
+            });
             let changes = signed::changes(&tools).expect("changes fixture");
             let manifest = signed::Manifest {
                 schema: 1,
@@ -615,7 +617,7 @@ impl State {
                 bytes: vec![0; 1024].into(),
                 authentication: None,
                 signed_metadata: None,
-                tool_changes: Vec::new().into(),
+                tool_changes: Arc::new(signed::ToolChangeSummary::default()),
             });
         }
         self.unsaved = false;
@@ -769,7 +771,7 @@ mod tests {
             bytes: vec![0].into(),
             authentication: None,
             signed_metadata: None,
-            tool_changes: Vec::new().into(),
+            tool_changes: Arc::new(signed::ToolChangeSummary::default()),
         })))
         .unwrap();
         state.poll();

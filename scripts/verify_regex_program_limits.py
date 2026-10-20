@@ -26,7 +26,7 @@ def encoded(value):
     return json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
 
 cases = [(f'original-{count}', f'a{{{count}}}', expected_ok)
-         for count, expected_ok in [(200000, True), (400000, False), (700000, False)]]
+         for count, expected_ok in [(200000, True), (300000, True), (400000, False), (700000, False)]]
 # These are distinct compiler paths: captures, bounded/lazy repetition, byte
 # classes, UTF-8 sequences, assertions, alternation and nested repetition.
 # Do not infer their accepted size from the single ASCII literal threshold.

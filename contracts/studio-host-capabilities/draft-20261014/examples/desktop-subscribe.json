@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "operation": "clipboard.subscribe",
+  "input": {
+    "formats": [
+      "text",
+      "image",
+      "html"
+    ],
+    "userGestureId": "gesture-issued-by-host"
+  }
+}

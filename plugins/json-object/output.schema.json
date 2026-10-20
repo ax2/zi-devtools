@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contractVersion": {"type": "string", "const": "1.0.0-rc.1"},
+    "ok": {"type": "boolean", "const": true},
+    "data": {"type": "object"},
+    "error": {"type": "null"}
+  },
+  "required": ["contractVersion", "ok", "data", "error"],
+  "additionalProperties": false
+}

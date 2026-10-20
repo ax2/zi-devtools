@@ -150,6 +150,12 @@ pub(super) struct Saved {
     operation: Operation,
 }
 impl Saved {
+    pub(super) fn has_complex(&self) -> bool {
+        [&self.a, &self.b]
+            .into_iter()
+            .flat_map(|input| input.typed.iter().flatten())
+            .any(|value| matches!(value, Value::Complex(_, _)))
+    }
     pub(super) fn uses_statistics(&self) -> bool {
         self.operation.statistic().is_some()
     }

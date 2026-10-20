@@ -1,6 +1,6 @@
 [package]
 name = "zi-devtools"
-version = "0.82.0-dev.105"
+version = "0.82.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Native Windows developer toolbox and local service manager"
@@ -16,11 +16,13 @@ zi-shell-core = { path = "crates/zi-shell-core" }
 zi-diff-core = { path = "crates/zi-diff-core" }
 zi-regex-core = { path = "crates/zi-regex-core" }
 zi-json-core = { path = "crates/zi-json-core" }
+zi-json-object-wasi = { path = "crates/zi-json-object-wasi" }
 zi-character-core = { path = "crates/zi-character-core" }
 zi-trace-core = { path = "crates/zi-trace-core" }
 zi-text-core = { path = "crates/zi-text-core" }
 zi-inspect-core = { path = "crates/zi-inspect-core" }
 zi-diagnostics-core = { path = "crates/zi-diagnostics-core" }
+zi-image-core = { path = "crates/zi-image-core" }
 ab_glyph = "0.2.32"
 anyhow = "1.0"
 base64 = "0.22"
@@ -43,7 +45,9 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 tokio = { version = "1", features = ["rt", "time", "net", "macros"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
+jsonschema = { version = "0.59.0", default-features = false }
 semver = "=1.0.28"
+same-file = "=1.0.6"
 flate2 = "=1.1.10"
 ring = "=0.17.14"
 zeroize = "=1.9.0"
@@ -63,14 +67,14 @@ lopdf = "0.34"
 quick-xml = "0.41"
 zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 scraper = "0.21"
-rusqlite = { version = "0.32.1", features = ["bundled", "hooks"] }
+rusqlite = { version = "0.32.1", features = ["bundled", "hooks", "backup"] }
 
 [features]
 ui-preview = ["zi-shell-core/ui-preview"]
 
 [workspace]
 exclude = ["vendor/regex-automata"]
-members = ["crates/zi-msi-actions", "crates/zi-shell-core", "crates/zi-compare-wasi", "crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi"]
+members = ["crates/zi-msi-actions", "crates/zi-shell-core", "crates/zi-compare-wasi", "crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-text-resource-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-image-core", "crates/zi-image-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi", "crates/zi-json-object-wasi"]
 default-members = ["."]
 resolver = "3"
 
@@ -87,9 +91,9 @@ name = "tutorial_recording"
 required-features = ["ui-preview"]
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_System_Variant", "Win32_Storage_FileSystem"] }
+windows = { version = "0.62.2", features = ["Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_WinRT", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_System_Variant", "Win32_Storage_FileSystem", "Data_Pdf", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams"] }
 rfd = { version = "0.17.2", default-features = false }
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_StationsAndDesktops", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_UI_Input_KeyboardAndMouse", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_System_ApplicationInstallationAndServicing", "Win32_System_IO"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_StationsAndDesktops", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_UI_Input_KeyboardAndMouse", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_System_ApplicationInstallationAndServicing", "Win32_System_IO"] }
 windows-capture = "2.0.1"
 wasapi = "0.24.0"
 
@@ -156,6 +160,10 @@ name = "workflow_bookmarks_ui"
 required-features = ["ui-preview"]
 
 [[example]]
+name = "common_image_result_handoff_ui"
+required-features = ["ui-preview"]
+
+[[example]]
 name = "search_scopes_ui"
 required-features = ["ui-preview"]
 
@@ -173,6 +181,14 @@ required-features = ["ui-preview"]
 
 [[example]]
 name = "workflow_output_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "workflow_step_output_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "workflow_step_handoff_ui"
 required-features = ["ui-preview"]
 
 [[example]]
@@ -208,6 +224,10 @@ name = "image_report_ui"
 required-features = ["ui-preview"]
 
 [[example]]
+name = "image_text_flow_relay_ui"
+required-features = ["ui-preview"]
+
+[[example]]
 name = "metadata_image_relay_ui"
 required-features = ["ui-preview"]
 
@@ -233,4 +253,52 @@ required-features = ['ui-preview']
 
 [[example]]
 name = "explorer_shell_probe"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "recorder_selection_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "delimited_handoff_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "handoff_scroll_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "handoff_access_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "handoff_keyboard_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "directory_retry_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "directory_tasks_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "image_entry_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "launcher_keyboard_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "navigation_history_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "navigation_extended_ui"
+required-features = ["ui-preview"]
+
+[[example]]
+name = "instance_search_ui"
 required-features = ["ui-preview"]

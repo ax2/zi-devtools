@@ -8,6 +8,7 @@ pub(super) enum Action {
     Discard,
     Duplicate,
     Convert,
+    KnowledgeHandoff,
 }
 impl State {
     /// Consume a page navigation request before rendering the outer scroll area.
@@ -66,6 +67,7 @@ impl State {
         let mut convert = false;
         let mut save_copy = false;
         let mut compare = false;
+        let mut knowledge_handoff = false;
         if self.calendar {
             ui.horizontal(|ui| {
                 for (index, label) in ["返回日程视图", "查看当前编辑"].into_iter().enumerate()
@@ -154,6 +156,16 @@ impl State {
             }
             response
                 .on_hover_text("只复制标题和正文为新草稿，原记录保留；不会自动保存或迁移提醒。");
+            if !is_event {
+                let response = ui.add_enabled(
+                    available && !dirty && revision > 0 && !in_trash,
+                    egui::Button::new("送到知识采集"),
+                );
+                knowledge_handoff = response.clicked();
+                response.on_hover_text(
+                    "将已保存的备忘复制到知识采集的内存草稿；检查预览后仍需手动保存，且不会自动扫描或索引。",
+                );
+            }
             ui.separator();
             ui.label(status);
             ui.add(
@@ -194,6 +206,8 @@ impl State {
             self.queue_editor_action(Action::Duplicate);
         } else if convert {
             self.queue_editor_action(Action::Convert);
+        } else if knowledge_handoff {
+            self.queue_editor_action(Action::KnowledgeHandoff);
         }
     }
     pub fn finish_editor_actions(&mut self, save_shortcut: bool) {
@@ -230,6 +244,20 @@ impl State {
                         self.error = true;
                     }
                 }
+                Action::KnowledgeHandoff => {
+                    if let Some(item) = self.draft.as_ref().filter(|item| {
+                        item.revision > 0
+                            && !item.trash
+                            && item.schedule.is_none()
+                            && !self.has_unsaved()
+                    }) {
+                        self.knowledge_handoff = Some((
+                            item.title.clone(),
+                            format!("zi-devtools 备忘录 · {}", item.title),
+                            item.body.clone(),
+                        ));
+                    }
+                }
             }
         }
     }
@@ -239,6 +267,39 @@ impl State {
 mod tests {
     use super::*;
     use crate::planner::tests::{event, fixture, wait_state};
+    #[test]
+    fn knowledge_handoff_requires_a_saved_clean_non_event_memo() {
+        let path = fixture();
+        let mut memo = Item::new(None);
+        memo.title = "本机资料整理".into();
+        memo.body = "整理已确认的内容".into();
+        store::save(&path, memo.clone()).unwrap();
+        let mut state = State::new(path.clone());
+        wait_state(&mut state);
+        let saved = state.items[0].clone();
+        state.edit(saved);
+        state.queue_editor_action(Action::KnowledgeHandoff);
+        state.finish_editor_actions(false);
+        assert_eq!(
+            state.take_knowledge_handoff(),
+            Some((
+                "本机资料整理".into(),
+                "zi-devtools 备忘录 · 本机资料整理".into(),
+                "整理已确认的内容".into(),
+            ))
+        );
+
+        state.draft.as_mut().unwrap().body.push_str(" 未保存修改");
+        state.queue_editor_action(Action::KnowledgeHandoff);
+        state.finish_editor_actions(false);
+        assert!(state.take_knowledge_handoff().is_none());
+
+        state.edit(event());
+        state.queue_editor_action(Action::KnowledgeHandoff);
+        state.finish_editor_actions(false);
+        assert!(state.take_knowledge_handoff().is_none());
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
     #[test]
     fn queued_save_captures_later_input_and_discard_restores_saved_snapshot() {
         let path = fixture();

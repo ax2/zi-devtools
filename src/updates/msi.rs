@@ -29,7 +29,7 @@ pub struct Prepared {
     pub installed_version: String,
     pub version: String,
     pub bytes: u64,
-    pub changes: Vec<String>,
+    pub changes: signed::ToolChangeSummary,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

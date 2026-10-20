@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "profile": "plugin.task.lifecycle.v1@1.0.0-preview.1",
+  "vectors": [
+    {
+      "id": "exact-confirmation-approved-once",
+      "accepted": true,
+      "networkRequests": 1,
+      "now": "2026-10-16T12:00:00Z",
+      "request": {"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"approve"},
+      "binding": {"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health",
+      "currentPermissionGeneration":4,
+      "alreadyUsed":false
+    },
+    {
+      "id": "exact-decline-has-zero-network",
+      "accepted": true,
+      "networkRequests": 0,
+      "now": "2026-10-16T12:00:00Z",
+      "request": {"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"decline"},
+      "binding": {"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health",
+      "currentPermissionGeneration":4,
+      "alreadyUsed":false
+    },
+    {
+      "id": "expired-confirmation-rejected-before-network",
+      "accepted":false,
+      "networkRequests":0,
+      "now":"2026-10-16T12:01:00Z",
+      "request":{"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"approve"},
+      "binding":{"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health",
+      "currentPermissionGeneration":4,
+      "alreadyUsed":false
+    },
+    {
+      "id":"task-mismatch-rejected",
+      "accepted":false,"networkRequests":0,"now":"2026-10-16T12:00:00Z",
+      "request":{"schemaVersion":1,"taskRef":"taskref_b","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"approve"},
+      "binding":{"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health","currentPermissionGeneration":4,"alreadyUsed":false
+    },
+    {
+      "id":"step-mismatch-rejected",
+      "accepted":false,"networkRequests":0,"now":"2026-10-16T12:00:00Z",
+      "request":{"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.info","confirmationId":"cnf_a","decision":"approve"},
+      "binding":{"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health","currentPermissionGeneration":4,"alreadyUsed":false
+    },
+    {
+      "id":"target-changed-rejected",
+      "accepted":false,"networkRequests":0,"now":"2026-10-16T12:00:00Z",
+      "request":{"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"approve"},
+      "binding":{"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://other.example.test/actuator/health","currentPermissionGeneration":4,"alreadyUsed":false
+    },
+    {
+      "id":"permission-generation-changed-rejected",
+      "accepted":false,"networkRequests":0,"now":"2026-10-16T12:00:00Z",
+      "request":{"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"approve"},
+      "binding":{"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health","currentPermissionGeneration":5,"alreadyUsed":false
+    },
+    {
+      "id":"confirmation-replay-rejected-no-second-request",
+      "accepted":false,"networkRequests":0,"now":"2026-10-16T12:00:01Z",
+      "request":{"schemaVersion":1,"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","decision":"approve"},
+      "binding":{"taskRef":"taskref_a","operationStepId":"actuator.health","confirmationId":"cnf_a","target":"https://service.example.test/actuator/health","permissionGeneration":4,"expiresAt":"2026-10-16T12:00:30Z"},
+      "currentTarget":"https://service.example.test/actuator/health","currentPermissionGeneration":4,"alreadyUsed":true
+    }
+  ]
+}

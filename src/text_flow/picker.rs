@@ -13,6 +13,7 @@ enum Category {
     Text,
     Digest,
     Table,
+    Image,
 }
 impl Category {
     fn label(self) -> &'static str {
@@ -23,14 +24,16 @@ impl Category {
             Self::Text => "文本处理",
             Self::Digest => "摘要校验",
             Self::Table => "表格处理",
+            Self::Image => "图片处理",
         }
     }
     fn of(action: &Action) -> Self {
         match action.id.split('.').next().unwrap_or("") {
             "json" => Self::Json,
             "base64" | "url" | "html" | "hex" => Self::Encoding,
-            "sha256" => Self::Digest,
+            "sha256" | "file" => Self::Digest,
             "table" => Self::Table,
+            "image" => Self::Image,
             _ => Self::Text,
         }
     }
@@ -50,6 +53,8 @@ fn aliases(action: &Action) -> &'static str {
         "hex.encode" => "十六进制 encode",
         "hex.decode" => "十六进制 decode",
         "sha256.digest" => "哈希 散列 摘要 校验 hash checksum sha256",
+        "file.sha256" => "文件 引用 哈希 散列 摘要 校验 hash checksum sha256 integrity",
+        "image.info" => "图片 图像 image information dimensions 像素 尺寸 透明度 alpha 报告",
         "table.parse_csv" => "导入 解析 csv import parse",
         "table.parse_tsv" => "导入 解析 tsv tab import parse",
         "table.parse_json" => "导入 解析 json import parse",
@@ -176,6 +181,7 @@ impl Picker {
                         Category::Text,
                         Category::Digest,
                         Category::Table,
+                        Category::Image,
                     ] {
                         changed |= ui
                             .selectable_value(&mut self.category, category, category.label())
@@ -265,6 +271,8 @@ impl Picker {
                                 action.output.label(),
                                 action.version
                             ));
+                            ui.weak(action.effect.label())
+                                .on_hover_text(action.effect.details());
                             if ui
                                 .add_enabled(can_add && compatible, egui::Button::new("添加"))
                                 .clicked()

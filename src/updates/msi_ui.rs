@@ -206,18 +206,10 @@ impl State {
             ));
             ui.weak(format!("安装目录：{}", p.directory.display()));
             ui.weak(format!("安装器与处理记录：{}", p.stage.display()));
-            egui::CollapsingHeader::new(format!("工具变化（{}项）", p.changes.len())).show(
-                ui,
-                |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(150.0)
-                        .show(ui, |ui| {
-                            for row in &p.changes {
-                                ui.label(row);
-                            }
-                        });
-                },
-            );
+            egui::CollapsingHeader::new(format!("工具版本与目录变化（{}项）", p.changes.len()))
+                .show(ui, |ui| {
+                    super::signed::changes_ui(ui, &p.changes, 150.0);
+                });
             ui.checkbox(&mut self.confirm, "同意退出程序并使用Windows Installer升级");
             ui.weak("安装器会显示真实进度并可取消；若要求系统重启，将保留记录，不自动重启电脑。");
             if !blockers.is_empty() {
@@ -286,7 +278,10 @@ impl State {
                 installed_version: "0.81.0".into(),
                 version: "0.83.0".into(),
                 bytes: 9_744_384,
-                changes: vec!["程序更新检查 0.6.0 → 0.7.0".into()],
+                changes: super::signed::ToolChangeSummary {
+                    updated: vec!["程序更新检查 0.6.0 → 0.7.0".into()],
+                    ..Default::default()
+                },
             }))
         };
         self.message = if failed {

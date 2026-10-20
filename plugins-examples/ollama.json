@@ -19,7 +19,14 @@
         "url": "http://127.0.0.1:11434/api/tags",
         "method": "GET"
       },
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "建立独立工具版本基线；当前范围见工具说明。"
+        }
+      ]
     },
     {
       "id": "chat",
@@ -49,7 +56,14 @@
         },
         "response_pointer": "/message/content"
       },
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "建立独立工具版本基线；当前范围见工具说明。"
+        }
+      ]
     }
   ]
 }

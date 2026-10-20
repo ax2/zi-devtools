@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/events.response.schema.json",
+  "title": "plugin.task.lifecycle.v1 event replay response proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef", "events", "requestedAfterSequence", "nextSequence", "hasMore", "earliestRetainedSequence", "latestSequence", "snapshotRequired", "terminal"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256},
+    "events": {"type": "array", "maxItems": 256, "items": {"$ref": "event.schema.json"}},
+    "requestedAfterSequence": {"type": "integer", "minimum": 0},
+    "nextSequence": {"type": "integer", "minimum": 0},
+    "hasMore": {"type": "boolean"},
+    "earliestRetainedSequence": {"type": "integer", "minimum": 1},
+    "latestSequence": {"type": "integer", "minimum": 0},
+    "cursorError": {"enum": ["cursor_expired", "cursor_invalid", "snapshot_required"]},
+    "snapshotRequired": {"type": "boolean"},
+    "terminal": {"oneOf": [{"type": "null"}, {"$ref": "terminal.schema.json"}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"cursorError": {"const": "cursor_expired"}}, "required": ["cursorError"]}, "then": {"required": ["snapshotRequired"], "properties": {"events": {"maxItems": 0}, "hasMore": {"const": false}, "snapshotRequired": {"const": true}}}},
+    {"if": {"properties": {"cursorError": {"enum": ["cursor_invalid", "snapshot_required"]}}, "required": ["cursorError"]}, "then": {"required": ["snapshotRequired"], "properties": {"events": {"maxItems": 0}, "hasMore": {"const": false}, "snapshotRequired": {"const": true}}}},
+    {"if": {"not": {"required": ["cursorError"]}}, "then": {"properties": {"snapshotRequired": {"const": false}}}}
+  ]
+}

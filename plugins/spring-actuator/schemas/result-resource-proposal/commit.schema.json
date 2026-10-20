@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/result-resource-proposal/commit.schema.json",
+  "title": "result.resource.create.v1 commit proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "operation", "draftId", "confirmed"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "operation": {"const": "resource.create.commit"},
+    "draftId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "confirmed": {"type": "boolean"}
+  }
+}

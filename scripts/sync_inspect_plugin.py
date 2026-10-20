@@ -4,6 +4,7 @@ import copy
 import json
 import re
 from pathlib import Path
+from tool_directory import apply_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -28,6 +29,7 @@ manifest['contributes'] = dict(
                   ('JWT inspection never verifies signature, expiry or trust. ' if a['sourceToolId'] == 'jwt' else
                    'NFKC may change text meaning; character attention flags are not a full security audit. ' if a['sourceToolId'] == 'unicode' else '') + 'No file or network access.',
                   capability='devtools.inspect.' + a['id'], inputSchema=copy.deepcopy(schema)) for a in actions])
+apply_manifest(manifest)
 catalog = dict(contract='zicode.devtools-plugin/1.0.0-rc.1', packageId=manifest['id'], packageVersion=manifest['version'],
                source=dict(revision='REPLACE_WITH_PROVIDER_SOURCE_REVISION', dirty=True),
                tools=[dict(sourceToolId=a['sourceToolId'], toolId='devtools.inspect.' + a['id'], capabilityId='devtools.inspect.' + a['id'],

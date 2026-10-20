@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/plugins/spring-actuator/0.1.1/task-api-proposal/revoked.event.schema.json",
+  "title": "plugin.task.lifecycle.v1 revoked event proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskRef", "sequence", "eventType", "state", "at", "terminal"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "taskRef": {"type": "string", "minLength": 1, "maxLength": 256},
+    "sequence": {"type": "integer", "minimum": 1},
+    "eventType": {"const": "terminal"},
+    "state": {"const": "revoked"},
+    "at": {"type": "string", "format": "date-time"},
+    "terminal": {"$ref": "terminal.schema.json"}
+  }
+}

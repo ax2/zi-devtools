@@ -1,0 +1,114 @@
+{
+  "status": "proposal_not_negotiated",
+  "profileDeclared": false,
+  "operations": [
+    {
+      "id": "devtools.agent-assist.models",
+      "packageId": "com.zicode.devtools.agent-assist",
+      "sourceToolId": "agent-runner",
+      "title": "读取模型目录",
+      "directory": {
+        "categoryId": "ai",
+        "aliases": [
+          "模型列表",
+          "list models"
+        ],
+        "description": "定位读取模型按钮；用户点击后才读取当前场景的模型目录。"
+      },
+      "viewId": "devtools.agent-assist.main",
+      "proposedFocusTarget": "refresh-models",
+      "executionSurface": "view",
+      "autoExecute": false
+    },
+    {
+      "id": "devtools.agent-assist.generate",
+      "packageId": "com.zicode.devtools.agent-assist",
+      "sourceToolId": "agent-runner",
+      "title": "预览并生成回答",
+      "directory": {
+        "categoryId": "ai",
+        "aliases": [
+          "生成回答",
+          "model generation"
+        ],
+        "description": "定位生成区域；目标、资料及模型选择保留，仍需用户点击并逐次确认。"
+      },
+      "viewId": "devtools.agent-assist.main",
+      "proposedFocusTarget": "generate",
+      "executionSurface": "view",
+      "autoExecute": false
+    },
+    {
+      "id": "devtools.spring-actuator.health",
+      "packageId": "com.zicode.devtools.spring-actuator",
+      "sourceToolId": "spring-actuator",
+      "title": "查看服务健康",
+      "directory": {
+        "categoryId": "system",
+        "aliases": [
+          "健康状态",
+          "Actuator health"
+        ],
+        "description": "定位端点选择并选择health；不会自动提交HTTP请求。"
+      },
+      "viewId": "devtools.spring-actuator.main",
+      "proposedFocusTarget": "endpoint",
+      "executionSurface": "view",
+      "autoExecute": false
+    },
+    {
+      "id": "devtools.spring-actuator.info",
+      "packageId": "com.zicode.devtools.spring-actuator",
+      "sourceToolId": "spring-actuator",
+      "title": "查看服务信息",
+      "directory": {
+        "categoryId": "system",
+        "aliases": [
+          "服务信息",
+          "Actuator info"
+        ],
+        "description": "定位端点选择并选择info；不会自动提交HTTP请求。"
+      },
+      "viewId": "devtools.spring-actuator.main",
+      "proposedFocusTarget": "endpoint",
+      "executionSurface": "view",
+      "autoExecute": false
+    },
+    {
+      "id": "devtools.spring-actuator.metrics",
+      "packageId": "com.zicode.devtools.spring-actuator",
+      "sourceToolId": "spring-actuator",
+      "title": "查看指标目录",
+      "directory": {
+        "categoryId": "system",
+        "aliases": [
+          "指标列表",
+          "Actuator metrics"
+        ],
+        "description": "定位端点选择并选择metrics；不代表支持单项指标查询。"
+      },
+      "viewId": "devtools.spring-actuator.main",
+      "proposedFocusTarget": "endpoint",
+      "executionSurface": "view",
+      "autoExecute": false
+    },
+    {
+      "id": "devtools.spring-actuator.summary",
+      "packageId": "com.zicode.devtools.spring-actuator",
+      "sourceToolId": "spring-actuator",
+      "title": "查看响应摘要",
+      "directory": {
+        "categoryId": "system",
+        "aliases": [
+          "响应概览",
+          "response summary"
+        ],
+        "description": "定位结果标题；没有结果时显示现有空状态，不自动发起请求。"
+      },
+      "viewId": "devtools.spring-actuator.main",
+      "proposedFocusTarget": "result-title",
+      "executionSurface": "view",
+      "autoExecute": false
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devtools.zicode.com/contracts/studio-host-capabilities/service-http-get-preview-20261015/schemas/sdk-request.schema.json",
+  "title": "Studio proposed service.http.get.v1 View request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["origin", "endpoint"],
+  "properties": {
+    "origin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "format": "uri",
+      "description": "Canonical HTTP or HTTPS origin only. Host performs authoritative address, DNS, and network-policy validation."
+    },
+    "endpoint": {
+      "type": "string",
+      "enum": ["health", "info", "metrics"]
+    }
+  }
+}

@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zicode.com/contracts/studio-host/service.v1/request-draft-2026-10-14.schema.json",
+  "title": "Studio Host service.v1 provider request draft",
+  "description": "Draft provider operation body. Host injects authenticated pluginId, sceneId and requestId; callers cannot supply them.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "models.list"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 128
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "model.generate"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "modelRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "consentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Opaque one-shot reference; Studio must verify trusted issuance and bind it to plugin, scene, operation and permission generation. A provider-supplied string is not consent."
+            },
+            "goal": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 2048,
+              "description": "Host additionally rejects values over 2048 UTF-8 bytes; JSON Schema maxLength counts characters.",
+              "x-host-utf8-bytes-maximum": 2048
+            },
+            "materials": {
+              "type": "array",
+              "maxItems": 32,
+              "description": "Host additionally rejects an aggregate over 32768 UTF-8 bytes across all material text values.",
+              "x-host-utf8-aggregate-bytes-maximum": 32768,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "sourceKind": {
+                    "enum": [
+                      "user_text",
+                      "tool_handoff",
+                      "clipboard_text",
+                      "explicit_file_selection"
+                    ]
+                  },
+                  "trust": {
+                    "enum": [
+                      "user_authored",
+                      "tool_output",
+                      "untrusted_user_material"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 32768
+                  }
+                },
+                "required": [
+                  "sourceId",
+                  "displayName",
+                  "sourceKind",
+                  "trust",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "maxOutputTokens": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "deadlineMs": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 300000
+            }
+          },
+          "required": [
+            "modelRef",
+            "runId",
+            "consentId",
+            "goal",
+            "materials",
+            "maxOutputTokens",
+            "deadlineMs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "mcp.servers.list"
+        },
+        "input": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "mcp.tools.list"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "serverRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "serverRef"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "mcp.tool.call"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "serverRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "toolName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "toolSchemaSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "arguments": {
+              "type": "object",
+              "maxProperties": 32
+            },
+            "consentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Opaque one-shot reference; Studio must verify trusted issuance and bind it to plugin, scene, operation, permission generation, run, server, tool, schema digest and SHA-256 of RFC 8785 JCS argument bytes. A provider-supplied string is not consent.",
+              "x-host-consent-binding": ["pluginId", "sceneId", "operation", "permissionGeneration", "runId", "serverRef", "toolName", "toolSchemaSha256", "argumentsDigest"]
+            },
+            "deadlineMs": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 30000
+            }
+          },
+          "required": [
+            "runId",
+            "serverRef",
+            "toolName",
+            "toolSchemaSha256",
+            "arguments",
+            "consentId",
+            "deadlineMs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "task.cancel"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": [
+            "taskId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "input"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

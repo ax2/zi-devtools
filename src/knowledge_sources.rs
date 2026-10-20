@@ -178,8 +178,10 @@ fn excluded(relative: &str, directory: bool, rules: &[String]) -> bool {
 
 fn supported(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-        ["md", "markdown", "txt", "html", "htm", "pdf", "docx"]
-            .contains(&e.to_ascii_lowercase().as_str())
+        [
+            "md", "markdown", "txt", "html", "htm", "pdf", "docx", "png", "jpg", "jpeg", "webp",
+        ]
+        .contains(&e.to_ascii_lowercase().as_str())
     })
 }
 
@@ -511,6 +513,8 @@ pub struct State {
     confirm_remove: Option<String>,
     message: String,
     locked: bool,
+    index_followup_available: bool,
+    index_request: bool,
 }
 impl State {
     pub(crate) fn background_active(&self) -> bool {
@@ -579,6 +583,8 @@ impl State {
             confirm_remove: None,
             message,
             locked,
+            index_followup_available: false,
+            index_request: false,
         }
     }
 
@@ -617,6 +623,24 @@ impl State {
         self.excludes = "drafts/, *.log".into();
         self.edit_excludes = "drafts/, *.log".into();
         self.message = "上次扫描：2 个文档，3 项跳过。内容只在本机读取。".into();
+        self.index_followup_available = true;
+    }
+
+    #[cfg(feature = "ui-preview")]
+    pub fn preview_add_ocr_image(&mut self) {
+        if let Some(snapshot) = self
+            .sources
+            .first_mut()
+            .and_then(|source| source.snapshot.as_mut())
+        {
+            snapshot.total_bytes += 18_240;
+            snapshot.files.push(FileVersion {
+                relative: "scans/example.png".into(),
+                bytes: 18_240,
+                modified_ms: 0,
+                sha256: "c4".repeat(32),
+            });
+        }
     }
 
     fn persist(&mut self) -> Result<()> {
@@ -642,20 +666,31 @@ impl State {
                             changes(source.snapshot.as_ref(), &snapshot);
                         let count = snapshot.files.len();
                         source.snapshot = Some(snapshot);
-                        self.message = match self.persist() {
-                            Ok(()) => format!(
-                                "扫描完成：{count} 个文档；新增 {added}、变化 {changed}、移除 {removed}"
-                            ),
-                            Err(e) => format!("扫描完成但保存失败：{e}"),
+                        self.index_followup_available = match self.persist() {
+                            Ok(()) => {
+                                self.message = format!(
+                                    "扫描完成：{count} 个文档；新增 {added}、变化 {changed}、移除 {removed}"
+                                );
+                                true
+                            }
+                            Err(e) => {
+                                self.message = format!("扫描完成但保存失败：{e}");
+                                false
+                            }
                         };
                     }
                 }
-                Err(e) => self.message = e,
+                Err(e) => {
+                    self.index_followup_available = false;
+                    self.message = e;
+                }
             }
         }
     }
 
     fn start_scan(&mut self, source: Source) {
+        self.index_followup_available = false;
+        self.index_request = false;
         self.message = format!("正在扫描 {}…", source.name);
         self.cancel = Arc::new(AtomicBool::new(false));
         let cancel = self.cancel.clone();
@@ -667,6 +702,26 @@ impl State {
                 scan(&source, &cancel).map_err(|e| e.to_string()),
             ));
         });
+    }
+
+    pub fn take_index_request(&mut self) -> bool {
+        std::mem::take(&mut self.index_request)
+    }
+
+    /// Select and explicitly scan an existing directory source after user confirmation.
+    pub fn scan_source(&mut self, id: &str) -> Result<()> {
+        ensure!(!self.locked, "知识源配置不可用，扫描已禁用");
+        ensure!(self.running.is_none(), "已有知识源扫描正在运行");
+        let source = self
+            .sources
+            .iter()
+            .find(|source| source.id == id && source.kind == Kind::Directory)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("所选目录知识源已不可用"))?;
+        self.selected = Some(source.id.clone());
+        self.edit_excludes = source.excludes.join(", ");
+        self.start_scan(source);
+        Ok(())
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -716,6 +771,14 @@ impl State {
         }
         if !self.message.is_empty() {
             ui.label(&self.message);
+        }
+        if self.index_followup_available {
+            if ui.button("下一步：打开增量知识索引…").clicked() {
+                self.index_request = true;
+            }
+            ui.small(
+                "此按钮只打开索引页；还需在那里明确点击“同步全部已扫描来源”才会保存正文索引。 ",
+            );
         }
         ui.separator();
         ui.strong(format!("已添加 {} 个知识源", self.sources.len()));
@@ -859,6 +922,47 @@ impl Drop for State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn common_raster_image_formats_are_supported_ocr_sources() {
+        for path in ["capture.png", "scan.jpg", "scan.jpeg", "page.webp"] {
+            assert!(supported(Path::new(path)), "{path}");
+        }
+        assert!(!supported(Path::new("animation.gif")));
+    }
+
+    #[test]
+    fn explicit_capture_followup_selects_and_scans_only_the_named_directory_source() {
+        let root =
+            std::env::temp_dir().join(format!("zi-knowledge-followup-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("captured.md"), "saved capture").unwrap();
+        let config = root.join("sources.json");
+        let mut registry = Vec::new();
+        let source = add_source(&mut registry, &root, "Docs", "").unwrap();
+        save(&config, &registry).unwrap();
+
+        let mut state = State::new(config.clone());
+        state.scan_source(&source.id).unwrap();
+        assert_eq!(state.selected.as_deref(), Some(source.id.as_str()));
+        let started = std::time::Instant::now();
+        while state.running.is_some() {
+            state.poll();
+            assert!(
+                started.elapsed().as_secs() < 8,
+                "source follow-up scan timed out"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(state.sources[0].snapshot.as_ref().unwrap().files.len(), 1);
+        assert!(state.message.contains("扫描完成"));
+        assert!(state.index_followup_available);
+        assert!(!state.take_index_request());
+        state.index_request = true;
+        assert!(state.take_index_request());
+        assert!(!state.take_index_request());
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn explicit_sources_scan_excludes_and_track_versions() {
         let root = std::env::temp_dir().join(format!("zi-knowledge-{}", uuid::Uuid::new_v4()));

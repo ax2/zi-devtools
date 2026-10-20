@@ -1,0 +1,21 @@
+{
+  "id": "com.zicode.devtools.diagnostics-actuator-preview",
+  "version": "0.0.1-preview.1",
+  "status": "provider review bundle only; not an installable plugin",
+  "hostProfile": "service.http.get.v1@1.0.0-preview.1",
+  "sourceToolId": "spring-actuator",
+  "sourceToolVersion": "1.1.1",
+  "manifestRequiredProfiles": {
+    "compute.wasi.v1": "=1.0.0-rc.1",
+    "output.schema.v1": "=1.0.0-rc.1"
+  },
+  "requiresUnimplementedProfile": true,
+  "knownIncompatibilities": [
+    "No Studio Host implementation or acceptance",
+    "Named metrics/<name> is unavailable",
+    "Bearer authentication is unavailable",
+    "Context/base paths are unavailable",
+    "Host request budgets are lower than the standalone tool",
+    "SDK result schema and error codes are not frozen"
+  ]
+}

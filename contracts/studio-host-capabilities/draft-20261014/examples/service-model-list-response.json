@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "operation": "models.list",
+  "result": {
+    "models": [
+      {
+        "modelRef": "host-model-ref",
+        "displayName": "Local model",
+        "providerKind": "local",
+        "supportsCancellation": true
+      }
+    ]
+  }
+}

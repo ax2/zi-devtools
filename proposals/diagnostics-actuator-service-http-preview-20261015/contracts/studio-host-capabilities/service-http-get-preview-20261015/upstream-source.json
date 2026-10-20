@@ -1,0 +1,6 @@
+{
+  "source": "E:\\zicode-studio-desktop\\docs\\plugins\\service-http-get-preview.md",
+  "observedOn": "2026-10-15",
+  "sha256": "bb3e9e49bf8ee6c33577c994331d2216c7c67a7b29d3e2388e04753e409775e5",
+  "status": "unimplemented Studio preview; this local contract snapshot is sufficient for provider-side work and does not import the sibling checkout at build time"
+}

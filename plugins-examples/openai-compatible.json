@@ -20,7 +20,14 @@
         "url": "http://127.0.0.1:1234/v1/models",
         "method": "GET"
       },
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "建立独立工具版本基线；当前范围见工具说明。"
+        }
+      ]
     },
     {
       "id": "chat",
@@ -50,7 +57,14 @@
         },
         "response_pointer": "/choices/0/message/content"
       },
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "version_history": [
+        {
+          "version": "0.1.0",
+          "date": "2026-10-05",
+          "changes": "建立独立工具版本基线；当前范围见工具说明。"
+        }
+      ]
     }
   ]
 }

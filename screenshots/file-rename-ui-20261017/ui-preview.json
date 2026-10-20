@@ -1,0 +1,14 @@
+{
+  "tool": "file-rename",
+  "toolVersion": "0.1.0",
+  "applicationVersion": "0.82.0-dev.105",
+  "previewOnly": true,
+  "themes": ["light", "dark"],
+  "viewport": "1600x1125",
+  "fixtureItems": 3,
+  "previewReadyItems": 2,
+  "unchangedItems": 1,
+  "conflicts": 0,
+  "sourceFilesModified": false,
+  "fixtureLocation": "project target UI-preview directory"
+}

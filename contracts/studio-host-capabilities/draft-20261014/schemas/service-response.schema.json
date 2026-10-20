@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zicode.com/contracts/studio-host/service.v1/response-draft-2026-10-14.schema.json",
+  "title": "Studio Host service.v1 direct response draft",
+  "description": "Direct bounded responses for discovery calls and acknowledgement for accepted async work. Host identity is implicit in the authenticated request.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "models.list"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "models": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "modelRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "providerKind": {
+                    "enum": [
+                      "host_managed",
+                      "local",
+                      "approved_remote"
+                    ]
+                  },
+                  "supportsCancellation": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "modelRef",
+                  "displayName",
+                  "providerKind",
+                  "supportsCancellation"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nextCursor": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "models"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "mcp.servers.list"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "servers": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "serverRef": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "status": {
+                    "enum": [
+                      "connected",
+                      "disconnected",
+                      "permission_required"
+                    ]
+                  }
+                },
+                "required": [
+                  "serverRef",
+                  "displayName",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "servers"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "const": "mcp.tools.list"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "serverRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "tools": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "inputSchema": {
+                    "type": "object",
+                    "maxProperties": 128
+                  },
+                  "effectClass": {
+                    "enum": [
+                      "read_only",
+                      "mutating",
+                      "unknown"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "description",
+                  "inputSchema",
+                  "effectClass"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "serverRef",
+            "tools"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "enum": [
+            "model.generate",
+            "mcp.tool.call"
+          ]
+        },
+        "accepted": {
+          "const": true
+        },
+        "taskId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "deadlineMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 300000
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "accepted",
+        "taskId",
+        "deadlineMs"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "operation": {
+          "type": "string"
+        },
+        "accepted": {
+          "const": false
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "CONSENT_REQUIRED",
+                "PERMISSION_DENIED",
+                "PERMISSION_REVOKED",
+                "UNSUPPORTED",
+                "INVALID_INPUT",
+                "RATE_LIMITED",
+                "HOST_FAILURE"
+              ]
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "retryable"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operation",
+        "accepted",
+        "error"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

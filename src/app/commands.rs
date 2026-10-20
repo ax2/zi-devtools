@@ -658,6 +658,12 @@ impl DevToolsApp {
                 self.quick_open = false;
                 None
             }
+            Some(Action::RecordFocus) => {
+                self.recorder.focus_tutorial_at_cursor();
+                self.prefix.active = false;
+                self.quick_open = false;
+                None
+            }
             Some(Action::RecordEffectsOff) => {
                 self.recorder.disable_tutorial_effects();
                 self.prefix.active = false;

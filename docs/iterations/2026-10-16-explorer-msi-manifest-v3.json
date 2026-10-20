@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 3,
+  "msi": "current.msi",
+  "msiSha256": "ec8f94b3e7fa51bf79f8bcfbf8bc7d7fe816a5c5056454e1b2e7e8d2227c7a37",
+  "productVersion": "0.82.0",
+  "desktopExeSha256": "b0022a448f38474efc24ecb0a1fdb6d4e59915d3dc6971074dd568b174043d65",
+  "menuActionsDllSha256": "705bc36ebdc1c6322f321dbac3f69a0f9c17773ac0010fb685823f85b5e9d264",
+  "menuActionsBinarySha256": "705bc36ebdc1c6322f321dbac3f69a0f9c17773ac0010fb685823f85b5e9d264",
+  "menuActionsBinaryExact": true,
+  "capabilityCount": 11,
+  "capabilityDeclarationSha256": "178f0c83c491674db5688602a2716e7536b24688d04c72e3a59f97ec334a61cf",
+  "capabilityPropertyExact": true,
+  "transactionActions": [
+    "ZiMenuPrepare",
+    "ZiMenuRollback",
+    "ZiMenuExecute",
+    "ZiMenuCommitReady",
+    "ZiMenuCommitReceipt",
+    "ZiMenuFinalize"
+  ],
+  "customActionBindings": {
+    "ZiMenuPrepare": {
+      "type": 1,
+      "binary": "ZiMenuActions",
+      "entryPoint": "ZiMenuPrepare"
+    },
+    "ZiMenuRollback": {
+      "type": 1281,
+      "binary": "ZiMenuActions",
+      "entryPoint": "ZiMenuRollback"
+    },
+    "ZiMenuExecute": {
+      "type": 1025,
+      "binary": "ZiMenuActions",
+      "entryPoint": "ZiMenuExecute"
+    },
+    "ZiMenuCommitReady": {
+      "type": 1537,
+      "binary": "ZiMenuActions",
+      "entryPoint": "ZiMenuCommitReady"
+    },
+    "ZiMenuCommitReceipt": {
+      "type": 65,
+      "binary": "ZiMenuActions",
+      "entryPoint": "ZiMenuCommitReceipt"
+    },
+    "ZiMenuFinalize": {
+      "type": 65,
+      "binary": "ZiMenuActions",
+      "entryPoint": "ZiMenuFinalize"
+    }
+  },
+  "embeddedMenuActionDll": true,
+  "desktopExeInPackage": true,
+  "scope": "MSI database content check only; install/upgrade/repair/uninstall behavior is covered by separate disposable-runner smoke tests."
+}

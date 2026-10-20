@@ -68,6 +68,45 @@ impl DerefMut for Workspace {
     }
 }
 impl Workspace {
+    pub(crate) fn navigation_entries(&self) -> Vec<crate::instance_navigation::Entry> {
+        use crate::instance_navigation::{Entry, Key, Kind};
+        self.instances
+            .iter()
+            .map(|instance| Entry {
+                key: Key {
+                    kind: Kind::Image,
+                    id: instance.id.clone(),
+                },
+                name: instance.title.clone(),
+                tool: "image-workflow".into(),
+                busy: instance.state.busy(),
+                pending: instance.state.pending_import(),
+            })
+            .collect()
+    }
+    pub(crate) fn navigation_identity(&self) -> (String, String) {
+        let instance = &self.instances[self.active];
+        (instance.id.clone(), instance.title.clone())
+    }
+    pub(crate) fn navigation_has(&self, id: &str) -> bool {
+        self.instances.iter().any(|i| i.id == id)
+    }
+    pub(crate) fn navigation_blocked(&self) -> bool {
+        self.close_confirm.is_some() || self.pending_import()
+    }
+    pub(crate) fn navigation_select(&mut self, id: &str) -> Result<()> {
+        ensure!(!self.navigation_blocked(), "请先完成或取消图片流程审核");
+        let index = self
+            .instances
+            .iter()
+            .position(|i| i.id == id)
+            .context("图片实例已关闭")?;
+        ensure!(
+            !self.instances[index].state.pending_import(),
+            "请先处理目标图片实例的导入审核"
+        );
+        self.select(index)
+    }
     pub(crate) fn active_id(&self) -> String {
         self.instances[self.active].id.clone()
     }

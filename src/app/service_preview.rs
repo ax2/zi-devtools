@@ -417,8 +417,9 @@ impl DevToolsApp {
                 .all(|status| status.name != "stale-snapshot")
         );
     }
-    pub fn preview_tray_scene(&mut self, ctx: &egui::Context, folder: &Path, index: usize) {
+    pub fn preview_tray_scene(&mut self, ctx: &egui::Context, _folder: &Path, index: usize) {
         let light = index % 2 == 1;
+        ctx.set_embed_viewports(true);
         ctx.input_mut(|i| {
             i.raw.system_theme = Some(if light {
                 egui::Theme::Light
@@ -426,18 +427,44 @@ impl DevToolsApp {
                 egui::Theme::Dark
             })
         });
-        if self.preview_tray_capture.is_none() {
-            // Intentionally use the opposite main theme to verify independence.
+        if !self.quick_open || !self.quick_context {
+            // Intentionally use the opposite main theme to verify tray independence.
             self.set_theme(ctx, if light { Theme::Dark } else { Theme::Light });
             self.open_tray_context(ctx);
-            self.quick_tab = "服务".into();
-            self.preview_panel_frames = 0;
-            self.preview_tray_capture = Some(folder.join(if light {
-                "tray-panel-light.png"
+            self.quick_tab = if index >= 502 {
+                self.quick_category = "文件与系统".into();
+                "全部"
             } else {
-                "tray-panel-dark.png"
-            }));
+                self.quick_category = "全部分类".into();
+                "服务"
+            }
+            .into();
+            self.preview_panel_frames = 0;
         }
+        if index >= 504 {
+            let id = uuid::Uuid::from_u128(0x5a1c_21e0_0000_4000_8000_0000_0000_0001).to_string();
+            self.preferences.tool_collections = vec![crate::preferences::ToolCollection {
+                id: id.clone(),
+                name: "Java / Django 排查".into(),
+                tool_ids: vec![
+                    "java-trace".into(),
+                    "django-trace".into(),
+                    "mcp-inspector".into(),
+                ],
+            }];
+            self.quick_collection_id = id;
+            self.quick_tab = "集合".into();
+            self.quick_category = "全部分类".into();
+        }
+        // Keep the capture fixture deterministic even when the host window manager does
+        // not focus embedded viewports; the real panel dismisses on focus loss.
+        self.quick_open = true;
+        self.quick_context = true;
+        self.quick_had_focus = false;
+        self.quick_focus = false;
+        self.quick_opened = Instant::now();
+        self.launcher_open = false;
+        self.launcher_query.clear();
         assert_eq!(self.theme, if light { Theme::Dark } else { Theme::Light });
     }
 }
