@@ -38,4 +38,4 @@ $manifestProof = Join-Path $outputPath 'ExplorerMenuManifestProof.json'
 if ($LASTEXITCODE -ne 0) { throw 'Built MSI does not preserve the inspected shell capability manifest' }
 Copy-Item target/release/ZiDevTools.exe (Join-Path $outputPath "ZiDevTools-$version-windows-x64.exe")
 Copy-Item target/release/ZiDevToolsMcp.exe (Join-Path $outputPath "ZiDevToolsMcp-$version-windows-x64.exe")
-Get-FileHash -LiteralPath $msiPath, (Join-Path $outputPath "ZiDevTools-$version-windows-x64.exe"), (Join-Path $outputPath "ZiDevToolsMcp-$version-windows-x64.exe"), $manifestProof -Algorithm SHA256 | Sort-Object Path | ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) } | Set-Content (Join-Path $outputPath 'SHA256SUMS.txt')
+Get-FileHash -LiteralPath $msiPath, (Join-Path $outputPath "ZiDevTools-$version-windows-x64.exe"), (Join-Path $outputPath "ZiDevToolsMcp-$version-windows-x64.exe") -Algorithm SHA256 | Sort-Object Path | ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) } | Set-Content (Join-Path $outputPath 'SHA256SUMS.txt')
