@@ -50,8 +50,12 @@ fn validate_inner(
     let mut contains_id = false;
     collect_schema_refs(&schema, 0, &mut references, &mut contains_id)?;
 
+    let canonical_schema_file = schema_file
+        .map(|path| path.canonicalize().context("无法定位所选 JSON Schema 文件"))
+        .transpose()?;
+
     let instance: Value = serde_json::from_str(instance_text).context("待校验内容不是有效 JSON")?;
-    let registry = match schema_file {
+    let registry = match canonical_schema_file.as_deref() {
         Some(path) => Some(build_local_registry(path, &schema, contains_id)?),
         None => {
             if let Some(reference) = references
@@ -82,7 +86,7 @@ fn validate_inner(
         .with_pattern_options(jsonschema::PatternOptions::regex());
     if let Some(registry) = &registry {
         options = options.with_registry(registry);
-        if let Some(schema_file) = schema_file {
+        if let Some(schema_file) = canonical_schema_file.as_deref() {
             options = options.with_base_uri(file_uri(schema_file)?.to_string());
         }
     }

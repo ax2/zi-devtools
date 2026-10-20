@@ -1865,7 +1865,7 @@
     {
       "sourceToolId": "json-schema",
       "title": "JSON Schema 校验",
-      "sourceVersion": "0.2.0",
+      "sourceVersion": "0.2.1",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
       "pluginStatus": "not_delivered",
@@ -1876,7 +1876,7 @@
           "scopeKind": "declared_standalone_scope",
           "scope": "桌面端支持 JSON Schema Draft 4/6/7/2019-09/2020-12 自动识别、元模式检查、错误字段 JSON Pointer、值脱敏和嵌入文档内的 # 引用；用户可明确选择本机根 Schema 文件，并按需解析其目录内的 file:// 或无$id场景下的相对引用；目录外路径、网络 URI、查询参数、带$id且含相对外部引用的 URI 歧义均拒绝。根Schema≤64KiB、JSON≤1MiB、最多32个外部文件/累计1MiB、最多显示100条错误；不执行修复。共享可移植 WASI 核心与 Studio Host 验收仍待评估。",
           "sourceStatus": "in-progress",
-          "sourceVersion": "0.2.0",
+          "sourceVersion": "0.2.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
         }

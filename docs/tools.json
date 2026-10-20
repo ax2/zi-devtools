@@ -1764,7 +1764,7 @@
           "导入Schema文件"
         ]
       },
-      "tool_version": "0.2.0",
+      "tool_version": "0.2.1",
       "version_history": [
         {
           "version": "0.0.0",
@@ -1780,6 +1780,11 @@
           "version": "0.2.0",
           "date": "2026-10-17",
           "changes": "可明确选择本机根 Schema 文件，按需读取其目录内的受限本地引用；阻止网络和目录外读取，并约束 URI 基址歧义。"
+        },
+        {
+          "version": "0.2.1",
+          "date": "2026-10-20",
+          "changes": "规范化用户选择的根文件路径，并让本机相对引用的基址与注册表键使用同一 canonical file URI；兼容 Windows 短路径。"
         }
       ]
     },
