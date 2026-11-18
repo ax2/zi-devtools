@@ -1,4 +1,6 @@
 //! Pure text algorithms and the bounded Studio compute contract. No host access.
+pub mod json_file;
+mod json_file_numbers;
 pub mod sql;
 pub mod transforms;
 

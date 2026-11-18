@@ -157,7 +157,10 @@ pub fn hex_encode(input: &str) -> Result<String> {
 pub fn hex_decode(input: &str) -> Result<String> {
     bounded(input)?;
     let value: String = input.chars().filter(|c| !c.is_ascii_whitespace()).collect();
-    if !value.is_ascii() || !value.bytes().all(|c| c.is_ascii_hexdigit()) || value.len() % 2 != 0 {
+    if !value.is_ascii()
+        || !value.bytes().all(|c| c.is_ascii_hexdigit())
+        || !value.len().is_multiple_of(2)
+    {
         bail!("请输入成对的十六进制字符，可用空格或换行分隔，例如 E4 BD A0");
     }
     let bytes = (0..value.len())

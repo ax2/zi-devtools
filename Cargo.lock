@@ -6040,6 +6040,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-json-format-wasi"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
+ "zi-text-core",
+]
+
+[[package]]
 name = "zi-json-object-wasi"
 version = "0.1.0"
 dependencies = [

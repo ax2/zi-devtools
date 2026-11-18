@@ -40,7 +40,7 @@
 原有 14 项专项工具均已提供首版，具体范围见上表；两项异常链 / Traceback 工具独立列入小工具目录。当前专项目录统计由 `docs/tools.json` 自动生成：
 
 <!-- framework-catalog-summary:start -->
-截至 2026-10-20 · 工具目录 v0.82.0：Java/JVM、Spring、Python/Django 与 Celery 专项诊断 14 项（14 项已实现，0 项规划 / 开发中）；另有 2 项异常链 / Traceback 工具。共 16 项，16 项已实现、0 项规划 / 开发中。来源：`docs/tools.json`。
+截至 2026-11-18 · 工具目录 v0.82.0：Java/JVM、Spring、Python/Django 与 Celery 专项诊断 14 项（14 项已实现，0 项规划 / 开发中）；另有 2 项异常链 / Traceback 工具。共 16 项，16 项已实现、0 项规划 / 开发中。来源：`docs/tools.json`。
 <!-- framework-catalog-summary:end -->
 
 插件迁移、版本及实现边界以各自文档为准；工具状态变更后运行 `python scripts/sync_tools.py` 和 `python scripts/sync_tools.py --check`，并同步实现证据、阶段记录及官网快照。
