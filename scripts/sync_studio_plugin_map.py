@@ -242,6 +242,28 @@ sql_row["operationScopes"] = [dict(
     runtimeVerification="43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
     viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
     blockingReason="unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收")]
+# File actions extend the strict JSON subset without changing legacy inline packages.
+json_file_capabilities = [
+    ("devtools.json-file.format", "JSON 文件格式化"),
+    ("devtools.json-file.minify", "JSON 文件压缩"),
+    ("devtools.json-file.validate", "JSON 文件校验"),
+]
+json_row["candidateCapabilities"] += [operation for operation, _ in json_file_capabilities]
+json_row["candidatePackages"].append(dict(packageId="com.zicode.devtools.json-file", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/json-file-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/json-file-0.1.0-candidate-02-verification.json",
+    capabilities=[operation for operation, _ in json_file_capabilities]))
+json_row["operationScopes"] += [dict(operationId=operation, title=title,
+    scopeKind="resource_sized_strict_json_action", sourceVersion=json_row["sourceVersion"], pluginStatus="candidate",
+    scope="UTF-8单文件1MiB/结果8MiB/64层；重复键、不安全整数及十进制精度损失明确作策略拒绝，与语法错误区分。原文件只读，保存需Host另行确认。",
+    core="zi-text-core/0.1.0", adapter="zi-json-format-wasi/0.1.0", packageId="com.zicode.devtools.json-file", packageVersion="0.1.0",
+    hostProfile="resource.wasi.json-file-transform.v1@=1.0.0-preview.1",
+    limits=dict(inputUtf8Bytes=1048576, outputBytes=8388608, maxDepth=64),
+    candidateDirectory="release/plugin-candidates/json-file-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/json-file-0.1.0-candidate-02-verification.json",
+    blockingReason="独立无签名候选，真实Host/Worker证据单独交付；不推定日常安装已启用。")
+    for operation, title in json_file_capabilities]
+
 for row in rows:
     candidate_scopes = [scope for scope in row["operationScopes"] if scope.get("candidateDirectory")]
     directories = {scope["candidateDirectory"] for scope in candidate_scopes}

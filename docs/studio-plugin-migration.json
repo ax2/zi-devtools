@@ -12,7 +12,7 @@
     {
       "sourceToolId": "json",
       "title": "JSON",
-      "sourceVersion": "1.3.0",
+      "sourceVersion": "1.3.1",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
       "pluginStatus": "candidate",
@@ -21,7 +21,10 @@
         "devtools.text.json.minify",
         "devtools.text.json.validate",
         "devtools.json.object.inspect",
-        "devtools.json.object.receive"
+        "devtools.json.object.receive",
+        "devtools.json-file.format",
+        "devtools.json-file.minify",
+        "devtools.json-file.validate"
       ],
       "pilotCapabilities": [
         "devtools.text.json.format",
@@ -34,7 +37,7 @@
           "title": "JSON 格式化",
           "scopeKind": "complete_standalone_json_action",
           "scope": "格式化JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
-          "sourceVersion": "1.3.0",
+          "sourceVersion": "1.3.1",
           "pluginStatus": "candidate",
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
@@ -57,7 +60,7 @@
           "title": "JSON 压缩",
           "scopeKind": "complete_standalone_json_action",
           "scope": "压缩JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
-          "sourceVersion": "1.3.0",
+          "sourceVersion": "1.3.1",
           "pluginStatus": "candidate",
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
@@ -80,7 +83,7 @@
           "title": "JSON 校验",
           "scopeKind": "complete_standalone_json_action",
           "scope": "校验JSON；单输入UTF-8文本，运行时限制8192字节、64层JSON、拒绝重复键/不安全整数。",
-          "sourceVersion": "1.3.0",
+          "sourceVersion": "1.3.1",
           "pluginStatus": "candidate",
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
@@ -103,7 +106,7 @@
           "title": "JSON 对象摘要",
           "scopeKind": "structured_object_result",
           "scope": "根值必须为 JSON object；输入对象最多 8 KiB、128 个根字段、64 层与 4096 节点，请求/结果最多 48 KiB。",
-          "sourceVersion": "1.3.0",
+          "sourceVersion": "1.3.1",
           "pluginStatus": "candidate",
           "core": "zi-json-core/0.1.0",
           "adapter": "zi-json-object-wasi/0.1.0",
@@ -133,7 +136,7 @@
           "title": "接收 JSON 对象",
           "scopeKind": "object_receiver_for_confirmed_transfer",
           "scope": "仅作为已捕获 JSON object 的显式接收端；保持对象类型，受 8 KiB 输入、128 字段、48 KiB envelope 限制。",
-          "sourceVersion": "1.3.0",
+          "sourceVersion": "1.3.1",
           "pluginStatus": "candidate",
           "core": "zi-json-core/0.1.0",
           "adapter": "zi-json-object-wasi/0.1.0",
@@ -157,6 +160,69 @@
           "runtimeVerification": "10_baseline_native_wasi_parity_and_current_packaged_wasi_replay",
           "viewVerification": "no_plugin_view; standalone_JSON_object_summary_action_uses_same_native_adapter",
           "blockingReason": "unsigned provider candidate; Studio Host profile negotiation, real JSON capture/transfer/save and lifecycle remain unverified"
+        },
+        {
+          "operationId": "devtools.json-file.format",
+          "title": "JSON 文件格式化",
+          "scopeKind": "resource_sized_strict_json_action",
+          "sourceVersion": "1.3.1",
+          "pluginStatus": "candidate",
+          "scope": "UTF-8单文件1MiB/结果8MiB/64层；重复键、不安全整数及十进制精度损失明确作策略拒绝，与语法错误区分。原文件只读，保存需Host另行确认。",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-json-format-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.json-file",
+          "packageVersion": "0.1.0",
+          "hostProfile": "resource.wasi.json-file-transform.v1@=1.0.0-preview.1",
+          "limits": {
+            "inputUtf8Bytes": 1048576,
+            "outputBytes": 8388608,
+            "maxDepth": 64
+          },
+          "candidateDirectory": "release/plugin-candidates/json-file-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/json-file-0.1.0-candidate-02-verification.json",
+          "blockingReason": "独立无签名候选，真实Host/Worker证据单独交付；不推定日常安装已启用。"
+        },
+        {
+          "operationId": "devtools.json-file.minify",
+          "title": "JSON 文件压缩",
+          "scopeKind": "resource_sized_strict_json_action",
+          "sourceVersion": "1.3.1",
+          "pluginStatus": "candidate",
+          "scope": "UTF-8单文件1MiB/结果8MiB/64层；重复键、不安全整数及十进制精度损失明确作策略拒绝，与语法错误区分。原文件只读，保存需Host另行确认。",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-json-format-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.json-file",
+          "packageVersion": "0.1.0",
+          "hostProfile": "resource.wasi.json-file-transform.v1@=1.0.0-preview.1",
+          "limits": {
+            "inputUtf8Bytes": 1048576,
+            "outputBytes": 8388608,
+            "maxDepth": 64
+          },
+          "candidateDirectory": "release/plugin-candidates/json-file-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/json-file-0.1.0-candidate-02-verification.json",
+          "blockingReason": "独立无签名候选，真实Host/Worker证据单独交付；不推定日常安装已启用。"
+        },
+        {
+          "operationId": "devtools.json-file.validate",
+          "title": "JSON 文件校验",
+          "scopeKind": "resource_sized_strict_json_action",
+          "sourceVersion": "1.3.1",
+          "pluginStatus": "candidate",
+          "scope": "UTF-8单文件1MiB/结果8MiB/64层；重复键、不安全整数及十进制精度损失明确作策略拒绝，与语法错误区分。原文件只读，保存需Host另行确认。",
+          "core": "zi-text-core/0.1.0",
+          "adapter": "zi-json-format-wasi/0.1.0",
+          "packageId": "com.zicode.devtools.json-file",
+          "packageVersion": "0.1.0",
+          "hostProfile": "resource.wasi.json-file-transform.v1@=1.0.0-preview.1",
+          "limits": {
+            "inputUtf8Bytes": 1048576,
+            "outputBytes": 8388608,
+            "maxDepth": 64
+          },
+          "candidateDirectory": "release/plugin-candidates/json-file-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/json-file-0.1.0-candidate-02-verification.json",
+          "blockingReason": "独立无签名候选，真实Host/Worker证据单独交付；不推定日常安装已启用。"
         }
       ],
       "reason": "JSON 格式化/压缩/校验仍由 Text 0.4.1 候选提供；对象摘要另由 JSON Object 0.1.1 候选声明 result.json.v1 与 tool.directory.v1，对象接收能力用于显式接力。提供方字节一致验证已完成，Studio Host/Pi 和结果接力仍待接收方验收。",
@@ -186,6 +252,17 @@
           "capabilities": [
             "devtools.json.object.inspect",
             "devtools.json.object.receive"
+          ]
+        },
+        {
+          "packageId": "com.zicode.devtools.json-file",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/json-file-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/json-file-0.1.0-candidate-02-verification.json",
+          "capabilities": [
+            "devtools.json-file.format",
+            "devtools.json-file.minify",
+            "devtools.json-file.validate"
           ]
         }
       ]

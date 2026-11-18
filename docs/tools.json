@@ -1,6 +1,6 @@
 {
   "version": "0.82.0",
-  "updated": "2026-10-20",
+  "updated": "2026-11-18",
   "tools": [
     {
       "id": "json",
@@ -8,7 +8,7 @@
       "status": "implemented",
       "category": "小工具",
       "priority": "—",
-      "scope": "格式化、压缩、校验与结构化对象摘要；同仓共享纯Rust核心。对象摘要原样保留 object 值并给出字段类型/深度/UTF-8 字节统计。result.json.v1 WASI 候选限制 object 8 KiB、根字段128、深度64、节点4096及输出48 KiB；Host 结果接力仍待接收验收",
+      "scope": "格式化、压缩、校验与结构化对象摘要；同仓共享纯Rust核心。对象摘要原样保留 object 值并给出字段类型/深度/UTF-8 字节统计。result.json.v1 WASI 候选限制 object 8 KiB、根字段128、深度64、节点4096及输出48 KiB；Host 结果接力仍待接收验收；新增独立文件插件候选 com.zicode.devtools.json-file，单文件1MiB、输出8MiB，64层、键唯一、安全整数且十进制数值可精确往返；语法错误和策略拒绝分开，原文件保持不变，Studio确认后另存。独立版默认文本模式不变。",
       "discovery": {
         "label": "JSON",
         "summary": "格式化、压缩、校验与结构化对象摘要 JSON",
@@ -23,7 +23,7 @@
           "结构化json结果"
         ]
       },
-      "tool_version": "1.3.0",
+      "tool_version": "1.3.1",
       "version_history": [
         {
           "version": "1.0.0",
@@ -64,6 +64,11 @@
           "version": "1.3.0",
           "date": "2026-10-17",
           "changes": "增加有界 JSON object 摘要操作，输出保留原 object 的结构化数据和根字段类型/深度统计；独立 WASI provider 声明 result.json.v1 并提供 object 接收能力。Host 保存/接力仍待真实验收。"
+        },
+        {
+          "version": "1.3.1",
+          "date": "2026-11-18",
+          "changes": "新增独立JSON文件WASI候选：格式化、压缩与校验共用原严格解析器；1MiB输入、8MiB输出、64层，重复键/不安全整数/不能精确十进制往返分别作策略拒绝，不改独立版默认模式。"
         }
       ]
     },
