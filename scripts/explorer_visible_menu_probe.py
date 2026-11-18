@@ -20,6 +20,8 @@ import time
 import zlib
 import winreg
 
+from explorer_menu_snapshot import menu_labels, popup_windows_for_process, wait_menu_snapshot
+
 
 def require_hosted_runner():
     assert (os.environ.get('GITHUB_ACTIONS') == 'true'
@@ -144,6 +146,7 @@ def main():
         function = getattr(user, name)
         function.argtypes, function.restype = args, result
     for name, args, result in [
+        ('IsMenu', [ctypes.c_void_p], ctypes.c_bool),
         ('GetMenuItemCount', [ctypes.c_void_p], ctypes.c_int),
         ('GetMenuItemID', [ctypes.c_void_p, ctypes.c_int], ctypes.c_uint),
         ('GetMenuStringW', [ctypes.c_void_p, ctypes.c_uint, ctypes.c_wchar_p,
@@ -388,15 +391,21 @@ def main():
         return user.SendMessageW(hwnd, 0x01E1, 0, 0)
 
     def labels(menu):
-        count = user.GetMenuItemCount(menu)
-        assert 0 < count <= 128, f'Invalid visible menu item count: {count}'
-        values = []
-        for index in range(count):
-            buffer = ctypes.create_unicode_buffer(512)
-            length = user.GetMenuStringW(menu, index, buffer, len(buffer), 0x400)
-            assert 0 <= length < len(buffer), f'Cannot read menu item {index}'
-            values.append(buffer.value if length else '')  # Native separators have no label.
-        return values
+        return menu_labels(user, menu)
+
+    def wait_for_popup(context, timeout=10):
+        process_id = ctypes.c_uint32()
+        assert user.GetWindowThreadProcessId(explorer, ctypes.byref(process_id))
+        explorer_pid = process_id.value
+        assert explorer_pid
+
+        def owned_popup_windows():
+            return popup_windows_for_process(user, top_windows(), explorer_pid)
+
+        diagnostic = {}
+        proof.setdefault('menuSnapshotReads', {})[context] = diagnostic
+        return wait_menu_snapshot(user, owned_popup_windows, menu_handle, context,
+                                  timeout=timeout, diagnostics=diagnostic)
 
     fixture_dir = source.parent.name
     selected_folder = output / 'A-文件夹菜单测试'
@@ -442,16 +451,7 @@ def main():
         proof['fileSelectionInputSent'] = True
         time.sleep(.2)
         press(0xA0, 0x79)  # Shift+F10 opens the selected file's classic context menu.
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
-            if menus:
-                root_menu_window = menus[-1]
-                break
-            time.sleep(.1)
-        assert root_menu_window, 'Explorer did not display a native context-menu popup'
-        popup = menu_handle(root_menu_window)
-        root_labels = labels(popup)
+        root_menu_window, popup, root_labels = wait_for_popup('file', timeout=15)
         proof['contextMenuVisible'] = True
         proof['menuVisibleBeforeRefresh'] = root_labels.count('Zi DevTools') == 1
         proof['rootMenuLabelsBeforeRefresh'] = root_labels
@@ -469,17 +469,7 @@ def main():
             shell.SHChangeNotify(0x08000000, 0x3000, None, None)
             time.sleep(.5)
             press(0xA0, 0x79)
-            deadline = time.monotonic() + 10
-            root_menu_window = None
-            while time.monotonic() < deadline:
-                menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
-                if menus:
-                    root_menu_window = menus[-1]
-                    break
-                time.sleep(.1)
-            assert root_menu_window, 'Explorer did not reopen its context menu after association refresh'
-            popup = menu_handle(root_menu_window)
-            root_labels = labels(popup)
+            root_menu_window, popup, root_labels = wait_for_popup('file-after-refresh')
             proof['menuVisibleAfterRefresh'] = root_labels.count('Zi DevTools') == 1
             proof['rootMenuLabelsAfterRefresh'] = root_labels
             proof['refreshScreenshot'] = str(output / 'explorer-menu-after-refresh.png')
@@ -523,17 +513,7 @@ def main():
         time.sleep(.5)
         press(0x24)  # Home selects the first (folder) item.
         press(0xA0, 0x79)  # Shift+F10 opens the selected folder menu.
-        deadline = time.monotonic() + 10
-        root_menu_window = None
-        while time.monotonic() < deadline:
-            menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
-            if menus:
-                root_menu_window = menus[-1]
-                break
-            time.sleep(.1)
-        assert root_menu_window, 'Explorer did not display the selected-directory context menu'
-        popup = menu_handle(root_menu_window)
-        directory_labels = labels(popup)
+        root_menu_window, popup, directory_labels = wait_for_popup('selected-directory')
         assert directory_labels.count('Zi DevTools') == 1, directory_labels
         proof['directoryMenuVisible'] = True
         proof['directoryRootLabels'] = directory_labels
@@ -569,17 +549,7 @@ def main():
         assert user.GetWindowRect(explorer, ctypes.byref(rect))
         assert rect.right - rect.left > 500 and rect.bottom - rect.top > 400, rect
         right_click_at(rect.right - 100, rect.bottom - 110)
-        deadline = time.monotonic() + 10
-        root_menu_window = None
-        while time.monotonic() < deadline:
-            menus = [hwnd for hwnd, cls, _ in top_windows() if cls == '#32768']
-            if menus:
-                root_menu_window = menus[-1]
-                break
-            time.sleep(.1)
-        assert root_menu_window, 'Explorer did not display the folder-background context menu'
-        popup = menu_handle(root_menu_window)
-        background_labels = labels(popup)
+        root_menu_window, popup, background_labels = wait_for_popup('folder-background')
         assert background_labels.count('Zi DevTools') == 1, background_labels
         proof['backgroundMenuVisible'] = True
         proof['backgroundRootLabels'] = background_labels
@@ -624,6 +594,8 @@ def main():
             assert selected_folder.parent == output
             shutil.rmtree(selected_folder)
         proof['fixtureUnchanged'] = source.read_bytes() == original
+        (output / 'explorer-visible-proof.json').write_text(
+            json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':
