@@ -7,14 +7,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const SCHEMA_LIMIT: usize = 64 * 1024;
-const INSTANCE_LIMIT: usize = 1024 * 1024;
-const ERROR_LIMIT: usize = 100;
+use zi_json_schema_core::{
+    SCHEMA_LIMIT, collect_schema_refs, parse_instance, parse_schema, validate_document,
+    validate_documents,
+};
+
 const EXTERNAL_SCHEMA_COUNT_LIMIT: usize = 32;
 const EXTERNAL_SCHEMA_TOTAL_LIMIT: usize = 1024 * 1024;
 
 pub fn validate(instance_text: &str, schema_text: &str) -> Result<String> {
-    validate_inner(instance_text, schema_text, None)
+    validate_document(instance_text, schema_text)
 }
 
 pub fn load_schema_file(path: &Path) -> Result<(PathBuf, String)> {
@@ -30,86 +32,20 @@ pub fn validate_with_schema_file(
     schema_text: &str,
     schema_file: &Path,
 ) -> Result<String> {
-    validate_inner(instance_text, schema_text, Some(schema_file))
-}
-
-fn validate_inner(
-    instance_text: &str,
-    schema_text: &str,
-    schema_file: Option<&Path>,
-) -> Result<String> {
-    if schema_text.len() > SCHEMA_LIMIT {
-        return Err(anyhow!("JSON Schema 超过 64 KiB 限制"));
-    }
-    if instance_text.len() > INSTANCE_LIMIT {
-        return Err(anyhow!("待校验 JSON 超过 1 MiB 限制"));
-    }
-
-    let schema: Value = serde_json::from_str(schema_text).context("JSON Schema 不是有效 JSON")?;
-    let mut references = Vec::new();
+    let schema = parse_schema(instance_text, schema_text)?;
     let mut contains_id = false;
-    collect_schema_refs(&schema, 0, &mut references, &mut contains_id)?;
-
-    let canonical_schema_file = schema_file
-        .map(|path| path.canonicalize().context("无法定位所选 JSON Schema 文件"))
-        .transpose()?;
-
-    let instance: Value = serde_json::from_str(instance_text).context("待校验内容不是有效 JSON")?;
-    let registry = match canonical_schema_file.as_deref() {
-        Some(path) => Some(build_local_registry(path, &schema, contains_id)?),
-        None => {
-            if let Some(reference) = references
-                .iter()
-                .find(|reference| !reference.starts_with('#'))
-            {
-                return Err(anyhow!(
-                    "外部引用需要先选择本机 Schema 文件；已拒绝引用：{reference}"
-                ));
-            }
-            None
-        }
-    };
-
-    if let Some(registry) = &registry {
-        if !jsonschema::meta::options()
-            .with_registry(registry)
-            .is_valid(&schema)
-        {
-            return Err(anyhow!("JSON Schema 文档不符合其声明的标准"));
-        }
-    } else if !jsonschema::meta::is_valid(&schema) {
-        return Err(anyhow!("JSON Schema 文档不符合其声明的标准"));
-    }
-
-    let mut options = jsonschema::options()
-        .offline()
-        .with_pattern_options(jsonschema::PatternOptions::regex());
-    if let Some(registry) = &registry {
-        options = options.with_registry(registry);
-        if let Some(schema_file) = canonical_schema_file.as_deref() {
-            options = options.with_base_uri(file_uri(schema_file)?.to_string());
-        }
-    }
-    let validator = options.build(&schema).context("无法编译 JSON Schema")?;
-
-    let mut errors = validator.iter_errors(&instance).peekable();
-    let mut output = String::new();
-    let mut count = 0;
-    for error in errors.by_ref().take(ERROR_LIMIT) {
-        count += 1;
-        let path = error.instance_path().to_string();
-        let path = if path.is_empty() { "/" } else { &path };
-        use std::fmt::Write;
-        let _ = writeln!(output, "- 数据路径 `{path}`：{}", error.masked());
-    }
-
-    if count == 0 {
-        return Ok("校验通过：JSON 符合 Schema。".into());
-    }
-    if errors.next().is_some() {
-        output.push_str("\n错误超过 100 条，已截断显示。\n");
-    }
-    Ok(format!("校验失败：至少 {count} 条错误\n{output}"))
+    collect_schema_refs(&schema, 0, &mut Vec::new(), &mut contains_id)?;
+    let canonical = schema_file
+        .canonicalize()
+        .context("无法定位所选 JSON Schema 文件")?;
+    let instance = parse_instance(instance_text)?;
+    let registry = build_local_registry(&canonical, &schema, contains_id)?;
+    validate_documents(
+        &instance,
+        &schema,
+        Some(&registry),
+        Some(file_uri(&canonical)?.to_string()),
+    )
 }
 
 fn read_limited_json_file(path: &Path, limit: usize) -> Result<String> {
@@ -228,96 +164,10 @@ fn resolve_local_reference(
     Ok(target)
 }
 
-fn collect_schema_refs(
-    schema: &Value,
-    depth: usize,
-    references: &mut Vec<String>,
-    contains_id: &mut bool,
-) -> Result<()> {
-    if depth > 128 {
-        return Err(anyhow!("JSON Schema 嵌套超过 128 层"));
-    }
-    if let Value::Object(object) = schema {
-        *contains_id |= object.get("$id").and_then(Value::as_str).is_some();
-        for key in ["$ref", "$dynamicRef", "$recursiveRef"] {
-            if let Some(reference) = object.get(key).and_then(Value::as_str) {
-                references.push(reference.to_owned());
-            }
-        }
-
-        const SINGLE_SCHEMA: &[&str] = &[
-            "additionalItems",
-            "additionalProperties",
-            "contains",
-            "contentSchema",
-            "else",
-            "if",
-            "items",
-            "not",
-            "propertyNames",
-            "then",
-            "unevaluatedItems",
-            "unevaluatedProperties",
-        ];
-        const SCHEMA_MAPS: &[&str] = &[
-            "$defs",
-            "definitions",
-            "dependentSchemas",
-            "patternProperties",
-            "properties",
-        ];
-        const SCHEMA_ARRAYS: &[&str] = &["allOf", "anyOf", "oneOf", "prefixItems"];
-
-        for key in SINGLE_SCHEMA {
-            if let Some(subschema) = object.get(*key) {
-                visit_schema_value(subschema, depth + 1, references, contains_id)?;
-            }
-        }
-        for key in SCHEMA_MAPS {
-            if let Some(map) = object.get(*key).and_then(Value::as_object) {
-                for subschema in map.values() {
-                    visit_schema_value(subschema, depth + 1, references, contains_id)?;
-                }
-            }
-        }
-        for key in SCHEMA_ARRAYS {
-            if let Some(values) = object.get(*key).and_then(Value::as_array) {
-                for subschema in values {
-                    visit_schema_value(subschema, depth + 1, references, contains_id)?;
-                }
-            }
-        }
-        if let Some(dependencies) = object.get("dependencies").and_then(Value::as_object) {
-            for dependency in dependencies.values() {
-                if dependency.is_object() || dependency.is_boolean() {
-                    visit_schema_value(dependency, depth + 1, references, contains_id)?;
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn visit_schema_value(
-    value: &Value,
-    depth: usize,
-    references: &mut Vec<String>,
-    contains_id: &mut bool,
-) -> Result<()> {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                collect_schema_refs(value, depth + 1, references, contains_id)?;
-            }
-        }
-        _ => collect_schema_refs(value, depth, references, contains_id)?,
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zi_json_schema_core::INSTANCE_LIMIT;
 
     struct TempSchemaFolder(PathBuf);
 

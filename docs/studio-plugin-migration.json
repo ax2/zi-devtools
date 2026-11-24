@@ -2009,8 +2009,10 @@
       "sourceVersion": "0.2.1",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.json-schema.validate"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2020,9 +2022,28 @@
           "sourceVersion": "0.2.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.json-schema.validate",
+          "scopeKind": "bounded_offline_schema_validation",
+          "scope": "Draft 4/6/7（默认7），实例和Schema各8KiB，仅支持文档内引用。最多100条脱敏错误，长报告提前截断。",
+          "sourceVersion": "0.2.1",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputUtf8BytesPerField": 8192,
+            "serializedRequestAndResultBytes": 49152,
+            "maxDisplayedErrors": 100
+          },
+          "runtimeVerification": "23_independent_windows_production_worker_vectors",
+          "blockingReason": "2019-09与2020-12受现有fuel限制；根文件、外部引用和原生容量继续追踪。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "纯离线粘贴候选已通过真实 Windows Worker。现代 Draft 和根文件引用由 Studio #29 继续跟踪。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.json-schema",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/json-schema-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/json-schema-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "log-viewer",
