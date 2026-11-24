@@ -16,6 +16,8 @@ use std::{
 };
 
 use crate::disk_inspector::{ScanStatus, is_link};
+pub use zi_directory_compare_wasi::classification::{Difference, ItemKind};
+use zi_directory_compare_wasi::classification::{different_digests, different_metadata};
 
 mod copy_progress;
 mod pagination;
@@ -60,48 +62,6 @@ pub struct Progress {
     pub attempted_hash_pairs: u64,
     pub hashed_pairs: u64,
     pub hash_bytes: u64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ItemKind {
-    File,
-    Directory,
-}
-
-impl ItemKind {
-    fn label(self) -> &'static str {
-        match self {
-            Self::File => "文件",
-            Self::Directory => "目录",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Difference {
-    OnlyLeft,
-    OnlyRight,
-    TypeMismatch,
-    SizeMismatch,
-    ContentMismatch,
-    Unverified,
-    Changed,
-    ReadError,
-}
-
-impl Difference {
-    fn label(self) -> &'static str {
-        match self {
-            Self::OnlyLeft => "仅左侧",
-            Self::OnlyRight => "仅右侧",
-            Self::TypeMismatch => "类型不同",
-            Self::SizeMismatch => "大小不同",
-            Self::ContentMismatch => "内容不同",
-            Self::Unverified => "未校验内容",
-            Self::Changed => "检查中变化",
-            Self::ReadError => "读取失败",
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -569,16 +529,13 @@ pub fn compare(
                     report
                         .rows
                         .push(row(relative, Difference::Changed, Some(a), Some(b)));
-                } else if a.kind != b.kind {
+                } else if let Some(difference) = different_metadata(a.kind, a.size, b.kind, b.size)
+                {
                     report
                         .rows
-                        .push(row(relative, Difference::TypeMismatch, Some(a), Some(b)));
+                        .push(row(relative, difference, Some(a), Some(b)));
                 } else if a.kind == ItemKind::Directory {
                     report.same_directories += 1;
-                } else if a.size != b.size {
-                    report
-                        .rows
-                        .push(row(relative, Difference::SizeMismatch, Some(a), Some(b)));
                 } else {
                     let mut entry = row(relative, Difference::Unverified, Some(a), Some(b));
                     let required = a.size.saturating_mul(2);
@@ -642,11 +599,15 @@ pub fn compare(
                         Ok(digest) => {
                             entry.right_sha256 = Some(digest);
                             report.progress.hashed_pairs += 1;
-                            if entry.left_sha256 == entry.right_sha256 {
+                            if let Some(difference) = different_digests(
+                                entry.left_sha256.as_deref(),
+                                entry.right_sha256.as_deref(),
+                            ) {
+                                entry.difference = difference;
+                            } else {
                                 report.same_files += 1;
                                 continue;
                             }
-                            entry.difference = Difference::ContentMismatch;
                         }
                         Err(HashError::Changed) => {
                             entry.difference = Difference::Changed;
