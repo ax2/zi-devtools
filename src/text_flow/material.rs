@@ -1,6 +1,6 @@
 use crate::{
     tools::{ToolKind, run_tool},
-    workbench::{DataFormat, Dataset},
+    workbench::{DataFormat, Dataset, DesktopDataset},
 };
 use anyhow::{Context, Result, bail, ensure};
 use std::sync::Arc;

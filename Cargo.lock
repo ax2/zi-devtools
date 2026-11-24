@@ -5950,6 +5950,7 @@ dependencies = [
  "zi-json-schema-core",
  "zi-regex-core",
  "zi-shell-core",
+ "zi-table-core",
  "zi-text-core",
  "zi-trace-core",
  "zip",
@@ -6141,6 +6142,26 @@ dependencies = [
  "sha2",
  "uuid",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "zi-table-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "csv",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-table-merge-wasi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "zi-table-core",
 ]
 
 [[package]]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::workbench::DesktopDataset;
 #[cfg(feature = "ui-preview")]
 mod date_preview;
 mod discovery;

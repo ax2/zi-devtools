@@ -168,6 +168,25 @@ compare_row["operationScopes"].append(dict(
     blockingReason="独立未签名候选；双目录选址、Host授权、取消、UI、CSV导出和复制范围继续跟踪。",
 ))
 
+merge_row = next(row for row in rows if row["sourceToolId"] == "csv-merge")
+merge_ids = ["devtools.table-merge." + mode for mode in ("left", "inner", "append", "columns")]
+merge_row.update(
+    pluginStatus="candidate", candidateCapabilities=merge_ids, scopeComplete=False,
+    packageId="com.zicode.devtools.table-merge", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/table-merge-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/table-merge-0.1.0-candidate-01-verification.json",
+    reason="四种两表合并共享原生解析和关联核心，逐侧选择 CSV、TSV 或 JSON；原 Compute 冻结包保留。",
+)
+for operation in merge_ids:
+    merge_row["operationScopes"].append(dict(operationId=operation,
+        scopeKind="bounded_independent_table_formats",
+        scope="两表各 8 KiB、分别解析，零资源权限，按类型匹配并保留有效的 64 位整数。返回分页预览所需表结构和 CSV。",
+        sourceVersion=merge_row["sourceVersion"], pluginStatus="candidate",
+        limits=dict(inputUtf8BytesPerTable=8192, serializedRequestAndResultBytes=49152),
+        runtimeVerification="independent_native_and_windows_production_worker_vectors",
+        blockingReason="独立版更大表格、应用到原始草稿及其余窗口流程由 Studio #28 跟踪。",
+    ))
+
 schema_row = next(row for row in rows if row["sourceToolId"] == "json-schema")
 schema_row.update(
     pluginStatus="candidate", candidateCapabilities=["devtools.json-schema.validate"], scopeComplete=False,
