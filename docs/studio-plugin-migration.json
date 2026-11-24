@@ -1753,8 +1753,13 @@
       "sourceVersion": "1.2.0",
       "sourceStatus": "implemented",
       "migration": "compute_candidate",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.table-merge.left",
+        "devtools.table-merge.inner",
+        "devtools.table-merge.append",
+        "devtools.table-merge.columns"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1764,9 +1769,66 @@
           "sourceVersion": "1.2.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+        },
+        {
+          "operationId": "devtools.table-merge.left",
+          "scopeKind": "bounded_independent_table_formats",
+          "scope": "两表各 8 KiB、分别解析，零资源权限，按类型匹配并保留有效的 64 位整数。返回分页预览所需表结构和 CSV。",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputUtf8BytesPerTable": 8192,
+            "serializedRequestAndResultBytes": 49152
+          },
+          "runtimeVerification": "independent_native_and_windows_production_worker_vectors",
+          "blockingReason": "独立版更大表格、应用到原始草稿及其余窗口流程由 Studio #28 跟踪。"
+        },
+        {
+          "operationId": "devtools.table-merge.inner",
+          "scopeKind": "bounded_independent_table_formats",
+          "scope": "两表各 8 KiB、分别解析，零资源权限，按类型匹配并保留有效的 64 位整数。返回分页预览所需表结构和 CSV。",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputUtf8BytesPerTable": 8192,
+            "serializedRequestAndResultBytes": 49152
+          },
+          "runtimeVerification": "independent_native_and_windows_production_worker_vectors",
+          "blockingReason": "独立版更大表格、应用到原始草稿及其余窗口流程由 Studio #28 跟踪。"
+        },
+        {
+          "operationId": "devtools.table-merge.append",
+          "scopeKind": "bounded_independent_table_formats",
+          "scope": "两表各 8 KiB、分别解析，零资源权限，按类型匹配并保留有效的 64 位整数。返回分页预览所需表结构和 CSV。",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputUtf8BytesPerTable": 8192,
+            "serializedRequestAndResultBytes": 49152
+          },
+          "runtimeVerification": "independent_native_and_windows_production_worker_vectors",
+          "blockingReason": "独立版更大表格、应用到原始草稿及其余窗口流程由 Studio #28 跟踪。"
+        },
+        {
+          "operationId": "devtools.table-merge.columns",
+          "scopeKind": "bounded_independent_table_formats",
+          "scope": "两表各 8 KiB、分别解析，零资源权限，按类型匹配并保留有效的 64 位整数。返回分页预览所需表结构和 CSV。",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputUtf8BytesPerTable": 8192,
+            "serializedRequestAndResultBytes": 49152
+          },
+          "runtimeVerification": "independent_native_and_windows_production_worker_vectors",
+          "blockingReason": "独立版更大表格、应用到原始草稿及其余窗口流程由 Studio #28 跟踪。"
         }
       ],
-      "reason": "文本/数据纯计算迁移候选；需抽离核心、确定有界协议并实际构建验收，尚未接入。"
+      "reason": "四种两表合并共享原生解析和关联核心，逐侧选择 CSV、TSV 或 JSON；原 Compute 冻结包保留。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.table-merge",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/table-merge-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/table-merge-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "checksum-manifest",

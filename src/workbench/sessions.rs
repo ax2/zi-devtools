@@ -1099,9 +1099,9 @@ mod tests {
         state.dataset = Some(Dataset::parse(&state.input, DataFormat::Csv, b',').unwrap());
 
         let snapshot = state.autosave_snapshot().unwrap();
-        let live_rows = &state.dataset.as_ref().unwrap().rows.0;
-        let snapshot_rows = &snapshot.dataset.as_ref().unwrap().rows.0;
-        assert!(std::sync::Arc::ptr_eq(live_rows, snapshot_rows));
+        let live_rows = state.dataset.as_ref().unwrap().rows.as_ptr();
+        let snapshot_rows = snapshot.dataset.as_ref().unwrap().rows.as_ptr();
+        assert_eq!(live_rows, snapshot_rows);
 
         state.dataset.as_mut().unwrap().rows[0][1] = Value::from("edited during save");
         let restored = DataState::restore(&snapshot.snapshot().unwrap()).unwrap();
