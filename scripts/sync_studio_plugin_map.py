@@ -150,6 +150,24 @@ duplicates_row["operationScopes"].append(dict(
     blockingReason="独立未签名候选；Studio确认选址、授权、取消、UI和主程序分发继续验收。",
 ))
 
+compare_row = next(row for row in rows if row["sourceToolId"] == "file-compare")
+compare_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.directory-compare.scan"],
+    packageId="com.zicode.devtools.directory-compare", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/directory-compare-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/directory-compare-0.1.0-candidate-01-verification.json",
+    reason="只读目录对比候选通过生产Windows Worker与原生适配器对照；双目录授权和工具页由Studio #29验收，复制等完整独立版能力另行跟踪。",
+)
+compare_row["operationScopes"].append(dict(
+    operationId="devtools.directory-compare.scan", scopeKind="bounded_confirmed_directory_comparison",
+    scope="按精确相对路径对比两侧类型、逻辑大小和SHA-256；清点不足时不推断单侧缺失；不写入文件。",
+    sourceVersion=compare_row["sourceVersion"], pluginStatus="candidate",
+    hostProfile="resource.local-directory.compare.draft1",
+    analysisLimits=dict(snapshotBytes=61440, comparedPaths=256, reportBytes=49152),
+    runtimeVerification="27_fixed_native_and_production_windows_worker_vectors",
+    blockingReason="独立未签名候选；双目录选址、Host授权、取消、UI、CSV导出和复制范围继续跟踪。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

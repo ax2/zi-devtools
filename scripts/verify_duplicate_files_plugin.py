@@ -140,22 +140,16 @@ def cases():
         yield label, bad, INVALID
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--native", type=Path, required=True)
-    parser.add_argument("--module", type=Path, required=True)
-    parser.add_argument("--worker", type=Path, required=True)
-    parser.add_argument("--evidence", type=Path)
-    args = parser.parse_args()
+def verify_vectors(args, *, plugin, capability, vectors, extras):
     wasm = args.module.read_bytes()
 
     records = []
-    for case, value, expected in cases():
+    for case, value, expected in vectors:
         data = payload(value)
         direct = invoke([args.native], data)
         try:
             wire = invoke([args.worker, "--zicode-plugin-worker"], worker_frame(
-                wasm, data, plugin=PLUGIN, capability=CAPABILITY))
+                wasm, data, plugin=plugin, capability=capability))
         except RuntimeError as error:
             raise RuntimeError(f"{case}: {error}") from error
         assert wire["ok"], (case, wire)
@@ -167,8 +161,8 @@ def main():
             assert guest == dict(ok=False, error=guest["error"]), (case, guest)
             assert guest["error"]["code"] == expected["errorCode"], (case, guest, expected)
         row = dict(case=case, bytes=len(data), inputSha256=hashlib.sha256(data).hexdigest(),
-                   ok=guest["ok"], partial=guest.get("partial"), groupCount=guest.get("groupCount"),
-                   projectionTruncated=guest.get("projectionTruncated"))
+                   ok=guest["ok"], partial=guest.get("partial"))
+        row.update({key: guest.get(key) for key in extras})
         print(json.dumps(row, ensure_ascii=False), flush=True)
         records.append(row)
     proof = dict(passed=len(records), wasmSha256=hashlib.sha256(wasm).hexdigest(),
@@ -176,6 +170,16 @@ def main():
     if args.evidence:
         args.evidence.write_text(json.dumps(proof | {"cases": records}, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(proof))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--native", type=Path, required=True)
+    parser.add_argument("--module", type=Path, required=True)
+    parser.add_argument("--worker", type=Path, required=True)
+    parser.add_argument("--evidence", type=Path)
+    verify_vectors(parser.parse_args(), plugin=PLUGIN, capability=CAPABILITY, vectors=cases(),
+                   extras=("groupCount", "projectionTruncated"))
 
 
 if __name__ == "__main__":

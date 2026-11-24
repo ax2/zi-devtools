@@ -66,22 +66,30 @@ def manifest():
     )
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def candidate_arguments(description):
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--module", required=True, type=Path)
     parser.add_argument("--evidence", required=True, type=Path)
     parser.add_argument("--candidate", default="01")
-    args = parser.parse_args()
+    return parser, parser.parse_args()
+
+
+def freeze_candidate(parser, args, *, slug, source_tool, profile, manifest, vectors, fixture_generator):
+    plugin = manifest["id"]
+    version = manifest["version"]
+    title = manifest["displayName"]
+    scope = manifest["description"]
+    capability, = manifest["contributes"]["capabilities"]
     if not (len(args.candidate) == 2 and args.candidate.isascii() and args.candidate.isdigit()):
         parser.error("candidate number must contain two ASCII digits")
-    dest = ROOT / "release/plugin-candidates" / f"duplicate-files-{VERSION}-candidate-{args.candidate}"
+    dest = ROOT / "release/plugin-candidates" / f"{slug}-{version}-candidate-{args.candidate}"
     receipt = dest.with_name(dest.name + "-verification.json")
     if dest.exists() or receipt.exists():
         parser.error("candidate or external receipt already exists")
 
     wasm = args.module.read_bytes()
     evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
-    vectors = list(cases())
+    vectors = list(vectors)
     expected_inputs = [(case, digest(payload(value)), expected["ok"])
                        for case, value, expected in vectors]
     actual_inputs = [(row["case"], row["inputSha256"], row["ok"]) for row in evidence["cases"]]
@@ -98,17 +106,17 @@ def main():
     (dest / "runtime").mkdir(parents=True)
     (dest / "runtime/tools.wasm").write_bytes(wasm)
     shutil.copyfile(ROOT / "LICENSE", dest / "LICENSE")
-    shutil.copyfile(ROOT / "plugins/duplicate-files/README.md", dest / "README.md")
+    shutil.copyfile(ROOT / "plugins" / slug / "README.md", dest / "README.md")
     (dest / "NOTICE").write_text(
         "ZiDevTools and the WASI resource reader are MIT. Serde and serde_json retain their upstream licenses.\n",
         encoding="utf-8",
     )
-    dump(dest / "plugin.json", manifest())
+    dump(dest / "plugin.json", manifest)
     dump(dest / "catalog.json", dict(
-        contract="zicode.devtools-plugin/1.0.0-rc.1", packageId=PLUGIN, packageVersion=VERSION,
+        contract="zicode.devtools-plugin/1.0.0-rc.1", packageId=plugin, packageVersion=version,
         deliveryStatus="unsigned_provider_candidate_not_host_accepted",
-        tools=[dict(sourceToolId="duplicate-files", capabilityId=CAPABILITY, title=TITLE,
-                    status="candidate", inputProfile=PROFILE, scope=SCOPE)],
+        tools=[dict(sourceToolId=source_tool, capabilityId=capability["id"], title=title,
+                    status="candidate", inputProfile=profile, scope=scope)],
     ))
     dump(dest / "provenance.json", dict(
         sourceRevision=revision, dirty=False, signature="unsigned",
@@ -116,7 +124,7 @@ def main():
         wasmProfile="plugin", moduleSha256=digest(wasm), workerVerification=evidence,
     ))
     dump(dest / "fixtures.json", dict(
-        generator="scripts/verify_duplicate_files_plugin.py",
+        generator=fixture_generator,
         cases=[
             dict(id=name, snapshot=value if len(payload(value)) <= 4096 else None,
                  inputSha256=digest(payload(value)), expected=expected)
@@ -130,7 +138,7 @@ def main():
             files.append(dict(path=path.relative_to(dest).as_posix(), size=len(data), sha256=digest(data)))
     index = digest(compact(files))
     dump(receipt, dict(
-        schemaVersion=1, pluginId=PLUGIN, packageVersion=VERSION, signatureVerified=False,
+        schemaVersion=1, pluginId=plugin, packageVersion=version, signatureVerified=False,
         directoryIndexSha256=index, files=files, fileCount=len(files),
         totalBytes=sum(item["size"] for item in files),
         directoryIndexEncoding=dict(hash="SHA-256", encoding="UTF-8", content="files array in listed order",
@@ -138,6 +146,13 @@ def main():
                                     separators=[",", ":"], trailingNewline=False),
     ))
     print(json.dumps(dict(candidate=str(dest), directoryIndexSha256=index, files=len(files))))
+
+
+def main():
+    parser, args = candidate_arguments(__doc__)
+    freeze_candidate(parser, args, slug="duplicate-files", source_tool="duplicate-files",
+                     profile=PROFILE, manifest=manifest(), vectors=cases(),
+                     fixture_generator="scripts/verify_duplicate_files_plugin.py")
 
 
 if __name__ == "__main__":

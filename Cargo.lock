@@ -5941,6 +5941,7 @@ dependencies = [
  "zi-character-core",
  "zi-diagnostics-core",
  "zi-diff-core",
+ "zi-directory-compare-wasi",
  "zi-duplicate-files-wasi",
  "zi-image-core",
  "zi-inspect-core",
@@ -5980,6 +5981,15 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "similar",
+]
+
+[[package]]
+name = "zi-directory-compare-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]
