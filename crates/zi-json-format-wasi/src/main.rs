@@ -79,14 +79,6 @@ mod transport {
     const PLUGIN: &str = "com.zicode.devtools.json-file";
     const CHUNK: usize = 64 * 1024;
 
-    #[link(wasm_import_module = "zicode_resource_input_draft1")]
-    unsafe extern "C" {
-        #[link_name = "size"]
-        fn resource_size(index: i32) -> i64;
-        #[link_name = "read"]
-        fn resource_read(index: i32, offset: i64, destination: *mut u8, length: i32) -> i32;
-    }
-
     #[link(wasm_import_module = "zicode_resource_output_draft1")]
     unsafe extern "C" {
         #[link_name = "create"]
@@ -138,28 +130,7 @@ mod transport {
         if file.byte_length > MAX_FILE {
             return Err("INPUT_TOO_LARGE");
         }
-        let index = index as i32;
-        if unsafe { resource_size(index) } != file.byte_length as i64 {
-            return Err("RESOURCE_READ_FAILED");
-        }
-        let mut bytes = vec![0; file.byte_length];
-        let mut offset = 0;
-        while offset < bytes.len() {
-            let length = CHUNK.min(bytes.len() - offset);
-            let read = unsafe {
-                resource_read(
-                    index,
-                    offset as i64,
-                    bytes[offset..].as_mut_ptr(),
-                    length as i32,
-                )
-            };
-            if !(1..=length as i32).contains(&read) {
-                return Err("RESOURCE_READ_FAILED");
-            }
-            offset += read as usize;
-        }
-        Ok(bytes)
+        zi_resource_input_wasi::read_prefix(index as i32, file.byte_length, file.byte_length)
     }
 
     pub(super) fn execute() -> Result<Value, Failure> {

@@ -1795,8 +1795,10 @@
       "sourceVersion": "1.0.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.disk-inspector.scan"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -1806,9 +1808,28 @@
           "sourceVersion": "1.0.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.disk-inspector.scan",
+          "scopeKind": "bounded_confirmed_directory_usage",
+          "scope": "消费Host确认的相对名称、类型和逻辑长度；汇总逻辑字节、直属子目录与大文件前20，并标出部分结果。",
+          "sourceVersion": "1.0.1",
+          "pluginStatus": "candidate",
+          "hostProfile": "resource.local-directory.usage.draft1",
+          "analysisLimits": {
+            "snapshotBytes": 2097152,
+            "analyzedBytes": 65536,
+            "reportBytes": 49152
+          },
+          "runtimeVerification": "16_fixed_native_and_production_windows_worker_vectors",
+          "blockingReason": "独立未签名候选；正常Studio工具页、工作区外选址和Explorer入口继续验收。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "目录用量只读候选已通过真实Windows Worker与原生对照；Studio工具页和完整Host验收在Studio #29跟踪。",
+      "packageId": "com.zicode.devtools.disk-inspector",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/disk-inspector-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/disk-inspector-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "duplicate-files",
