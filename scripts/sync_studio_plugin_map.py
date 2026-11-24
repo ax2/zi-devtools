@@ -168,6 +168,23 @@ compare_row["operationScopes"].append(dict(
     blockingReason="独立未签名候选；双目录选址、Host授权、取消、UI、CSV导出和复制范围继续跟踪。",
 ))
 
+schema_row = next(row for row in rows if row["sourceToolId"] == "json-schema")
+schema_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.json-schema.validate"], scopeComplete=False,
+    packageId="com.zicode.devtools.json-schema", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/json-schema-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/json-schema-0.1.0-candidate-01-verification.json",
+    reason="纯离线粘贴候选已通过真实 Windows Worker。现代 Draft 和根文件引用由 Studio #29 继续跟踪。",
+)
+schema_row["operationScopes"].append(dict(
+    operationId="devtools.json-schema.validate", scopeKind="bounded_offline_schema_validation",
+    scope="Draft 4/6/7（默认7），实例和Schema各8KiB，仅支持文档内引用。最多100条脱敏错误，长报告提前截断。",
+    sourceVersion=schema_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputUtf8BytesPerField=8192, serializedRequestAndResultBytes=49152, maxDisplayedErrors=100),
+    runtimeVerification="23_independent_windows_production_worker_vectors",
+    blockingReason="2019-09与2020-12受现有fuel限制；根文件、外部引用和原生容量继续追踪。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

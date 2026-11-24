@@ -5947,6 +5947,7 @@ dependencies = [
  "zi-inspect-core",
  "zi-json-core",
  "zi-json-object-wasi",
+ "zi-json-schema-core",
  "zi-regex-core",
  "zi-shell-core",
  "zi-text-core",
@@ -6086,6 +6087,24 @@ dependencies = [
  "serde_json",
  "zi-json-core",
  "zi-text-core",
+]
+
+[[package]]
+name = "zi-json-schema-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "jsonschema",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-json-schema-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-json-schema-core",
 ]
 
 [[package]]
