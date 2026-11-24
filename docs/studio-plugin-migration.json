@@ -2302,8 +2302,10 @@
       "sourceVersion": "1.5.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.image.crop"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2313,9 +2315,30 @@
           "sourceVersion": "1.5.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.image.crop",
+          "scopeKind": "bounded_confirmed_pixel_crop",
+          "scope": "一张已确认的静态 PNG/JPEG/WebP，按原始像素坐标产生无损 PNG，不改原件。",
+          "sourceVersion": "1.5.0",
+          "pluginStatus": "candidate",
+          "hostProfile": "resource.wasi.image.crop.v1@=1.0.0-preview.1",
+          "limits": {
+            "inputBytes": 33554432,
+            "outputBytes": 33554432,
+            "edge": 4096,
+            "pixels": 16000000
+          },
+          "runtimeVerification": "fixed_synthetic_windows_production_worker_vectors",
+          "blockingReason": "单张裁剪子集，交互选区、标注、批量和原生界面仍待。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "原生图片核心的单张像素裁剪候选已通过 Windows Worker。标注和可视选区继续在 Studio #29 跟踪。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.image-crop",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/image-crop-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/image-crop-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "image-metadata",

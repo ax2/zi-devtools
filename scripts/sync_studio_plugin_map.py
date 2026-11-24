@@ -204,6 +204,24 @@ schema_row["operationScopes"].append(dict(
     blockingReason="2019-09与2020-12受现有fuel限制；根文件、外部引用和原生容量继续追踪。",
 ))
 
+crop_row = next(row for row in rows if row["sourceToolId"] == "image-crop-annotate")
+crop_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.image.crop"], scopeComplete=False,
+    packageId="com.zicode.devtools.image-crop", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/image-crop-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/image-crop-0.1.0-candidate-01-verification.json",
+    reason="原生图片核心的单张像素裁剪候选已通过 Windows Worker。标注和可视选区继续在 Studio #29 跟踪。",
+)
+crop_row["operationScopes"].append(dict(
+    operationId="devtools.image.crop", scopeKind="bounded_confirmed_pixel_crop",
+    scope="一张已确认的静态 PNG/JPEG/WebP，按原始像素坐标产生无损 PNG，不改原件。",
+    sourceVersion=crop_row["sourceVersion"], pluginStatus="candidate",
+    hostProfile="resource.wasi.image.crop.v1@=1.0.0-preview.1",
+    limits=dict(inputBytes=32 * 1024 * 1024, outputBytes=32 * 1024 * 1024, edge=4096, pixels=16_000_000),
+    runtimeVerification="fixed_synthetic_windows_production_worker_vectors",
+    blockingReason="单张裁剪子集，交互选区、标注、批量和原生界面仍待。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

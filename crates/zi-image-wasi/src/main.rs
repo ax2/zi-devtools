@@ -1,5 +1,5 @@
-//! Resource-mode image adapter. It has no filesystem or network imports.
-use anyhow::{Context, Result, bail, ensure};
+//! Resource-mode image adapter with separate resize and crop builds.
+use anyhow::{Context, Result, ensure};
 use image::ImageFormat;
 use serde::Deserialize;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -10,6 +10,14 @@ const MAX_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
 const PROFILE_MAX_EDGE: u32 = 4096;
 const PROFILE_MAX_PIXELS: u64 = 16_000_000;
 const IO_CHUNK: usize = 64 * 1024;
+#[cfg(not(feature = "crop"))]
+const PLUGIN: &str = "com.zicode.devtools.image";
+#[cfg(feature = "crop")]
+const PLUGIN: &str = "com.zicode.devtools.image-crop";
+#[cfg(not(feature = "crop"))]
+const CAPABILITY: &str = "devtools.image.resize";
+#[cfg(feature = "crop")]
+const CAPABILITY: &str = "devtools.image.crop";
 
 #[link(wasm_import_module = "zicode_resource_input_draft1")]
 unsafe extern "C" {
@@ -52,6 +60,7 @@ struct ResourceDescriptor {
     byte_length: usize,
 }
 
+#[cfg(not(feature = "crop"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Operation {
@@ -60,6 +69,42 @@ struct Operation {
     quality: serde_json::Value,
 }
 
+#[cfg(feature = "crop")]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Operation {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+#[cfg(feature = "crop")]
+impl Operation {
+    fn bounds(&self, source_width: u32, source_height: u32) -> Result<zi_image_core::CropBounds> {
+        ensure!(
+            self.width > 0
+                && self.height > 0
+                && self
+                    .x
+                    .checked_add(self.width)
+                    .is_some_and(|right| right <= source_width)
+                && self
+                    .y
+                    .checked_add(self.height)
+                    .is_some_and(|bottom| bottom <= source_height),
+            "invalid operation crop rectangle"
+        );
+        Ok(zi_image_core::CropBounds {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: self.height,
+        })
+    }
+}
+
+#[cfg(not(feature = "crop"))]
 fn integer_parameter(value: &serde_json::Value, max_digits: usize) -> Result<u32> {
     match value {
         serde_json::Value::Number(number) => number
@@ -75,10 +120,11 @@ fn integer_parameter(value: &serde_json::Value, max_digits: usize) -> Result<u32
             );
             text.parse::<u32>().context("invalid operation integer")
         }
-        _ => bail!("invalid operation integer"),
+        _ => anyhow::bail!("invalid operation integer"),
     }
 }
 
+#[cfg(not(feature = "crop"))]
 impl Operation {
     fn validated(&self) -> Result<(u32, u8, ImageFormat, i32, &'static str)> {
         let max_width = integer_parameter(&self.max_width, 4)?;
@@ -189,24 +235,21 @@ fn read_resource(length: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+#[cfg(not(feature = "crop"))]
 fn encode_format(name: &str) -> Result<(ImageFormat, i32, &'static str)> {
     match name {
         "png" => Ok((ImageFormat::Png, 1, "image/png")),
         "jpeg" => Ok((ImageFormat::Jpeg, 2, "image/jpeg")),
         "webp" => Ok((ImageFormat::WebP, 3, "image/webp")),
-        _ => bail!("unsupported output format"),
+        _ => anyhow::bail!("unsupported output format"),
     }
 }
 
 fn execute(envelope: Envelope) -> Result<serde_json::Value> {
-    ensure!(
-        envelope.plugin_id == "com.zicode.devtools.image",
-        "invalid plugin id"
-    );
+    ensure!(envelope.plugin_id == PLUGIN, "invalid plugin id");
     ensure!(!envelope.scene_id.is_empty(), "missing scene id");
     ensure!(
-        envelope.capability_id.as_deref() == Some("devtools.image.resize")
-            && envelope.command_id.is_none(),
+        envelope.capability_id.as_deref() == Some(CAPABILITY) && envelope.command_id.is_none(),
         "invalid capability"
     );
     ensure!(
@@ -231,7 +274,10 @@ fn execute(envelope: Envelope) -> Result<serde_json::Value> {
         ),
         "unsupported input mime type"
     );
+    #[cfg(not(feature = "crop"))]
     let (max_width, quality, format, mime_index, mime_type) = envelope.input.validated()?;
+    #[cfg(feature = "crop")]
+    let (quality, format, mime_index, mime_type) = (82, ImageFormat::Png, 1, "image/png");
 
     let declared_size = unsafe { resource_size(0) };
     ensure!(declared_size > 0, "missing input resource");
@@ -261,15 +307,35 @@ fn execute(envelope: Envelope) -> Result<serde_json::Value> {
         PROFILE_MAX_PIXELS,
     )
     .context("image dimensions exceed resource profile")?;
+    #[cfg(feature = "crop")]
+    let bounds = {
+        // Animated images are a separate workflow. Do not silently flatten them.
+        let reader = std::io::Cursor::new(&input_bytes);
+        let animated = match detected {
+            ImageFormat::Png => image::codecs::png::PngDecoder::new(reader)
+                .and_then(|decoder| decoder.is_apng())
+                .context("image decode failed")?,
+            ImageFormat::WebP => image::codecs::webp::WebPDecoder::new(reader)
+                .context("image decode failed")?
+                .has_animation(),
+            _ => false,
+        };
+        ensure!(!animated, "unsupported input image animation");
+        envelope.input.bounds(input_width, input_height)?
+    };
     let image = zi_image_core::decode(&input_bytes).context("image decode failed")?;
     // The decoded image owns its pixels; free the compressed guest input before
-    // resize/encode so the resource frame bytes do not remain live unnecessarily.
+    // processing so the resource frame bytes do not remain live unnecessarily.
     drop(input_bytes);
     let source_width = image.width();
     let source_height = image.height();
-    let resized = zi_image_core::resize_to_width(&image, max_width)?;
+    #[cfg(not(feature = "crop"))]
+    let derived = zi_image_core::resize_to_width(&image, max_width)?;
+    #[cfg(feature = "crop")]
+    let derived = zi_image_core::crop_pixels(&image, bounds)?;
+    drop(image);
     let mut output = BoundedOutput::new();
-    zi_image_core::encode(&resized, format, quality, &mut output)?;
+    zi_image_core::encode(&derived, format, quality, &mut output)?;
     let output_bytes = output.into_bytes();
     ensure!(!output_bytes.is_empty(), "empty encoded image");
 
@@ -294,8 +360,8 @@ fn execute(envelope: Envelope) -> Result<serde_json::Value> {
         "ok": true,
         "sourceWidth": source_width,
         "sourceHeight": source_height,
-        "width": resized.width(),
-        "height": resized.height(),
+        "width": derived.width(),
+        "height": derived.height(),
         "mimeType": mime_type,
         "byteLength": output_bytes.len(),
     }))
@@ -319,7 +385,11 @@ fn public_failure(error: &anyhow::Error) -> serde_json::Value {
     } else if detail.contains("output budget") {
         ("OUTPUT_LIMIT", "编码结果超过 32 MiB 输出限制")
     } else if detail.contains("invalid operation") {
-        ("INVALID_PARAMETERS", "缩放宽度、格式或质量参数无效")
+        #[cfg(not(feature = "crop"))]
+        let message = "缩放宽度、格式或质量参数无效";
+        #[cfg(feature = "crop")]
+        let message = "裁剪区域必须落在图片范围内";
+        ("INVALID_PARAMETERS", message)
     } else if detail.contains("input size out of range") {
         ("INPUT_LIMIT", "输入图片为空或超过 32 MiB")
     } else {
@@ -339,7 +409,7 @@ fn main() {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "crop")))]
 mod tests {
     use super::*;
 
@@ -415,5 +485,38 @@ mod tests {
         ] {
             assert!(invalid.validated().is_err());
         }
+    }
+}
+
+#[cfg(all(test, feature = "crop"))]
+mod crop_tests {
+    use super::*;
+
+    #[test]
+    fn pixel_rectangle_accepts_the_last_pixel_and_rejects_invalid_bounds() {
+        let edge = Operation {
+            x: 3,
+            y: 1,
+            width: 1,
+            height: 1,
+        };
+        let bounds = edge.bounds(4, 2).unwrap();
+        assert_eq!(
+            (bounds.x, bounds.y, bounds.width, bounds.height),
+            (3, 1, 1, 1)
+        );
+        assert!(Operation { width: 2, ..edge }.bounds(4, 2).is_err());
+        assert!(Operation { width: 0, ..edge }.bounds(4, 2).is_err());
+        assert!(
+            Operation {
+                x: u32::MAX,
+                ..edge
+            }
+            .bounds(4, 2)
+            .is_err()
+        );
+        assert!(
+            serde_json::from_str::<Operation>(r#"{"x":0.5,"y":0,"width":1,"height":1}"#).is_err()
+        );
     }
 }

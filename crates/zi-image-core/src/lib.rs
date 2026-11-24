@@ -115,8 +115,26 @@ pub fn crop_bounds(width: u32, height: u32, region: CropRegion) -> Result<CropBo
 }
 
 pub fn crop_percent(image: &DynamicImage, region: CropRegion) -> Result<DynamicImage> {
-    validate_image(image)?;
     let bounds = crop_bounds(image.width(), image.height(), region)?;
+    crop_pixels(image, bounds)
+}
+
+/// Crop a nonempty rectangle measured from the original image’s top-left pixel.
+pub fn crop_pixels(image: &DynamicImage, bounds: CropBounds) -> Result<DynamicImage> {
+    validate_image(image)?;
+    ensure!(
+        bounds.width > 0
+            && bounds.height > 0
+            && bounds
+                .x
+                .checked_add(bounds.width)
+                .is_some_and(|right| right <= image.width())
+            && bounds
+                .y
+                .checked_add(bounds.height)
+                .is_some_and(|bottom| bottom <= image.height()),
+        "crop region is outside the image"
+    );
     let output = image.crop_imm(bounds.x, bounds.y, bounds.width, bounds.height);
     validate_image(&output)?;
     Ok(output)
@@ -225,6 +243,25 @@ mod tests {
         .to_rgba8();
         assert_eq!((cropped.width(), cropped.height()), (2, 1));
         assert_eq!(cropped.get_pixel(0, 0), &Rgba([1, 1, 5, 255]));
+    }
+
+    #[test]
+    fn pixel_crop_preserves_unpremultiplied_rgba_and_checks_bounds() {
+        let pixels =
+            image::RgbaImage::from_raw(3, 1, vec![0, 0, 0, 255, 19, 25, 31, 0, 2, 4, 8, 64])
+                .unwrap();
+        let image = DynamicImage::ImageRgba8(pixels);
+        let bounds = CropBounds {
+            x: 1,
+            y: 0,
+            width: 2,
+            height: 1,
+        };
+        assert_eq!(
+            crop_pixels(&image, bounds).unwrap().as_bytes(),
+            &[19, 25, 31, 0, 2, 4, 8, 64]
+        );
+        assert!(crop_pixels(&image, CropBounds { width: 3, ..bounds }).is_err());
     }
 
     #[test]
