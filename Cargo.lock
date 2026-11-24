@@ -5982,6 +5982,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-disk-inspector-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-fields-wasi"
 version = "0.1.0"
 dependencies = [
@@ -6046,6 +6055,7 @@ dependencies = [
  "base64",
  "serde",
  "serde_json",
+ "zi-resource-input-wasi",
  "zi-text-core",
 ]
 
@@ -6076,6 +6086,10 @@ dependencies = [
  "regex",
  "regex-syntax",
 ]
+
+[[package]]
+name = "zi-resource-input-wasi"
+version = "0.1.0"
 
 [[package]]
 name = "zi-shell-core"

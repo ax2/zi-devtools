@@ -114,6 +114,24 @@ for row in rows:
         row["requiredProfiles"] = {"tool.directory.v1": "=1.0.0-preview.1", "tool.open.v1": "=1.0.0-preview.1"}
         row["candidateDirectory"] = "release/plugin-candidates/inspect-0.1.2-candidate-01"
         row["verificationReceipt"] = "release/plugin-candidates/inspect-0.1.2-candidate-01-verification-revision-01.json"
+disk_row = next(row for row in rows if row["sourceToolId"] == "disk-inspector")
+disk_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.disk-inspector.scan"],
+    packageId="com.zicode.devtools.disk-inspector", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/disk-inspector-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/disk-inspector-0.1.0-candidate-01-verification.json",
+    reason="目录用量只读候选已通过真实Windows Worker与原生对照；Studio工具页和完整Host验收在Studio #29跟踪。",
+)
+disk_row["operationScopes"].append(dict(
+    operationId="devtools.disk-inspector.scan", scopeKind="bounded_confirmed_directory_usage",
+    scope="消费Host确认的相对名称、类型和逻辑长度；汇总逻辑字节、直属子目录与大文件前20，并标出部分结果。",
+    sourceVersion=disk_row["sourceVersion"], pluginStatus="candidate",
+    hostProfile="resource.local-directory.usage.draft1",
+    analysisLimits=dict(snapshotBytes=2 * 1024 * 1024, analyzedBytes=65536, reportBytes=49152),
+    runtimeVerification="16_fixed_native_and_production_windows_worker_vectors",
+    blockingReason="独立未签名候选；正常Studio工具页、工作区外选址和Explorer入口继续验收。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
