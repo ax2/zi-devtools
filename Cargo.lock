@@ -5941,6 +5941,7 @@ dependencies = [
  "zi-character-core",
  "zi-diagnostics-core",
  "zi-diff-core",
+ "zi-duplicate-files-wasi",
  "zi-image-core",
  "zi-inspect-core",
  "zi-json-core",
@@ -5983,6 +5984,15 @@ dependencies = [
 
 [[package]]
 name = "zi-disk-inspector-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-duplicate-files-wasi"
 version = "0.1.0"
 dependencies = [
  "serde",

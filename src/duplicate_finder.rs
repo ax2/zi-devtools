@@ -330,23 +330,14 @@ pub fn find(
             }
         }
     }
-    report.groups = hashed
+    report.groups = zi_duplicate_files_wasi::groups::rank(hashed)
         .into_iter()
-        .filter(|(_, files)| files.len() > 1)
-        .map(|((size, digest), mut files)| {
-            files.sort();
-            DuplicateGroup {
-                size,
-                sha256: digest.iter().map(|byte| format!("{byte:02x}")).collect(),
-                files,
-            }
+        .map(|group| DuplicateGroup {
+            size: group.size,
+            sha256: group.sha256(),
+            files: group.paths,
         })
         .collect();
-    report.groups.sort_by(|a, b| {
-        b.redundant_bytes()
-            .cmp(&a.redundant_bytes())
-            .then_with(|| a.sha256.cmp(&b.sha256))
-    });
     report.group_count = report.groups.len();
     report.redundant_bytes = report.groups.iter().fold(0u64, |sum, group| {
         sum.saturating_add(group.redundant_bytes())

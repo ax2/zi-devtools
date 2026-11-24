@@ -132,6 +132,24 @@ disk_row["operationScopes"].append(dict(
     blockingReason="独立未签名候选；正常Studio工具页、工作区外选址和Explorer入口继续验收。",
 ))
 
+duplicates_row = next(row for row in rows if row["sourceToolId"] == "duplicate-files")
+duplicates_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.duplicate-files.scan"],
+    packageId="com.zicode.devtools.duplicate-files", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/duplicate-files-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/duplicate-files-0.1.0-candidate-01-verification.json",
+    reason="重复文件只读报告候选通过生产Windows Worker与原生适配器对照；Studio正常工具页和完整Host验收在Studio #29跟踪。",
+)
+duplicates_row["operationScopes"].append(dict(
+    operationId="devtools.duplicate-files.scan", scopeKind="bounded_confirmed_directory_digests",
+    scope="消费Host确认的相对路径、逻辑长度和SHA-256；统计同大小同摘要文件组和理论冗余量，扫描覆盖与展示裁剪分别标记。",
+    sourceVersion=duplicates_row["sourceVersion"], pluginStatus="candidate",
+    hostProfile="resource.local-directory.duplicates.draft1",
+    analysisLimits=dict(snapshotBytes=61440, hashedFiles=256, hashedBytes=268435456, reportBytes=49152),
+    runtimeVerification="24_fixed_native_and_production_windows_worker_vectors",
+    blockingReason="独立未签名候选；Studio确认选址、授权、取消、UI和主程序分发继续验收。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

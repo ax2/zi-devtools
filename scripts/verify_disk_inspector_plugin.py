@@ -120,12 +120,12 @@ def cases():
         yield case, value, {"ok": False, "errorCode": "INVALID_DIRECTORY_SNAPSHOT"}
 
 
-def worker_frame(wasm, payload):
+def worker_frame(wasm, payload, *, plugin=PLUGIN, capability=CAPABILITY):
     header = compact({
         "profile": "resource.wasi.input.draft2",
         "request": {
-            "workerKind": "wasi", "workerPath": "", "pluginId": PLUGIN,
-            "capabilityId": CAPABILITY, "sceneId": "programming", "input": {},
+            "workerKind": "wasi", "workerPath": "", "pluginId": plugin,
+            "capabilityId": capability, "sceneId": "programming", "input": {},
         },
         "module": {"byteLength": len(wasm), "sha256": hashlib.sha256(wasm).hexdigest()},
         "resources": [{
