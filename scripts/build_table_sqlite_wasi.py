@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--sqlite-source", required=True, type=Path,
                         help="sqlite3.c from Cargo's locked libsqlite3-sys 0.30.1")
     parser.add_argument("--work", required=True, type=Path, help="Writable directory for build-only C artifacts")
-    parser.add_argument("--package", choices=("zi-table-sqlite-wasi", "zi-sqlite-browser-wasi", "zi-knowledge-keyword-wasi"),
+    parser.add_argument("--package", choices=("zi-table-sqlite-wasi", "zi-sqlite-browser-wasi", "zi-knowledge-keyword-wasi", "zi-knowledge-index-build-wasi"),
                         default="zi-table-sqlite-wasi", help="SQLite guest to build")
     args = parser.parse_args()
     compiler, sqlite, work = (value.resolve() for value in (args.zig, args.sqlite_source, args.work))
@@ -31,7 +31,7 @@ def main():
     context = dict(os.environ, ZIG_LOCAL_CACHE_DIR=str(local), ZIG_GLOBAL_CACHE_DIR=str(shared),
                    TEMP=str(work), TMP=str(work))
     obj, archive = work / "sqlite3.o", work / "libsqlite3.a"
-    fts_flags = ["-DSQLITE_ENABLE_FTS5=1"] if args.package == "zi-knowledge-keyword-wasi" else []
+    fts_flags = ["-DSQLITE_ENABLE_FTS5=1"] if args.package in {"zi-knowledge-keyword-wasi", "zi-knowledge-index-build-wasi"} else []
     subprocess.run([compiler, "cc", "-target", "wasm32-wasi", "-Os", "-ffunction-sections",
                     "-fdata-sections", "-DSQLITE_MAX_MMAP_SIZE=0", "-DSQLITE_DISABLE_DIRSYNC=1",
                     "-DSQLITE_THREADSAFE=0", "-DSQLITE_TEMP_STORE=3", "-DSQLITE_OMIT_LOAD_EXTENSION=1",

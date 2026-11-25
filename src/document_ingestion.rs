@@ -279,7 +279,7 @@ fn parse_text(bytes: &[u8], markdown: bool) -> Result<Vec<(String, String)>> {
         }
         push_section(&mut sections, format!("段落 {}", number + 1), current)?;
     } else {
-        for (i, paragraph) in text.split("\n\n").enumerate() {
+        for (i, paragraph) in zi_document_text_core::plain_paragraphs(text) {
             push_section(
                 &mut sections,
                 format!("段落 {}", i + 1),

@@ -325,24 +325,20 @@ fn sync_all_with_ocr_language(
                 aggregate.chunks <= MAX_CHUNKS && aggregate.text_bytes <= MAX_TEXT_BYTES,
                 "索引超过 100000 个分块或 128 MiB 正文预算；本轮修改已回滚"
             );
-            tx.execute(
-                "INSERT INTO indexed_files(source_id,relative,sha256,bytes,text_bytes,chunk_count,indexed_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
-                params![source.id, file.relative, file.sha256, file.bytes, text_bytes, count, chrono::Utc::now().to_rfc3339()],
+            let indexed_at = chrono::Utc::now().to_rfc3339();
+            zi_knowledge_index_core::insert_document(
+                &tx,
+                zi_knowledge_index_core::IndexedDocument {
+                    source_id: &source.id,
+                    relative: &file.relative,
+                    sha256: &file.sha256,
+                    bytes: file.bytes,
+                    text_bytes,
+                    indexed_at: &indexed_at,
+                    chunks: &preview.chunks,
+                },
+                || check_cancel(cancel),
             )?;
-            {
-                let mut insert = tx.prepare("INSERT INTO chunks(source_id,relative,ordinal,location,sha256,text) VALUES(?1,?2,?3,?4,?5,?6)")?;
-                for chunk in &preview.chunks {
-                    check_cancel(cancel)?;
-                    insert.execute(params![
-                        source.id,
-                        file.relative,
-                        chunk.ordinal,
-                        chunk.location,
-                        chunk.sha256,
-                        chunk.text
-                    ])?;
-                }
-            }
             if previous.is_some() {
                 report.updated += 1;
             } else {
