@@ -73,11 +73,17 @@ impl TextInput {
     }
 
     pub(crate) fn format(&self) -> Result<String> {
+        #[cfg(target_os = "wasi")]
+        let wire_overhead = serde_json::to_vec(&crate::ResultEnvelope::success(String::new()))
+            .expect("empty success serializes")
+            .len();
         format_sql(
             &self.text,
             self.dialect.unwrap_or(Dialect::Generic),
             self.indent.unwrap_or_default(),
             self.keyword_case.unwrap_or_default(),
+            #[cfg(target_os = "wasi")]
+            Some(crate::REQUEST_LIMIT - wire_overhead),
         )
     }
 }
@@ -104,7 +110,14 @@ pub fn format_with_options(
     indent_style: IndentStyle,
     keyword_case: KeywordCase,
 ) -> Result<String> {
-    format_sql(input, Dialect::parse(dialect)?, indent_style, keyword_case)
+    format_sql(
+        input,
+        Dialect::parse(dialect)?,
+        indent_style,
+        keyword_case,
+        #[cfg(target_os = "wasi")]
+        None,
+    )
 }
 
 fn format_sql(
@@ -112,6 +125,7 @@ fn format_sql(
     dialect: Dialect,
     indent_style: IndentStyle,
     keyword_case: KeywordCase,
+    #[cfg(target_os = "wasi")] response_content_budget: Option<usize>,
 ) -> Result<String> {
     if input.trim().is_empty() {
         return Err(anyhow!("请输入 SQL 语句"));
@@ -138,8 +152,61 @@ fn format_sql(
     };
 
     // Keep placeholders verbatim. Formatting must never substitute user parameters.
+    #[cfg(target_os = "wasi")]
+    if let Some(mut remaining) = response_content_budget.filter(|_| literals.is_empty()) {
+        return sqlformat::format_checked(
+            &protected_input,
+            &QueryParams::None,
+            &options,
+            |chunk| {
+                let Some(rest) = remaining.checked_sub(json_string_content_size(chunk)) else {
+                    return false;
+                };
+                remaining = rest;
+                true
+            },
+        )
+        .ok_or_else(|| OutputLimit.into());
+    }
+
     let output = sqlformat::format(&protected_input, &QueryParams::None, &options);
     Ok(restore_protected_literals(output, &literals))
+}
+
+#[cfg(target_os = "wasi")]
+#[derive(Debug)]
+pub(crate) struct OutputLimit;
+
+#[cfg(target_os = "wasi")]
+impl std::fmt::Display for OutputLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SQL output exceeds the JSON envelope limit")
+    }
+}
+
+#[cfg(target_os = "wasi")]
+impl std::error::Error for OutputLimit {}
+
+#[cfg(any(test, target_os = "wasi"))]
+fn json_string_content_size(text: &str) -> usize {
+    text.bytes()
+        .map(|byte| match byte {
+            b'"' | b'\\' | b'\x08' | b'\t' | b'\n' | b'\x0c' | b'\r' => 2,
+            0..=0x1f => 6,
+            _ => 1,
+        })
+        .sum()
+}
+
+#[cfg(test)]
+#[test]
+fn output_budget_counts_the_actual_json_escapes() {
+    let mut text: String = (0..=127).map(char::from).collect();
+    text.push_str("中文😀é\\\"");
+    assert_eq!(
+        json_string_content_size(&text),
+        serde_json::to_vec(&text).unwrap().len() - 2
+    );
 }
 
 const LITERAL_MARKER: &str = "__ZICODE_SQLFMT_LITERAL_";

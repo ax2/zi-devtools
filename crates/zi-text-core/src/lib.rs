@@ -240,6 +240,8 @@ pub fn execute(capability: &str, input: &str) -> ResultEnvelope {
 fn sql_result(result: anyhow::Result<String>) -> ResultEnvelope {
     match result {
         Ok(text) => ResultEnvelope::success(text),
+        #[cfg(target_os = "wasi")]
+        Err(error) if error.is::<sql::OutputLimit>() => result_too_large(),
         Err(_) => ResultEnvelope::failure("INVALID_INPUT", "SQL 为空或方言字面量格式无效"),
     }
 }
@@ -250,12 +252,12 @@ pub fn serialize_result(result: &ResultEnvelope) -> Vec<u8> {
     if bytes.len() <= REQUEST_LIMIT {
         bytes
     } else {
-        serde_json::to_vec(&ResultEnvelope::failure(
-            "INPUT_TOO_LARGE",
-            "结果超过 48 KiB",
-        ))
-        .expect("fixed result")
+        serde_json::to_vec(&result_too_large()).expect("fixed result")
     }
+}
+
+fn result_too_large() -> ResultEnvelope {
+    ResultEnvelope::failure("INPUT_TOO_LARGE", "结果超过 48 KiB")
 }
 
 fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {

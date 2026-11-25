@@ -25,6 +25,19 @@ upstream word-character predicate. Multi-word matching finds the same
 first ASCII-insensitive final word without allocating an uppercase copy
 of the remaining SQL for each successful match.
 
+For the Studio WASI response, the layout can report chunks that remain
+after final whitespace trimming. Later layout operations append text or
+trim trailing whitespace, so they cannot remove any reported chunk.
+The text core counts serialized JSON escapes and the actual success
+envelope overhead. It stops only when those bytes already exceed the
+response limit. SQL with protected literal replacement continues to use
+the complete restored result for the final size check.
+
+While outside an inline block, the lookahead stops once its accumulated
+source length exceeds the existing inline limit. That block is already
+ineligible and the formatter would discard its metadata. A block inside
+an existing inline block keeps the full lookahead and its stored length.
+
 Review token precedence, word boundaries, and the keyword table when
 updating the pinned dependency. The Windows checks compare the frozen
 67 requests byte for byte and exercise measured 8 KiB dense templates

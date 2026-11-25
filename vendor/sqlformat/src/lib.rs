@@ -27,6 +27,17 @@ pub fn format(query: &str, params: &QueryParams, options: &FormatOptions) -> Str
     formatter::format(&tokens, params, options)
 }
 
+/// Formats and reports each immutable chunk of the final output text.
+pub fn format_checked(
+    query: &str,
+    params: &QueryParams,
+    options: &FormatOptions,
+    accept: impl FnMut(&str) -> bool,
+) -> Option<String> {
+    let tokens = tokenizer::tokenize(query, matches!(params, QueryParams::Named(_)), options);
+    formatter::format_checked(&tokens, params, options, Some(accept))
+}
+
 /// The SQL dialect to use. This affects parsing of special characters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
