@@ -1,7 +1,11 @@
+use std::{borrow::Cow, collections::BTreeMap, fmt::Write};
+
 use anyhow::{Result, anyhow};
+use serde::{Deserialize, Deserializer};
 use sqlformat::{Dialect as FormatterDialect, FormatOptions, Indent, QueryParams};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum IndentStyle {
     TwoSpaces,
     #[default]
@@ -9,7 +13,8 @@ pub enum IndentStyle {
     Tabs,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum KeywordCase {
     #[default]
     Uppercase,
@@ -17,7 +22,8 @@ pub enum KeywordCase {
     Preserve,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 enum Dialect {
     Generic,
     PostgreSql,
@@ -47,6 +53,40 @@ impl Dialect {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TextInput {
+    pub(crate) text: String,
+    #[serde(default, deserialize_with = "present")]
+    dialect: Option<Dialect>,
+    #[serde(default, deserialize_with = "present")]
+    indent: Option<IndentStyle>,
+    #[serde(default, deserialize_with = "present")]
+    keyword_case: Option<KeywordCase>,
+}
+
+impl TextInput {
+    pub(crate) fn has_sql_options(&self) -> bool {
+        self.dialect.is_some() || self.indent.is_some() || self.keyword_case.is_some()
+    }
+
+    pub(crate) fn format(&self) -> Result<String> {
+        format_sql(
+            &self.text,
+            self.dialect.unwrap_or(Dialect::Generic),
+            self.indent.unwrap_or_default(),
+            self.keyword_case.unwrap_or_default(),
+        )
+    }
+}
+
+// An absent property uses its default, but explicit null is outside the string enum.
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
+}
+
 pub fn format(input: &str, dialect: &str) -> Result<String> {
     format_with_options(
         input,
@@ -62,7 +102,15 @@ pub fn format_with_options(
     indent_style: IndentStyle,
     keyword_case: KeywordCase,
 ) -> Result<String> {
-    let dialect = Dialect::parse(dialect)?;
+    format_sql(input, Dialect::parse(dialect)?, indent_style, keyword_case)
+}
+
+fn format_sql(
+    input: &str,
+    dialect: Dialect,
+    indent_style: IndentStyle,
+    keyword_case: KeywordCase,
+) -> Result<String> {
     if input.trim().is_empty() {
         return Err(anyhow!("请输入 SQL 语句"));
     }
@@ -89,77 +137,112 @@ pub fn format_with_options(
 
     // Keep placeholders verbatim. Formatting must never substitute user parameters.
     let output = sqlformat::format(&protected_input, &QueryParams::None, &options);
-    Ok(restore_protected_literals(&output, &literals))
+    Ok(restore_protected_literals(output, &literals))
+}
+
+const LITERAL_MARKER: &str = "__ZICODE_SQLFMT_LITERAL_";
+
+struct ProtectedLiteral<'a> {
+    text: &'a str,
+    leading_underscores: usize,
 }
 
 fn protect_dialect_regions(
     input: &str,
     dialect: Dialect,
-) -> Result<(String, Vec<(String, String)>)> {
+) -> Result<(Cow<'_, str>, Vec<ProtectedLiteral<'_>>)> {
+    if !matches!(dialect, Dialect::PostgreSql | Dialect::Sqlite) {
+        return Ok((Cow::Borrowed(input), Vec::new()));
+    }
+
     let bytes = input.as_bytes();
-    let mut output = String::with_capacity(input.len());
+    let mut output = String::new();
+    let collisions = literal_marker_collisions(input);
     let mut literals = Vec::new();
     let mut scan = 0;
     let mut copy_from = 0;
 
     while scan < bytes.len() {
-        match bytes[scan] {
-            b'\'' | b'"' => scan = quoted_end(bytes, scan, bytes[scan]),
+        let protected_end = match bytes[scan] {
+            b'\'' | b'"' => {
+                scan = quoted_end(bytes, scan, bytes[scan]);
+                continue;
+            }
             b'-' if bytes.get(scan + 1) == Some(&b'-') => {
                 scan = line_comment_end(bytes, scan + 2);
+                continue;
             }
             b'/' if bytes.get(scan + 1) == Some(&b'*') => {
                 scan = block_comment_end(bytes, scan + 2);
+                continue;
             }
-            b'$' if dialect == Dialect::PostgreSql => {
-                let Some((delimiter, body_start)) = dollar_delimiter(bytes, scan) else {
-                    scan += 1;
-                    continue;
-                };
-                let body = &bytes[body_start..];
-                let Some(close_offset) = body
-                    .windows(delimiter.len())
-                    .position(|window| window == delimiter)
-                else {
-                    return Err(anyhow!("PostgreSQL dollar 引号缺少结束标记"));
-                };
-                let end = body_start + close_offset + delimiter.len();
-                output.push_str(&input[copy_from..scan]);
-
-                let mut placeholder = format!("__ZICODE_SQLFMT_LITERAL_{}__", literals.len());
-                while input.contains(&placeholder) {
-                    placeholder.insert(0, '_');
+            b'$' if dialect == Dialect::PostgreSql => match dollar_delimiter(bytes, scan) {
+                Some((delimiter, body_start)) => {
+                    let close_offset = bytes[body_start..]
+                        .windows(delimiter.len())
+                        .position(|window| window == delimiter)
+                        .ok_or_else(|| anyhow!("PostgreSQL dollar 引号缺少结束标记"))?;
+                    Some(body_start + close_offset + delimiter.len())
                 }
-                output.push_str(&placeholder);
-                literals.push((placeholder, input[scan..end].to_owned()));
-                scan = end;
-                copy_from = end;
-            }
-            b'[' if dialect == Dialect::Sqlite => {
-                if let Some(end) = bracket_identifier_end(bytes, scan) {
-                    output.push_str(&input[copy_from..scan]);
-                    let mut placeholder = format!("__ZICODE_SQLFMT_LITERAL_{}__", literals.len());
-                    while input.contains(&placeholder) {
-                        placeholder.insert(0, '_');
-                    }
-                    output.push_str(&placeholder);
-                    literals.push((placeholder, input[scan..end].to_owned()));
-                    scan = end;
-                    copy_from = end;
-                } else {
-                    scan += 1;
-                }
-            }
-            _ => scan += 1,
+                None => None,
+            },
+            b'[' if dialect == Dialect::Sqlite => bracket_identifier_end(bytes, scan),
+            _ => None,
         };
+
+        if let Some(end) = protected_end {
+            let index = literals.len();
+            let leading_underscores = collisions.get(&index).copied().unwrap_or(0);
+            output.push_str(&input[copy_from..scan]);
+            output.extend(std::iter::repeat_n('_', leading_underscores));
+            write!(output, "{LITERAL_MARKER}{index}__").expect("writing to a string");
+            literals.push(ProtectedLiteral {
+                text: &input[scan..end],
+                leading_underscores,
+            });
+            scan = end;
+            copy_from = end;
+        } else {
+            scan += 1;
+        }
     }
 
     if literals.is_empty() {
-        Ok((input.to_owned(), literals))
+        Ok((Cow::Borrowed(input), literals))
     } else {
         output.push_str(&input[copy_from..]);
-        Ok((output, literals))
+        Ok((Cow::Owned(output), literals))
     }
+}
+
+fn literal_marker_index(tail: &str) -> Option<(usize, &str)> {
+    let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
+    let index = &tail[..digits];
+    if digits > 1 && index.starts_with('0') {
+        return None;
+    }
+    let suffix = tail[digits..].strip_prefix("__")?;
+    Some((index.parse().ok()?, suffix))
+}
+
+// Compute the shortest collision-free version of each original marker in one scan.
+// Keeping the old marker widths preserves the formatter's line-wrap decisions.
+fn literal_marker_collisions(input: &str) -> BTreeMap<usize, usize> {
+    let mut collisions = BTreeMap::new();
+    for (start, marker) in input.match_indices(LITERAL_MARKER) {
+        let Some((index, _)) = literal_marker_index(&input[start + marker.len()..]) else {
+            continue;
+        };
+        let leading_underscores = input.as_bytes()[..start]
+            .iter()
+            .rev()
+            .take_while(|&&byte| byte == b'_')
+            .count()
+            + 1;
+        let longest = collisions.entry(index).or_insert(0);
+        *longest = (*longest).max(leading_underscores);
+    }
+    collisions
 }
 
 fn bracket_identifier_end(bytes: &[u8], start: usize) -> Option<usize> {
@@ -223,27 +306,36 @@ fn block_comment_end(bytes: &[u8], start: usize) -> usize {
     bytes.len()
 }
 
-fn restore_protected_literals(output: &str, literals: &[(String, String)]) -> String {
+fn restore_protected_literals(output: String, literals: &[ProtectedLiteral<'_>]) -> String {
+    if literals.is_empty() {
+        return output;
+    }
     let mut restored = String::with_capacity(output.len());
     let mut cursor = 0;
-
-    loop {
-        let next = literals
-            .iter()
-            .filter_map(|(placeholder, literal)| {
-                output[cursor..]
-                    .find(placeholder)
-                    .map(|offset| (cursor + offset, placeholder, literal))
-            })
-            .min_by_key(|(position, _, _)| *position);
-        let Some((position, placeholder, literal)) = next else {
-            restored.push_str(&output[cursor..]);
-            return restored;
+    for (marker_start, marker) in output.match_indices(LITERAL_MARKER) {
+        let Some((index, tail)) = literal_marker_index(&output[marker_start + marker.len()..])
+        else {
+            continue;
         };
-        restored.push_str(&output[cursor..position]);
-        restored.push_str(literal);
-        cursor = position + placeholder.len();
+        let Some(literal) = literals.get(index) else {
+            continue;
+        };
+        let Some(start) = marker_start.checked_sub(literal.leading_underscores) else {
+            continue;
+        };
+        if start < cursor
+            || !output.as_bytes()[start..marker_start]
+                .iter()
+                .all(|&byte| byte == b'_')
+        {
+            continue;
+        }
+        restored.push_str(&output[cursor..start]);
+        restored.push_str(literal.text);
+        cursor = output.len() - tail.len();
     }
+    restored.push_str(&output[cursor..]);
+    restored
 }
 
 fn dollar_delimiter(bytes: &[u8], start: usize) -> Option<(&[u8], usize)> {

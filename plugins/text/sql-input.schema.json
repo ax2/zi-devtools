@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "maxLength": 8192
+    },
+    "dialect": {
+      "title": "SQL dialect",
+      "type": "string",
+      "enum": [
+        "generic",
+        "postgresql",
+        "mysql",
+        "sqlite",
+        "sqlserver"
+      ],
+      "default": "generic"
+    },
+    "indent": {
+      "title": "Indentation",
+      "type": "string",
+      "enum": [
+        "twoSpaces",
+        "fourSpaces",
+        "tabs"
+      ],
+      "default": "fourSpaces"
+    },
+    "keywordCase": {
+      "title": "Keyword case",
+      "type": "string",
+      "enum": [
+        "uppercase",
+        "lowercase",
+        "preserve"
+      ],
+      "default": "uppercase"
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}

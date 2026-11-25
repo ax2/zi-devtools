@@ -2,7 +2,7 @@
 import math
 
 
-def validate_compute_metadata(manifest, catalog, reference, require_directory=False):
+def validate_compute_metadata(manifest, catalog, reference, require_directory=False, input_overrides=None):
     """Check frozen Pi routing/inputs; this is not complete Host validation."""
     contributions = manifest['contributes']
     capabilities = contributions['capabilities']
@@ -14,12 +14,19 @@ def validate_compute_metadata(manifest, catalog, reference, require_directory=Fa
     reference_pi = reference['contributes']['piTools'][0]
     pi_tools = contributions['piTools']
     assert len(pi_tools) == len(ids) and len({tool['name'] for tool in pi_tools}) == len(ids)
+    input_overrides = input_overrides or {}
+    assert set(input_overrides) <= ids, 'Input schema override has no registered capability'
+    default_input = reference_pi['inputSchema']
+
+    def expected_input(capability_id):
+        return input_overrides.get(capability_id, default_input)
+
     for tool in pi_tools:
         assert set(tool) == set(reference_pi), 'Pi fields differ from frozen declaration; capabilityId is not capability'
         assert tool['capability'] in ids, 'Pi routes to an unregistered capability'
-        assert tool['inputSchema'] == reference_pi['inputSchema'], 'Single-text compute input schema drifted'
+        assert tool['inputSchema'] == expected_input(tool['capability']), 'Compute Pi input schema drifted'
     assert {tool['capability'] for tool in pi_tools} == ids
-    assert all(cap['inputSchema'] == reference_pi['inputSchema'] for cap in capabilities)
+    assert all(cap['inputSchema'] == expected_input(cap['id']) for cap in capabilities), 'Compute capability input schema drifted'
     assert manifest['permissions'] == reference['permissions'], 'Compute permissions differ from frozen optional Pi grant'
     if require_directory:
         from tool_directory import PROFILE, apply_manifest, validate_directory
