@@ -5034,8 +5034,13 @@
       "sourceVersion": "0.15.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.date.difference",
+        "devtools.date.offset",
+        "devtools.date.workday_count",
+        "devtools.date.workday_offset"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -5045,9 +5050,78 @@
           "sourceVersion": "0.15.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.date.difference",
+          "scopeKind": "bounded_offline_civil_date_calculation",
+          "scope": "公历日期差，返回带符号天数。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "minYear": 1,
+            "maxYear": 9999,
+            "maxAbsoluteOffset": 4000000,
+            "requestBytes": 4096,
+            "serializedResultBytes": 2048
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。"
+        },
+        {
+          "operationId": "devtools.date.offset",
+          "scopeKind": "bounded_offline_civil_date_calculation",
+          "scope": "公历按天、月或年偏移，月末规则可明确选择。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "minYear": 1,
+            "maxYear": 9999,
+            "maxAbsoluteOffset": 4000000,
+            "requestBytes": 4096,
+            "serializedResultBytes": 2048
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。"
+        },
+        {
+          "operationId": "devtools.date.workday_count",
+          "scopeKind": "bounded_offline_civil_date_calculation",
+          "scope": "周一至周五计数，结束日包括在范围内，可包含开始日。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "minYear": 1,
+            "maxYear": 9999,
+            "maxAbsoluteOffset": 4000000,
+            "requestBytes": 4096,
+            "serializedResultBytes": 2048
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。"
+        },
+        {
+          "operationId": "devtools.date.workday_offset",
+          "scopeKind": "bounded_offline_civil_date_calculation",
+          "scope": "周一至周五按正负工作日偏移，跳过周末。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "minYear": 1,
+            "maxYear": 9999,
+            "maxAbsoluteOffset": 4000000,
+            "requestBytes": 4096,
+            "serializedResultBytes": 2048
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "复用原生日期与工作日计算规则，提供公历日期四项离线操作。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.date-calculator",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/date-calculator-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/date-calculator-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "explorer-menu",

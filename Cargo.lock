@@ -5874,6 +5874,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-civil-date-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+]
+
+[[package]]
 name = "zi-compare-wasi"
 version = "0.1.0"
 dependencies = [
@@ -5882,6 +5890,16 @@ dependencies = [
  "wasi",
  "zi-diff-core",
  "zi-fields-wasi",
+]
+
+[[package]]
+name = "zi-date-calculator-wasi"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "zi-civil-date-core",
 ]
 
 [[package]]
@@ -5939,6 +5957,7 @@ dependencies = [
  "winresource",
  "zeroize",
  "zi-character-core",
+ "zi-civil-date-core",
  "zi-diagnostics-core",
  "zi-diff-core",
  "zi-directory-compare-wasi",

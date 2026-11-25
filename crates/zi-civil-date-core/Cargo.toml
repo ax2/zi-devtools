@@ -1,0 +1,10 @@
+[package]
+name = "zi-civil-date-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+
+[dependencies]
+chrono = { version = "0.4", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
