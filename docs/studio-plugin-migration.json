@@ -2113,8 +2113,10 @@
       "sourceVersion": "0.2.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.log-viewer.filter"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2124,9 +2126,29 @@
           "sourceVersion": "0.2.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.log-viewer.filter",
+          "scopeKind": "confirmed_local_log_event_preview",
+          "scope": "按原生事件规则识别多行事件，在本机按级别和区分大小写的字面正文筛选。报告总匹配数及前12条。",
+          "sourceVersion": "0.2.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 16384,
+            "queryBytes": 256,
+            "previewBytes": 512,
+            "displayedEvents": 12
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "独立版的大日志流式索引、分页、时间定位与轮转尚未接入。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "单份确认 UTF-8 日志的多行事件、级别和字面筛选已通过 Windows Worker。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.log-viewer",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/log-viewer-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/log-viewer-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "sqlite",
