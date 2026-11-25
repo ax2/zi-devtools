@@ -174,10 +174,10 @@ mod tests {
             ValueRef::Real(f64::INFINITY),
             ValueRef::Text(b"abc"),
         ] {
-            page.rows[0][0] = cell(value, None, &mut 2);
+            page.rows[0][0] = cell(value, None, MAX_CELL_BYTES, &mut 2);
             assert!(Review::prepare(&page, "fixture").is_err());
         }
-        page.rows[0][0] = cell(ValueRef::Text(b"ok"), None, &mut 100);
+        page.rows[0][0] = cell(ValueRef::Text(b"ok"), None, MAX_CELL_BYTES, &mut 100);
         page.truncated_cells = 1;
         assert!(Review::prepare(&page, "fixture").is_err());
     }

@@ -70,6 +70,8 @@ pub const INPUT_LIMIT: usize = 2 * 1024 * 1024;
 pub const ROW_LIMIT: usize = 10_000;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
+#[cfg(feature = "sqlite")]
+pub mod sqlite_read;
 
 pub const COLUMN_LIMIT: usize = 128;
 

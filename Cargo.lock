@@ -6506,6 +6506,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-sqlite-browser-wasi"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
+ "zi-table-core",
+]
+
+[[package]]
 name = "zi-table-core"
 version = "0.1.0"
 dependencies = [

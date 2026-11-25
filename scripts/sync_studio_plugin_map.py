@@ -708,6 +708,26 @@ table_sqlite_row["operationScopes"].append(dict(
                    "接收方单独验证正常工具页与另存。",
 ))
 
+sqlite_browser_row = next(row for row in rows if row["sourceToolId"] == "sqlite")
+sqlite_browser_capability = "devtools.sqlite.snapshot.browse"
+sqlite_browser_row.update(
+    pluginStatus="candidate", candidateCapabilities=[sqlite_browser_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.sqlite-browser", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/sqlite-browser-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/sqlite-browser-0.1.0-candidate-01-verification.json",
+    reason="复用原生只读表分页和 CSV 编码，从本次明确确认的单份静态库查看目录及普通表。",
+)
+sqlite_browser_row["operationScopes"].append(dict(
+    operationId=sqlite_browser_capability, scopeKind="confirmed_single_sqlite_snapshot_browser",
+    scope="浏览一份自包含 UTF-8 SQLite 文件的表目录和普通表页，可生成一个完整页的 CSV 供确认另存。",
+    sourceVersion=sqlite_browser_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=131072, catalogObjects=64, pageRows=16, maxPages=16, columns=16,
+                maxCellBytes=512, maxPageBytes=6144, outputCsvBytes=24576),
+    runtimeVerification="40_fixed_native_production_windows_worker_and_exact_csv_parity",
+    blockingReason="支持静态只读目录与普通表分页，视图或虚拟表数据、任意 SQL、可写打开、外部扩展和 WAL 保留。"
+                   "接收方单独验证正常入口、按次文件确认及 CSV 保存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
