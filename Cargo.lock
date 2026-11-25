@@ -6018,6 +6018,7 @@ dependencies = [
  "zi-matrix-core",
  "zi-memo-text-core",
  "zi-pdf-text-core",
+ "zi-prompt-template-core",
  "zi-regex-core",
  "zi-rename-core",
  "zi-shell-core",
@@ -6377,6 +6378,23 @@ dependencies = [
  "serde_json",
  "zi-pdf-text-core",
  "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-prompt-template-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "zi-prompt-template-wasi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "zi-prompt-template-core",
 ]
 
 [[package]]

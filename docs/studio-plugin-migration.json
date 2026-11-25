@@ -2868,8 +2868,11 @@
       "sourceVersion": "0.1.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.prompt.variables",
+        "devtools.prompt.expand"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2879,9 +2882,45 @@
           "sourceVersion": "0.1.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.prompt.variables",
+          "scopeKind": "prompt_variable_validation",
+          "scope": "检查模板语法，列出已去重、排序的变量名，保持四花括号字面语义。",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "templateUtf8Bytes": 16384,
+            "variableNames": 12,
+            "serializedRequestBytes": 49152
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "原生模板名、修订、标签、跨工具填充、模型配置与请求继续由独立版提供。本候选的超长展开仅提供有界预览。"
+        },
+        {
+          "operationId": "devtools.prompt.expand",
+          "scopeKind": "single_pass_prompt_expansion_preview",
+          "scope": "按原生规则展开一次。重复占位符共用同一变量文本，变量值中的花括号保留。",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "templateUtf8Bytes": 16384,
+            "variableNames": 12,
+            "serializedRequestBytes": 49152,
+            "expandedUtf8Bytes": 131072,
+            "previewUtf8Bytes": 16384,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "原生模板名、修订、标签、跨工具填充、模型配置与请求继续由独立版提供。本候选的超长展开仅提供有界预览。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "共享独立版提示词变量语法和一次性展开，提供两项无权限的本机预览。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.prompt-expansion",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/prompt-expansion-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/prompt-expansion-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "token-budget",

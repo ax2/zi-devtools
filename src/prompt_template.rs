@@ -2,11 +2,11 @@
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-pub const MAX_BODY_BYTES: usize = 16 * 1024;
-pub const MAX_RENDER_BYTES: usize = 128 * 1024;
-pub const MAX_VARIABLES: usize = 12;
+pub use zi_prompt_template_core::{
+    MAX_BODY_BYTES, MAX_RENDER_BYTES, MAX_VARIABLES, render, variables,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,105 +25,6 @@ pub struct Revision {
     pub tags: Vec<String>,
     pub body: String,
     pub options: RunOptions,
-}
-
-enum Part<'a> {
-    Text(&'a str),
-    Literal(&'static str),
-    Variable(&'a str),
-}
-
-fn valid_variable(name: &str) -> bool {
-    let mut chars = name.bytes();
-    chars
-        .next()
-        .is_some_and(|first| first.is_ascii_alphabetic() || first == b'_')
-        && name.len() <= 32
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == b'_')
-}
-
-fn parts(body: &str) -> Result<Vec<Part<'_>>> {
-    let mut parts = Vec::new();
-    let mut index = 0;
-    while index < body.len() {
-        let rest = &body[index..];
-        let open = rest.find("{{");
-        let close = rest.find("}}");
-        let next = match (open, close) {
-            (Some(a), Some(b)) => a.min(b),
-            (Some(a), None) => a,
-            (None, Some(b)) => b,
-            (None, None) => {
-                parts.push(Part::Text(rest));
-                break;
-            }
-        };
-        if next > 0 {
-            parts.push(Part::Text(&rest[..next]));
-            index += next;
-            continue;
-        }
-        if rest.starts_with("{{{{") {
-            parts.push(Part::Literal("{{"));
-            index += 4;
-        } else if rest.starts_with("}}}}") {
-            parts.push(Part::Literal("}}"));
-            index += 4;
-        } else if let Some(after_open) = rest.strip_prefix("{{") {
-            let Some(end) = after_open.find("}}") else {
-                anyhow::bail!("变量占位符缺少结束双花括号");
-            };
-            let name = &after_open[..end];
-            ensure!(
-                valid_variable(name),
-                "变量名只能使用字母、数字和下划线，且不能以数字开头"
-            );
-            parts.push(Part::Variable(name));
-            index += 2 + end + 2;
-        } else {
-            anyhow::bail!("出现未配对的结束双花括号；字面量请写成 }}}}");
-        }
-    }
-    Ok(parts)
-}
-
-pub fn variables(body: &str) -> Result<Vec<String>> {
-    ensure!(!body.trim().is_empty(), "模板正文不能为空");
-    ensure!(body.len() <= MAX_BODY_BYTES, "模板正文超过 16 KiB");
-    ensure!(
-        !body
-            .chars()
-            .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')),
-        "模板正文含不支持的控制字符"
-    );
-    let names: BTreeSet<String> = parts(body)?
-        .into_iter()
-        .filter_map(|part| match part {
-            Part::Variable(name) => Some(name.into()),
-            _ => None,
-        })
-        .collect();
-    ensure!(names.len() <= MAX_VARIABLES, "模板最多包含 12 个不同变量");
-    Ok(names.into_iter().collect())
-}
-
-pub fn render(body: &str, values: &BTreeMap<String, String>) -> Result<String> {
-    variables(body)?;
-    let mut output = String::new();
-    for part in parts(body)? {
-        match part {
-            Part::Text(text) | Part::Literal(text) => output.push_str(text),
-            Part::Variable(name) => {
-                let value = values.get(name).filter(|v| !v.trim().is_empty());
-                let Some(value) = value else {
-                    anyhow::bail!("请填写变量 {name}");
-                };
-                output.push_str(value);
-            }
-        }
-        ensure!(output.len() <= MAX_RENDER_BYTES, "变量展开结果超过 128 KiB");
-    }
-    Ok(output)
 }
 
 pub fn parse_tags(raw: &str) -> Result<Vec<String>> {
@@ -238,6 +139,7 @@ pub fn diff(previous: &Revision, current: &Revision) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn variables_escape_braces_and_render_only_after_complete_values() {
