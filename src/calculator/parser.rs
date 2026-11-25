@@ -1,5 +1,6 @@
 use super::{Angle, Value};
 use std::collections::BTreeMap;
+use zi_matrix_core::exact_number as number;
 
 #[derive(Clone)]
 enum Token {
@@ -125,42 +126,6 @@ fn unit_definition(unit: &str) -> Option<(&'static str, Value, Value)> {
     Some((dimension, Value::exact(n, d).ok()?, offset))
 }
 
-fn number(text: &str) -> Result<Value, String> {
-    if let Some((digits, radix)) = text
-        .strip_prefix("0x")
-        .map(|s| (s, 16))
-        .or_else(|| text.strip_prefix("0b").map(|s| (s, 2)))
-        .or_else(|| text.strip_prefix("0o").map(|s| (s, 8)))
-    {
-        return i128::from_str_radix(digits, radix)
-            .map(|v| Value::Exact(v, 1))
-            .map_err(|_| "进制整数无效或溢出".into());
-    }
-    let (mantissa, exponent) = if let Some((m, e)) = text.split_once(['e', 'E']) {
-        (m, e.parse::<i32>().map_err(|_| "科学计数法指数无效")?)
-    } else {
-        (text, 0)
-    };
-    let (digits, fraction) = if let Some((a, b)) = mantissa.split_once('.') {
-        (format!("{a}{b}"), b.len() as i32)
-    } else {
-        (mantissa.to_owned(), 0)
-    };
-    let n = digits
-        .parse::<i128>()
-        .map_err(|_| "数字无效或超出精确范围")?;
-    let scale = fraction.checked_sub(exponent).ok_or("小数位数溢出")?;
-    if scale.unsigned_abs() > 38 {
-        return Err("小数/科学计数法精确位数最多 38".into());
-    }
-    let factor = 10i128.checked_pow(scale.unsigned_abs()).ok_or("数字溢出")?;
-    if scale >= 0 {
-        Value::exact(n, factor)
-    } else {
-        Value::exact(n.checked_mul(factor).ok_or("数字溢出")?, 1)
-    }
-}
-
 fn lex(input: &str) -> Result<Vec<(Token, usize)>, String> {
     let b = input.as_bytes();
     let mut i = 0;
@@ -249,7 +214,7 @@ impl Parser<'_> {
                 self.at += 1;
                 let v = self.expression(60)?;
                 match op {
-                    "-" => v.neg()?,
+                    "-" => v.checked_neg()?,
                     "~" => Value::Exact(!v.integer()?, 1),
                     _ => v,
                 }
@@ -356,7 +321,7 @@ fn function(name: &str, args: &[Value], angle: Angle) -> Result<Value, String> {
             Value::Complex(real, imaginary) => Value::approximate(real.hypot(imaginary)),
             _ => {
                 let x = v.real()?;
-                if x < 0.0 { v.neg() } else { Ok(v) }
+                if x < 0.0 { v.checked_neg() } else { Ok(v) }
             }
         };
     }

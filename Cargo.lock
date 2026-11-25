@@ -5983,6 +5983,7 @@ dependencies = [
  "zi-json-schema-core",
  "zi-knowledge-source-core",
  "zi-log-core",
+ "zi-matrix-core",
  "zi-pdf-text-core",
  "zi-regex-core",
  "zi-rename-core",
@@ -6239,6 +6240,22 @@ dependencies = [
  "serde_json",
  "zi-log-core",
  "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-matrix-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "zi-matrix-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-matrix-core",
 ]
 
 [[package]]

@@ -2,98 +2,10 @@ use super::{Value, matrix_ui, valid_variable};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io::Read, path::Path, sync::atomic::AtomicBool};
+use zi_matrix_core::validate_value;
 
 pub(super) const LIMIT: usize = 1024 * 1024;
 
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-enum Number {
-    Exact {
-        numerator: String,
-        denominator: String,
-    },
-    Approx {
-        value: String,
-    },
-    Complex {
-        real: String,
-        imaginary: String,
-    },
-}
-impl Serialize for Value {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        validate_value(*self).map_err(serde::ser::Error::custom)?;
-        match self {
-            Self::Exact(n, d) => Number::Exact {
-                numerator: n.to_string(),
-                denominator: d.to_string(),
-            },
-            Self::Approx(value) => Number::Approx {
-                value: format!("{value:e}"),
-            },
-            Self::Complex(real, imaginary) => Number::Complex {
-                real: format!("{real:e}"),
-                imaginary: format!("{imaginary:e}"),
-            },
-        }
-        .serialize(serializer)
-    }
-}
-impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let parse = |s: String| -> Result<i128, String> {
-            if s.len() > 40 {
-                return Err("精确整数文本过长".into());
-            }
-            let n = s.parse::<i128>().map_err(|_| "精确整数超范围")?;
-            if n.to_string() != s {
-                return Err("精确整数必须是规范十进制字符串".into());
-            }
-            Ok(n)
-        };
-        let value = match Number::deserialize(deserializer)? {
-            Number::Exact {
-                numerator,
-                denominator,
-            } => Self::Exact(
-                parse(numerator).map_err(serde::de::Error::custom)?,
-                parse(denominator).map_err(serde::de::Error::custom)?,
-            ),
-            Number::Approx { value } => {
-                if value.len() > 64 {
-                    return Err(serde::de::Error::custom("近似数值文本过长"));
-                }
-                Self::Approx(value.parse::<f64>().map_err(serde::de::Error::custom)?)
-            }
-            Number::Complex { real, imaginary } => {
-                if real.len() > 64 || imaginary.len() > 64 {
-                    return Err(serde::de::Error::custom("复数分量文本过长"));
-                }
-                let parse = |text: String| -> Result<f64, String> {
-                    let value = text.parse::<f64>().map_err(|_| "复数分量无效")?;
-                    if !value.is_finite() || format!("{value:e}") != text {
-                        return Err("复数分量必须是有限规范科学计数法".into());
-                    }
-                    Ok(value)
-                };
-                Self::Complex(
-                    parse(real).map_err(serde::de::Error::custom)?,
-                    parse(imaginary).map_err(serde::de::Error::custom)?,
-                )
-            }
-        };
-        validate_value(value).map_err(serde::de::Error::custom)?;
-        Ok(value)
-    }
-}
-fn validate_value(value: Value) -> Result<(), String> {
-    match value {
-        Value::Exact(n, d) if d > 0 && Value::exact(n, d)? == value => Ok(()),
-        Value::Approx(x) if x.is_finite() => Ok(()),
-        Value::Complex(real, imaginary) if real.is_finite() && imaginary.is_finite() => Ok(()),
-        _ => Err("工作表数值必须是约分后的正分母有理数或有限近似值".into()),
-    }
-}
 fn variables<'de, D: serde::Deserializer<'de>>(d: D) -> Result<BTreeMap<String, Value>, D::Error> {
     struct Visitor;
     impl<'de> serde::de::Visitor<'de> for Visitor {
