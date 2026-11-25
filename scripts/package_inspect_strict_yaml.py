@@ -11,8 +11,15 @@ from revise_plugin_receipt import ENCODING, package_files, sha256
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.1.4"
 BASE_WASM = "1db3fc37df01cd3a8371320d4f897a7fdf750c87e6202b736ed6870f046b8f29"
-OUTPUT = ROOT / f"release/plugin-candidates/inspect-{VERSION}-candidate-01"
+OUTPUT = ROOT / f"release/plugin-candidates/inspect-{VERSION}-candidate-02"
 YAML_IDS = {"devtools.inspect.yaml.to_json", "devtools.inspect.yaml.from_json"}
+DUPLICATE_CASES = {"yaml-duplicate-last", "json-duplicate-last"}
+POLICY_ERROR = {
+    "code": "INVALID_INPUT",
+    "message": "Conversion requires unique keys and lossless numbers. 转换要求键唯一，且数值能精确往返。",
+}
+PORTABLE_FIELDS = ("id", "requestFile", "expectedFile", "requestSha256", "expectedSha256",
+                   "checks", "expectedError", "requestBytes", "resultBytes")
 LIBRARIES = {
     "yaml-rust2-0.13.0": ("Apache-LICENSE", "MIT-LICENSE"),
     "arraydeque-0.5.1": ("LICENSE",),
@@ -30,6 +37,28 @@ def write_json(path: Path, value: dict) -> None:
 
 def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def freeze_portable_fixtures(directory: Path) -> None:
+    path = directory / "fuel-proof.json"
+    cases = []
+    for old in read_json(path)["cases"]:
+        case = {field: old[field] for field in PORTABLE_FIELDS if field in old}
+        if case["id"] in DUPLICATE_CASES:
+            expected = directory / case["expectedFile"]
+            result = {"contractVersion": "1.0.0-rc.1", "ok": False, "data": None, "error": POLICY_ERROR}
+            data = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            expected.write_bytes(data)
+            case["expectedSha256"] = sha256(data)
+            case["resultBytes"] = len(data)
+            case["expectedError"] = POLICY_ERROR["code"]
+            case["id"] = case["id"].replace("last", "rejected")
+        cases.append(case)
+    write_json(path, {
+        "fixtureKind": "portable request and expected response bytes",
+        "limitations": ["Previous runtime timing and fuel measurements are historical."],
+        "cases": cases,
+    })
 
 
 def main() -> None:
@@ -79,15 +108,26 @@ def main() -> None:
     snapshot = read_json(directory)
     snapshot["packageVersion"] = VERSION
     write_json(directory, snapshot)
+    metadata_path = OUTPUT / "contracts/tool-directory/capabilities.json"
+    metadata = read_json(metadata_path)
+    for capability in manifest["contributes"]["capabilities"]:
+        # The 0.1.3 color description accurately documents its HEX-only input.
+        if capability["id"] == "devtools.inspect.color.convert":
+            metadata["capabilities"][capability["id"]] = capability["directory"]
+        if metadata["capabilities"][capability["id"]] != capability["directory"]:
+            raise SystemExit("Frozen directory entry disagrees with its package metadata")
+    write_json(metadata_path, metadata)
 
     fixture_path = OUTPUT / "fixtures/inspect.json"
     fixtures = read_json(fixture_path)
     for case in fixtures["cases"]:
-        if case["id"] in {"yaml-duplicate-last", "json-duplicate-last"}:
+        if case["id"] in DUPLICATE_CASES:
             case["id"] = case["id"].replace("last", "rejected")
             case["expectedText"] = None
             case["expectedError"] = "INVALID_INPUT"
     write_json(fixture_path, fixtures)
+    for relative in ("fixtures/budget", "fixtures/parity"):
+        freeze_portable_fixtures(OUTPUT / relative)
 
     view_path = OUTPUT / "views/main.html"
     view = view_path.read_text(encoding="utf-8")
