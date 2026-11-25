@@ -129,20 +129,35 @@ fn preview(bytes: &[u8]) -> Result<Value, Failure> {
     )
 }
 
-// The HTML5 parser does quadratic attribute duplicate checks on a tag. Bound
-// potential tag/attribute/reference work before passing untrusted text to it.
-// This deliberately counts lexical separators, rather than claiming to tokenize HTML.
+#[derive(Clone, Copy)]
+enum TagState {
+    Text,
+    Open,
+    Name,
+    BeforeAttribute,
+    Attribute,
+    AfterAttribute,
+    BeforeValue,
+    UnquotedValue,
+    QuotedValue(u8),
+    AfterQuotedValue,
+    Comment(usize),
+    Declaration,
+}
+
+// The HTML5 parser checks for duplicate attributes by scanning previously seen
+// attributes of each tag. Estimate tag, attribute and reference work before
+// parsing. Only a quote at the start of an attribute value can hide separators.
 fn within_html_budget(bytes: &[u8]) -> bool {
+    use TagState::*;
+
     let mut openings = 0;
     let mut references = 0;
     let mut total_separators = 0;
     let mut tag_separators = 0;
-    let mut in_tag = false;
-    let mut attribute_quote = None;
-    let mut value_pending = false;
-    let mut previous_was_space = false;
+    let mut state = Text;
 
-    for &byte in bytes {
+    for (offset, &byte) in bytes.iter().enumerate() {
         if byte == b'<' {
             openings += 1;
             if openings > MAX_OPENINGS {
@@ -155,36 +170,58 @@ fn within_html_budget(bytes: &[u8]) -> bool {
                 return false;
             }
         }
-        if !in_tag {
-            in_tag = byte == b'<';
-            continue;
-        }
-        if let Some(quote) = attribute_quote {
-            if byte == quote {
-                attribute_quote = None;
-            }
-            continue;
-        }
+
         let space = matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0c);
-        if value_pending {
-            if space {
-                continue;
+        let (next, separator) = match (state, byte) {
+            (Text, b'<') => (Open, false),
+            (Text, _) => continue,
+            (Open, b'/') => (Open, true),
+            (Open, b'<') => (Open, false),
+            (Open, b'!') if bytes[offset..].starts_with(b"!--") => (Comment(offset + 3), false),
+            (Open, b'!' | b'?') => (Declaration, false),
+            (Open, letter) if letter.is_ascii_alphabetic() => (Name, false),
+            (Open, _) => (Text, false),
+            (Comment(start), b'>') if offset >= start => {
+                let content = &bytes[start..offset];
+                if matches!(content, b"" | b"-")
+                    || content.ends_with(b"--")
+                    || content.ends_with(b"--!")
+                {
+                    (Text, false)
+                } else {
+                    continue;
+                }
             }
-            value_pending = false;
-            if matches!(byte, b'"' | b'\'') {
-                attribute_quote = Some(byte);
-                continue;
+            (Comment(_), _) => continue,
+            (QuotedValue(quote), current) if current == quote => (AfterQuotedValue, false),
+            (QuotedValue(_), _) => continue,
+            (_, b'>') => (Text, false),
+            (Declaration, _) => continue,
+            (BeforeValue, _) if space => continue,
+            (BeforeValue, b'"' | b'\'') => (QuotedValue(byte), false),
+            (BeforeValue, _) => (UnquotedValue, false),
+            (UnquotedValue, _) if space => (BeforeAttribute, true),
+            (UnquotedValue, _) => continue,
+            (Name | Attribute, _) if space => {
+                let next = if matches!(state, Name) {
+                    BeforeAttribute
+                } else {
+                    AfterAttribute
+                };
+                (next, true)
             }
-        }
-        if byte == b'>' {
-            in_tag = false;
-            previous_was_space = false;
+            (BeforeAttribute | AfterAttribute, _) if space => continue,
+            (Attribute | AfterAttribute, b'=') => (BeforeValue, true),
+            (_, b'/') => (BeforeAttribute, true),
+            (AfterQuotedValue, _) if space => (BeforeAttribute, true),
+            (AfterQuotedValue, _) => (Attribute, true),
+            (BeforeAttribute | AfterAttribute, _) => (Attribute, false),
+            (Name | Attribute, _) => continue,
+        };
+        state = next;
+        if matches!(state, Text) {
             tag_separators = 0;
-            continue;
         }
-        value_pending = byte == b'=';
-        let separator = matches!(byte, b'=' | b'/') || (space && !previous_was_space);
-        previous_was_space = space;
         if separator {
             tag_separators += 1;
             total_separators += 1;

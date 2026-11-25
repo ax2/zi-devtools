@@ -102,6 +102,28 @@ def fixtures():
     yield "ordinary-long-chinese-english-body", html(f"<p>{clipped_input}</p>").ljust(MAX_FILE, b" "), {}, MIME, preview("日报", clipped_input.strip())
 
 
+    for name, prefix in [
+        ("bare-value-double-quote-does-not-mask-attributes", '<p data=x="'),
+        ("bare-value-single-quote-does-not-mask-attributes", "<p data=x='"),
+        ("bare-value-several-equals-do-not-mask-attributes", '<p data=x==y=="'),
+        ("comment-cannot-mask-the-next-tag", '<!-- <p data=" fake tag --> <p'),
+    ]:
+        payload = html(prefix + "".join(f" data-probe{n:03}" for n in range(360)) + ">正文")
+        yield name, payload, {}, MIME, "HTML_TOO_COMPLEX"
+    repaired = html("""<p data=left/right="literal' next=ok>仍可读取</p>""")
+    yield "bare-value-punctuation-with-a-small-tag", repaired, {}, MIME, preview("日报", "仍可读取")
+    adjacent = '<p' + ''.join(f" a{n:03}='x'b{n:03}='y'" for n in range(42)) + '>text'
+    yield "missing-space-after-quote-still-counts-separators", html(adjacent), {}, MIME, "HTML_TOO_COMPLEX"
+    with_comment = html("""<!-- <p data=" fake tag --> <p data=test>正文</p>""")
+    yield "small-comment-with-fake-quote", with_comment, {}, MIME, preview("日报", "正文")
+    unit = "bound > inside / =值 "
+    units = (MAX_FILE - len(html("<p title=''>应保留</p>"))) // len(unit.encode())
+    long_value = unit * units
+    long_attribute = html(f"<p title='{long_value}'>应保留</p>").ljust(MAX_FILE,b" ")
+    assert len(long_attribute) == MAX_FILE
+    yield "long-quoted-value-with-equals-and-angles", long_attribute, {}, MIME, preview("日报", "应保留")
+
+
 def envelopes(module, payload, inputs, mime):
     resource = dict(resourceId="12121212-1212-4212-8212-121212121212", byteLength=len(payload),
                     mimeType=mime, contentVersion=digest(payload))

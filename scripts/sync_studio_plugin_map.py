@@ -502,8 +502,8 @@ local_html_capability = "devtools.html.local.preview"
 local_html_row.update(
     pluginStatus="candidate", candidateCapabilities=[local_html_capability], scopeComplete=False,
     packageId="com.zicode.devtools.local-html", packageVersion="0.1.0",
-    candidateDirectory="release/plugin-candidates/local-html-0.1.0-candidate-01",
-    verificationReceipt="release/plugin-candidates/local-html-0.1.0-candidate-01-verification.json",
+    candidateDirectory="release/plugin-candidates/local-html-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/local-html-0.1.0-candidate-02-verification.json",
     reason="复用原生网页文字提取，提供逐次确认的一份本机 UTF-8 HTML 只读预览。",
 )
 local_html_row["operationScopes"].append(dict(
