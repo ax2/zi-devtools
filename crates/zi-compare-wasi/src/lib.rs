@@ -1,9 +1,10 @@
-//! Explicit clock proposal experiment, not a negotiated or installed plugin.
+//! Bounded proposal and Studio Compare WASI adapters.
 //! Four operations reuse the existing adapter in process. No old wire fallback.
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 pub const CONTRACT_VERSION: &str = "1.1.0-proposal.3";
+const STUDIO_CONTRACT_VERSION: &str = "1.0.0-rc.1";
 pub const REQUEST_LIMIT: usize = 48 * 1024;
 
 /// Diagnostic boundaries; production uses a no-op observer.
@@ -24,7 +25,8 @@ pub enum Phase {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Request<'a> {
-    contract_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    contract_version: Option<String>,
     plugin_id: String,
     scene_id: String,
     capability_id: String,
@@ -87,7 +89,7 @@ fn clock_available() -> bool {
     }
 }
 
-fn handle(bytes: &[u8], observe: &mut impl FnMut(Phase)) -> Envelope {
+fn handle(bytes: &[u8], wire_version: &str, observe: &mut impl FnMut(Phase)) -> Envelope {
     if bytes.len() > REQUEST_LIMIT {
         return failure("INPUT_TOO_LARGE", "请求超过 48 KiB");
     }
@@ -98,7 +100,10 @@ fn handle(bytes: &[u8], observe: &mut impl FnMut(Phase)) -> Envelope {
         return failure("INVALID_INPUT", "请求结构无效");
     };
     observe(Phase::RequestParsed);
-    if request.contract_version != CONTRACT_VERSION
+    // The desktop Worker provides the rc.1 handler envelope without a
+    // contractVersion member. The proposal executable requires its explicit ID.
+    let request_version = (wire_version != STUDIO_CONTRACT_VERSION).then_some(wire_version);
+    if request.contract_version.as_deref() != request_version
         || request.plugin_id != "com.zicode.devtools.compare"
         || request.scene_id.is_empty()
         || request.scene_id.len() > 128
@@ -117,7 +122,7 @@ fn handle(bytes: &[u8], observe: &mut impl FnMut(Phase)) -> Envelope {
             return failure("RUNTIME_UNAVAILABLE", "运行环境未提供单调时钟");
         }
         let empty = Envelope {
-            contract_version: CONTRACT_VERSION.to_owned(),
+            contract_version: wire_version.to_owned(),
             ok: true,
             data: Some(Text {
                 text: String::new(),
@@ -158,9 +163,8 @@ fn handle(bytes: &[u8], observe: &mut impl FnMut(Phase)) -> Envelope {
         };
     }
     // Reuse the complete four-operation implementation as a Rust library.
-    // The public entry accepts only proposal.3; this is internal normalization,
-    // not negotiation, a Host call, an executable or a fallback wire protocol.
-    request.contract_version = zi_fields_wasi::CONTRACT_VERSION.to_owned();
+    // Each binary checks its own wire version before internal normalization.
+    request.contract_version = Some(zi_fields_wasi::CONTRACT_VERSION.to_owned());
     let normalized = serde_json::to_vec(&request).expect("request JSON serializes");
     let mut result: Envelope =
         serde_json::from_slice(&zi_fields_wasi::execute_request(&normalized))
@@ -177,13 +181,25 @@ pub fn execute_request(bytes: &[u8]) -> Vec<u8> {
 /// Instrumented entry for a separate diagnostic binary, never Host negotiation.
 #[doc(hidden)]
 pub fn execute_request_observed(bytes: &[u8], mut observe: impl FnMut(Phase)) -> Vec<u8> {
-    let output = serde_json::to_vec(&handle(bytes, &mut observe)).expect("result JSON serializes");
+    execute_with_contract(bytes, CONTRACT_VERSION, &mut observe)
+}
+
+/// Studio's released Compare contract, with a distinct binary and strict wire ID.
+pub fn execute_studio_request(bytes: &[u8]) -> Vec<u8> {
+    execute_with_contract(bytes, STUDIO_CONTRACT_VERSION, &mut |_| {})
+}
+
+fn execute_with_contract(bytes: &[u8], version: &str, observe: &mut impl FnMut(Phase)) -> Vec<u8> {
+    let mut reply = handle(bytes, version, observe);
+    reply.contract_version = version.to_owned();
+    let output = serde_json::to_vec(&reply).expect("result JSON serializes");
     observe(Phase::ResultSerialized);
     if output.len() <= REQUEST_LIMIT {
         output
     } else {
-        serde_json::to_vec(&failure("INPUT_TOO_LARGE", "结果超过 48 KiB"))
-            .expect("fixed error serializes")
+        let mut reply = failure("INPUT_TOO_LARGE", "结果超过 48 KiB");
+        reply.contract_version = version.to_owned();
+        serde_json::to_vec(&reply).expect("fixed error serializes")
     }
 }
 

@@ -98,3 +98,21 @@ fn four_operations_use_original_implementation() {
         assert_eq!(execute_request(&bytes), expected.as_bytes());
     }
 }
+
+#[test]
+fn studio_binary_accepts_only_its_wire_and_keeps_exact_numbers() {
+    let body = request(
+        "devtools.compare.json.diff.ordered",
+        serde_json::json!({"left":"[18446744073709551616]", "right":"[18446744073709551617]"}),
+    );
+    let rejected: Envelope = serde_json::from_slice(&execute_studio_request(&body)).unwrap();
+    assert_eq!(rejected.contract_version, STUDIO_CONTRACT_VERSION);
+    assert_eq!(rejected.error.unwrap().code, "INVALID_INPUT");
+    let mut body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    body.as_object_mut().unwrap().remove("contractVersion");
+    let body = serde_json::to_vec(&body).unwrap();
+    let result: Envelope = serde_json::from_slice(&execute_studio_request(&body)).unwrap();
+    assert_eq!(result.contract_version, STUDIO_CONTRACT_VERSION);
+    let report = result.data.unwrap().text;
+    assert!(report.contains("18446744073709551616") && report.contains("18446744073709551617"));
+}

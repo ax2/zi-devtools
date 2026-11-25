@@ -6330,10 +6330,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-json-compare-file-wasi"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "serde",
+ "serde_json",
+ "zi-json-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-json-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "serde",
  "serde_json",
 ]
 
