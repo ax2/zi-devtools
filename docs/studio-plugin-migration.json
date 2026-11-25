@@ -6027,8 +6027,10 @@
       "sourceVersion": "0.20.3",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.clipboard.text.compose"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -6038,9 +6040,28 @@
           "sourceVersion": "0.20.3",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.clipboard.text.compose",
+          "scopeKind": "confirmed_portable_clipboard_text_composition",
+          "scope": "保持 JSON 原顺序组合正文为段落、编号、CSV 或 Markdown，并确认保存完整结果。",
+          "sourceVersion": "0.20.3",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 32768,
+            "rows": 64,
+            "outputBytes": 49152
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_exact_four_file_outputs",
+          "blockingReason": "仅显式 JSON 文件版，系统剪贴板读取、历史、富文本与模板保持原范围。接收方单独核对正常工具中心及四种输出确认保存。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "复用原生文本组合和 CSV 公式前缀，仅从当前确认的本机 JSON 正文集合读取。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.clipboard-compose",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/clipboard-compose-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/clipboard-compose-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "clipboard-workflows",
