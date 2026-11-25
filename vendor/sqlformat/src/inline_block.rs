@@ -45,20 +45,16 @@ impl InlineBlock {
     }
 
     pub fn begin_if_possible(&mut self, tokens: &[Token<'_>], index: usize) -> bool {
-        let info = self.build_info(tokens, index);
-        if self.level == 0 && self.is_inline_block(&info) {
-            self.level = 1;
-        } else if self.level > 0 {
-            self.level += 1;
-        } else {
-            self.level = 0;
+        let require_inline = self.level == 0;
+        let Some(info) = self.build_info(tokens, index, require_inline) else {
+            return false;
+        };
+        if require_inline && !self.is_inline_block(&info) {
+            return false;
         }
-        if self.level > 0 {
-            self.info.push(info);
-            true
-        } else {
-            false
-        }
+        self.level += 1;
+        self.info.push(info);
+        true
     }
 
     pub fn end(&mut self) {
@@ -75,7 +71,12 @@ impl InlineBlock {
         self.info.last().map_or(0, |info| info.length)
     }
 
-    fn build_info(&self, tokens: &[Token<'_>], index: usize) -> BlockInfo {
+    fn build_info(
+        &self,
+        tokens: &[Token<'_>],
+        index: usize,
+        require_inline: bool,
+    ) -> Option<BlockInfo> {
         let mut length = 0;
         let mut level = 0;
         let mut top_level_token_span = 0;
@@ -86,6 +87,11 @@ impl InlineBlock {
 
         for token in &tokens[index..] {
             length += token.value.len();
+            // This length cannot fall back under the inline limit. The caller
+            // stores no metadata for a block that could not become inline.
+            if require_inline && length > self.inline_max_length {
+                return None;
+            }
             match token.kind {
                 TokenKind::ReservedTopLevel | TokenKind::ReservedTopLevelNoIndent => {
                     if start_top_level != -1 {
@@ -119,12 +125,12 @@ impl InlineBlock {
         }
 
         // broken syntax let's try our best
-        BlockInfo {
+        Some(BlockInfo {
             length,
             has_forbidden_tokens,
             has_reseved_tokens,
             top_level_token_span,
-        }
+        })
     }
 
     fn is_forbidden_token(&self, token: &Token<'_>) -> bool {

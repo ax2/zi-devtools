@@ -5,6 +5,9 @@
   "upstreamCommit": "832fa6e8eed392d01422db4f77d12086b3448194",
   "registryChecksum": "0705994df478b895f05b8e290e0d46e53187b26f8d889d37b2a0881234922d94",
   "modifiedSource": [
+    "src/formatter.rs",
+    "src/inline_block.rs",
+    "src/lib.rs",
     "src/tokenizer.rs"
   ],
   "files": [

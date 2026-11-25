@@ -54,8 +54,34 @@ pub(crate) fn format(
     params: &QueryParams,
     options: &FormatOptions,
 ) -> String {
+    format_checked(tokens, params, options, None::<fn(&str) -> bool>).expect("unbounded layout")
+}
+
+pub(crate) fn format_checked(
+    tokens: &[Token<'_>],
+    params: &QueryParams,
+    options: &FormatOptions,
+    mut accept: Option<impl FnMut(&str) -> bool>,
+) -> Option<String> {
     let mut formatter = Formatter::new(tokens, params, options);
     let mut formatted_query = String::new();
+    let mut committed_end = 0;
+    let mut check = |output: &str| {
+        let Some(accept) = accept.as_mut() else {
+            return true;
+        };
+        // All formatter edits are append or trailing whitespace removal.
+        // Final output also trims leading whitespace. Count only the prefix
+        // through the last non-whitespace character since the last check.
+        let stable = output[committed_end..].trim_end();
+        let new_text = if committed_end == 0 {
+            stable.trim_start()
+        } else {
+            stable
+        };
+        committed_end += stable.len();
+        accept(new_text)
+    };
     let mut is_fmt_enabled = true;
     let mut is_prev_token_fmt_switch = false;
     for (index, token) in tokens.iter().enumerate() {
@@ -74,6 +100,9 @@ pub(crate) fn format(
 
         if !is_fmt_enabled {
             formatter.format_no_change(token, &mut formatted_query);
+            if !check(&formatted_query) {
+                return None;
+            }
             continue;
         }
 
@@ -141,6 +170,10 @@ pub(crate) fn format(
             },
         }
 
+        if token.kind != TokenKind::Whitespace && !check(&formatted_query) {
+            return None;
+        }
+
         #[cfg(feature = "debug")]
         {
             use crate::debug::*;
@@ -178,7 +211,7 @@ pub(crate) fn format(
             anstream::eprintln!("{k}{:21}{rk}: {d}{:50}{rd} {line}", kind, value);
         }
     }
-    formatted_query.trim().to_string()
+    Some(formatted_query.trim().to_string())
 }
 
 struct Formatter<'a> {
