@@ -146,16 +146,6 @@ impl Review {
             && result == Some(&self.result)
     }
 }
-fn protect(text: String, safe: bool) -> String {
-    if safe
-        && (text.starts_with(['\t', '\r', '\n'])
-            || text.trim_start().starts_with(['=', '+', '-', '@']))
-    {
-        format!("'{text}")
-    } else {
-        text
-    }
-}
 fn check_cancel(cancel: &AtomicBool) -> Result<()> {
     if cancel.load(Ordering::Relaxed) {
         Err(sqlite_export::Cancelled.into())
@@ -201,15 +191,7 @@ fn csv_write(
         }
     }
     let mut writer = csv::Writer::from_writer(Bounded { file, bytes: 0 });
-    writer.write_record(data.headers.iter().map(|s| protect(s.clone(), safe)))?;
-    for row in &data.rows {
-        check_cancel(cancel)?;
-        writer.write_record(
-            row.iter()
-                .map(|v| protect(cell_text(v), safe && v.is_string())),
-        )?;
-    }
-    writer.flush()?;
+    workflow::write_csv(data, &mut writer, safe, || check_cancel(cancel))?;
     let bounded = writer.into_inner().map_err(|e| anyhow!(e.to_string()))?;
     bounded.file.sync_all()?;
     let bytes = bounded.bytes as u64;
@@ -858,8 +840,6 @@ mod tests {
             assert_eq!(cell("large"), u64::MAX.to_string());
         }
         assert_eq!(source, original);
-        assert_eq!(protect(" \t=1+1".into(), true), "' \t=1+1");
-        assert_eq!(protect("=1+1".into(), false), "=1+1");
         assert_eq!(
             std::fs::read_dir(&fixture.0).unwrap().count(),
             1,

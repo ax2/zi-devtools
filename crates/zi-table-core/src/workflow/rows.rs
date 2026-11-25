@@ -240,6 +240,8 @@ pub(super) fn propose(
                 .map(|(to, from)| (format!("第{}行", from + 1), format!("第{}行", to + 1)))
                 .collect(),
         )
+    } else if indices.len() == data.rows.len() {
+        (0, Vec::new())
     } else {
         let retained: std::collections::HashSet<_> = indices.iter().copied().collect();
         (
@@ -251,13 +253,14 @@ pub(super) fn propose(
                 .collect(),
         )
     };
-    let mut result = Dataset {
-        headers: data.headers.clone(),
-        rows: Vec::with_capacity(indices.len()).into(),
-    };
-    for i in indices {
-        check_cancel(cancel)?;
-        result.rows.push(data.rows[i].clone());
+    let mut result = data.clone();
+    if changed != 0 {
+        let mut rows = Vec::with_capacity(indices.len());
+        for i in indices {
+            check_cancel(cancel)?;
+            rows.push(data.rows[i].clone());
+        }
+        result.rows = rows.into();
     }
     Ok(transform::Proposal {
         data: result,

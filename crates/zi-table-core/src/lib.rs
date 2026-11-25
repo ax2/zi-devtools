@@ -1,4 +1,6 @@
 //! Shared delimited/JSON datasets and native join semantics.
+pub mod transform;
+pub mod workflow;
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,6 +11,12 @@ pub mod join;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SharedRows<T>(Arc<Vec<T>>);
+
+impl<T> SharedRows<T> {
+    fn shares_storage(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
 
 impl<T> Default for SharedRows<T> {
     fn default() -> Self {
@@ -272,6 +280,25 @@ impl Dataset {
         rows
     }
 }
+// Match serde_json's compact value length without allocating for common cells.
+fn value_json_bytes(value: &Value) -> usize {
+    match value {
+        Value::Null | Value::Bool(true) => 4,
+        Value::Bool(false) => 5,
+        Value::String(text) => {
+            2 + text
+                .bytes()
+                .map(|byte| match byte {
+                    b'"' | b'\\' | 8 | 9 | 10 | 12 | 13 => 2,
+                    0..=31 => 6,
+                    _ => 1,
+                })
+                .sum::<usize>()
+        }
+        other => other.to_string().len(),
+    }
+}
+
 pub fn cell_text(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
