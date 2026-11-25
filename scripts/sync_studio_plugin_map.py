@@ -939,6 +939,24 @@ table_pipeline_row["operationScopes"].append(dict(
                    "接收方独立核对 Windows 工具中心的角色、文件确认、保存和重启。",
 ))
 
+conversation_markdown_row = next(row for row in rows if row["sourceToolId"] == "model-chat")
+conversation_markdown_capability = "devtools.chat.transcript.to_markdown"
+conversation_markdown_row.update(
+    pluginStatus="candidate", candidateCapabilities=[conversation_markdown_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.conversation-markdown", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/conversation-markdown-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/conversation-markdown-0.1.0-candidate-01-verification.json",
+    reason="确认一份原生版本 1 会话 JSON，按顺序将完整问答转成原生纯文本围栏 Markdown。",
+)
+conversation_markdown_row["operationScopes"].append(dict(
+    operationId=conversation_markdown_capability, scopeKind="confirmed_native_transcript_markdown_export",
+    scope="严格的版本 1 JSON，只接受成对用户及助手文本；保留原文件，转换后确认为完整 Markdown 新产物。",
+    sourceVersion=conversation_markdown_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(fileBytes=65536, jsonEscapes=12288, turns=16, markdownBytes=196608),
+    runtimeVerification="fixed_native_and_production_windows_worker_literal_fence_and_markdown_byte_parity",
+    blockingReason="当前仅离线文件互转，模型通信、附件及会话库仍用独立版。接收方独立检查 Studio 安装、确认保存和重启。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

@@ -1,25 +1,11 @@
 //! Bounded in-memory context with explicit text export; no automatic persistence.
 use crate::plugins::{Adapter, PluginTool};
 use anyhow::{Result, ensure};
-use serde::Deserialize;
 use serde_json::{Value, json};
-
-pub const MAX_TURNS: usize = 16;
-pub const MAX_BYTES: usize = 256 * 1024;
-const MAX_IMPORT_BYTES: usize = 2 * 1024 * 1024;
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ExportFile {
-    schema: String,
-    version: u32,
-    messages: Vec<ExportMessage>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ExportMessage {
-    role: String,
-    content: String,
-}
+pub use zi_conversation_core::{MAX_BYTES, MAX_TURNS};
+use zi_conversation_core::{
+    MAX_IMPORT_BYTES, parse_transcript, render_markdown, validate_answer, validate_question,
+};
 #[derive(Default)]
 pub struct Conversation {
     binding: String,
@@ -60,32 +46,12 @@ impl Conversation {
         Self::import(std::str::from_utf8(&bytes)?, binding)
     }
     pub(crate) fn import(text: &str, binding: String) -> Result<Self> {
-        ensure!(text.len() <= MAX_IMPORT_BYTES, "会话文件超过 2 MiB");
-        let file: ExportFile = serde_json::from_str(text.trim_start_matches('\u{feff}'))
-            .map_err(|_| anyhow::anyhow!("会话 JSON 格式无效或包含未知字段"))?;
-        ensure!(
-            file.schema == "zi-devtools-conversation" && file.version == 1,
-            "不支持的会话格式或版本"
-        );
-        ensure!(
-            !file.messages.is_empty()
-                && file.messages.len().is_multiple_of(2)
-                && file.messages.len() <= MAX_TURNS * 2,
-            "会话必须包含 1 至 16 轮完整问答"
-        );
-        let mut candidate = Self {
+        Ok(Self {
             binding,
-            turns: Vec::new(),
-        };
-        for pair in file.messages.chunks_exact(2) {
-            ensure!(
-                pair[0].role == "user" && pair[1].role == "assistant",
-                "仅支持按顺序排列的 user/assistant 问答，不支持工具或系统消息"
-            );
-            candidate.complete(pair[0].content.clone(), pair[1].content.clone())?;
-        }
-        Ok(candidate)
+            turns: parse_transcript(text)?,
+        })
     }
+
     pub fn bind(&mut self, binding: String) -> bool {
         if self.binding == binding {
             return false;
@@ -124,30 +90,11 @@ impl Conversation {
                 "schema":"zi-devtools-conversation", "version":1, "messages":messages
             }))?);
         }
-        let mut text = String::from("# Zi DevTools 会话\n\n仅包含成功完成的问答。\n");
-        for (index, (question, answer)) in self.turns.iter().enumerate() {
-            for (role, content) in [("你", question), ("模型", answer)] {
-                // Fence original text, including HTML and Markdown, without altering it.
-                let longest = content.split(|c| c != '`').map(str::len).max().unwrap_or(0);
-                let fence = "`".repeat(3.max(longest + 1));
-                text.push_str(&format!(
-                    "\n## 第 {} 轮 · {role}\n\n{fence}text\n{content}\n{fence}\n",
-                    index + 1
-                ));
-            }
-        }
-        Ok(text)
+        render_markdown(&self.turns)
     }
+
     pub fn prepare(&self, input: &str) -> Result<Vec<Value>> {
-        ensure!(!input.trim().is_empty(), "请输入消息");
-        ensure!(
-            self.turns.len() < MAX_TURNS,
-            "会话已达 16 轮，请清空会话后继续"
-        );
-        ensure!(
-            self.bytes().saturating_add(input.len()) <= MAX_BYTES,
-            "会话文本超过 256 KiB，请缩短输入或清空会话"
-        );
+        validate_question(self.turns.len(), self.bytes(), input)?;
         let mut messages = Vec::with_capacity(self.turns.len() * 2 + 1);
         for (user, assistant) in &self.turns {
             messages.push(json!({"role":"user","content":user}));
@@ -157,15 +104,9 @@ impl Conversation {
         Ok(messages)
     }
     pub fn complete(&mut self, input: String, output: String) -> Result<()> {
-        self.prepare(&input)?;
-        ensure!(!output.trim().is_empty(), "响应为空，未加入上下文");
-        ensure!(
-            self.bytes()
-                .saturating_add(input.len())
-                .saturating_add(output.len())
-                <= MAX_BYTES,
-            "响应超出会话容量，结果保留但未加入上下文；请清空会话后继续"
-        );
+        let bytes = self.bytes();
+        validate_question(self.turns.len(), bytes, &input)?;
+        validate_answer(bytes + input.len(), &output)?;
         self.turns.push((input, output));
         Ok(())
     }
