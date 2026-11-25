@@ -56,7 +56,7 @@ assert not source['dirty'], 'Commit the candidate source before freezing'
 contract = root/'contracts/studio-devtools/v1'
 catalog = json.loads((contract/'catalog.example.json').read_text(encoding='utf-8'))
 plugin = json.loads((contract/'plugin.example.json').read_text(encoding='utf-8'))
-plugin['version'] = '0.4.3'
+plugin['version'] = '0.4.4'
 catalog['packageVersion'] = plugin['version']
 catalog['source']=source
 versions = {item['id']:item['tool_version'] for item in json.loads((root/'docs/tools.json').read_text(encoding='utf-8'))['tools']}
@@ -115,7 +115,7 @@ def json_bytes(value): return (json.dumps(value,ensure_ascii=False,indent=2)+'\n
 write(Path('runtime/tools.wasm'),module)
 write(Path('plugin.json'),json_bytes(plugin))
 write(Path('verification/tool-directory-snapshot.json'),directory_snapshot_bytes)
-write(Path('MIGRATION.md'),('''# Migration to the Text 0.4.3 candidate\n\nThe seven capability IDs and the directory profile are unchanged. SQL accepts optional dialect, indent and keywordCase. A text-only request produces the former generic, four-space, uppercase result. The other capabilities retain their text-only schemas. The SQL response still contains text. The packaged Text View continues to use the generic defaults. Common dense 8 KiB SQL templates now complete within the existing Worker budget. The 0.4.2 directory remains available. This unsigned candidate requires separate Studio install and lifecycle acceptance.\n''').encode())
+write(Path('MIGRATION.md'),('''# Migration to the Text 0.4.4 candidate\n\nThe seven capability IDs and the directory profile are unchanged. SQL accepts optional dialect, indent and keywordCase. A text-only request produces the former generic, four-space, uppercase result. The other capabilities retain their text-only schemas. The SQL response still contains text. The packaged Text View continues to use the generic defaults. Common dense 8 KiB SQL templates still complete within the existing Worker budget. The formatter reports the existing 48 KiB result limit early for proven over-limit layouts. Deep inputs that require protected-literal restoration may still consume the existing fuel budget. The 0.4.3 directory remains available. This unsigned candidate requires separate Studio install and lifecycle acceptance.\n''').encode())
 write(Path('verification/fuel-proof.json'),json_bytes(budget_proof))
 write(Path('verification/cold-proof.json'),json_bytes(cold_proof))
 write(Path('verification/engine-provenance.json'),json_bytes(engine_provenance))
@@ -123,7 +123,7 @@ write(Path('verification/verify_fuel.py'),(root/'scripts/verify_diagnostics_fuel
 write(Path('verification/verify_cold.py'),(root/'scripts/verify_diagnostics_cold.py').read_bytes())
 write(Path('verification/bootstrap_engine.py'),(root/'scripts/bootstrap_diagnostics_engine.py').read_bytes())
 write(Path('verification/requirements.txt'),b'wasmtime==36.0.0\n')
-write(Path('verification/README.md'),('''# Replaying the independent runtime proofs\n\nThe package is an unsigned provider directory, not a Studio Host acceptance result. Replaying requires Windows PowerShell, Python 3.13, network access for the hash-pinned Wasmtime 36.0.2 C-API archive, and the package files. From the repository root, create a new cache under `target` and record its local engine identity:\n\n```powershell\npy -3.13 verification/bootstrap_engine.py --cache-dir target/text-plugin-wasmtime-36.0.2 --provenance target/text-plugin-engine.json\n$env:PYTHONPATH = (Resolve-Path target/text-plugin-wasmtime-36.0.2).Path\npy -3.13 verification/verify_fuel.py --wasm release/text-plugin-0.4.3-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.3-candidate-01/fixtures/budget --output target/text-plugin-fuel --text-results --engine-provenance target/text-plugin-engine.json\npy -3.13 verification/verify_cold.py --wasm release/text-plugin-0.4.3-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.3-candidate-01/fixtures/budget --output target/text-plugin-cold.json --engine-provenance target/text-plugin-engine.json\n```\n\nThe packaged fuel/cold proofs bind the WASM digest, raw requests, exact expected response bytes, Wasmtime native DLL digest and all 76 case IDs. They do not test Studio's production Worker, UI bridge, Pi authorization, install lifecycle or Host pipe behavior.\n''').encode())
+write(Path('verification/README.md'),('''# Replaying the independent runtime proofs\n\nThe package is an unsigned provider directory, not a Studio Host acceptance result. Replaying requires Windows PowerShell, Python 3.13, network access for the hash-pinned Wasmtime 36.0.2 C-API archive, and the package files. From the repository root, create a new cache under `target` and record its local engine identity:\n\n```powershell\npy -3.13 verification/bootstrap_engine.py --cache-dir target/text-plugin-wasmtime-36.0.2 --provenance target/text-plugin-engine.json\n$env:PYTHONPATH = (Resolve-Path target/text-plugin-wasmtime-36.0.2).Path\npy -3.13 verification/verify_fuel.py --wasm release/text-plugin-0.4.4-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.4-candidate-01/fixtures/budget --output target/text-plugin-fuel --text-results --engine-provenance target/text-plugin-engine.json\npy -3.13 verification/verify_cold.py --wasm release/text-plugin-0.4.4-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.4-candidate-01/fixtures/budget --output target/text-plugin-cold.json --engine-provenance target/text-plugin-engine.json\n```\n\nThe packaged fuel/cold proofs bind the WASM digest, raw requests, exact expected response bytes, Wasmtime native DLL digest and all 76 case IDs. They do not test Studio's production Worker, UI bridge, Pi authorization, install lifecycle or Host pipe behavior.\n''').encode())
 for case_file in sorted(args.cases_dir.iterdir()):
     if case_file.is_file():
         write(Path('fixtures/budget')/case_file.name,case_file.read_bytes())
@@ -144,12 +144,12 @@ write(Path('fixtures/sql-format.json'),json_bytes({
     'operations':[{'capabilityId':'devtools.text.sql.format',
                    'input':'select id,name from users where active=true',
                    'expected':'SELECT id, name\nFROM users\nWHERE active = TRUE'}],
-    'limitations':['deep or other unusually complex SQL can still reach the unchanged Worker budgets','no semantic validation or database connection']}))
+    'limitations':['deep SQL requiring protected-literal restoration can still reach the unchanged Worker budgets','no semantic validation or database connection']}))
 write(Path('views/main.html'),(root/'plugins/text/views/main.html').read_bytes())
 write(Path('LICENSE'),(root/'LICENSE').read_bytes())
 for license_name in ['LICENSE-MIT', 'LICENSE-APACHE']:
     write(Path('licenses') / ('sqlformat-' + license_name), (root/'vendor/sqlformat'/license_name).read_bytes())
-write(Path('NOTICE'),b'ZiDevTools Text 0.4.3. MIT. Rust core dependencies: serde/serde_json (MIT OR Apache-2.0), base64 (MIT OR Apache-2.0), sha2 and RustCrypto dependencies (MIT OR Apache-2.0), sqlformat (MIT OR Apache-2.0). Rust standard library (MIT OR Apache-2.0).\n')
+write(Path('NOTICE'),b'ZiDevTools Text 0.4.4. MIT. Rust core dependencies: serde/serde_json (MIT OR Apache-2.0), base64 (MIT OR Apache-2.0), sha2 and RustCrypto dependencies (MIT OR Apache-2.0), sqlformat (MIT OR Apache-2.0). Rust standard library (MIT OR Apache-2.0).\n')
 write(Path('README.md'),(root/'plugins/text/README.md').read_bytes())
 files=[]
 for path in sorted(output.rglob('*')):

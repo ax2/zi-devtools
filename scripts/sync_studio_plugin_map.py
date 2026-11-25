@@ -692,12 +692,12 @@ for source_id, operations in {
         blockingReason="unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收")
         for operation, title, scope in operations]
 sql_row = next(row for row in rows if row["sourceToolId"] == "sql-format")
-sql_row["reason"] = "共享 Rust 核心接入五种方言、缩进及关键字大小写，旧请求继续使用通用默认值。九组 8 KiB 密集短句在原预算通过。深层及其他高开销模板和 Studio 接收流程仍待。"
+sql_row["reason"] = "共享 Rust 核心接入五种方言、缩进及关键字大小写，旧请求继续使用通用默认值。九组 8 KiB 密集短句保留原输出。十组原耗油的深层模板明确返回结果超限。保护字面量恢复和 Studio 正式安装继续验收。"
 sql_row["scopeComplete"] = False
 sql_row["packageId"] = "com.zicode.devtools.text"
-sql_row["packageVersion"] = "0.4.3"
-sql_row["candidateDirectory"] = "release/text-plugin-0.4.3-candidate-01"
-sql_row["verificationReceipt"] = "release/text-plugin-0.4.3-candidate-01-verification.json"
+sql_row["packageVersion"] = "0.4.4"
+sql_row["candidateDirectory"] = "release/text-plugin-0.4.4-candidate-01"
+sql_row["verificationReceipt"] = "release/text-plugin-0.4.4-candidate-01-verification.json"
 sql_row["operationScopes"] = [dict(
     operationId="devtools.text.sql.format", title="SQL 格式化",
     scopeKind="bounded_sql_formatter_options",
@@ -710,9 +710,9 @@ sql_row["operationScopes"] = [dict(
     limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152, fuel=10_000_000),
     candidateDirectory=sql_row["candidateDirectory"],
     verificationReceipt=sql_row["verificationReceipt"],
-    runtimeVerification="76_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_cold_and_12_windows_worker_examples",
+    runtimeVerification="76_frozen_byte_outputs_within_budget_and_15_windows_worker_output_limit_examples",
     viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_with_generic_sql_defaults",
-    blockingReason="深层嵌套或其他高开销 SQL 仍可能达到预算。当前结果仅覆盖提供方候选，Studio 安装、文件导入下载与 Pi 权限由接收方验证。")]
+    blockingReason="实际恢复保护字面量的深层 SQL 仍可能达到预算。当前结果仅覆盖提供方候选，Studio 安装、文件导入下载与 Pi 权限由接收方验证。")]
 # File actions extend the strict JSON subset without changing legacy inline packages.
 json_file_capabilities = [
     ("devtools.json-file.format", "JSON 文件格式化"),
