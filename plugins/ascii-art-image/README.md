@@ -8,9 +8,14 @@
 
 仅此插件的 WASI 构建使用图片 Worker 已有的 256 MiB 模块上限，保留 2 MiB 栈。构建进程传入以下 flags，并复用已有 Cargo 目标。
 
-\`\`\`powershell
-$env:RUSTFLAGS = '-C link-arg=--max-memory=268435456 -C link-arg=-zstack-size=2097152'
-cargo build --offline --locked --profile plugin --target wasm32-wasip1 -p zi-ascii-art-image-wasi
-\`\`\`
+```powershell
+$previousRustFlags = $env:RUSTFLAGS
+try {
+    $env:RUSTFLAGS = '-C link-arg=--max-memory=268435456 -C link-arg=-zstack-size=2097152'
+    cargo build --offline --locked --profile plugin --target wasm32-wasip1 -p zi-ascii-art-image-wasi
+} finally {
+    $env:RUSTFLAGS = $previousRustFlags
+}
+```
 
-原生对照用 \`cargo build --offline --locked --profile plugin -p zi-ascii-art-image-wasi\`。以 \`scripts/verify_ascii_art_image_plugin.py\` 核对合成三格式原图、透明度、宽度及资源边界。该验证可以使用已有 Studio 图片 Worker 预算进行提供方对照，安装和 Host 协商由 Studio 单独验证。
+原生对照用 `cargo build --offline --locked --profile plugin -p zi-ascii-art-image-wasi`。以 `scripts/verify_ascii_art_image_plugin.py` 核对合成三格式原图、透明度、宽度及资源边界。该验证可以使用已有 Studio 图片 Worker 预算进行提供方对照，安装和 Host 协商由 Studio 单独验证。
