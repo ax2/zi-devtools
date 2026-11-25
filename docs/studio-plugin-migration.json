@@ -2967,8 +2967,10 @@
       "sourceVersion": "0.5.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.chat.transcript.to_markdown"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2978,9 +2980,29 @@
           "sourceVersion": "0.5.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.chat.transcript.to_markdown",
+          "scopeKind": "confirmed_native_transcript_markdown_export",
+          "scope": "严格的版本 1 JSON，只接受成对用户及助手文本；保留原文件，转换后确认为完整 Markdown 新产物。",
+          "sourceVersion": "0.5.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "fileBytes": 65536,
+            "jsonEscapes": 12288,
+            "turns": 16,
+            "markdownBytes": 196608
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_literal_fence_and_markdown_byte_parity",
+          "blockingReason": "当前仅离线文件互转，模型通信、附件及会话库仍用独立版。接收方独立检查 Studio 安装、确认保存和重启。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "确认一份原生版本 1 会话 JSON，按顺序将完整问答转成原生纯文本围栏 Markdown。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.conversation-markdown",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/conversation-markdown-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/conversation-markdown-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "model-compare",

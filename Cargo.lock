@@ -5976,6 +5976,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-conversation-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-conversation-markdown-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "zi-conversation-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-date-calculator-wasi"
 version = "0.1.0"
 dependencies = [
@@ -6043,6 +6063,7 @@ dependencies = [
  "zi-character-core",
  "zi-civil-date-core",
  "zi-clipboard-compose-core",
+ "zi-conversation-core",
  "zi-diagnostics-core",
  "zi-diff-core",
  "zi-directory-compare-wasi",
