@@ -69,8 +69,11 @@ fn execute() -> Result<Value, Error> {
     {
         return Err("INVALID_RESOURCE");
     }
-    // Studio's generic file picker labels an unknown binary type as octet-stream.
-    if !matches!(file.mime_type.as_str(), "application/json" | "text/plain") {
+    // Studio assigns ordinary JSON uploads the untyped binary MIME. The recipe parser checks the bytes.
+    if !matches!(
+        file.mime_type.as_str(),
+        "application/json" | "text/plain" | "application/octet-stream"
+    ) {
         return Err("UNSUPPORTED_MIME");
     }
     if file.byte_length > RECIPE_LIMIT {

@@ -53,6 +53,8 @@ def fixtures():
     image = step("image.info", "图片 · 信息报告", "image", effect="process-in-memory-image")
     source = recipe(1, "json.minify")
     yield "plain-text", source, {}, MIME, report(1, minify)
+    yield "local-json-mime", source, {}, "application/octet-stream", report(1, minify)
+    yield "not-a-recipe-binary", b"\x00\xff", {}, "application/octet-stream", "INVALID_RECIPE"
     yield "typed-input-output", recipe(2, "table.parse_csv", "table.export_schema"), {}, MIME, report(2, parse, export)
     yield "file-effect-and-side-output", recipe(3, "file.sha256", "json.minify"), {}, MIME, report(3, file, minify)
     yield "image-effect", recipe(4, "image.info"), {}, MIME, report(4, image)

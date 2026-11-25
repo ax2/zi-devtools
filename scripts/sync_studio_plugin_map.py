@@ -305,8 +305,8 @@ flow_row = next(row for row in rows if row["sourceToolId"] == "text-flow")
 flow_row.update(
     pluginStatus="candidate", candidateCapabilities=["devtools.flow.recipe.inspect"], scopeComplete=False,
     packageId="com.zicode.devtools.flow-recipe", packageVersion="0.1.0",
-    candidateDirectory="release/plugin-candidates/flow-recipe-0.1.0-candidate-01",
-    verificationReceipt="release/plugin-candidates/flow-recipe-0.1.0-candidate-01-verification.json",
+    candidateDirectory="release/plugin-candidates/flow-recipe-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/flow-recipe-0.1.0-candidate-02-verification.json",
     reason="复用原生格式 1–4 与动作签名校验，提供经确认的文本流程配方只读检查。",
 )
 flow_row["operationScopes"].append(dict(

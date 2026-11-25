@@ -41,7 +41,7 @@ def manifest():
         activationEvents=["onCapability:"+CAPABILITY],
         runtime={"wasi":"runtime/tools.wasm","resourceInputProfile":PROFILE},
         contributes=dict(activities=[],views=[],commands=[],piTools=[],capabilities=[dict(
-            id=CAPABILITY,title=TITLE,description=SCOPE,resourceInputMimeTypes=[MIME,"text/plain"],
+            id=CAPABILITY,title=TITLE,description=SCOPE,resourceInputMimeTypes=[MIME,"text/plain","application/octet-stream"],
             inputSchema=obj(),
             outputSchema={"type":"object","oneOf":[success,failure]},maxResultBytes=MAX_RESULT,
             directory=dict(categoryId="files",aliases=["配方检查","工具流程","文本流程","Text flow recipe inspector"],description=SCOPE))]),
