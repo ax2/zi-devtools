@@ -666,6 +666,25 @@ memo_backup_row["operationScopes"].append(dict(
                    "需通过目标 Studio 正常入口与另存。",
 ))
 
+image_convert_row = next(row for row in rows if row["sourceToolId"] == "image-tools")
+image_convert_capability = "devtools.image.convert.original-size"
+image_convert_row.update(
+    pluginStatus="candidate", candidateCapabilities=[image_convert_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.image-convert", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/image-convert-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/image-convert-0.1.0-candidate-01-verification.json",
+    reason="来自单图图片工具的原尺寸编码，读取本次明确确认的静态 PNG、JPEG 或 WebP。",
+)
+image_convert_row["operationScopes"].append(dict(
+    operationId=image_convert_capability, scopeKind="bounded_confirmed_original_size_image_conversion",
+    scope="用独立版编码器转换静态图片，保留原宽高，生成单个可确认另存的派生资源。",
+    sourceVersion=image_convert_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=33554432, outputBytes=33554432, maxEdge=12000, maxPixels=16000000),
+    runtimeVerification="32_fixed_production_windows_worker_cases_native_codec_parity",
+    blockingReason="单文件转换。剪贴板、工作实例、批量、完整图像接力及接收端正常入口另验。",
+))
+
+
 
 
 
