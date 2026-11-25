@@ -2,8 +2,6 @@
 use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
 use image::{DynamicImage, ImageFormat, ImageReader, Limits};
-use quick_xml::{Reader, events::Event};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -13,21 +11,12 @@ use std::{
 };
 
 use crate::knowledge_sources::{FileVersion, Kind, Source};
+pub use zi_document_text_core::Chunk;
+use zi_document_text_core::{MAX_CHUNKS, OVERLAP_CHARS, chunks_from, docx::read_paragraphs};
 
 const MAX_FILE: u64 = 16 * 1024 * 1024;
 const MAX_TEXT: usize = 4 * 1024 * 1024;
-const CHUNK_CHARS: usize = 800;
-const OVERLAP_CHARS: usize = 100;
-const MAX_CHUNKS: usize = 2_000;
 const MAX_IMAGE_PIXELS: u64 = 16_000_000;
-
-#[derive(Clone, Debug, Serialize)]
-pub struct Chunk {
-    pub location: String,
-    pub ordinal: usize,
-    pub text: String,
-    pub sha256: String,
-}
 
 #[derive(Clone, Debug)]
 pub struct Preview {
@@ -64,49 +53,10 @@ fn push_section(
 }
 
 fn parse_docx(bytes: &[u8]) -> Result<Vec<(String, String)>> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).context("Word 文件 ZIP 结构无效")?;
-    ensure!(archive.len() <= 2_000, "Word 文件条目过多");
-    let file = archive
-        .by_name("word/document.xml")
-        .context("缺少 word/document.xml")?;
-    ensure!(
-        file.size() <= MAX_TEXT as u64 * 2,
-        "Word 正文 XML 超过 8 MiB"
-    );
-    let mut xml = Vec::new();
-    file.take((MAX_TEXT * 2 + 1) as u64).read_to_end(&mut xml)?;
-    ensure!(xml.len() <= MAX_TEXT * 2, "Word 正文 XML 超过 8 MiB");
-    let mut reader = Reader::from_reader(xml.as_slice());
-    reader.config_mut().trim_text(false);
     let mut sections = Vec::new();
-    let mut paragraph = String::new();
-    let mut number = 0;
-    let mut in_text = false;
-    loop {
-        match reader.read_event().context("Word 正文 XML 格式无效")? {
-            Event::Start(tag) if tag.name().as_ref() == b"w:t" => in_text = true,
-            Event::End(tag) if tag.name().as_ref() == b"w:t" => in_text = false,
-            Event::Text(value) if in_text => {
-                paragraph.push_str(&quick_xml::escape::unescape(&value.decode()?)?)
-            }
-            Event::GeneralRef(value) if in_text => {
-                let encoded = format!("&{};", value.decode()?);
-                paragraph.push_str(&quick_xml::escape::unescape(&encoded)?);
-            }
-            Event::Empty(tag) if tag.name().as_ref() == b"w:tab" => paragraph.push('\t'),
-            Event::Empty(tag) if tag.name().as_ref() == b"w:br" => paragraph.push('\n'),
-            Event::End(tag) if tag.name().as_ref() == b"w:p" => {
-                number += 1;
-                push_section(
-                    &mut sections,
-                    format!("段落 {number}"),
-                    std::mem::take(&mut paragraph),
-                )?;
-            }
-            Event::Eof => break,
-            _ => {}
-        }
-    }
+    read_paragraphs(bytes, 2_000, MAX_TEXT * 2, |number, text| {
+        push_section(&mut sections, format!("段落 {number}"), text)
+    })?;
     Ok(sections)
 }
 
@@ -338,31 +288,6 @@ fn parse_text(bytes: &[u8], markdown: bool) -> Result<Vec<(String, String)>> {
         }
     }
     Ok(sections)
-}
-
-fn chunks_from(sections: Vec<(String, String)>) -> Result<Vec<Chunk>> {
-    let mut chunks = Vec::new();
-    for (location, text) in sections {
-        let chars: Vec<char> = text.chars().collect();
-        let mut start = 0;
-        while start < chars.len() {
-            ensure!(chunks.len() < MAX_CHUNKS, "分块超过 2000 个");
-            let end = (start + CHUNK_CHARS).min(chars.len());
-            let part: String = chars[start..end].iter().collect();
-            chunks.push(Chunk {
-                location: location.clone(),
-                ordinal: chunks.len() + 1,
-                sha256: digest(part.as_bytes()),
-                text: part,
-            });
-            if end == chars.len() {
-                break;
-            }
-            start = end - OVERLAP_CHARS;
-        }
-    }
-    ensure!(!chunks.is_empty(), "未提取到可用正文");
-    Ok(chunks)
 }
 
 fn verified_source(source: &Source, file: &FileVersion) -> Result<(PathBuf, Vec<u8>)> {

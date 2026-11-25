@@ -3413,8 +3413,10 @@
       "sourceVersion": "1.4.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.docx.preview.chunks"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3424,9 +3426,30 @@
           "sourceVersion": "1.4.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.docx.preview.chunks",
+          "scopeKind": "bounded_confirmed_docx_chunks",
+          "scope": "确认一份本机 DOCX，仅解析 word/document.xml。保留原生段落位置、800字分块和100字重叠。",
+          "sourceVersion": "1.4.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "confirmedDocxBytes": 131072,
+            "extractedXmlBytes": 131072,
+            "zipEntries": 256,
+            "previewRows": 8,
+            "previewTextBytes": 6144
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅 DOCX 正文分块预览，不接宏或媒体、其它格式、OCR、知识源索引和完整导出。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "复用原生文档解析与分块核心，提供确认的 DOCX 正文有界只读预览。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.docx-preview",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/docx-preview-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/docx-preview-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "rag-index",

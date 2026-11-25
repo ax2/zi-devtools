@@ -266,6 +266,24 @@ pdf_row["operationScopes"].append(dict(
     blockingReason="候选只包含单页嵌入文本，保留独立版 PDF 专用 UI、OCR、全文检索和结果另存。",
 ))
 
+ingest_row = next(row for row in rows if row["sourceToolId"] == "rag-ingestion")
+ingest_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.docx.preview.chunks"], scopeComplete=False,
+    packageId="com.zicode.devtools.docx-preview", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/docx-preview-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/docx-preview-0.1.0-candidate-01-verification.json",
+    reason="复用原生文档解析与分块核心，提供确认的 DOCX 正文有界只读预览。",
+)
+ingest_row["operationScopes"].append(dict(
+    operationId="devtools.docx.preview.chunks", scopeKind="bounded_confirmed_docx_chunks",
+    scope="确认一份本机 DOCX，仅解析 word/document.xml。保留原生段落位置、800字分块和100字重叠。",
+    sourceVersion=ingest_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(confirmedDocxBytes=131072, extractedXmlBytes=131072, zipEntries=256,
+                previewRows=8, previewTextBytes=6144),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅 DOCX 正文分块预览，不接宏或媒体、其它格式、OCR、知识源索引和完整导出。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

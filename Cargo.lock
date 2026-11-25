@@ -5942,6 +5942,7 @@ dependencies = [
  "zi-diagnostics-core",
  "zi-diff-core",
  "zi-directory-compare-wasi",
+ "zi-document-text-core",
  "zi-duplicate-files-wasi",
  "zi-image-core",
  "zi-inspect-core",
@@ -6002,6 +6003,28 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-document-text-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "quick-xml",
+ "serde",
+ "sha2",
+ "zip",
+]
+
+[[package]]
+name = "zi-docx-preview-wasi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "zi-document-text-core",
  "zi-resource-input-wasi",
 ]
 
