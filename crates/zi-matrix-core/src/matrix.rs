@@ -1,7 +1,7 @@
 use super::Value;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Matrix {
+pub struct Matrix {
     pub rows: usize,
     pub cols: usize,
     pub cells: Vec<Value>,
@@ -9,7 +9,7 @@ pub(super) struct Matrix {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(super) enum Operation {
+pub enum Operation {
     Add,
     Subtract,
     Multiply,
@@ -205,7 +205,7 @@ impl Matrix {
             };
             if pivot != col {
                 a.swap_rows(col, pivot);
-                result = result.neg()?;
+                result = result.checked_neg()?;
             }
             let divisor = a.get(col, col);
             result = result.binary("*", divisor)?;
@@ -284,6 +284,41 @@ impl Matrix {
                 .collect::<Result<Vec<_>, _>>()?,
         )
     }
+}
+
+/// Read the native calculator's rectangular TSV shape and trim its cell text.
+pub fn tsv_cells(text: &str, cell_limit: usize) -> Result<Vec<Vec<&str>>, String> {
+    if text.len() > 16 * 1024 {
+        return Err("TSV内容最多16KiB".into());
+    }
+    let lines: Vec<_> = text.trim_end_matches(['\r', '\n']).lines().collect();
+    if lines.is_empty() || lines.len() > 8 {
+        return Err("TSV需为1–8行".into());
+    }
+    let cols = lines[0].split('\t').count();
+    if !(1..=8).contains(&cols) {
+        return Err("TSV需为1–8列，以制表符分列".into());
+    }
+    lines
+        .iter()
+        .enumerate()
+        .map(|(r, line)| {
+            let cells: Vec<_> = line.split('\t').map(str::trim).collect();
+            if cells.len() != cols {
+                return Err(format!("第{}行列数不一致", r + 1));
+            }
+            for (c, cell) in cells.iter().enumerate() {
+                if cell.is_empty() || cell.len() > cell_limit {
+                    return Err(format!(
+                        "({}, {})不能为空且最多{cell_limit}字节",
+                        r + 1,
+                        c + 1
+                    ));
+                }
+            }
+            Ok(cells)
+        })
+        .collect()
 }
 
 #[cfg(test)]

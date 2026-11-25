@@ -377,6 +377,39 @@ for action, scope in date_ops.items():
         blockingReason="仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。",
     ))
 
+matrix_ops = {
+    "add": "同样尺寸的实数矩阵加法。",
+    "subtract": "同样尺寸的实数矩阵减法。",
+    "multiply": "维度相容的实数矩阵乘法。",
+    "transpose": "实数矩阵转置。",
+    "determinant": "实数方阵行列式，奇异时返回零。",
+    "inverse": "实数可逆方阵求逆。",
+    "solve": "求解 AX=B，A 必须可逆，B 可有多个右端项。",
+}
+matrix_package = dict(
+    packageId="com.zicode.devtools.matrix-calculator", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+)
+date_row["candidatePackages"] = [
+    dict(packageId=date_row["packageId"], packageVersion=date_row["packageVersion"],
+         candidateDirectory=date_row["candidateDirectory"], verificationReceipt=date_row["verificationReceipt"],
+         capabilities=date_row["candidateCapabilities"].copy()),
+    dict(**matrix_package, capabilities=["devtools.matrix." + name for name in matrix_ops]),
+]
+date_row["candidateCapabilities"] += ["devtools.matrix." + name for name in matrix_ops]
+date_row["reason"] = "日期候选保留原四项离线操作，矩阵候选另提供七项实数计算。独立版计算器范围尚未完整迁移。"
+for action, scope in matrix_ops.items():
+    date_row["operationScopes"].append(dict(
+        operationId="devtools.matrix." + action, scopeKind="bounded_offline_real_matrix_calculation",
+        scope=scope, sourceVersion=date_row["sourceVersion"], pluginStatus="candidate",
+        **matrix_package,
+        limits=dict(matrixRows=8, matrixColumns=8, matrixBytes=4096, cellBytes=96,
+                    requestBytes=16384, serializedResultBytes=12288),
+        runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+        blockingReason="仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。",
+    ))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

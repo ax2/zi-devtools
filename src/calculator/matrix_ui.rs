@@ -31,33 +31,15 @@ impl Default for Input {
 }
 impl Input {
     fn from_tsv(text: &str) -> Result<Self, String> {
-        if text.len() > 16 * 1024 {
-            return Err("TSV内容最多16KiB".into());
-        }
-        let lines: Vec<_> = text.trim_end_matches(['\r', '\n']).lines().collect();
-        if lines.is_empty() || lines.len() > 8 {
-            return Err("TSV需为1–8行".into());
-        }
-        let cols = lines[0].split('\t').count();
-        if !(1..=8).contains(&cols) {
-            return Err("TSV需为1–8列，以制表符分列".into());
-        }
+        let grid = super::matrix::tsv_cells(text, 512)?;
         let mut result = Self {
-            rows: lines.len(),
-            cols,
+            rows: grid.len(),
+            cols: grid[0].len(),
             ..Self::default()
         };
-        for (r, line) in lines.iter().enumerate() {
-            let cells: Vec<_> = line.split('\t').collect();
-            if cells.len() != cols {
-                return Err(format!("第{}行列数不一致", r + 1));
-            }
+        for (r, cells) in grid.iter().enumerate() {
             for (c, cell) in cells.iter().enumerate() {
-                let text = cell.trim();
-                if text.is_empty() || text.len() > 512 {
-                    return Err(format!("({}, {})不能为空且最多512字节", r + 1, c + 1));
-                }
-                result.cells[r * 8 + c] = text.into();
+                result.cells[r * 8 + c] = (*cell).into();
             }
         }
         Ok(result)

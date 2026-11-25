@@ -5040,7 +5040,14 @@
         "devtools.date.difference",
         "devtools.date.offset",
         "devtools.date.workday_count",
-        "devtools.date.workday_offset"
+        "devtools.date.workday_offset",
+        "devtools.matrix.add",
+        "devtools.matrix.subtract",
+        "devtools.matrix.multiply",
+        "devtools.matrix.transpose",
+        "devtools.matrix.determinant",
+        "devtools.matrix.inverse",
+        "devtools.matrix.solve"
       ],
       "pilotCapabilities": [],
       "operationScopes": [
@@ -5115,14 +5122,190 @@
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
           "blockingReason": "仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。"
+        },
+        {
+          "operationId": "devtools.matrix.add",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "同样尺寸的实数矩阵加法。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.matrix.subtract",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "同样尺寸的实数矩阵减法。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.matrix.multiply",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "维度相容的实数矩阵乘法。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.matrix.transpose",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "实数矩阵转置。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.matrix.determinant",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "实数方阵行列式，奇异时返回零。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.matrix.inverse",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "实数可逆方阵求逆。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.matrix.solve",
+          "scopeKind": "bounded_offline_real_matrix_calculation",
+          "scope": "求解 AX=B，A 必须可逆，B 可有多个右端项。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "matrixRows": 8,
+            "matrixColumns": 8,
+            "matrixBytes": 4096,
+            "cellBytes": 96,
+            "requestBytes": 16384,
+            "serializedResultBytes": 12288
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         }
       ],
-      "reason": "复用原生日期与工作日计算规则，提供公历日期四项离线操作。",
+      "reason": "日期候选保留原四项离线操作，矩阵候选另提供七项实数计算。独立版计算器范围尚未完整迁移。",
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.date-calculator",
       "packageVersion": "0.1.0",
       "candidateDirectory": "release/plugin-candidates/date-calculator-0.1.0-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/date-calculator-0.1.0-candidate-01-verification.json"
+      "verificationReceipt": "release/plugin-candidates/date-calculator-0.1.0-candidate-01-verification.json",
+      "candidatePackages": [
+        {
+          "packageId": "com.zicode.devtools.date-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/date-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/date-calculator-0.1.0-candidate-01-verification.json",
+          "capabilities": [
+            "devtools.date.difference",
+            "devtools.date.offset",
+            "devtools.date.workday_count",
+            "devtools.date.workday_offset"
+          ]
+        },
+        {
+          "packageId": "com.zicode.devtools.matrix-calculator",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/matrix-calculator-0.1.0-candidate-01-verification.json",
+          "capabilities": [
+            "devtools.matrix.add",
+            "devtools.matrix.subtract",
+            "devtools.matrix.multiply",
+            "devtools.matrix.transpose",
+            "devtools.matrix.determinant",
+            "devtools.matrix.inverse",
+            "devtools.matrix.solve"
+          ]
+        }
+      ]
     },
     {
       "sourceToolId": "explorer-menu",
