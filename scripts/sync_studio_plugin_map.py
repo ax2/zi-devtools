@@ -485,26 +485,27 @@ for source_id, operations in {
         blockingReason="unsigned提供方候选；Base64/SHA View逐项检查及Studio Host/Pi仍待验收")
         for operation, title, scope in operations]
 sql_row = next(row for row in rows if row["sourceToolId"] == "sql-format")
-sql_row["reason"] = "共享纯Rust SQL格式化核心新增WASI通用方言操作；仅覆盖格式化单操作，不含桌面方言/缩进/大小写选择，Studio Host/Pi仍待接收方验收。"
+sql_row["reason"] = "共享 Rust 核心接入五种方言、缩进及关键字大小写，旧请求继续使用通用默认值。密集 SQL 的预算和 Studio 接收流程仍待。"
 sql_row["scopeComplete"] = False
 sql_row["packageId"] = "com.zicode.devtools.text"
-sql_row["packageVersion"] = "0.4.1"
-sql_row["candidateDirectory"] = "release/text-plugin-0.4.1-candidate-02"
-sql_row["verificationReceipt"] = "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json"
+sql_row["packageVersion"] = "0.4.2"
+sql_row["candidateDirectory"] = "release/text-plugin-0.4.2-candidate-01"
+sql_row["verificationReceipt"] = "release/text-plugin-0.4.2-candidate-01-verification.json"
 sql_row["operationScopes"] = [dict(
-    operationId="devtools.text.sql.format", title="SQL 格式化 · 通用方言",
-    scopeKind="partial_standalone_formatter", scope="通用SQL词法模式和默认缩进/关键字大小写；不提供桌面工具的PostgreSQL/MySQL/SQLite/SQL Server方言选择。",
+    operationId="devtools.text.sql.format", title="SQL 格式化",
+    scopeKind="bounded_sql_formatter_options",
+    scope="通用、PostgreSQL、MySQL、SQLite、SQL Server，以及两空格、四空格、Tab、大写、小写和保留大小写。省略选项时沿用旧默认输出。",
     sourceVersion=sql_row["sourceVersion"], pluginStatus="candidate",
     core="zi-text-core/0.1.0", adapter="zi-text-wasi/0.1.0",
-    packageId="com.zicode.devtools.text", packageVersion="0.4.1",
+    packageId="com.zicode.devtools.text", packageVersion=sql_row["packageVersion"],
     hostProfile="compute.wasi.v1@=1.0.0-rc.1",
     directoryProfile="tool.directory.v1@=1.0.0-preview.1",
-    limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152),
-    candidateDirectory="release/text-plugin-0.4.1-candidate-02",
+    limits=dict(inputUtf8Bytes=8192, serializedResultBytes=49152, fuel=10_000_000),
+    candidateDirectory=sql_row["candidateDirectory"],
     verificationReceipt=sql_row["verificationReceipt"],
-    runtimeVerification="43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
-    viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
-    blockingReason="unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收")]
+    runtimeVerification="67_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_cold_and_windows_worker_fixed_examples",
+    viewVerification="public_sdk_shaped_bridge_actual_wasi_all_7_operations_with_generic_sql_defaults",
+    blockingReason="结构密集的 SQL 仍可能耗尽预算。当前结果仅覆盖提供方候选，Studio 安装、文件导入下载与 Pi 权限由接收方验证。")]
 # File actions extend the strict JSON subset without changing legacy inline packages.
 json_file_capabilities = [
     ("devtools.json-file.format", "JSON 文件格式化"),

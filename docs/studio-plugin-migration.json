@@ -2036,34 +2036,35 @@
       "operationScopes": [
         {
           "operationId": "devtools.text.sql.format",
-          "title": "SQL 格式化 · 通用方言",
-          "scopeKind": "partial_standalone_formatter",
-          "scope": "通用SQL词法模式和默认缩进/关键字大小写；不提供桌面工具的PostgreSQL/MySQL/SQLite/SQL Server方言选择。",
+          "title": "SQL 格式化",
+          "scopeKind": "bounded_sql_formatter_options",
+          "scope": "通用、PostgreSQL、MySQL、SQLite、SQL Server，以及两空格、四空格、Tab、大写、小写和保留大小写。省略选项时沿用旧默认输出。",
           "sourceVersion": "0.3.1",
           "pluginStatus": "candidate",
           "core": "zi-text-core/0.1.0",
           "adapter": "zi-text-wasi/0.1.0",
           "packageId": "com.zicode.devtools.text",
-          "packageVersion": "0.4.1",
+          "packageVersion": "0.4.2",
           "hostProfile": "compute.wasi.v1@=1.0.0-rc.1",
           "directoryProfile": "tool.directory.v1@=1.0.0-preview.1",
           "limits": {
             "inputUtf8Bytes": 8192,
-            "serializedResultBytes": 49152
+            "serializedResultBytes": 49152,
+            "fuel": 10000000
           },
-          "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-          "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json",
-          "runtimeVerification": "43_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_budget_and_fresh_process_cold_pass",
-          "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_two_themes_invalid_json_rejection",
-          "blockingReason": "unsigned且不完整提供方候选；SQL桌面方言选项、Studio安装/权限/PI/Host生命周期仍待验收"
+          "candidateDirectory": "release/text-plugin-0.4.2-candidate-01",
+          "verificationReceipt": "release/text-plugin-0.4.2-candidate-01-verification.json",
+          "runtimeVerification": "67_native_wasi_byte_parity_official_wasmtime_36_0_2_fuel_cold_and_windows_worker_fixed_examples",
+          "viewVerification": "public_sdk_shaped_bridge_actual_wasi_all_7_operations_with_generic_sql_defaults",
+          "blockingReason": "结构密集的 SQL 仍可能耗尽预算。当前结果仅覆盖提供方候选，Studio 安装、文件导入下载与 Pi 权限由接收方验证。"
         }
       ],
-      "reason": "共享纯Rust SQL格式化核心新增WASI通用方言操作；仅覆盖格式化单操作，不含桌面方言/缩进/大小写选择，Studio Host/Pi仍待接收方验收。",
+      "reason": "共享 Rust 核心接入五种方言、缩进及关键字大小写，旧请求继续使用通用默认值。密集 SQL 的预算和 Studio 接收流程仍待。",
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.text",
-      "packageVersion": "0.4.1",
-      "candidateDirectory": "release/text-plugin-0.4.1-candidate-02",
-      "verificationReceipt": "release/plugin-candidates/text-plugin-0.4.1-candidate-02-verification-revision-01.json"
+      "packageVersion": "0.4.2",
+      "candidateDirectory": "release/text-plugin-0.4.2-candidate-01",
+      "verificationReceipt": "release/text-plugin-0.4.2-candidate-01-verification.json"
     },
     {
       "sourceToolId": "json-schema",

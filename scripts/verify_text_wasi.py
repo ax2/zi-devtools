@@ -62,6 +62,53 @@ for value in ['not-json','{"x":1,"x":2}','9007199254740992','['*65+'0'+']'*65]:
     cases.append(('json-validate-invalid-'+str(len(cases)),request('devtools.text.json.validate',{'text':value}),None,'INVALID_INPUT'))
 cases.append(('sql-format-generic',request('devtools.text.sql.format',{'text':'select id,name from users where active=true'}),'SELECT id, name\nFROM users\nWHERE active = TRUE',None))
 cases.append(('sql-format-empty',request('devtools.text.sql.format',{'text':' \n'}),None,'INVALID_INPUT'))
+sql_id = 'devtools.text.sql.format'
+style_columns = (
+    'a_very_long_column_name_that_pushes_the_line_wrap_threshold',
+    'another_very_long_column_name_that_pushes_the_line_wrap_threshold',
+    "'MiXeD'",
+)
+style_input = f'SeLeCt {", ".join(style_columns)} FrOm users Where active = true'
+
+def sql_case(case_id, text, expected=None, error=None, **options):
+    cases.append(('sql-options-'+case_id, request(sql_id, {'text':text, **options}), expected, error))
+
+sql_case('explicit-default', 'select id,name from users where active=true', 'SELECT id, name\nFROM users\nWHERE active = TRUE',
+         dialect='generic', indent='fourSpaces', keywordCase='uppercase')
+sql_case('postgres-dollar', 'select $body$中文 select; from$body$ as body, $1 from records',
+         'SELECT\n    $body$中文 select; from$body$ AS body,\n    $1\nFROM records', dialect='postgresql')
+sql_case('postgres-marker-collision',
+         'select __ZICODE_SQLFMT_LITERAL_0__, ___ZICODE_SQLFMT_LITERAL_0__, __ZICODE_SQLFMT_LITERAL_01__, $$x 中文$$, $tag$y$tag$, $1 from records',
+         'select\n    __ZICODE_SQLFMT_LITERAL_0__,\n    ___ZICODE_SQLFMT_LITERAL_0__,\n    __ZICODE_SQLFMT_LITERAL_01__,'
+         '\n    $$x 中文$$,\n    $tag$y$tag$,\n    $1\nfrom records', dialect='postgresql',keywordCase='lowercase')
+sql_case('mysql-quoting', "select `order`, '$1 -- literal' as note # keep from, where\nfrom `table` where id = ?",
+         "SELECT\n    `order`,\n    '$1 -- literal' AS note # keep from, where\nFROM `table`\nWHERE id = ?", dialect='mysql')
+sql_case('sqlite-brackets', 'select [order], [a]]b] from [table]',
+         'SELECT\n    [order],\n    [a]]b]\nFROM [table]', dialect='sqlite')
+sql_case('sql-server-brackets', 'select [order], [a]]b] from [table] where [user_id] = @id',
+         'SELECT [order], [a]]b]\nFROM [table]\nWHERE [user_id] = @id', dialect='sqlserver')
+sql_case('two-space-lowercase', style_input, 'select\n  '+',\n  '.join(style_columns)+'\nfrom users\nwhere active = true',
+         indent='twoSpaces', keywordCase='lowercase')
+sql_case('four-space-uppercase', style_input, 'SELECT\n    '+',\n    '.join(style_columns)+'\nFROM users\nWHERE active = TRUE',
+         indent='fourSpaces', keywordCase='uppercase')
+sql_case('tabs-preserve', style_input, 'SeLeCt\n\t'+',\n\t'.join(style_columns)+'\nFrOm users\nWhere active = true',
+         indent='tabs', keywordCase='preserve')
+sql_case('postgres-unterminated', 'select $body$中文', error='INVALID_INPUT', dialect='postgresql')
+sql_case('unknown-dialect', 'select 1', error='INVALID_INPUT', dialect='oracle')
+sql_case('numeric-indent', 'select 1', error='INVALID_INPUT', indent=2)
+sql_case('unknown-keyword-case', 'select 1', error='INVALID_INPUT', keywordCase='auto')
+sql_case('explicit-null', 'select 1', error='INVALID_INPUT', keywordCase=None)
+sql_case('extra-field', 'select 1', error='INVALID_INPUT', format=True)
+cases.append(('sql-options-wrong-capability', request('devtools.text.sha256', {'text':'abc', 'dialect':'generic'}), None, 'INVALID_INPUT'))
+other_plugin = request('devtools.transforms.stats.inspect', {'text':'abc','indent':'tabs'})
+other_plugin['pluginId'] = 'com.zicode.devtools.transforms'
+cases.append(('sql-options-wrong-plugin', other_plugin, None, 'INVALID_INPUT'))
+cases.append(('sql-options-duplicate-field', b'{"pluginId":"com.zicode.devtools.text","sceneId":"coding","capabilityId":"devtools.text.sql.format","commandId":null,"input":{"text":"select 1","dialect":"generic","dialect":"mysql"}}', None, 'INVALID_INPUT'))
+max_sql = "select '" + '中'*2727 + "'; "
+assert len(max_sql.encode()) == 8192
+for dialect in ['generic', 'postgresql', 'mysql', 'sqlite', 'sqlserver']:
+    sql_case(dialect+'-utf8-8192', max_sql, 'SELECT\n    '+max_sql[7:-1], dialect=dialect)
+sql_case('utf8-8193', max_sql+' ', error='INPUT_TOO_LARGE', dialect='postgresql')
 near = '['*60 + ','.join(['0']*320) + ']'*60
 cases.append(('large-output',request('devtools.text.json.format',{'text':near}),json.dumps(json.loads(near),ensure_ascii=False,indent=2),None))
 over = '['*60 + ','.join(['0']*750) + ']'*60

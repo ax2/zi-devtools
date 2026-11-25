@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 pub const REQUEST_LIMIT: usize = 48 * 1024;
 pub const TEXT_LIMIT: usize = 8192;
 pub const CONTRACT_VERSION: &str = "1.0.0-rc.1";
+const SQL_FORMAT: &str = "devtools.text.sql.format";
 
 // Standalone policy preserves its existing wide integers and whitespace handling.
 pub fn json(input: &str, pretty: bool) -> Result<String, serde_json::Error> {
@@ -98,16 +99,16 @@ impl<'de> Deserialize<'de> for Slot {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Request {
+struct Request<Input> {
     plugin_id: String,
     scene_id: String,
     capability_id: Slot,
     command_id: Slot,
-    input: Text,
+    input: Input,
 }
 
 pub fn execute_request(bytes: &[u8]) -> ResultEnvelope {
-    with_request(bytes, |request| {
+    with_request(bytes, |request: Request<sql::TextInput>| {
         if !["com.zicode.devtools.text", "com.zicode.devtools.transforms"]
             .contains(&request.plugin_id.as_str())
             || request.scene_id.is_empty()
@@ -116,9 +117,17 @@ pub fn execute_request(bytes: &[u8]) -> ResultEnvelope {
         {
             return ResultEnvelope::failure("INVALID_INPUT", "插件或场景标识无效");
         }
-        dispatch_request(&request, |cap, text| {
+        if request.input.has_sql_options()
+            && (request.plugin_id != "com.zicode.devtools.text"
+                || request.capability_id.0.as_deref() != Some(SQL_FORMAT))
+        {
+            return ResultEnvelope::failure("INVALID_INPUT", "请求结构无效");
+        }
+        dispatch_request(&request, &request.input.text, |cap, text| {
             if request.plugin_id == "com.zicode.devtools.transforms" {
                 execute_transforms(cap, text)
+            } else if cap == SQL_FORMAT {
+                sql_result(request.input.format())
             } else {
                 execute(cap, text)
             }
@@ -133,36 +142,40 @@ pub fn execute_plugin_request(
     plugin_id: &str,
     handler: impl FnOnce(&str, &str) -> ResultEnvelope,
 ) -> ResultEnvelope {
-    with_request(bytes, |request| {
+    with_request(bytes, |request: Request<Text>| {
         if request.plugin_id != plugin_id
             || request.scene_id.is_empty()
             || request.scene_id.len() > 128
         {
             return ResultEnvelope::failure("INVALID_INPUT", "插件或场景标识无效");
         }
-        dispatch_request(&request, handler)
+        dispatch_request(&request, &request.input.text, handler)
     })
 }
 
-fn with_request(bytes: &[u8], handler: impl FnOnce(Request) -> ResultEnvelope) -> ResultEnvelope {
+fn with_request<Input: for<'de> Deserialize<'de>>(
+    bytes: &[u8],
+    handler: impl FnOnce(Request<Input>) -> ResultEnvelope,
+) -> ResultEnvelope {
     if bytes.len() > REQUEST_LIMIT {
         return ResultEnvelope::failure("INPUT_TOO_LARGE", "请求超过 48 KiB");
     }
-    let Ok(request) = serde_json::from_slice::<Request>(bytes) else {
+    let Ok(request) = serde_json::from_slice::<Request<Input>>(bytes) else {
         return ResultEnvelope::failure("INVALID_INPUT", "请求结构无效");
     };
     handler(request)
 }
 
-fn dispatch_request(
-    request: &Request,
+fn dispatch_request<Input>(
+    request: &Request<Input>,
+    text: &str,
     handler: impl FnOnce(&str, &str) -> ResultEnvelope,
 ) -> ResultEnvelope {
-    if request.input.text.len() > TEXT_LIMIT {
+    if text.len() > TEXT_LIMIT {
         return ResultEnvelope::failure("INPUT_TOO_LARGE", "文本超过 8192 UTF-8 字节");
     }
     match (&request.capability_id.0, &request.command_id.0) {
-        (Some(cap), None) if !cap.is_empty() => handler(cap, &request.input.text),
+        (Some(cap), None) if !cap.is_empty() => handler(cap, text),
         (None, Some(command)) if !command.is_empty() => {
             ResultEnvelope::failure("UNSUPPORTED_OPERATION", "未注册后台命令")
         }
@@ -215,13 +228,19 @@ pub fn execute(capability: &str, input: &str) -> ResultEnvelope {
         "devtools.text.json.validate" => strict_json(input, 0)
             .map(|_| "JSON 有效（插件兼容规则）".to_owned())
             .map_err(|_| ("INVALID_INPUT", "JSON 无效、重复键、深度或整数范围超限")),
-        "devtools.text.sql.format" => sql::format(input, "generic")
-            .map_err(|_| ("INVALID_INPUT", "SQL 为空或方言字面量格式无效")),
+        SQL_FORMAT => return sql_result(sql::format(input, "generic")),
         _ => Err(("UNSUPPORTED_OPERATION", "未注册该工具能力")),
     };
     match result {
         Ok(text) => ResultEnvelope::success(text),
         Err((code, message)) => ResultEnvelope::failure(code, message),
+    }
+}
+
+fn sql_result(result: anyhow::Result<String>) -> ResultEnvelope {
+    match result {
+        Ok(text) => ResultEnvelope::success(text),
+        Err(_) => ResultEnvelope::failure("INVALID_INPUT", "SQL 为空或方言字面量格式无效"),
     }
 }
 
@@ -438,6 +457,71 @@ mod tests {
         assert!(!empty.ok);
         assert_eq!(empty.error.unwrap().code, "INVALID_INPUT");
     }
+    #[test]
+    fn sql_request_accepts_optional_format_settings_and_keeps_legacy_result() {
+        let mut request = serde_json::json!({
+            "pluginId": "com.zicode.devtools.text",
+            "sceneId": "coding",
+            "capabilityId": SQL_FORMAT,
+            "commandId": null,
+            "input": { "text": "select id,name from users where active=true" },
+        });
+        let legacy = execute_request(&serde_json::to_vec(&request).unwrap());
+        assert_eq!(
+            legacy.data.unwrap().text,
+            "SELECT id, name\nFROM users\nWHERE active = TRUE"
+        );
+
+        let text = "SeLeCt a_very_long_column_name_that_pushes_the_line_wrap_threshold, another_very_long_column_name_that_pushes_the_line_wrap_threshold, $tag$MiXeD 中文$tag$ FrOm users";
+        request["input"] = serde_json::json!({
+            "text": text, "dialect": "postgresql", "indent": "tabs", "keywordCase": "preserve",
+        });
+        let response = execute_request(&serde_json::to_vec(&request).unwrap());
+        assert_eq!(
+            response.data.unwrap().text,
+            sql::format_with_options(
+                text,
+                "postgresql",
+                sql::IndentStyle::Tabs,
+                sql::KeywordCase::Preserve
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn sql_options_are_strict_and_do_not_leak_into_other_capabilities() {
+        let mut request = serde_json::json!({
+            "pluginId": "com.zicode.devtools.text",
+            "sceneId": "coding",
+            "capabilityId": SQL_FORMAT,
+            "commandId": null,
+            "input": {},
+        });
+        for invalid in [
+            serde_json::json!({"text":"select 1","dialect":"oracle"}),
+            serde_json::json!({"text":"select 1","indent":2}),
+            serde_json::json!({"text":"select 1","keywordCase":null}),
+            serde_json::json!({"text":"select 1","keywordCase":"sentence"}),
+            serde_json::json!({"text":"select 1","extra":true}),
+            serde_json::json!({"text":"","dialect":"mysql"}),
+        ] {
+            request["input"] = invalid;
+            let result = execute_request(&serde_json::to_vec(&request).unwrap());
+            assert_eq!(result.error.unwrap().code, "INVALID_INPUT");
+        }
+
+        request["input"] = serde_json::json!({"text":"select 1","dialect":"generic"});
+        request["capabilityId"] = serde_json::json!("devtools.text.sha256");
+        let result = execute_request(&serde_json::to_vec(&request).unwrap());
+        assert_eq!(result.error.unwrap().code, "INVALID_INPUT");
+
+        request["pluginId"] = serde_json::json!("com.zicode.devtools.transforms");
+        request["capabilityId"] = serde_json::json!("devtools.transforms.stats.inspect");
+        let result = execute_request(&serde_json::to_vec(&request).unwrap());
+        assert_eq!(result.error.unwrap().code, "INVALID_INPUT");
+    }
+
     #[test]
     fn envelope_limits_required_fields_and_no_input_echo() {
         let base = serde_json::json!({"pluginId":"com.zicode.devtools.text","sceneId":"coding","capabilityId":"devtools.text.sha256","commandId":null,"input":{"text":"secret"}});
