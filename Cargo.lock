@@ -5998,6 +5998,7 @@ dependencies = [
  "zi-document-text-core",
  "zi-duplicate-files-wasi",
  "zi-flow-recipe-core",
+ "zi-html-clip-core",
  "zi-ics-preview-core",
  "zi-image-core",
  "zi-inspect-core",
@@ -6130,6 +6131,24 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-flow-recipe-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-html-clip-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "scraper",
+]
+
+[[package]]
+name = "zi-html-clip-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-html-clip-core",
  "zi-resource-input-wasi",
 ]
 
