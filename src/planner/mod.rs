@@ -54,6 +54,7 @@ use std::{
 };
 
 use zi_ics_preview_core::recurrence::{MAX_YEAR, MIN_YEAR, Repeat};
+use zi_memo_text_core::backup::{valid_timestamp, validate_memo_fields, validate_tags};
 
 const MAX_ITEMS: usize = 2000;
 const MAX_BODY: usize = zi_memo_text_core::MAX_BODY_BYTES;
@@ -137,20 +138,14 @@ impl Item {
                 "日历 UID 无效"
             );
         }
-        ensure!(
-            uuid::Uuid::parse_str(&self.id)?.to_string() == self.id,
-            "记录标识无效"
-        );
-        ensure!(self.revision >= 0, "记录版本无效");
-        ensure!(valid_timestamp(self.updated), "记录更新时间无效");
-        ensure!(
-            !self.title.trim().is_empty()
-                && self.title.chars().count() <= 120
-                && !self.title.chars().any(char::is_control),
-            "标题需要 1–120 个字符，不能包含换行"
-        );
-        ensure!(self.body.len() <= MAX_BODY, "正文最多 128 KiB");
-        validate_tags(&self.tags)?;
+        validate_memo_fields(
+            &self.id,
+            self.revision,
+            self.updated,
+            &self.title,
+            &self.body,
+            &self.tags,
+        )?;
         if let Some(s) = &self.schedule {
             s.validate_interval()?;
             ensure!(
@@ -183,10 +178,6 @@ impl Item {
     }
 }
 
-fn valid_timestamp(value: i64) -> bool {
-    DateTime::from_timestamp(value, 0).is_some_and(|time| (1..=9999).contains(&time.year()))
-}
-
 fn parse_tags(input: &str) -> Result<Vec<String>> {
     let mut tags = Vec::new();
     for raw in input.split(',') {
@@ -199,26 +190,6 @@ fn parse_tags(input: &str) -> Result<Vec<String>> {
     }
     validate_tags(&tags)?;
     Ok(tags)
-}
-
-fn validate_tags(tags: &[String]) -> Result<()> {
-    ensure!(tags.len() <= 16, "每条记录最多 16 个标签");
-    let mut seen = HashSet::new();
-    for tag in tags {
-        ensure!(
-            !tag.trim().is_empty()
-                && tag == tag.trim()
-                && tag.chars().count() <= 24
-                && !tag.chars().any(|c| c.is_control() || c == ',' || c == '#'),
-            "标签须为 1–24 个字符，不能包含逗号、# 或控制字符"
-        );
-        ensure!(seen.insert(tag.to_lowercase()), "标签不能重复");
-    }
-    ensure!(
-        tags.iter().map(String::len).sum::<usize>() <= 1024,
-        "标签总长度超过限制"
-    );
-    Ok(())
 }
 
 #[derive(Clone)]

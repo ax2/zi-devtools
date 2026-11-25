@@ -1,6 +1,8 @@
 //! Text preparation shared by native memo import and the independent preview.
 use std::{error, fmt};
 
+pub mod backup;
+
 pub const MAX_BODY_BYTES: usize = 128 * 1024;
 pub const BOM: &[u8] = b"\xef\xbb\xbf";
 pub const MAX_FILE_BYTES: usize = MAX_BODY_BYTES + BOM.len();

@@ -1266,6 +1266,36 @@ fn backup_roundtrip_preserves_full_schedule_trash_and_rejects_malformed_data() {
 }
 
 #[test]
+fn exported_backup_can_be_used_to_extract_exact_memo_markdown() {
+    let path = fixture();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let backup_path = path.with_file_name("fixture-backup.json");
+    let output_path = path.with_file_name("fixture.md");
+    let mut hidden_event = event();
+    hidden_event.revision = 1;
+    let mut memo = Item::new(None);
+    memo.revision = 1;
+    memo.title = "中文备忘".into();
+    memo.body = "# 正文\r\n\r\n字节保持 🙂  \t\n".into();
+    memo.tags = vec!["原始标签".into()];
+    let document = backup::Document::new(vec![hidden_event, memo.clone()]).unwrap();
+    backup::write(&backup_path, &document).unwrap();
+    let bytes = std::fs::read(&backup_path).unwrap();
+    let snapshot = zi_memo_text_core::backup::read_snapshot(&bytes).unwrap();
+    assert!(!snapshot.records[0].can_export());
+    let selected = &snapshot.records[1];
+    assert!(selected.can_export());
+    assert_eq!(selected.title, memo.title);
+    assert_eq!(selected.body, memo.body);
+    files::write_note(&output_path, &memo.body).unwrap();
+    assert_eq!(
+        std::fs::read(&output_path).unwrap(),
+        selected.body.as_bytes()
+    );
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn restore_modes_count_changes_and_reminders_require_choice() {
     let mut shared = event();
     shared.revision = 1;

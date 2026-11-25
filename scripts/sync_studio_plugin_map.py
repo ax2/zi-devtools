@@ -646,6 +646,27 @@ service_config_row["operationScopes"].append(dict(
                    "进程管理和日志仍由独立版提供，需目标 Studio 正常入口验收。",
 ))
 
+memo_backup_row = next(row for row in rows if row["sourceToolId"] == "memos")
+memo_backup_capability = "devtools.memos.backup.markdown"
+memo_backup_row.update(
+    pluginStatus="candidate", candidateCapabilities=[memo_backup_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.memo-backup", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/memo-backup-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/memo-backup-0.1.0-candidate-01-verification.json",
+    reason="从用户确认的 v1 备份列出普通备忘，并按原序号逐条生成字节完整的 Markdown。",
+)
+memo_backup_row["operationScopes"].append(dict(
+    operationId=memo_backup_capability, scopeKind="bounded_confirmed_backup_memo_export",
+    scope="保留版本 1 备份编号，显示正常备忘标题。用户明确选择后生成单个 Markdown 派生资源。"
+          "不显示日程或回收站正文。",
+    sourceVersion=memo_backup_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=131072, records=64, resultBytes=40960, maxOutputs=1),
+    runtimeVerification="42_fixed_native_production_windows_worker_exact_markdown_cases",
+    blockingReason="仅提取单条备忘；全备忘日程资料库、合并恢复和提醒不在此候选范围。"
+                   "需通过目标 Studio 正常入口与另存。",
+))
+
+
 
 
 for operation, source_id, title in trace_actions:
