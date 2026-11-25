@@ -5,6 +5,7 @@ use std::{
     io::{Read, Write},
     path::Path,
 };
+use zi_memo_text_core::backup::{FORMAT, VERSION};
 
 const LIMIT: usize = 40 * 1024 * 1024;
 #[derive(Clone, Serialize, Deserialize)]
@@ -61,15 +62,15 @@ impl Document {
     pub fn new(records: Vec<Item>) -> Result<Self> {
         validate_records(&records)?;
         Ok(Self {
-            format: "zi-devtools-planner".into(),
-            version: 1,
+            format: FORMAT.into(),
+            version: VERSION,
             created_at: Local::now().timestamp(),
             records,
         })
     }
     fn validate(&self) -> Result<()> {
         ensure!(
-            self.format == "zi-devtools-planner" && self.version == 1,
+            self.format == FORMAT && self.version == VERSION,
             "不支持此备份格式或版本"
         );
         ensure!(valid_timestamp(self.created_at), "备份时间无效");
