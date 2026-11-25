@@ -68,6 +68,9 @@ impl<T: PartialEq> PartialEq<Vec<T>> for SharedRows<T> {
 
 pub const INPUT_LIMIT: usize = 2 * 1024 * 1024;
 pub const ROW_LIMIT: usize = 10_000;
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
+
 pub const COLUMN_LIMIT: usize = 128;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,6 +116,18 @@ impl Dataset {
         Ok(())
     }
     pub fn parse(input: &str, format: DataFormat, delimiter: u8) -> Result<Self> {
+        Self::parse_with_limits(input, format, delimiter, ROW_LIMIT, COLUMN_LIMIT)
+    }
+
+    pub fn parse_with_limits(
+        input: &str,
+        format: DataFormat,
+        delimiter: u8,
+        max_rows: usize,
+        max_columns: usize,
+    ) -> Result<Self> {
+        let max_rows = max_rows.min(ROW_LIMIT);
+        let max_columns = max_columns.min(COLUMN_LIMIT);
         if input.len() > INPUT_LIMIT {
             bail!("输入最多 2 MiB");
         }
@@ -134,13 +149,13 @@ impl Dataset {
                 {
                     bail!("CSV 表头不能为空或重复；请先修正列名");
                 }
-                if headers.len() > COLUMN_LIMIT {
-                    bail!("最多 128 列");
+                if headers.len() > max_columns {
+                    bail!("最多 {max_columns} 列");
                 }
                 let mut rows = Vec::new();
                 for (i, record) in reader.records().enumerate() {
-                    if i >= ROW_LIMIT {
-                        bail!("最多 10000 行数据");
+                    if i >= max_rows {
+                        bail!("最多 {max_rows} 行数据");
                     }
                     let record =
                         record.with_context(|| format!("CSV 第 {} 条数据记录无效", i + 1))?;
@@ -157,6 +172,8 @@ impl Dataset {
                     let data: Self = serde_json::from_str(input.trim_start_matches('\u{feff}'))
                         .context("JSON对象须为含headers/rows的列结构表格，不接受其他字段")?;
                     data.validate_saved()?;
+                    anyhow::ensure!(data.rows.len() <= max_rows, "最多 {max_rows} 行数据");
+                    anyhow::ensure!(data.headers.len() <= max_columns, "最多 {max_columns} 列");
                     return Ok(data);
                 }
                 let items = value
@@ -165,8 +182,8 @@ impl Dataset {
                 if items.is_empty() {
                     bail!("对象数组为空，无法推断列名");
                 }
-                if items.len() > ROW_LIMIT {
-                    bail!("最多 10000 行数据");
+                if items.len() > max_rows {
+                    bail!("最多 {max_rows} 行数据");
                 }
                 let mut names = BTreeSet::new();
                 for (i, item) in items.iter().enumerate() {
@@ -176,6 +193,9 @@ impl Dataset {
                     names.extend(object.keys().cloned());
                 }
                 let headers = names.into_iter().collect::<Vec<_>>();
+                if headers.is_empty() || headers.len() > max_columns {
+                    bail!("数据须包含 1–{max_columns} 列");
+                }
                 let rows: Vec<Vec<Value>> = items
                     .iter()
                     .map(|item| {
@@ -191,8 +211,8 @@ impl Dataset {
                 }
             }
         };
-        if data.headers.is_empty() || data.headers.len() > COLUMN_LIMIT {
-            bail!("数据须包含 1–128 列");
+        if data.headers.is_empty() || data.headers.len() > max_columns {
+            bail!("数据须包含 1–{max_columns} 列");
         }
         data.validate_saved()?;
         Ok(data)

@@ -6511,6 +6511,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "csv",
+ "rusqlite",
  "serde",
  "serde_json",
 ]
@@ -6522,6 +6523,17 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+ "zi-table-core",
+]
+
+[[package]]
+name = "zi-table-sqlite-wasi"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
  "zi-table-core",
 ]
 
