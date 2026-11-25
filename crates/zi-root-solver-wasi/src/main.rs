@@ -4,7 +4,10 @@ use std::{
     collections::BTreeMap,
     io::{Read, Write},
 };
-use zi_matrix_core::{Angle, Value, parse_real_literal, root, valid_variable};
+use zi_matrix_core::{
+    expression::input::{AngleInput, Literal, parse_constants},
+    root,
+};
 
 const PLUGIN: &str = "com.zicode.devtools.root-solver";
 const CAPABILITY: &str = "devtools.roots.bisect";
@@ -22,21 +25,6 @@ struct Request<'a> {
     command_id: Json,
     #[serde(borrow)]
     input: &'a RawValue,
-}
-
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum AngleInput {
-    #[default]
-    Radians,
-    Degrees,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum Literal {
-    Exact(String),
-    Approximate(f64),
 }
 
 #[derive(Deserialize)]
@@ -65,23 +53,6 @@ fn default_iterations() -> usize {
 
 struct Failure(&'static str, String);
 
-fn constants(input: BTreeMap<String, Literal>) -> Result<BTreeMap<String, Value>, Failure> {
-    if input.len() > 64 {
-        return Err(Failure("INVALID_CONSTANT", "最多提供 64 个常量。".into()));
-    }
-    input.into_iter().map(|(name,literal)| {
-        if !valid_variable(&name) || name == "x" {
-            return Err(Failure("INVALID_CONSTANT","常量名须为 ASCII 字母、数字或下划线，并以字母开头。x、pi、e、i 和 ans 为保留名称。".into()));
-        }
-        let value = match literal {
-            Literal::Exact(text) if text.len() <= 64 => parse_real_literal(text.trim(), false),
-            Literal::Exact(_) => Err("精确常量最多 64 UTF-8 字节".into()),
-            Literal::Approximate(number) => Value::approximate(number),
-        }.map_err(|reason| Failure("INVALID_CONSTANT",format!("{name}：{reason}")))?;
-        Ok((name,value))
-    }).collect()
-}
-
 fn execute(request: Request<'_>) -> Result<Json, Failure> {
     if request.plugin_id != PLUGIN
         || request.scene_id.is_empty()
@@ -95,11 +66,8 @@ fn execute(request: Request<'_>) -> Result<Json, Failure> {
     }
     let input: Input = serde_json::from_str(request.input.get())
         .map_err(|_| Failure("INVALID_INPUT", "请检查公式、区间和求根参数。".into()))?;
-    let variables = constants(input.constants)?;
-    let angle = match input.angle {
-        AngleInput::Radians => Angle::Radians,
-        AngleInput::Degrees => Angle::Degrees,
-    };
+    let variables = parse_constants(input.constants, true)
+        .map_err(|reason| Failure("INVALID_CONSTANT", reason))?;
     let result = root::solve_with_work_limit(
         &input.formula,
         root::Interval {
@@ -109,7 +77,7 @@ fn execute(request: Request<'_>) -> Result<Json, Failure> {
             iterations: input.max_iterations,
         },
         &variables,
-        angle,
+        input.angle.into(),
         Some(WORK_LIMIT),
     )
     .map_err(|reason| Failure("ROOT_OPERATION", reason))?;
