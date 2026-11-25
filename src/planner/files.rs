@@ -182,33 +182,19 @@ pub(super) fn read_note(path: &Path) -> Result<Item> {
         "请选择普通文本文件，不能是目录或符号链接"
     );
     ensure!(
-        metadata.len() <= (MAX_BODY + 3) as u64,
+        metadata.len() <= zi_memo_text_core::MAX_FILE_BYTES as u64,
         "文件超过 128 KiB，请先缩小内容"
     );
     let file = File::open(path).context("无法读取所选文件")?;
     ensure!(file.metadata()?.is_file(), "所选路径不再是普通文件");
     let mut bytes = Vec::new();
-    file.take((MAX_BODY + 4) as u64).read_to_end(&mut bytes)?;
-    let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes);
-    ensure!(bytes.len() <= MAX_BODY, "文件超过 128 KiB，请先缩小内容");
-    let body =
-        std::str::from_utf8(bytes).context("文件不是 UTF-8；请先用文件编码工具转换后导入")?;
-    ensure!(!body.contains('\0'), "文件包含空字节，请确认是文本文件");
+    file.take((zi_memo_text_core::MAX_FILE_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)?;
+    let name = path.file_stem().unwrap_or_default().to_string_lossy();
+    let draft = zi_memo_text_core::prepare(&bytes, &name)?;
     let mut item = Item::new(None);
-    item.title = path
-        .file_stem()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(120)
-        .collect::<String>()
-        .trim()
-        .to_owned();
-    if item.title.is_empty() {
-        item.title = "导入的备忘".into();
-    }
-    item.body = body.to_owned();
+    item.title = draft.title;
+    item.body = draft.body.to_owned();
     item.validate()?;
     Ok(item)
 }
