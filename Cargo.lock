@@ -6022,6 +6022,7 @@ dependencies = [
  "zi-rag-eval-core",
  "zi-regex-core",
  "zi-rename-core",
+ "zi-service-config-core",
  "zi-shell-core",
  "zi-table-core",
  "zi-text-core",
@@ -6455,6 +6456,24 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-matrix-core",
+]
+
+[[package]]
+name = "zi-service-config-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_yaml_ng",
+]
+
+[[package]]
+name = "zi-service-config-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
+ "zi-service-config-core",
 ]
 
 [[package]]

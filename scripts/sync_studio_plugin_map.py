@@ -626,6 +626,27 @@ rag_eval_row["operationScopes"].append(dict(
                    "需要目标 Studio 正常入口验收。",
 ))
 
+service_config_row = next(row for row in rows if row["sourceToolId"] == "services")
+service_config_capability = "devtools.services.config.preflight"
+service_config_row.update(
+    pluginStatus="candidate", candidateCapabilities=[service_config_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.service-config", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/service-config-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/service-config-0.1.0-candidate-01-verification.json",
+    reason="共用原生服务 YAML 类型与导入前置校验，检查用户确认的单份本机配置。",
+)
+service_config_row["operationScopes"].append(dict(
+    operationId=service_config_capability, scopeKind="bounded_confirmed_service_config_preflight",
+    scope="检查 services 映射、必填命令及工作目录字段、停止命令及超时范围。"
+          "报告问题序号和脱敏设置计数，密集结构建议分批检查。",
+    sourceVersion=service_config_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=16384, services=64, yamlSyntaxWeight=1536, serializedResultBytes=16384),
+    runtimeVerification="50_fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅复用原生导入的文件内检查。导入提交、运行环境、健康探测、"
+                   "进程管理和日志仍由独立版提供，需目标 Studio 正常入口验收。",
+))
+
+
 
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
