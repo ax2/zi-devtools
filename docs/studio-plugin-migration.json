@@ -4715,8 +4715,10 @@
       "sourceVersion": "1.1.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.django.environment.report.review"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -4726,9 +4728,28 @@
           "sourceVersion": "1.1.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.django.environment.report.review",
+          "scopeKind": "confirmed_native_python_django_environment_report_review",
+          "scope": "保留解释器版本、虚拟环境、Django 分发和模块来源的分别记录，以及采集时 django-admin 入口三态。",
+          "sourceVersion": "1.1.1",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 32768,
+            "outputBytes": 4096,
+            "captureCount": 2
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_exact_redacted_text",
+          "blockingReason": "读取历史报告。执行解释器、读取当前系统 PATH、检查项目配置仍由独立版提供。接收方单独核对 Windows 文件确认、预览、保存、重启。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "读取一次明确确认的原生 Python / Django JSON，查看单环境或双环境历史快照，预览脱敏结果。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.python-env-report",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/python-env-report-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/python-env-report-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "django-migrations",

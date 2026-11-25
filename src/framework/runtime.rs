@@ -277,8 +277,26 @@ pub fn python_environment_cancellable(
         .as_ref()
         .zip(sibling_admin.as_ref())
         .map(|(a, b)| a.canonicalize().ok() != b.canonicalize().ok());
+    python_environment_report(
+        selected,
+        compared,
+        path_entry(&["python.exe", "python3", "python"]),
+        admin,
+        sibling_admin,
+        mismatch,
+    )
+}
+
+pub(super) fn python_environment_report(
+    selected: Value,
+    compared: Value,
+    path_python: Option<PathBuf>,
+    admin: Option<PathBuf>,
+    sibling_admin: Option<PathBuf>,
+    mismatch: Option<bool>,
+) -> Result<String> {
     report(
-        json!({"selected":selected,"comparison":compared,"pathPython":path_entry(&["python.exe","python3","python"]),"pathDjangoAdmin":admin,"expectedSiblingDjangoAdmin":sibling_admin,"entryLayoutMismatch":mismatch,"notes":"运行所选可信解释器 -I，仅检查分发元数据与模块定位，不 import django、不加载项目 settings。解释器启动仍可能执行已安装 site/.pth 钩子。CLI 目录差异只是线索，未执行 django-admin；缺失分发或模块位置需要检查所选环境。"}),
+        json!({"selected":selected,"comparison":compared,"pathPython":path_python,"pathDjangoAdmin":admin,"expectedSiblingDjangoAdmin":sibling_admin,"entryLayoutMismatch":mismatch,"notes":"运行所选可信解释器 -I，仅检查分发元数据与模块定位，不 import django、不加载项目 settings。解释器启动仍可能执行已安装 site/.pth 钩子。CLI 目录差异只是线索，未执行 django-admin；缺失分发或模块位置需要检查所选环境。"}),
     )
 }
 pub fn recording(exe: &str, file: &str) -> Result<String> {

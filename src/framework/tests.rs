@@ -387,3 +387,47 @@ fn saved_java_environment_report_can_be_reviewed_without_running_java() {
     assert!(preview.maven_entry_reported && !preview.gradle_entry_reported);
     assert!(!preview.text.contains("fixture-private"));
 }
+
+#[test]
+fn saved_python_environment_report_can_be_reviewed_without_running_python() {
+    let selected = json!({
+        "executable":r"X:\fixture-private\venv\Scripts\python.exe",
+        "version":"3.12.8", "prefix":r"X:\fixture-private\venv",
+        "basePrefix":r"X:\fixture-private\base", "scriptsPath":r"X:\fixture-private\venv\Scripts",
+        "virtualEnvironment":true,
+        "django":{"version":"5.1.7","location":r"X:\fixture-private\site-packages\django"},
+        "djangoImportOrigin":null
+    });
+    let compared = json!({
+        "executable":r"Y:\fixture-private\python.exe",
+        "version":"3.13.2", "prefix":r"Y:\fixture-private",
+        "basePrefix":r"Y:\fixture-private", "scriptsPath":null,
+        "virtualEnvironment":false, "django":null,
+        "djangoImportOrigin":r"Y:\fixture-private\alternate\django\__init__.py"
+    });
+    let body = runtime::python_environment_report(
+        selected,
+        compared,
+        Some(r"Z:\fixture-private\python.exe".into()),
+        Some(r"Z:\fixture-private\django-admin.exe".into()),
+        Some(r"X:\fixture-private\venv\Scripts\django-admin.exe".into()),
+        Some(true),
+    )
+    .unwrap();
+    let saved = generated_report(Tool::PythonEnvironment, body).unwrap();
+    let preview = zi_python_env_report_core::review(saved.as_bytes()).unwrap();
+    assert_eq!(preview.selected.python_version, "3.12.8");
+    assert!(preview.selected.virtual_environment);
+    assert_eq!(
+        preview.selected.django_distribution_version.as_deref(),
+        Some("5.1.7")
+    );
+    assert!(!preview.selected.django_module_origin_reported);
+    let other = preview.comparison.unwrap();
+    assert_eq!(other.python_version, "3.13.2");
+    assert!(!other.virtual_environment);
+    assert!(other.django_distribution_version.is_none() && other.django_module_origin_reported);
+    assert_eq!(preview.entry_layout_mismatch, Some(true));
+    assert!(preview.path_python_reported && preview.path_django_admin_reported);
+    assert!(!preview.text.contains("fixture-private"));
+}
