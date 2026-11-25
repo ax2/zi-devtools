@@ -264,7 +264,10 @@ def main():
         baseline_match = None
         if args.reference and expected != "IMAGE_DIMENSION_LIMIT":
             old, old_raw = native_run(args.reference, source, request)
-            baseline_match = (old, old_raw) == (native, native_raw)
+            if expected:
+                baseline_match = old.get("error", {}).get("code") == expected and not old_raw
+            else:
+                baseline_match = (old, old_raw) == (native, native_raw)
         worker, parts, metrics = worker_run(harness, args.worker, frame)
         record = dict(case=key, inputBytes=len(data), inputSha256=digest(data), requestedWidth=width, mime=mime,
                       expectedError=expected, native=native, worker=worker, metrics=metrics,
