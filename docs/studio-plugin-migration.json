@@ -1712,7 +1712,7 @@
       "operationScopes": [
         {
           "scopeKind": "declared_standalone_scope",
-          "scope": "结构化 JSON 差异与 JSON Pointer 路径；数组按索引或无序多重集比较；不含忽略路径",
+          "scope": "结构化 JSON 差异与 JSON Pointer 路径；数组按索引或无序多重集比较；不含忽略路径。Studio 0.1.1 候选以十进制精确比较并在报告保留数字原文，适用于有界文本及经授权的双文件输入；独立程序沿用现有比较策略。",
           "sourceStatus": "implemented",
           "sourceVersion": "1.0.4",
           "pluginStatus": "not_delivered",

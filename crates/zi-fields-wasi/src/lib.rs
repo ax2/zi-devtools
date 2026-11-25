@@ -121,7 +121,7 @@ fn handle(bytes: &[u8]) -> ResultEnvelope {
             if input.left.len() > 8192 || input.right.len() > 8192 {
                 return ResultEnvelope::failure("INPUT_TOO_LARGE", "差异字段超过 UTF-8 字节限制");
             }
-            zi_json_core::json_diff_with_result_budget(
+            zi_json_core::json_diff_exact_with_result_budget(
                 &input.left,
                 &input.right,
                 request.capability_id.ends_with(".unordered"),

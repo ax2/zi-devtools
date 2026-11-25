@@ -1,4 +1,8 @@
 //! Complete standalone JSON path and diff algorithms; no Host IO or execution.
+mod exact;
+
+pub use exact::json_diff_exact_with_result_budget;
+
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
