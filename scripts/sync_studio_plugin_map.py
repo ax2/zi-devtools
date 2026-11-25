@@ -354,6 +354,29 @@ sources_row["operationScopes"].append(dict(
     blockingReason="仅目录名称预检；内容、文件大小、递归、指纹、变更历史、保存知识源和重建索引未接入。",
 ))
 
+date_row = next(row for row in rows if row["sourceToolId"] == "advanced-calculator")
+date_ops = {
+    "difference": "公历日期差，返回带符号天数。",
+    "offset": "公历按天、月或年偏移，月末规则可明确选择。",
+    "workday_count": "周一至周五计数，结束日包括在范围内，可包含开始日。",
+    "workday_offset": "周一至周五按正负工作日偏移，跳过周末。",
+}
+date_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.date." + name for name in date_ops],
+    scopeComplete=False, packageId="com.zicode.devtools.date-calculator", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/date-calculator-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/date-calculator-0.1.0-candidate-01-verification.json",
+    reason="复用原生日期与工作日计算规则，提供公历日期四项离线操作。",
+)
+for action, scope in date_ops.items():
+    date_row["operationScopes"].append(dict(
+        operationId="devtools.date." + action, scopeKind="bounded_offline_civil_date_calculation",
+        scope=scope, sourceVersion=date_row["sourceVersion"], pluginStatus="candidate",
+        limits=dict(minYear=1,maxYear=9999,maxAbsoluteOffset=4000000,requestBytes=4096,serializedResultBytes=2048),
+        runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+        blockingReason="仅公历日期和工作日计算，其他计算器功能、工作表和日程接力未迁移。",
+    ))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
