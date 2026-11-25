@@ -538,6 +538,26 @@ ics_count_row["operationScopes"].append(dict(
                    "单独验收 Windows 安装与资料生命周期。",
 ))
 
+memo_text_row = next(row for row in rows if row["sourceToolId"] == "memo-library")
+memo_text_capability = "devtools.memo.file.preview"
+memo_text_row.update(
+    pluginStatus="candidate", candidateCapabilities=[memo_text_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.memo-text", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/memo-text-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/memo-text-0.1.0-candidate-01-verification.json",
+    reason="共享独立版逐条备忘文本准备，提供一份显式确认文件的只读导入预览。",
+)
+memo_text_row["operationScopes"].append(dict(
+    operationId=memo_text_capability, scopeKind="bounded_confirmed_memo_file_preview",
+    scope="从 Markdown/UTF-8 文本预览建议标题、准确字节范围和原样正文。保留 CRLF、制表和空格。",
+    sourceVersion=memo_text_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(files=1, bodyUtf8Bytes=131072, extraBomBytes=3, previewBytes=6144,
+                titleCharacters=120, serializedResultBytes=49152),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="源批量事务提交、标签、导出和知识接力继续由独立版提供。"
+                   "本候选只提供单文件预览，Windows 安装与资料生命周期另行接收。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

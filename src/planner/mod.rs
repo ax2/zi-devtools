@@ -56,7 +56,7 @@ use std::{
 use zi_ics_preview_core::recurrence::{MAX_YEAR, MIN_YEAR, Repeat};
 
 const MAX_ITEMS: usize = 2000;
-const MAX_BODY: usize = 128 * 1024;
+const MAX_BODY: usize = zi_memo_text_core::MAX_BODY_BYTES;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
