@@ -407,7 +407,7 @@ for action, scope in matrix_ops.items():
         limits=dict(matrixRows=8, matrixColumns=8, matrixBytes=4096, cellBytes=96,
                     requestBytes=16384, serializedResultBytes=12288),
         runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
-        blockingReason="仅七项实数 TSV 运算。原生网格、独立表达式、变量、复数和工作表未迁移；Studio Host 安装及工具中心尚待验收。",
+        blockingReason="仅七项实数 TSV 运算。原生网格、变量与工作表未迁移；Studio Host 安装及工具中心尚待验收。",
     ))
 
 statistics_ops = {
@@ -437,7 +437,7 @@ for action, scope in statistics_ops.items():
                     minValues=2 if action.startswith("sample_") else 1,
                     requestBytes=16384, serializedResultBytes=1024),
         runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
-        blockingReason="仅实数一维数列统计，排列组合、独立表达式、变量、工作表和图表未迁移；Studio 安装及工具中心待验收。",
+        blockingReason="仅实数一维数列统计，变量、工作表和图表未迁移；Studio 安装及工具中心待验收。",
     ))
 
 root_capability = "devtools.roots.bisect"
@@ -457,7 +457,26 @@ date_row["operationScopes"].append(dict(
                 minTolerance=1e-12, maxTolerance=1e-2, minIterations=1, maxIterations=200, explicitConstants=64,
                 guestWorkUnits=22000, requestBytes=16384, serializedResultBytes=1024),
     runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
-    blockingReason="仅用户提供区间的一个候选点。复杂度预算、连续性未证明、极点及偶重根限制均明示。独立表达式、变量会话、绘图、工作表和数值接力未迁移。",
+    blockingReason="仅用户提供区间的一个候选点。复杂度预算、连续性未证明、极点及偶重根限制均明示。变量会话、绘图、工作表和数值接力未迁移。",
+))
+
+formula_capability = "devtools.calculator.evaluate"
+formula_package = dict(
+    packageId="com.zicode.devtools.expression-calculator", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/expression-calculator-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/expression-calculator-0.1.0-candidate-01-verification.json",
+)
+date_row["candidatePackages"].append(dict(**formula_package, capabilities=[formula_capability]))
+date_row["candidateCapabilities"].append(formula_capability)
+date_row["reason"] = "日期、矩阵、数值统计、区间二分求根和单次公式计算已有独立离线候选。原生会话和工作表范围尚未完整迁移。"
+date_row["operationScopes"].append(dict(
+    operationId=formula_capability, scopeKind="bounded_stateless_numeric_expression",
+    scope="使用原生表达式计算精确有理数、近似和复数、位运算、单位换算及排列组合。",
+    sourceVersion=date_row["sourceVersion"], pluginStatus="candidate", **formula_package,
+    limits=dict(formulaUtf8Bytes=2048, formulaTokens=512, expressionDepth=64, functionArguments=64,
+                explicitConstants=64, constantUtf8Bytes=64, requestBytes=16384, serializedResultBytes=1024),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅一次无状态公式。变量和 ans 会话、绘图、工作表、图像或数值接力仍由独立版提供。",
 ))
 
 for operation, source_id, title in trace_actions:

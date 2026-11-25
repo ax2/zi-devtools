@@ -6073,6 +6073,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-expression-calculator-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-matrix-core",
+]
+
+[[package]]
 name = "zi-fields-wasi"
 version = "0.1.0"
 dependencies = [

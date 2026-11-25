@@ -2,6 +2,7 @@ use super::{Angle, Value, exact_number as number};
 use std::collections::BTreeMap;
 
 mod bisection;
+pub mod input;
 
 enum Token {
     Number(Value),
