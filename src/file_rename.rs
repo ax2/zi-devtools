@@ -12,8 +12,9 @@ use std::{fs::OpenOptions, io::Write};
 use anyhow::{Context, Result, anyhow, ensure};
 use eframe::egui;
 
+use zi_rename_core::Rules;
+
 pub const MAX_FILES: usize = 500;
-const MAX_RULE_BYTES: usize = 4096;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PreviewStatus {
@@ -104,12 +105,14 @@ pub fn preview(
 ) -> Result<Preview> {
     ensure!(!paths.is_empty(), "请先选择要重命名的文件");
     ensure!(paths.len() <= MAX_FILES, "一次最多处理 {MAX_FILES} 个文件");
-    for value in [find, replacement, prefix, suffix] {
-        ensure!(
-            value.len() <= MAX_RULE_BYTES,
-            "重命名规则每项不能超过 4 KiB"
-        );
-    }
+    let rules = Rules {
+        find,
+        replacement,
+        prefix,
+        suffix,
+        case_sensitive,
+    };
+    rules.validate()?;
 
     let mut seen_sources = Vec::<Arc<same_file::Handle>>::new();
     let mut entries = Vec::with_capacity(paths.len());
@@ -142,13 +145,7 @@ pub fn preview(
             .and_then(|name| name.to_str())
             .ok_or_else(|| anyhow!("无法读取文件名主体：{}", source.display()))?;
         let extension = source.extension().and_then(|name| name.to_str());
-        let replaced = replace_literal(stem, find, replacement, case_sensitive);
-        let new_stem = format!("{prefix}{replaced}{suffix}");
-        let new_name = match extension {
-            Some(extension) => format!("{new_stem}.{extension}"),
-            None => new_stem,
-        };
-        validate_component(&new_name)?;
+        let new_name = rules.target_name(stem, extension)?;
         let destination = source.with_file_name(new_name);
         let status = if file_name
             == destination
@@ -427,80 +424,6 @@ fn move_no_replace(source: &Path, destination: &Path) -> Result<()> {
         }
         Ok(())
     }
-}
-
-fn replace_literal(input: &str, find: &str, replacement: &str, case_sensitive: bool) -> String {
-    if find.is_empty() {
-        return input.to_owned();
-    }
-    if case_sensitive {
-        return input.replace(find, replacement);
-    }
-    let mut folded = String::with_capacity(input.len());
-    let mut boundaries = std::collections::HashMap::new();
-    boundaries.insert(0usize, 0usize);
-    for (source_start, character) in input.char_indices() {
-        folded.extend(character.to_lowercase());
-        boundaries.insert(folded.len(), source_start + character.len_utf8());
-    }
-    let needle = find.to_lowercase();
-    let mut output = String::with_capacity(input.len());
-    let mut source_cursor = 0;
-    let mut folded_cursor = 0;
-    while let Some(relative) = folded
-        .get(folded_cursor..)
-        .and_then(|rest| rest.find(&needle))
-    {
-        let folded_start = folded_cursor + relative;
-        let folded_end = folded_start + needle.len();
-        let (Some(&byte_start), Some(&byte_end)) =
-            (boundaries.get(&folded_start), boundaries.get(&folded_end))
-        else {
-            folded_cursor = folded_end;
-            continue;
-        };
-        if byte_start < source_cursor {
-            folded_cursor = folded_end;
-            continue;
-        }
-        output.push_str(&input[source_cursor..byte_start]);
-        output.push_str(replacement);
-        source_cursor = byte_end;
-        folded_cursor = folded_end.min(folded.len());
-    }
-    output.push_str(&input[source_cursor..]);
-    output
-}
-
-fn validate_component(name: &str) -> Result<()> {
-    ensure!(!name.is_empty(), "目标文件名不能为空");
-    ensure!(
-        name.encode_utf16().count() <= 255,
-        "目标文件名超过 255 个 UTF-16 单元"
-    );
-    ensure!(
-        !name.ends_with(' ') && !name.ends_with('.'),
-        "Windows 文件名不能以空格或句点结尾"
-    );
-    ensure!(
-        !name
-            .chars()
-            .any(|c| c.is_control()
-                || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')),
-        "目标文件名包含 Windows 不允许的字符"
-    );
-    let base = name
-        .split('.')
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches([' ', '.'])
-        .to_ascii_uppercase();
-    let reserved = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || (base.len() == 4
-            && (base.starts_with("COM") || base.starts_with("LPT"))
-            && matches!(base.as_bytes()[3], b'1'..=b'9'));
-    ensure!(!reserved, "目标文件名是 Windows 保留设备名");
-    Ok(())
 }
 
 fn windows_fold(path: &Path) -> String {
@@ -855,7 +778,7 @@ mod tests {
         fs::write(&source, b"two changed").unwrap();
         assert!(!execute(&plan).completed);
         for name in ["CON.txt", "bad?.txt", "trailing. ", "x\\y.txt"] {
-            assert!(validate_component(name).is_err(), "{name}");
+            assert!(zi_rename_core::validate_component(name).is_err(), "{name}");
         }
     }
 
@@ -918,10 +841,15 @@ mod tests {
 
     #[test]
     fn case_insensitive_unicode_matching_does_not_split_folded_characters() {
-        assert_eq!(
-            replace_literal("İstanbul", "i\u{307}", "X", false),
-            "Xstanbul"
-        );
-        assert_eq!(replace_literal("İstanbul", "i", "X", false), "İstanbul");
+        let mut rules = Rules {
+            find: "i\u{307}",
+            replacement: "X",
+            prefix: "",
+            suffix: "",
+            case_sensitive: false,
+        };
+        assert_eq!(rules.target_name("İstanbul", None).unwrap(), "Xstanbul");
+        rules.find = "i";
+        assert_eq!(rules.target_name("İstanbul", None).unwrap(), "İstanbul");
     }
 }

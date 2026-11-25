@@ -2279,8 +2279,10 @@
       "sourceVersion": "0.1.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.files.rename.preview"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2290,9 +2292,31 @@
           "sourceVersion": "0.1.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.files.rename.preview",
+          "scopeKind": "bounded_confirmed_rename_preview",
+          "scope": "对确认的一层目录名称预览改名，检测未改变、仅大小写、相同提议、已有名称和非法名称。",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "snapshotBytes": 65536,
+            "entries": 64,
+            "sourceNameBytes": 12288,
+            "targetNameBytes": 16384,
+            "ruleFieldUtf8Bytes": 128,
+            "serializedResultBytes": 49152
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅目录名称快照的预览；原生多选、实际变更、竞态复核和撤销未接入。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "复用原生字面替换与文件名检查，接收显式确认的一层目录名称快照。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.rename-preview",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/rename-preview-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/rename-preview-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "image-tools",

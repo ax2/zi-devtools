@@ -5954,6 +5954,7 @@ dependencies = [
  "zi-log-core",
  "zi-pdf-text-core",
  "zi-regex-core",
+ "zi-rename-core",
  "zi-shell-core",
  "zi-table-core",
  "zi-text-core",
@@ -6227,6 +6228,23 @@ dependencies = [
  "anyhow",
  "regex",
  "regex-syntax",
+]
+
+[[package]]
+name = "zi-rename-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "zi-rename-preview-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-rename-core",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]
