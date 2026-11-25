@@ -558,6 +558,32 @@ memo_text_row["operationScopes"].append(dict(
                    "本候选只提供单文件预览，Windows 安装与资料生命周期另行接收。",
 ))
 
+prompt_template_row = next(row for row in rows if row["sourceToolId"] == "prompt-library")
+prompt_operations = [
+    ("devtools.prompt.variables", "prompt_variable_validation",
+     "检查模板语法，列出已去重、排序的变量名，保持四花括号字面语义。"),
+    ("devtools.prompt.expand", "single_pass_prompt_expansion_preview",
+     "按原生规则展开一次。重复占位符共用同一变量文本，变量值中的花括号保留。"),
+]
+prompt_template_row.update(
+    pluginStatus="candidate", candidateCapabilities=[operation[0] for operation in prompt_operations],
+    scopeComplete=False, packageId="com.zicode.devtools.prompt-expansion", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/prompt-expansion-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/prompt-expansion-0.1.0-candidate-01-verification.json",
+    reason="共享独立版提示词变量语法和一次性展开，提供两项无权限的本机预览。",
+)
+for operation, kind, scope in prompt_operations:
+    prompt_template_row["operationScopes"].append(dict(
+        operationId=operation, scopeKind=kind, scope=scope,
+        sourceVersion=prompt_template_row["sourceVersion"], pluginStatus="candidate",
+        limits=dict(templateUtf8Bytes=16384, variableNames=12, serializedRequestBytes=49152,
+                    **({"expandedUtf8Bytes":131072,"previewUtf8Bytes":16384,"serializedResultBytes":49152}
+                       if kind=="single_pass_prompt_expansion_preview" else {})),
+        runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+        blockingReason="原生模板名、修订、标签、跨工具填充、模型配置与请求继续由独立版提供。"
+                       "本候选的超长展开仅提供有界预览。",
+    ))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
