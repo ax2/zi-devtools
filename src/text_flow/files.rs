@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
 };
-const RECIPE_LIMIT: usize = 65536;
+use zi_flow_recipe_core::{RECIPE_LIMIT, read_recipe};
 fn read(path: &Path, limit: usize, cancel: &AtomicBool) -> Result<Vec<u8>> {
     ensure!(path.is_absolute(), "请选择完整文件路径");
     ensure!(!cancel.load(Ordering::Relaxed), "操作已取消");
@@ -23,9 +23,7 @@ pub(super) fn input(path: &Path, cancel: &AtomicBool) -> Result<String> {
         .context("请选择UTF-8文本文件，二进制文件不作为文本读取")
 }
 pub(super) fn recipe(path: &Path, cancel: &AtomicBool) -> Result<Definition> {
-    let definition: Definition = serde_json::from_slice(&read(path, RECIPE_LIMIT, cancel)?)?;
-    definition.validate()?;
-    Ok(definition)
+    read_recipe(&read(path, RECIPE_LIMIT, cancel)?)
 }
 pub(super) fn save_recipe(
     definition: &Definition,

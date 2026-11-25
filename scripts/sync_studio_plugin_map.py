@@ -301,6 +301,23 @@ calendar_row["operationScopes"].append(dict(
     blockingReason="仅 ICS 文件预览，尚不含日程导入/导出、同步、时区换算、重复展开或提醒。",
 ))
 
+flow_row = next(row for row in rows if row["sourceToolId"] == "text-flow")
+flow_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.flow.recipe.inspect"], scopeComplete=False,
+    packageId="com.zicode.devtools.flow-recipe", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/flow-recipe-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/flow-recipe-0.1.0-candidate-02-verification.json",
+    reason="复用原生格式 1–4 与动作签名校验，提供经确认的文本流程配方只读检查。",
+)
+flow_row["operationScopes"].append(dict(
+    operationId="devtools.flow.recipe.inspect", scopeKind="bounded_confirmed_flow_recipe_inspection",
+    scope="确认一份本机配方 JSON，校验 16 步以内的注册动作、版本和材料类型衔接，展示操作影响和结果端口。",
+    sourceVersion=flow_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(confirmedFileBytes=65536, recipeSteps=16, serializedResultBytes=16384),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅检查配方；运行、编辑、保存、命名实例、配方库及结果接力另行跟踪。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
