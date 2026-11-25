@@ -11,7 +11,6 @@ use std::sync::{
 
 const LIMIT: usize = 1024 * 1024;
 const TRACE_LIMIT: usize = 8 * LIMIT;
-const STEPS: usize = 16;
 
 mod files;
 pub(crate) mod material;
@@ -23,101 +22,11 @@ enum Reply {
     Definition(std::path::PathBuf, Definition),
     Saved(std::path::PathBuf, usize),
 }
-pub use material::{ACTIONS, Action, Effect, Kind, Material, OutputPort};
+use material::ExecuteAction;
+pub use material::Material;
+pub use zi_flow_recipe_core::{ACTIONS, Action, Definition, Effect, Kind, OutputPort, Step};
+use zi_flow_recipe_core::STEPS;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Step {
-    pub action: String,
-    pub version: u32,
-}
-impl Step {
-    fn registered(&self) -> Result<&'static Action> {
-        ACTIONS
-            .iter()
-            .find(|a| a.id == self.action && a.version == self.version)
-            .ok_or_else(|| anyhow::anyhow!("未知或不兼容的操作：{} v{}", self.action, self.version))
-    }
-}
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Definition {
-    pub version: u32,
-    pub steps: Vec<Step>,
-}
-impl Default for Definition {
-    fn default() -> Self {
-        Self {
-            version: 1,
-            steps: vec![],
-        }
-    }
-}
-impl Definition {
-    fn output_kind(&self) -> Result<Kind> {
-        self.validate()?;
-        match self.steps.last() {
-            Some(step) => Ok(step.registered()?.output),
-            None => self.start_kind(),
-        }
-    }
-    pub(crate) fn start_kind(&self) -> Result<Kind> {
-        if self.version >= 3 {
-            if let Some(first) = self.steps.first() {
-                let action = first.registered()?;
-                if action.input == Kind::File {
-                    ensure!(
-                        action.id == "file.sha256",
-                        "文件引用只能从文件 SHA-256 操作开始"
-                    );
-                    return Ok(Kind::File);
-                }
-                if action.input == Kind::Image {
-                    ensure!(
-                        self.version >= 4 && action.id == "image.info",
-                        "图片材料只能从图片信息操作开始"
-                    );
-                    return Ok(Kind::Image);
-                }
-            }
-        }
-        Ok(Kind::Text)
-    }
-    pub fn validate(&self) -> Result<()> {
-        ensure!(matches!(self.version, 1..=4), "不支持此流程版本");
-        ensure!(self.steps.len() <= STEPS, "文本流程最多16步");
-        let mut kind = self.start_kind()?;
-        for (index, step) in self.steps.iter().enumerate() {
-            let action = step.registered()?;
-            let mut ports = std::collections::BTreeSet::from(["result"]);
-            for port in action.side_outputs {
-                ensure!(
-                    !port.id.trim().is_empty()
-                        && !port.label.trim().is_empty()
-                        && ports.insert(port.id),
-                    "第{}步 {} 输出端口定义无效或重复",
-                    index + 1,
-                    action.label
-                );
-            }
-            ensure!(
-                self.version >= 2 || !action.typed(),
-                "第{}步需要流程格式2或3",
-                index + 1
-            );
-            ensure!(
-                action.input == kind,
-                "第{}步 {}需要{}，上一步输出为{}",
-                index + 1,
-                action.label,
-                action.input.label(),
-                kind.label()
-            );
-            kind = action.output;
-        }
-        Ok(())
-    }
-}
 #[derive(Debug, Default)]
 pub struct Run {
     pub outputs: Vec<Material>,
@@ -1507,8 +1416,8 @@ mod tests {
         let mut ids = std::collections::BTreeSet::new();
         for a in ACTIONS {
             assert!(ids.insert(a.id));
-            if let material::Executor::Native(tool, operation) = a.executor {
-                assert!(operation < tool.actions().len());
+            if let zi_flow_recipe_core::Executor::Native(tool, operation) = a.executor {
+                assert!(operation < crate::tools::ToolKind::from(tool).actions().len());
             }
         }
     }
