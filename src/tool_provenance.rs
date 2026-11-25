@@ -1,54 +1,18 @@
-//! Portable runtime provenance for saved tool results.
-//! This intentionally excludes machine names, user names and local paths.
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+//! Portable runtime provenance for native saved tool results.
+use zi_agent_record_core::provenance::valid_tool_version;
+pub use zi_agent_record_core::provenance::{RuntimeFingerprint, ToolProvenance};
 
-const DOMAIN: &str = "ZiDevTools runtime environment v1";
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct RuntimeFingerprint {
-    pub schema: u32,
-    pub app_version: String,
-    pub os: String,
-    pub architecture: String,
-    pub build_profile: String,
-    pub sha256: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ToolProvenance {
-    pub tool_id: String,
-    pub tool_version: String,
-    pub runtime_fingerprint: RuntimeFingerprint,
-}
-
-fn valid_tool_version(version: &str) -> bool {
-    let parts: Vec<_> = version.split('.').collect();
-    parts.len() == 3
-        && parts.iter().all(|part| {
-            !part.is_empty()
-                && (*part == "0" || !part.starts_with('0'))
-                && part.bytes().all(|byte| byte.is_ascii_digit())
-                && part.parse::<u32>().is_ok()
-        })
-}
-
-impl ToolProvenance {
-    pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            !self.tool_id.is_empty()
-                && self.tool_id.len() <= 128
-                && self
-                    .tool_id
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || b"._:-".contains(&byte)),
-            "工具标识无效"
-        );
-        anyhow::ensure!(valid_tool_version(&self.tool_version), "工具版本格式无效");
-        self.runtime_fingerprint.validate()
-    }
+pub fn current_runtime_fingerprint() -> RuntimeFingerprint {
+    RuntimeFingerprint::new(
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
+    )
 }
 
 /// Captures the declared catalog version and portable runtime fields for a newly generated result.
@@ -90,72 +54,8 @@ fn from_catalog(tool_id: &str, catalog: &serde_json::Value) -> anyhow::Result<To
     Ok(ToolProvenance {
         tool_id: tool_id.to_owned(),
         tool_version: version.to_owned(),
-        runtime_fingerprint: RuntimeFingerprint::current(),
+        runtime_fingerprint: current_runtime_fingerprint(),
     })
-}
-
-impl RuntimeFingerprint {
-    pub fn current() -> Self {
-        let mut value = Self {
-            schema: 1,
-            app_version: env!("CARGO_PKG_VERSION").to_owned(),
-            os: std::env::consts::OS.to_owned(),
-            architecture: std::env::consts::ARCH.to_owned(),
-            build_profile: if cfg!(debug_assertions) {
-                "debug"
-            } else {
-                "release"
-            }
-            .to_owned(),
-            sha256: String::new(),
-        };
-        value.sha256 = value.calculate_sha256();
-        value
-    }
-
-    fn calculate_sha256(&self) -> String {
-        let canonical = format!(
-            "{DOMAIN}\0{}\0{}\0{}\0{}",
-            self.app_version, self.os, self.architecture, self.build_profile
-        );
-        Sha256::digest(canonical.as_bytes())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect()
-    }
-
-    pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(self.schema == 1, "运行环境指纹版本不受支持");
-        for (name, value, max) in [
-            ("程序版本", self.app_version.as_str(), 64),
-            ("操作系统", self.os.as_str(), 32),
-            ("处理器架构", self.architecture.as_str(), 32),
-            ("构建类型", self.build_profile.as_str(), 16),
-        ] {
-            anyhow::ensure!(
-                !value.is_empty()
-                    && value.len() <= max
-                    && value
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-+".contains(&byte)),
-                "{name}字段无效"
-            );
-        }
-        anyhow::ensure!(
-            matches!(self.build_profile.as_str(), "debug" | "release"),
-            "构建类型无效"
-        );
-        anyhow::ensure!(
-            self.sha256.len() == 64
-                && self
-                    .sha256
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-                && self.sha256 == self.calculate_sha256(),
-            "运行环境指纹摘要不匹配"
-        );
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -164,7 +64,7 @@ mod tests {
 
     #[test]
     fn runtime_fingerprint_is_portable_bounded_and_self_verifying() {
-        let fingerprint = RuntimeFingerprint::current();
+        let fingerprint = current_runtime_fingerprint();
         fingerprint.validate().unwrap();
         let json = serde_json::to_string(&fingerprint).unwrap();
         if let Ok(username) = std::env::var("USERNAME")

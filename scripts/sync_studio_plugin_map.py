@@ -479,6 +479,24 @@ date_row["operationScopes"].append(dict(
     blockingReason="仅一次无状态公式。变量和 ans 会话、绘图、工作表、图像或数值接力仍由独立版提供。",
 ))
 
+agent_record_row = next(row for row in rows if row["sourceToolId"] == "agent-replay")
+agent_record_capability = "devtools.agent-record.inspect"
+agent_record_row.update(
+    pluginStatus="candidate", candidateCapabilities=[agent_record_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.agent-record", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/agent-record-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/agent-record-0.1.0-candidate-01-verification.json",
+    reason="共用独立版 Agent JSON 运行记录校验，提供一份经确认快照的只读元数据时间线。",
+)
+agent_record_row["operationScopes"].append(dict(
+    operationId=agent_record_capability, scopeKind="bounded_agent_export_metadata_inspection",
+    scope="检查导出记录 v1–v5，报告状态、步骤、耗时、响应字节、记录用量、来源和引用数量。隐藏文本、路径和任意名称。",
+    sourceVersion=agent_record_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=65536, maxCalls=4, maxAllowlist=8, maxSourceDeclarations=40, serializedResultBytes=4096),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅结构校验。独立版 1 MiB、目录浏览、比较与原文展示尚未迁移。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

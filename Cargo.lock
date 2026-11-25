@@ -5866,6 +5866,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-agent-record-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "zi-agent-record-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-agent-record-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-ascii-art-image-wasi"
 version = "0.1.0"
 dependencies = [
@@ -5967,6 +5989,7 @@ dependencies = [
  "windows-sys 0.59.0",
  "winresource",
  "zeroize",
+ "zi-agent-record-core",
  "zi-character-core",
  "zi-civil-date-core",
  "zi-diagnostics-core",
