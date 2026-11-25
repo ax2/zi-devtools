@@ -497,6 +497,27 @@ agent_record_row["operationScopes"].append(dict(
     blockingReason="仅结构校验。独立版 1 MiB、目录浏览、比较与原文展示尚未迁移。",
 ))
 
+local_html_row = next(row for row in rows if row["sourceToolId"] == "browser-clipper")
+local_html_capability = "devtools.html.local.preview"
+local_html_row.update(
+    pluginStatus="candidate", candidateCapabilities=[local_html_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.local-html", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/local-html-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/local-html-0.1.0-candidate-01-verification.json",
+    reason="复用原生网页文字提取，提供逐次确认的一份本机 UTF-8 HTML 只读预览。",
+)
+local_html_row["operationScopes"].append(dict(
+    operationId=local_html_capability, scopeKind="bounded_confirmed_local_html_text",
+    scope="确认一份本机 UTF-8 HTML，查看标题、可提取正文的前 6 KiB 和省略提示。",
+    sourceVersion=local_html_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=16384, previewTextBytes=6144, markupMarkers=256,
+                characterReferenceMarkers=512, tagSeparators=128, documentSeparators=768,
+                serializedResultBytes=16384),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="保留独立版 2 MiB 的导入、粘贴和公开 HTTPS 抓取、文本接力、知识源目录保存与去重。"
+                   "本候选使用静态正文规则，单独验收 Windows 安装与资料生命周期。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
