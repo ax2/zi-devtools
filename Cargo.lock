@@ -6020,6 +6020,7 @@ dependencies = [
  "zi-pdf-text-core",
  "zi-prompt-template-core",
  "zi-rag-eval-core",
+ "zi-recording-chapters-core",
  "zi-regex-core",
  "zi-rename-core",
  "zi-service-config-core",
@@ -6443,6 +6444,22 @@ dependencies = [
  "serde_json",
  "zi-rag-eval-core",
  "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-recording-chapters-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "zi-recording-chapters-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-recording-chapters-core",
 ]
 
 [[package]]

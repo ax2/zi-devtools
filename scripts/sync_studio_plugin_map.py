@@ -747,6 +747,25 @@ image_batch_row["operationScopes"].append(dict(
                    "接收方单独验证文件确认、多结果正常入口及另存。",
 ))
 
+recording_chapters_row = next(row for row in rows if row["sourceToolId"] == "recorder-tutorial")
+recording_chapters_capability = "devtools.recording.chapters.export"
+recording_chapters_row.update(
+    pluginStatus="candidate", candidateCapabilities=[recording_chapters_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.recording-chapters", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/recording-chapters-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/recording-chapters-0.1.0-candidate-01-verification.json",
+    reason="将本次明确确认的本机章节计划按原生规则导出 FFmpeg UTF-8 章节元数据。",
+)
+recording_chapters_row["operationScopes"].append(dict(
+    operationId=recording_chapters_capability, scopeKind="confirmed_recording_chapter_metadata_export",
+    scope="复用原生毫秒时间、顺序、超尾跳过和标题转义；完整 FFMETADATA1 可确认保存。",
+    sourceVersion=recording_chapters_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=32768, chapters=256, titleBytes=512, durationMs=2678400000, outputBytes=49152),
+    runtimeVerification="fixed_native_and_production_windows_worker_exact_output_independent_metadata_parse",
+    blockingReason="原生录屏、实时标记、视频写入和音源/屏幕能力仍保留。Studio 默认保存扩展名为 .txt。"
+                   "接收方单独验证文件确认、完整预览和保存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
