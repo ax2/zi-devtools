@@ -1,8 +1,23 @@
 //! Shared numeric values and bounded real matrix arithmetic.
 use serde::{Deserialize, Serialize};
 
+pub mod expression;
 pub mod matrix;
+pub mod root;
 pub mod statistics;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Angle {
+    Radians,
+    Degrees,
+}
+
+pub fn valid_variable(name: &str) -> bool {
+    !matches!(name, "pi" | "e" | "i" | "ans")
+        && (1..=32).contains(&name.len())
+        && name.as_bytes()[0].is_ascii_alphabetic()
+        && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
@@ -49,6 +64,10 @@ impl Value {
     }
     pub fn parts(self) -> (f64, f64) {
         match self {
+            Self::Exact(n, 1) => (
+                i64::try_from(n).map_or_else(|_| n as f64, |word| word as f64),
+                0.0,
+            ),
             Self::Exact(n, d) => (n as f64 / d as f64, 0.0),
             Self::Approx(x) => (x, 0.0),
             Self::Complex(real, imaginary) => (real, imaginary),

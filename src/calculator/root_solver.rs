@@ -1,10 +1,10 @@
 //! Bounded real root finding for a user-supplied bracketed interval.
-use super::{Angle, Value, parser};
+use super::{Angle, Value};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const MAX_ITERATIONS: usize = 200;
+pub(super) use zi_matrix_core::root::{ResultValue, solve};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,14 +40,6 @@ impl Saved {
         }
         Ok(())
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct ResultValue {
-    pub root: f64,
-    pub residual: f64,
-    pub iterations: usize,
-    pub converged: bool,
 }
 
 #[derive(Default)]
@@ -138,7 +130,7 @@ impl State {
                 .inner_margin(14.0)
                 .show(ui, |ui| {
                     ui.label(if result.converged {
-                        "区间已收敛（近似根）"
+                        "区间已收敛（候选点，请检查残差）"
                     } else {
                         "达到迭代上限（尚未收敛）"
                     });
@@ -165,171 +157,5 @@ impl State {
                 variables.keys().cloned().collect::<Vec<_>>().join("、")
             ));
         }
-    }
-}
-
-pub(super) fn solve(
-    formula: &str,
-    lower: f64,
-    upper: f64,
-    tolerance: f64,
-    iterations: usize,
-    variables: &BTreeMap<String, Value>,
-    angle: Angle,
-) -> Result<ResultValue, String> {
-    if formula.trim().is_empty() || formula.len() > 2048 {
-        return Err("函数公式需为1–2048字节".into());
-    }
-    if !lower.is_finite()
-        || !upper.is_finite()
-        || lower >= upper
-        || lower.abs() > 1e12
-        || upper.abs() > 1e12
-    {
-        return Err("区间端点必须有限、递增，且绝对值不超过 1e12".into());
-    }
-    if !tolerance.is_finite() || !(1e-12..=1e-2).contains(&tolerance) {
-        return Err("区间宽度容差需在 1e-12 到 1e-2 之间".into());
-    }
-    if !(1..=MAX_ITERATIONS).contains(&iterations) {
-        return Err(format!("迭代上限需在 1 到 {MAX_ITERATIONS} 之间"));
-    }
-    let prepared = parser::Prepared::new(formula)?;
-    let evaluate = |x: f64| -> Result<f64, String> {
-        let mut values = variables.clone();
-        values.insert("x".into(), Value::Approx(x));
-        prepared.evaluate(&values, angle)?.real()
-    };
-
-    let mut a = lower;
-    let mut b = upper;
-    let mut fa = evaluate(a)?;
-    let fb = evaluate(b)?;
-    if fa == 0.0 {
-        return Ok(ResultValue {
-            root: a,
-            residual: 0.0,
-            iterations: 0,
-            converged: true,
-        });
-    }
-    if fb == 0.0 {
-        return Ok(ResultValue {
-            root: b,
-            residual: 0.0,
-            iterations: 0,
-            converged: true,
-        });
-    }
-    if fa.is_sign_positive() == fb.is_sign_positive() {
-        return Err("区间端点的函数值没有异号；请选择能夹住变号根的区间".into());
-    }
-
-    let mut midpoint = a + (b - a) * 0.5;
-    let mut fm = evaluate(midpoint)?;
-    for iteration in 1..=iterations {
-        midpoint = a + (b - a) * 0.5;
-        if midpoint == a || midpoint == b {
-            return Ok(ResultValue {
-                root: midpoint,
-                residual: fm,
-                iterations: iteration - 1,
-                converged: true,
-            });
-        }
-        fm = evaluate(midpoint)?;
-        if fm == 0.0 || (b - a).abs() <= tolerance {
-            return Ok(ResultValue {
-                root: midpoint,
-                residual: fm,
-                iterations: iteration,
-                converged: true,
-            });
-        }
-        if fa.is_sign_positive() != fm.is_sign_positive() {
-            b = midpoint;
-        } else {
-            a = midpoint;
-            fa = fm;
-        }
-    }
-    Ok(ResultValue {
-        root: midpoint,
-        residual: fm,
-        iterations,
-        converged: false,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn run(formula: &str, lower: f64, upper: f64) -> Result<ResultValue, String> {
-        solve(
-            formula,
-            lower,
-            upper,
-            1e-10,
-            100,
-            &BTreeMap::new(),
-            Angle::Radians,
-        )
-    }
-
-    #[test]
-    fn bisects_a_bracketed_root_and_reports_approximation() {
-        let result = run("x^2-2", 1.0, 2.0).unwrap();
-        assert!(result.converged);
-        assert!((result.root - 2f64.sqrt()).abs() <= 1e-10);
-        assert!(result.residual.abs() <= 1e-9);
-        assert!(result.iterations <= 35);
-    }
-
-    #[test]
-    fn accepts_endpoint_roots_and_existing_variables() {
-        let at_endpoint = run("x-2", 2.0, 4.0).unwrap();
-        assert_eq!(at_endpoint.root, 2.0);
-        assert_eq!(at_endpoint.iterations, 0);
-
-        let mut variables = BTreeMap::new();
-        variables.insert("scale".into(), Value::Exact(3, 1));
-        let result = solve(
-            "scale*x-6",
-            1.0,
-            3.0,
-            1e-10,
-            100,
-            &variables,
-            Angle::Radians,
-        )
-        .unwrap();
-        assert!((result.root - 2.0).abs() <= 1e-10);
-    }
-
-    #[test]
-    fn rejects_missing_brackets_domains_complex_values_and_bad_limits() {
-        assert!(run("x^2+1", -1.0, 1.0).unwrap_err().contains("没有异号"));
-        assert!(run("1/x", -1.0, 1.0).is_err());
-        assert!(run("sqrt(-1)+x", -1.0, 1.0).is_err());
-        assert!(solve("x", 2.0, 1.0, 1e-10, 100, &BTreeMap::new(), Angle::Radians).is_err());
-        assert!(solve("x", 0.0, 1.0, 0.0, 100, &BTreeMap::new(), Angle::Radians).is_err());
-        assert!(solve("x", 0.0, 1.0, 1e-10, 201, &BTreeMap::new(), Angle::Radians).is_err());
-    }
-
-    #[test]
-    fn iteration_limit_returns_an_explicit_nonconverged_result() {
-        let result = solve(
-            "x^2-2",
-            1.0,
-            2.0,
-            1e-12,
-            1,
-            &BTreeMap::new(),
-            Angle::Radians,
-        )
-        .unwrap();
-        assert!(!result.converged);
-        assert_eq!(result.iterations, 1);
     }
 }

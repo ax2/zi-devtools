@@ -6326,6 +6326,15 @@ name = "zi-resource-input-wasi"
 version = "0.1.0"
 
 [[package]]
+name = "zi-root-solver-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-matrix-core",
+]
+
+[[package]]
 name = "zi-shell-core"
 version = "0.1.0"
 dependencies = [
