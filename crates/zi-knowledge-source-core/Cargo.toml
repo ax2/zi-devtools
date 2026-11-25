@@ -1,0 +1,9 @@
+[package]
+name = "zi-knowledge-source-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"

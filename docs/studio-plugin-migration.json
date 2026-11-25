@@ -3416,8 +3416,10 @@
       "sourceVersion": "1.2.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.knowledge.source.preflight"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3427,9 +3429,32 @@
           "sourceVersion": "1.2.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.knowledge.source.preflight",
+          "scopeKind": "bounded_confirmed_knowledge_source_preflight",
+          "scope": "按文件名、类型与排除规则统计可能纳入知识源的文档，标明未扫描的子目录。",
+          "sourceVersion": "1.2.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "snapshotBytes": 65536,
+            "entries": 64,
+            "nameBytes": 12288,
+            "exclusionRules": 8,
+            "exclusionUtf8Bytes": 960,
+            "previewCandidates": 24,
+            "serializedResultBytes": 24576
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅目录名称预检；内容、文件大小、递归、指纹、变更历史、保存知识源和重建索引未接入。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "复用原生文档格式和排除规则，预检已确认的一层目录名称快照。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.knowledge-preflight",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/knowledge-preflight-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/knowledge-preflight-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "rag-ingestion",

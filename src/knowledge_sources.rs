@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail, ensure};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use zi_knowledge_source_core::{Exclusions, format, parse_excludes};
 use std::{
     collections::{BTreeMap, HashSet},
     fs::{self, File, OpenOptions},
@@ -24,14 +25,6 @@ const MAX_DEPTH: usize = 8;
 const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_REGISTRY_BYTES: u64 = 512 * 1024;
-const DEFAULT_EXCLUDES: &[&str] = &[
-    ".git/",
-    "node_modules/",
-    "target/",
-    ".venv/",
-    "__pycache__/",
-];
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -104,85 +97,8 @@ fn valid_name(name: &str) -> bool {
     !name.trim().is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control)
 }
 
-fn parse_excludes(text: &str) -> Result<Vec<String>> {
-    let mut rules = Vec::new();
-    for raw in text.split([',', ';', '\n']) {
-        let rule = raw.trim().replace('\\', "/");
-        if rule.is_empty() {
-            continue;
-        }
-        ensure!(
-            rule.len() <= 120 && rules.len() < 32,
-            "排除规则最多 32 条、每条 120 字符"
-        );
-        ensure!(
-            !rule.starts_with('/') && !rule.contains(':') && !rule.chars().any(char::is_control),
-            "排除规则必须是相对名称"
-        );
-        ensure!(
-            !rule.split('/').any(|part| part == ".." || part == "."),
-            "排除规则不能包含路径穿越"
-        );
-        ensure!(
-            !rule
-                .split('/')
-                .enumerate()
-                .any(|(i, part)| part.is_empty() && i > 0 && i + 1 < rule.split('/').count()),
-            "排除规则不能包含空目录段"
-        );
-        ensure!(
-            !rule.contains('*')
-                || (rule.starts_with("*.")
-                    && rule.len() > 2
-                    && rule[2..].chars().all(|c| c.is_alphanumeric())),
-            "仅支持 *.扩展名 通配规则"
-        );
-        if !rules.contains(&rule) {
-            rules.push(rule);
-        }
-    }
-    Ok(rules)
-}
-
-fn excluded(relative: &str, directory: bool, rules: &[String]) -> bool {
-    let lower = relative.to_lowercase();
-    let segments: Vec<_> = lower.split('/').collect();
-    DEFAULT_EXCLUDES
-        .iter()
-        .map(|s| s.trim_end_matches('/'))
-        .chain(
-            rules
-                .iter()
-                .filter(|s| s.ends_with('/'))
-                .map(|s| s.trim_end_matches('/')),
-        )
-        .any(|name| {
-            let name = name.to_lowercase();
-            if name.contains('/') {
-                lower == name || lower.starts_with(&format!("{name}/"))
-            } else {
-                segments.contains(&name.as_str())
-            }
-        })
-        || rules.iter().any(|rule| {
-            let rule = rule.to_lowercase();
-            if let Some(ext) = rule.strip_prefix("*.") {
-                !directory && lower.ends_with(&format!(".{ext}"))
-            } else if rule.ends_with('/') {
-                false
-            } else {
-                lower == rule || lower.starts_with(&format!("{rule}/"))
-            }
-        })
-}
-
 fn supported(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-        [
-            "md", "markdown", "txt", "html", "htm", "pdf", "docx", "png", "jpg", "jpeg", "webp",
-        ]
-        .contains(&e.to_ascii_lowercase().as_str())
-    })
+    format(path).is_some()
 }
 
 fn fingerprint(path: &Path, relative: String, cancel: &AtomicBool) -> Result<FileVersion> {
@@ -306,6 +222,7 @@ pub fn scan(source: &Source, cancel: &AtomicBool) -> Result<Snapshot> {
     );
     let canonical = source.path.canonicalize()?;
     ensure!(canonical == source.path, "知识源路径已变化，请重新添加");
+    let exclusions = Exclusions::new(&source.excludes);
     let mut files = Vec::new();
     let mut skipped = 0;
     let mut visited = 0;
@@ -334,7 +251,7 @@ pub fn scan(source: &Source, cancel: &AtomicBool) -> Result<Snapshot> {
                 .context("相对路径不是 Unicode")?
                 .replace('\\', "/")
         };
-        if path != source.path && excluded(&relative, meta.is_dir(), &source.excludes) {
+        if path != source.path && exclusions.excludes(&relative, meta.is_dir()) {
             skipped += 1;
             continue;
         }
