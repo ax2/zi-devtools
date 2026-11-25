@@ -10,8 +10,10 @@ from tempfile import TemporaryDirectory
 
 PLUGIN = "com.zicode.devtools.log-viewer"
 CAPABILITY = "devtools.log-viewer.filter"
+TAIL_CAPABILITY = "devtools.log-viewer.tail"
 PROFILE = "resource.wasi.input.draft2"
 MAX_FILE = 16384
+MAX_SNAPSHOT = 32 * 1024 * 1024
 MAX_QUERY = 256
 MAX_PREVIEW = 512
 MAX_MATCHES = 12
@@ -86,10 +88,72 @@ def fixtures():
     yield "oversized-utf8-query", b"INFO a", {"query": "界" * 86}, "text/plain", "QUERY_TOO_LARGE"
 
 
-def requests(wasm, payload, inputs, mime):
+
+def tail_result(source, payload, skip, end_trim, matches, count, match_count=None):
+    start = max(0, len(source) - MAX_FILE)
+    end = len(source) - end_trim
+    analysis = report(payload, count, matches, match_count)
+    del analysis["ok"]
+    return dict(ok=True, sourceByteCount=len(source), windowStartByte=start,
+                analyzedStartByte=start + skip, analyzedEndByte=end, leadingSkippedBytes=skip,
+                trailingIncompleteUtf8Bytes=end_trim, endsWithNewline=source.endswith(b"\n"),
+                partial=start > 0 or end_trim > 0, analysis=analysis)
+
+
+def tail_fixtures():
+    text = "INFO 启动\r\nERROR 完成".encode()
+    bom = b"\xef\xbb\xbf" + text
+    yield "tail-small-bom-without-final-lf", bom, {}, "text/plain", tail_result(
+        bom, bom, 0, 0, [event(1, "info", 1, "INFO 启动\r\n"), event(2, "error", 1, "ERROR 完成")], 2,
+    )
+
+    banner = b"INFO boundary\n"
+    filler = b"    " + (b"." * (MAX_FILE - len(banner) - 5)) + b"\n"
+    source = (b"outside\n" * 16) + banner + filler
+    payload = banner + filler
+    yield "tail-proven-complete-first-line", source, {}, "text/plain", tail_result(
+        source, payload, 0, 0, [event(1, "info", 2, payload[:MAX_PREVIEW].decode(), True)], 1,
+    )
+
+    lost = b"\x82\xac old\r\n\tat synthetic.Old.run(Old.java:5)\r\nCaused by: cut\r\n"
+    complete = "2026-11-25 14:20:21 ERROR expected\r\n\tat synthetic.Test.run(Test.java:1)\r\nCaused by: 中文 ".encode()
+    end = b"\xe4\xb8"
+    lead = b"    " + b"x" * (MAX_FILE - len(lost) - len(complete) - len(end) - 5) + b"\n"
+    for name, size in (("tail-2mib-crossed-utf8", 2 * 1024 * 1024),
+                       ("tail-32mib-boundary", MAX_SNAPSHOT)):
+        source = b"s" * (size - MAX_FILE - 1) + b"\xe2" + lost + lead + complete + end
+        assert len(source) == size
+        yield name, source, {"level":"error","query":"中文"}, "application/octet-stream", tail_result(
+            source, complete, len(lost + lead), len(end),
+            [event(1, "error", 3, complete.decode())], 1,
+        )
+    short = b"x\n" * (MAX_FILE // 2)
+    dense = b"INFO outside the window\n" + short
+    yield "tail-dense-complete-window", dense, {}, "text/plain", tail_result(
+        dense, short, 0, 0, [event(i + 1, "unknown", 1, "x\n") for i in range(MAX_MATCHES)],
+        len(short) // 2, len(short) // 2,
+    )
+    no_break = b"x" * (MAX_FILE + 7)
+    yield "tail-window-is-one-partial-line", no_break, {}, "text/plain", tail_result(
+        no_break, b"", MAX_FILE, 0, [], 0,
+    )
+    trailing_error = b"INFO valid\nERROR bad \xe3\x28"
+    source = b"x" * (MAX_FILE - len(trailing_error) + 40) + b"\n" + trailing_error
+    yield "tail-invalid-utf8-inside-retained-window", source, {}, "application/octet-stream", "INVALID_UTF8"
+    yield "tail-wrong-mime", b"INFO a", {}, "image/png", "UNSUPPORTED_MIME"
+
+
+def cases():
+    for vector in fixtures():
+        yield CAPABILITY, *vector
+    for vector in tail_fixtures():
+        yield TAIL_CAPABILITY, *vector
+
+
+def requests(wasm, payload, inputs, mime, capability):
     resource = dict(resourceId="12121212-1212-4212-8212-121212121212", byteLength=len(payload),
                     mimeType=mime, contentVersion=digest(payload))
-    common = dict(pluginId=PLUGIN, capabilityId=CAPABILITY, sceneId="programming", input=inputs)
+    common = dict(pluginId=PLUGIN, capabilityId=capability, sceneId="programming", input=inputs)
     direct = compact(dict(**common, commandId=None, resourceInputProfile=PROFILE,
                           resources=[dict(index=0, **resource)]))
     header = compact(dict(profile=PROFILE, request=dict(workerKind="wasi", workerPath="", **common),
@@ -115,9 +179,9 @@ def main():
     recorded = []
     with TemporaryDirectory() as temporary:
         fixture = Path(temporary) / "synthetic.log"
-        for name, source, inputs, mime, expected in fixtures():
+        for capability, name, source, inputs, mime, expected in cases():
             fixture.write_bytes(source)
-            direct, wire = requests(wasm, source, inputs, mime)
+            direct, wire = requests(wasm, source, inputs, mime, capability)
             native = invoke([args.native, fixture], direct)
             try:
                 response = invoke([args.worker, "--zicode-plugin-worker"], wire)
@@ -132,7 +196,7 @@ def main():
                 assert actual == expected, (name, actual)
             output = compact(actual)
             assert len(output) <= MAX_RESULT
-            recorded.append(dict(case=name, inputBytes=len(source), inputSha256=digest(source), input=inputs,
+            recorded.append(dict(capability=capability, case=name, inputBytes=len(source), inputSha256=digest(source), input=inputs,
                                  mime=mime, ok=actual["ok"], outputBytes=len(output), outputSha256=digest(output)))
             print(name, "passed", flush=True)
     proof = dict(passed=len(recorded), workerSha256=digest(args.worker.read_bytes()),

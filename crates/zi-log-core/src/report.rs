@@ -3,6 +3,8 @@
 use crate::{Level, is_continuation, parse_timestamp};
 use serde::{Deserialize, Serialize};
 
+pub mod tail;
+
 pub const MAX_FILE_BYTES: usize = 16 * 1024;
 pub const MAX_QUERY_BYTES: usize = 256;
 pub const MAX_PREVIEW_BYTES: usize = 512;
@@ -43,6 +45,14 @@ struct Event {
 }
 
 pub fn scan<'a>(bytes: &'a [u8], filter: &Filter) -> Result<Report<'a>, &'static str> {
+    scan_bytes(bytes, filter, true)
+}
+
+fn scan_bytes<'a>(
+    bytes: &'a [u8],
+    filter: &Filter,
+    strip_bom: bool,
+) -> Result<Report<'a>, &'static str> {
     if bytes.len() > MAX_FILE_BYTES {
         return Err("INPUT_TOO_LARGE");
     }
@@ -51,7 +61,11 @@ pub fn scan<'a>(bytes: &'a [u8], filter: &Filter) -> Result<Report<'a>, &'static
         return Err("QUERY_TOO_LARGE");
     }
     let text = std::str::from_utf8(bytes).map_err(|_| "INVALID_UTF8")?;
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let text = if strip_bom {
+        text.strip_prefix('\u{feff}').unwrap_or(text)
+    } else {
+        text
+    };
     let mut report = Report {
         source_byte_count: bytes.len(),
         event_count: 0,

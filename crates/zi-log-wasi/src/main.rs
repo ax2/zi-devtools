@@ -3,10 +3,11 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::io::Read;
-use zi_log_core::report::{self, Filter, MAX_FILE_BYTES};
+use zi_log_core::report::{self, Filter, MAX_FILE_BYTES, tail};
 
 const PLUGIN: &str = "com.zicode.devtools.log-viewer";
-const CAPABILITY: &str = "devtools.log-viewer.filter";
+const FILTER: &str = "devtools.log-viewer.filter";
+const TAIL: &str = "devtools.log-viewer.tail";
 const PROFILE: &str = "resource.wasi.input.draft2";
 type Failure = &'static str;
 
@@ -46,7 +47,6 @@ fn execute() -> Result<Value, Failure> {
     let request: Request = serde_json::from_slice(&envelope).map_err(|_| "INVALID_REQUEST")?;
     if request.plugin_id != PLUGIN
         || request.scene_id.is_empty()
-        || request.capability_id != CAPABILITY
         || !request.command_id.is_null()
         || request.resource_input_profile != PROFILE
         || request.resource_output_profile.is_some()
@@ -72,31 +72,48 @@ fn execute() -> Result<Value, Failure> {
     ) {
         return Err("UNSUPPORTED_MIME");
     }
-    if file.byte_length > MAX_FILE_BYTES {
-        return Err("INPUT_TOO_LARGE");
+    let mut reply = match request.capability_id.as_str() {
+        FILTER => {
+            if file.byte_length > MAX_FILE_BYTES {
+                return Err("INPUT_TOO_LARGE");
+            }
+            let bytes = read(file.byte_length, 0)?;
+            serde_json::to_value(report::scan(&bytes, &request.input)?)
+        }
+        TAIL => {
+            let start = tail::read_start(file.byte_length)?;
+            let bytes = read(file.byte_length, start)?;
+            serde_json::to_value(tail::scan_tail(&bytes, file.byte_length, &request.input)?)
+        }
+        _ => return Err("INVALID_REQUEST"),
     }
-    let bytes = read(file.byte_length)?;
-    let result = report::scan(&bytes, &request.input)?;
-    let mut reply = serde_json::to_value(result).map_err(|_| "RESULT_FAILED")?;
+    .map_err(|_| "RESULT_FAILED")?;
     reply["ok"] = json!(true);
     Ok(reply)
 }
 
 #[cfg(target_arch = "wasm32")]
-fn read(length: usize) -> Result<Vec<u8>, Failure> {
-    zi_resource_input_wasi::read_prefix(0, length, length)
+fn read(length: usize, start: usize) -> Result<Vec<u8>, Failure> {
+    zi_resource_input_wasi::read_window(0, length, start, length - start)
 }
 
 // Host-independent adapter for comparing the same report against the production Worker.
 #[cfg(not(target_arch = "wasm32"))]
-fn read(length: usize) -> Result<Vec<u8>, Failure> {
+fn read(length: usize, start: usize) -> Result<Vec<u8>, Failure> {
+    use std::io::{Seek, SeekFrom};
+
     let path = std::env::args_os().nth(1).ok_or("RESOURCE_READ_FAILED")?;
-    let file = std::fs::File::open(path).map_err(|_| "RESOURCE_READ_FAILED")?;
+    let mut file = std::fs::File::open(path).map_err(|_| "RESOURCE_READ_FAILED")?;
+    if file.metadata().map_err(|_| "RESOURCE_READ_FAILED")?.len() != length as u64 {
+        return Err("RESOURCE_READ_FAILED");
+    }
+    file.seek(SeekFrom::Start(start as u64))
+        .map_err(|_| "RESOURCE_READ_FAILED")?;
     let mut bytes = Vec::new();
-    file.take((length + 1) as u64)
+    file.take((length - start + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|_| "RESOURCE_READ_FAILED")?;
-    if bytes.len() != length {
+    if bytes.len() != length - start {
         return Err("RESOURCE_READ_FAILED");
     }
     Ok(bytes)
@@ -106,6 +123,7 @@ fn main() {
     let reply = execute().unwrap_or_else(|code| {
         let message = match code {
             "INPUT_TOO_LARGE" => "Log file exceeds 16 KiB. 日志超过 16 KiB。",
+            "SNAPSHOT_TOO_LARGE" => "Log snapshot exceeds 32 MiB. 日志快照超过 32 MiB。",
             "QUERY_TOO_LARGE" => {
                 "Search phrase exceeds 256 UTF-8 bytes. 搜索词超过 256 个 UTF-8 字节。"
             }

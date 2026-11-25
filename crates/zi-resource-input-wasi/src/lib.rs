@@ -15,22 +15,36 @@ pub fn read_prefix(
     expected_size: usize,
     max_bytes: usize,
 ) -> Result<Vec<u8>, &'static str> {
+    read_window(index, expected_size, 0, expected_size.min(max_bytes))
+}
+
+/// Read only a bounded range of the explicitly approved snapshot.
+#[cfg(target_arch = "wasm32")]
+pub fn read_window(
+    index: i32,
+    expected_size: usize,
+    start: usize,
+    length: usize,
+) -> Result<Vec<u8>, &'static str> {
     const FAILED: &str = "RESOURCE_READ_FAILED";
     const CHUNK: usize = 64 * 1024;
+    if start > expected_size || length > expected_size - start {
+        return Err(FAILED);
+    }
 
     let expected = i64::try_from(expected_size).map_err(|_| FAILED)?;
     // These imports only expose the snapshots enumerated in the Host envelope.
     if unsafe { resource_size(index) } != expected {
         return Err(FAILED);
     }
-    let mut bytes = vec![0; expected_size.min(max_bytes)];
+    let mut bytes = vec![0; length];
     let mut offset = 0;
     while offset < bytes.len() {
         let length = CHUNK.min(bytes.len() - offset);
         let read = unsafe {
             resource_read(
                 index,
-                offset as i64,
+                (start + offset) as i64,
                 bytes[offset..].as_mut_ptr(),
                 length as i32,
             )

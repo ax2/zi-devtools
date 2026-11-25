@@ -9,15 +9,17 @@ import subprocess
 from package_disk_inspector_plugin import dump, integer, obj, string
 from package_duplicate_files_plugin import candidate_arguments
 from verify_log_viewer_plugin import (
-    CAPABILITY, MAX_FILE, MAX_MATCHES, MAX_PREVIEW, MAX_QUERY, MAX_RESULT,
-    PLUGIN, PROFILE, compact, digest, fixtures,
+    CAPABILITY, MAX_FILE, MAX_MATCHES, MAX_PREVIEW, MAX_QUERY, MAX_RESULT, MAX_SNAPSHOT,
+    PLUGIN, PROFILE, TAIL_CAPABILITY, cases, compact, digest,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = "log-viewer"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 TITLE = "本机日志筛选"
 SCOPE = "查看一份已确认的 UTF-8 日志。按级别和区分大小写的字面搜索词筛选多行事件。文件限 16 KiB，显示前 12 条匹配。"
+TAIL_TITLE = "本机日志末尾查看"
+TAIL_SCOPE = "明确提供最多 32 MiB 的 UTF-8 日志。只分析末尾至多 16 KiB，报告字节范围及跳过的部分。"
 MIME_TYPES = ["text/plain", "application/octet-stream"]
 LEVEL = {"type": "string", "enum": ["fatal", "error", "warning", "info", "debug", "trace", "unknown"]}
 
@@ -31,10 +33,22 @@ def manifest():
     boolean = {"type": "boolean"}
     entry = obj(eventNumber=integer(MAX_FILE), level=LEVEL, lineCount=integer(MAX_FILE),
                 text=string(MAX_PREVIEW), previewTruncated=boolean)
-    success = obj(ok=dict(boolean, const=True), sourceByteCount=integer(MAX_FILE),
-                  eventCount=integer(MAX_FILE), matchCount=integer(MAX_FILE), truncated=boolean,
+    report = dict(sourceByteCount=integer(MAX_FILE), eventCount=integer(MAX_FILE),
+                  matchCount=integer(MAX_FILE), truncated=boolean,
                   matches={"type": "array", "items": entry, "maxItems": MAX_MATCHES})
+    ok = dict(boolean, const=True)
+    success = obj(ok=ok, **report)
+    offset = integer(MAX_SNAPSHOT)
+    tail = obj(ok=ok, sourceByteCount=offset, windowStartByte=offset, analyzedStartByte=offset, analyzedEndByte=offset,
+               leadingSkippedBytes=integer(MAX_FILE), trailingIncompleteUtf8Bytes=integer(3),
+               endsWithNewline=boolean, partial=boolean, analysis=obj(**report))
     failure = obj(ok=dict(boolean, const=False), error=obj(code=string(32), message=string(256)))
+
+    def tool(id, title, scope, output, aliases):
+        return dict(id=id, title=title, description=scope, resourceInputMimeTypes=MIME_TYPES,
+                    inputSchema=fields, outputSchema={"type": "object", "oneOf": [output, failure]},
+                    maxResultBytes=MAX_RESULT, directory=dict(categoryId="files", aliases=aliases, description=scope))
+
     return dict(
         schemaVersion=2, id=PLUGIN, name="ZiDevTools Local Log Filter", displayName=TITLE,
         description=SCOPE, version=VERSION, publisher="zicode", license="MIT",
@@ -42,15 +56,12 @@ def manifest():
         requiredProfiles={"resource.input.types.v1": "=1.0.0-preview.1",
                           "output.schema.v1": "=1.0.0-rc.1",
                           "tool.directory.v1": "=1.0.0-preview.1"},
-        activationEvents=["onCapability:" + CAPABILITY],
+        activationEvents=["onCapability:" + CAPABILITY, "onCapability:" + TAIL_CAPABILITY],
         runtime={"wasi": "runtime/tools.wasm", "resourceInputProfile": PROFILE},
-        contributes=dict(activities=[], views=[], commands=[], piTools=[], capabilities=[dict(
-            id=CAPABILITY, title=TITLE, description=SCOPE,
-            resourceInputMimeTypes=MIME_TYPES, inputSchema=fields,
-            outputSchema={"type": "object", "oneOf": [success, failure]}, maxResultBytes=MAX_RESULT,
-            directory=dict(categoryId="files", aliases=["日志工作台", "日志查看", "log viewer", "filter log"],
-                           description=SCOPE),
-        )]),
+        contributes=dict(activities=[], views=[], commands=[], piTools=[], capabilities=[
+            tool(CAPABILITY, TITLE, SCOPE, success, ["日志工作台", "日志查看", "log viewer", "filter log"]),
+            tool(TAIL_CAPABILITY, TAIL_TITLE, TAIL_SCOPE, tail, ["查看日志尾部", "末尾日志", "tail log"]),
+        ]),
         permissions=dict(required=[
             dict(name="resource.read", reason="只读取本次明确确认的临时日志文件快照。"),
         ], optional=[]),
@@ -67,10 +78,10 @@ def main():
         parser.error("package and receipt must be new")
     module = args.module.read_bytes()
     proof = json.loads(args.evidence.read_text(encoding="utf-8"))
-    vectors = list(fixtures())
-    expected = [(name, digest(data), inputs, mime, not isinstance(result, str))
-                for name, data, inputs, mime, result in vectors]
-    actual = [(row["case"], row["inputSha256"], row["input"], row["mime"], row["ok"])
+    vectors = list(cases())
+    expected = [(capability, name, digest(data), inputs, mime, not isinstance(result, str))
+                for capability, name, data, inputs, mime, result in vectors]
+    actual = [(row["capability"], row["case"], row["inputSha256"], row["input"], row["mime"], row["ok"])
               for row in proof["cases"]]
     if (not 0 < len(module) <= 2 * 1024 * 1024 or proof["wasmSha256"] != digest(module)
             or proof["workerProfile"] != PROFILE or proof["passed"] != len(vectors) or actual != expected):
@@ -91,11 +102,13 @@ def main():
     dump(package / "catalog.json", dict(contract="zicode.devtools-plugin/1.0.0-rc.1",
                                         packageId=PLUGIN, packageVersion=VERSION,
                                         deliveryStatus="unsigned_provider_candidate_not_host_accepted",
-                                        tools=[dict(sourceToolId=SOURCE, capabilityId=CAPABILITY, title=TITLE,
-                                                    status="candidate", inputProfile=PROFILE, scope=SCOPE)]))
+                                        tools=[dict(sourceToolId=SOURCE, capabilityId=id, title=title,
+                                                    status="candidate", inputProfile=PROFILE, scope=scope)
+                                               for id, title, scope in [(CAPABILITY, TITLE, SCOPE),
+                                                                        (TAIL_CAPABILITY, TAIL_TITLE, TAIL_SCOPE)]]))
     dump(package / "fixtures.json", dict(generator="scripts/verify_log_viewer_plugin.py", cases=[
-        dict(id=name, inputSha256=digest(data), inputBytes=len(data), input=inputs,
-             mime=mime, ok=not isinstance(result, str)) for name, data, inputs, mime, result in vectors
+        dict(capability=capability, id=name, inputSha256=digest(data), inputBytes=len(data), input=inputs,
+             mime=mime, ok=not isinstance(result, str)) for capability, name, data, inputs, mime, result in vectors
     ]))
     dump(package / "provenance.json", dict(sourceRevision=git("rev-parse", "HEAD"), dirty=False,
                                           signature="unsigned", builtAt=datetime.now(timezone.utc).isoformat(),
