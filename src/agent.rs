@@ -1,6 +1,5 @@
 //! A bounded local Ollama agent using only explicitly granted MCP tools.
 use anyhow::{Context, Result, bail, ensure};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
@@ -21,7 +20,8 @@ use crate::{
 const MAX_CALLS: usize = 4;
 const MAX_RESPONSE: usize = 128 * 1024;
 const MAX_REQUEST: usize = 64 * 1024;
-pub(crate) const MAX_CONTEXT_BYTES: usize = 32 * 1024;
+pub use zi_agent_record_core::{EvidenceRef, SourceContext};
+pub(crate) use zi_agent_record_core::{MAX_CONTEXT_BYTES, validated_citations};
 pub(crate) const MAX_CONTEXT_ITEMS: usize = 32;
 const MAX_RESULT_EXCERPT: usize = 3 * 1024;
 pub(crate) const MAX_TOTAL_TOKENS: u64 = 12_000;
@@ -36,13 +36,6 @@ pub struct Config {
     pub context: Vec<SourceContext>,
     pub selected: Vec<String>,
     pub max_calls: usize,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct SourceContext {
-    pub source: String,
-    pub content: String,
 }
 
 #[derive(Clone, Debug)]
@@ -71,42 +64,6 @@ pub struct Step {
     pub model_excerpt_bytes: usize,
     pub is_error: bool,
     pub references: Vec<EvidenceRef>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct EvidenceRef {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub citation_id: Option<usize>,
-    pub source_id: String,
-    pub source_name: String,
-    pub relative_path: String,
-    pub location: String,
-    pub file_sha256: String,
-    pub chunk_sha256: String,
-}
-
-impl EvidenceRef {
-    pub fn valid(&self) -> bool {
-        let label = |value: &str, max: usize| {
-            !value.trim().is_empty() && value.len() <= max && !value.chars().any(char::is_control)
-        };
-        let hash =
-            |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
-        label(&self.source_id, 128)
-            && self.citation_id.is_none_or(|id| (1..=40).contains(&id))
-            && label(&self.source_name, 256)
-            && label(&self.relative_path, 1024)
-            && !self.relative_path.starts_with(['/', '\\'])
-            && !self.relative_path.contains(':')
-            && !self
-                .relative_path
-                .split(['/', '\\'])
-                .any(|part| part == "..")
-            && label(&self.location, 256)
-            && hash(&self.file_sha256)
-            && hash(&self.chunk_sha256)
-    }
 }
 
 fn parse_reference(hit: &Value) -> Option<EvidenceRef> {
@@ -499,20 +456,6 @@ fn available_reference_ids(steps: &[Step]) -> BTreeSet<usize> {
                 .filter_map(|reference| reference.citation_id)
         })
         .collect()
-}
-
-pub(crate) fn validated_citations(answer: &str, available: &BTreeSet<usize>) -> Result<Vec<usize>> {
-    let mut citations = BTreeSet::new();
-    let pattern = regex::Regex::new(r"\[K([0-9]+)\]")?;
-    for found in pattern.captures_iter(answer) {
-        let id = found[1].parse::<usize>().context("答案引用编号无效")?;
-        ensure!(
-            available.contains(&id),
-            "答案引用 [K{id}] 不在本次已选入模型消息的来源中"
-        );
-        citations.insert(id);
-    }
-    Ok(citations.into_iter().collect())
 }
 
 pub fn execute(

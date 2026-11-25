@@ -127,7 +127,7 @@ impl Document {
             format: "zi-devtools-calculator".into(),
             schema: 8,
             tool_version: tool_version.into(),
-            runtime_fingerprint: Some(crate::tool_provenance::RuntimeFingerprint::current()),
+            runtime_fingerprint: Some(crate::tool_provenance::current_runtime_fingerprint()),
             created_utc: chrono::Utc::now().timestamp(),
             data,
         })

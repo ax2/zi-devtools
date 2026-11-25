@@ -3354,8 +3354,10 @@
       "sourceVersion": "1.1.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.agent-record.inspect"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3365,9 +3367,30 @@
           "sourceVersion": "1.1.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.agent-record.inspect",
+          "scopeKind": "bounded_agent_export_metadata_inspection",
+          "scope": "检查导出记录 v1–v5，报告状态、步骤、耗时、响应字节、记录用量、来源和引用数量。隐藏文本、路径和任意名称。",
+          "sourceVersion": "1.1.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 65536,
+            "maxCalls": 4,
+            "maxAllowlist": 8,
+            "maxSourceDeclarations": 40,
+            "serializedResultBytes": 4096
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅结构校验。独立版 1 MiB、目录浏览、比较与原文展示尚未迁移。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "共用独立版 Agent JSON 运行记录校验，提供一份经确认快照的只读元数据时间线。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.agent-record",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/agent-record-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/agent-record-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "workflow-builder",
