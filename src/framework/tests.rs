@@ -361,3 +361,29 @@ fn diagnostic_handoff_rejects_unsupported_and_large_inputs_without_mutation() {
     assert_eq!(draft.executable, "preserved executable");
     assert!(!state.is_running());
 }
+
+#[test]
+fn saved_java_environment_report_can_be_reviewed_without_running_java() {
+    let selected = json!({"executable":r"X:\fixture-private\jdk\bin\java.exe",
+        "properties":{"java.version":"21.0.3+9","java.vendor":"Sample Vendor","os.arch":"amd64",
+                      "java.home":r"X:\fixture-private\jdk"},"javacPresent":true});
+    let compared = json!({"executable":r"Y:\fixture-private\bin\java.exe",
+        "properties":{"java.version":"17.0.12","os.arch":"aarch64"},"javacPresent":false});
+    let report = generated_report(
+        Tool::JavaEnvironment,
+        json!({"selected":selected,"comparison":compared,
+        "javaHome":r"X:\fixture-private\jdk","javaHomeMismatch":false,"pathJava":null,
+        "mavenEntry":r"Z:\fixture-private\bin\mvn.cmd","gradleEntry":null,
+        "versionMismatch":zi_jdk_report_core::version_mismatch(Some("21.0.3+9"),Some("17.0.12")),
+        "notes":"fixture-private raw notes"})
+        .to_string(),
+    )
+    .unwrap();
+    let preview = zi_jdk_report_core::review(report.as_bytes()).unwrap();
+    assert_eq!(preview.selected_version, "21.0.3+9");
+    assert_eq!(preview.compared_version.as_deref(), Some("17.0.12"));
+    assert_eq!(preview.version_mismatch, Some(true));
+    assert_eq!(preview.java_home_mismatch, Some(false));
+    assert!(preview.maven_entry_reported && !preview.gradle_entry_reported);
+    assert!(!preview.text.contains("fixture-private"));
+}

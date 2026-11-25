@@ -823,6 +823,25 @@ clipboard_compose_row["operationScopes"].append(dict(
                    "接收方单独核对正常工具中心及四种输出确认保存。",
 ))
 
+jdk_report_row = next(row for row in rows if row["sourceToolId"] == "java-environment")
+jdk_report_capability = "devtools.java.environment.report.review"
+jdk_report_row.update(
+    pluginStatus="candidate", candidateCapabilities=[jdk_report_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.jdk-report", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/jdk-report-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/jdk-report-0.1.0-candidate-01-verification.json",
+    reason="从明确确认的一份原生 JDK JSON 报告核对快照和版本差异，并给出可保存的脱敏结果。",
+)
+jdk_report_row["operationScopes"].append(dict(
+    operationId=jdk_report_capability, scopeKind="confirmed_native_jdk_environment_report_review",
+    scope="支持原生单环境或双环境历史报告。复用原生版本字符串比较，保留捕获时三态，省略路径与备注。",
+    sourceVersion=jdk_report_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=32768, outputBytes=4096, captureCount=2),
+    runtimeVerification="fixed_native_and_production_windows_worker_exact_redacted_text",
+    blockingReason="离线报告查看范围。执行 Java、探测当前环境/构建入口和环境路径比对留在独立版。"
+                   "接收方单独核对 Windows 文件确认、预览、保存、重启。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
