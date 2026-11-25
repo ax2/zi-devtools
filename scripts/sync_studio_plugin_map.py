@@ -688,6 +688,26 @@ image_convert_row["operationScopes"].append(dict(
 
 
 
+
+table_sqlite_row = next(row for row in rows if row["sourceToolId"] == "data-sqlite-export")
+table_sqlite_capability = "devtools.data.sqlite.export"
+table_sqlite_row.update(
+    pluginStatus="candidate", candidateCapabilities=[table_sqlite_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.table-sqlite", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/table-sqlite-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/table-sqlite-0.1.0-candidate-01-verification.json",
+    reason="复用原生表格与 SQLite 导出逻辑，为经确认的一份 CSV、TSV 或 JSON 提供全行另存。",
+)
+table_sqlite_row["operationScopes"].append(dict(
+    operationId=table_sqlite_capability, scopeKind="confirmed_single_table_sqlite_export",
+    scope="生成含全部输入行的单表 SQLite 新文件；按原生规则保留字符串、空值与数值类型。",
+    sourceVersion=table_sqlite_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=16384, rows=128, columns=16, outputBytes=131072),
+    runtimeVerification="27_fixed_native_production_windows_worker_and_readonly_integrity_parity",
+    blockingReason="覆盖一份小表完整另存。大表、工作台选区和持久工作实例不在本候选中。"
+                   "接收方单独验证正常工具页与另存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

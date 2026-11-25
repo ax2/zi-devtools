@@ -1,7 +1,8 @@
 //! A reviewed table snapshot is published as a new SQLite file, never an existing database.
 use super::*;
-use rusqlite::{Connection, OpenFlags, params_from_iter, types::Value as SqlValue};
+use rusqlite::{Connection, OpenFlags};
 use std::{fs, path::Path};
+use zi_table_core::sqlite::{create_verified_table, validate_identifiers};
 
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 
@@ -61,7 +62,7 @@ mod tests {
         assert_eq!(receipt.rows, 2);
         let conn =
             Connection::open_with_flags(receipt.path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
-        let table = identifier(&review.table).unwrap();
+        let table = r#""报告""; DROP TABLE x;--""#;
         let first: String = conn
             .query_row(
                 &format!("SELECT id FROM {table} ORDER BY rowid LIMIT 1"),
@@ -265,14 +266,6 @@ mod tests {
     }
 }
 
-fn identifier(name: &str) -> Result<String> {
-    anyhow::ensure!(
-        !name.trim().is_empty() && name.len() <= 512 && !name.contains('\0'),
-        "表名或列名为空、含空字符或超过512字节"
-    );
-    Ok(format!("\"{}\"", name.replace('"', "\"\"")))
-}
-
 impl Review {
     pub(super) fn prepare(
         data: &Dataset,
@@ -282,19 +275,7 @@ impl Review {
         scope: &'static str,
     ) -> Result<Self> {
         data.validate_saved()?;
-        identifier(table)?;
-        anyhow::ensure!(
-            !table.to_ascii_lowercase().starts_with("sqlite_"),
-            "表名不能使用SQLite保留前缀sqlite_"
-        );
-        let mut columns = BTreeSet::new();
-        for name in &data.headers {
-            identifier(name)?;
-            anyhow::ensure!(
-                columns.insert(name.to_ascii_lowercase()),
-                "SQLite列名不能仅大小写不同"
-            );
-        }
+        validate_identifiers(table, &data.headers)?;
         anyhow::ensure!(indices.len() <= ROW_LIMIT, "保存行数超过限制");
         let mut seen = BTreeSet::new();
         let mut bytes = serde_json::to_vec(&data.headers)?.len();
@@ -348,24 +329,6 @@ impl Review {
     }
 }
 
-fn sql_value(value: &Value) -> Result<SqlValue> {
-    Ok(match value {
-        Value::Null => SqlValue::Null,
-        Value::Bool(v) => SqlValue::Integer(i64::from(*v)),
-        Value::String(s) => SqlValue::Text(s.clone()),
-        Value::Number(n) => {
-            if let Some(v) = n.as_i64() {
-                SqlValue::Integer(v)
-            } else if n.is_u64() {
-                SqlValue::Text(n.to_string())
-            } else {
-                SqlValue::Real(n.as_f64().context("数值无法表示")?)
-            }
-        }
-        Value::Array(_) | Value::Object(_) => SqlValue::Text(serde_json::to_string(value)?),
-    })
-}
-
 #[derive(Debug)]
 pub(super) struct Cancelled;
 impl std::fmt::Display for Cancelled {
@@ -415,36 +378,9 @@ fn write_before_publish(
     let temporary = Temporary(temporary_path);
     let mut conn = Connection::open_with_flags(&temporary.0, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     conn.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;")?;
-    let table = identifier(&review.table)?;
-    let columns = review
-        .data
-        .headers
-        .iter()
-        .map(|h| identifier(h))
-        .collect::<Result<Vec<_>>>()?;
-    let transaction = conn.transaction()?;
-    // No declared affinity: CSV strings and mixed JSON cell types are not coerced.
-    transaction.execute_batch(&format!("CREATE TABLE {table} ({})", columns.join(",")))?;
-    {
-        let placeholders = vec!["?"; columns.len()].join(",");
-        let mut insert =
-            transaction.prepare(&format!("INSERT INTO {table} VALUES ({placeholders})"))?;
-        for row in &review.data.rows {
-            check_cancel(cancel)?;
-            let values = row.iter().map(sql_value).collect::<Result<Vec<_>>>()?;
-            insert.execute(params_from_iter(values))?;
-        }
-    }
-    check_cancel(cancel)?;
-    transaction.commit()?;
-    let rows: usize = conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-        row.get(0)
+    let rows = create_verified_table(&mut conn, &review.table, &review.data, || {
+        check_cancel(cancel)
     })?;
-    let integrity: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
-    anyhow::ensure!(
-        rows == review.data.rows.len() && integrity == "ok",
-        "写入校验失败，未发布目标文件"
-    );
     conn.close().map_err(|(_, error)| error)?;
     OpenOptions::new()
         .read(true)
