@@ -1297,6 +1297,30 @@ url["operationScopes"].append(dict(
     runtimeVerification="13_actual_wasi_schema_and_budget_cases_same_frozen_runtime",
     blockingReason="与transforms共享同一能力ID，隔离接收测试只启用一个提供方；真实Host资源授权、撤权、取消和跨工具接力尚未验收。",
 ))
+shortcut_row = next(row for row in rows if row["sourceToolId"] == "unified-shortcuts")
+shortcut_capability = "devtools.shortcuts.profile.merge"
+shortcut_execution = "resource.wasi.shortcuts.profile.v1"
+shortcut_row.update(
+    pluginStatus="candidate", candidateCapabilities=[shortcut_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.shortcut-profile", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/shortcut-profile-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/shortcut-profile-0.1.0-candidate-01-verification.json",
+    reason="选择并确认共享两份快捷配置，预览合并或替换和自定义冲突，确认保存新的可导入 JSON。",
+)
+shortcut_row["operationScopes"].append(dict(
+    operationId=shortcut_capability, title="比较并合并快捷配置",
+    scopeKind="portable_shortcut_profile_merge_replace_and_save", sourceVersion=shortcut_row["sourceVersion"],
+    pluginStatus="candidate", packageId=shortcut_row["packageId"], packageVersion=shortcut_row["packageVersion"],
+    candidateDirectory=shortcut_row["candidateDirectory"], verificationReceipt=shortcut_row["verificationReceipt"],
+    requiredProfiles={shortcut_execution: "=1.0.0-preview.1", "resource.input.types.v1": "=1.0.0-preview.1",
+                      "resource.output.types.v1": "=1.0.0-preview.1", "output.schema.v1": "=1.0.0-rc.1",
+                      "tool.directory.v1": "=1.0.0-preview.1"},
+    permissions=["resource.read"], inputProfile="resource.wasi.input.draft2", outputProfile="resource.wasi.output.draft1",
+    limits=dict(inputFiles=2, fileBytes=16384, bindingsPerFile=32, combinedBindings=64, outputBytes=49152),
+    scope="原生便携 v1，选择导入位置、合并或替换，保留禁用和暂停命令，检查重复、前缀和固定 K，确认生成一个新 JSON。",
+    blockingReason="需要接收端快捷配置专用执行档案；实际系统文件选择、在用快捷键、当前默认与跨应用热键另行验收。",
+))
+
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",
