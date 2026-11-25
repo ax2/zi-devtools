@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 2,
+  "id": "com.zicode.devtools.ascii-art-image",
+  "name": "ZiDevTools Original Image ASCII Art",
+  "displayName": "图片转 ASCII 字符画",
+  "description": "将本次明确选择的一张 PNG、JPEG 或 WebP 原图转换为 ASCII 字符画。原图最多 10 MiB、每边 2 万像素、总计 2000 万像素，输出为纯文本。",
+  "version": "0.1.0",
+  "publisher": "zicode",
+  "license": "MIT",
+  "engines": {
+    "zicode": ">=0.7.2 <1.0.0",
+    "pluginApi": "^1.0.0"
+  },
+  "requiredProfiles": {
+    "resource.wasi.image.ascii.v1": "=1.0.0-preview.1",
+    "output.schema.v1": "=1.0.0-rc.1",
+    "resource.output.types.v1": "=1.0.0-preview.1",
+    "resource.input.types.v1": "=1.0.0-preview.1",
+    "tool.directory.v1": "=1.0.0-preview.1"
+  },
+  "activationEvents": [
+    "onCapability:devtools.ascii.image.render"
+  ],
+  "runtime": {
+    "wasi": "runtime/tools.wasm",
+    "resourceInputProfile": "resource.wasi.input.draft2",
+    "resourceOutputProfile": "resource.wasi.output.draft1"
+  },
+  "contributes": {
+    "activities": [],
+    "views": [],
+    "capabilities": [
+      {
+        "id": "devtools.ascii.image.render",
+        "title": "图片转 ASCII 字符画",
+        "description": "将本次明确选择的一张 PNG、JPEG 或 WebP 原图转换为 ASCII 字符画。原图最多 10 MiB、每边 2 万像素、总计 2000 万像素，输出为纯文本。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 120,
+              "title": "输出字符宽度",
+              "default": 80
+            }
+          },
+          "required": [
+            "width"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 8,
+                  "maximum": 120
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 120
+                },
+                "byteLength": {
+                  "type": "integer",
+                  "minimum": 9,
+                  "maximum": 14520
+                }
+              },
+              "required": [
+                "ok",
+                "width",
+                "height",
+                "byteLength"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean",
+                  "const": false
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "message": {
+                      "type": "string",
+                      "maxLength": 240
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "ok",
+                "error"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "maxResultBytes": 1024,
+        "executionProfile": "resource.wasi.image.ascii.v1",
+        "resourceInputMimeTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/webp"
+        ],
+        "directory": {
+          "categoryId": "media",
+          "aliases": [
+            "图片转字符画",
+            "ASCII art from image",
+            "image to ASCII",
+            "原图字符画"
+          ],
+          "description": "将本次明确选择的一张 PNG、JPEG 或 WebP 原图转换为 ASCII 字符画。原图最多 10 MiB、每边 2 万像素、总计 2000 万像素，输出为纯文本。"
+        }
+      }
+    ],
+    "commands": [],
+    "piTools": []
+  },
+  "permissions": {
+    "required": [
+      {
+        "name": "resource.read",
+        "reason": "只读取本次调用中用户明确授权的一张原图快照。"
+      }
+    ],
+    "optional": []
+  }
+}
