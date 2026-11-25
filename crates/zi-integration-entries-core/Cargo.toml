@@ -1,0 +1,6 @@
+[package]
+name = "zi-integration-entries-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
