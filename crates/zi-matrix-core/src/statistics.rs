@@ -2,30 +2,28 @@
 use super::Value;
 use std::cmp::Ordering;
 
-fn positive_compare(mut a: u128, mut b: u128, mut c: u128, mut d: u128) -> Ordering {
-    let mut reverse = false;
-    loop {
-        let order = (a / b).cmp(&(c / d));
-        let (r, s) = (a % b, c % d);
-        let order = if !order.is_eq() {
-            order
-        } else if r == 0 || s == 0 {
-            r.cmp(&s)
-        } else {
-            (a, b, c, d) = (b, r, d, s);
-            reverse = !reverse;
-            continue;
-        };
-        return if reverse { order.reverse() } else { order };
-    }
+/// Returns the upper and lower halves of the exact product of two u128 values.
+/// Four 64-bit partial products fit their respective u128 accumulators.
+fn wide_product(left: u128, right: u128) -> (u128, u128) {
+    const WORD: u128 = u64::MAX as u128;
+    let (a_high, a_low) = (left >> 64, left & WORD);
+    let (b_high, b_low) = (right >> 64, right & WORD);
+    let low_low = a_low * b_low;
+    let high_low = a_high * b_low + (low_low >> 64);
+    let low_high = a_low * b_high + (high_low & WORD);
+    let upper = a_high * b_high + (high_low >> 64) + (low_high >> 64);
+    let lower = ((low_high & WORD) << 64) | (low_low & WORD);
+    (upper, lower)
 }
+
 pub fn compare(left: Value, right: Value) -> Ordering {
     match (left, right) {
         (Value::Exact(a, b), Value::Exact(c, d)) => {
             if (a < 0) != (c < 0) {
                 return a.cmp(&c);
             }
-            let order = positive_compare(a.unsigned_abs(), b as u128, c.unsigned_abs(), d as u128);
+            let order = wide_product(a.unsigned_abs(), d as u128)
+                .cmp(&wide_product(c.unsigned_abs(), b as u128));
             if a < 0 { order.reverse() } else { order }
         }
         _ => left
@@ -173,5 +171,80 @@ pub fn evaluate(name: &str, args: &[Value]) -> Option<Result<Value, String>> {
             Some(statistics(name, args))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn continued_fraction_compare(mut a: u128, mut b: u128, mut c: u128, mut d: u128) -> Ordering {
+        let mut reverse = false;
+        loop {
+            let order = (a / b).cmp(&(c / d));
+            let (r, s) = (a % b, c % d);
+            let order = if !order.is_eq() {
+                order
+            } else if r == 0 || s == 0 {
+                r.cmp(&s)
+            } else {
+                (a, b, c, d) = (b, r, d, s);
+                reverse = !reverse;
+                continue;
+            };
+            return if reverse { order.reverse() } else { order };
+        }
+    }
+
+    #[test]
+    fn exact_order_matches_the_original_without_variable_length_division() {
+        assert_eq!(wide_product(u128::MAX, u128::MAX), (u128::MAX - 1, 1));
+        assert_eq!(wide_product(1 << 64, 1 << 64), (1, 0));
+        assert_eq!(wide_product(0, u128::MAX), (0, 0));
+
+        let minimum = Value::Exact(i128::MIN, 1);
+        let maximum = Value::Exact(i128::MAX, 1);
+        assert_eq!(compare(minimum, maximum), Ordering::Less);
+        assert_eq!(compare(maximum, minimum), Ordering::Greater);
+        assert_eq!(compare(minimum, minimum), Ordering::Equal);
+        assert_eq!(
+            compare(Value::Exact(-1, 2), Value::Exact(-2, 4)),
+            Ordering::Equal
+        );
+        let n = i128::MAX;
+        assert_eq!(
+            compare(Value::Exact(n, n - 1), Value::Exact(n - 1, n - 2)),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare(Value::Exact(-n, n - 1), Value::Exact(1 - n, n - 2)),
+            Ordering::Greater
+        );
+
+        let mut seed = 0xd142_6a32_17c2_4f34_9bff_0739_88f2_d3bdu128;
+        let mut word = || {
+            seed ^= seed << 23;
+            seed ^= seed >> 17;
+            seed ^= seed << 26;
+            seed
+        };
+        for _ in 0..4_096 {
+            let a = word() as i128;
+            let b = (word() as i128 & i128::MAX) | 1;
+            let c = word() as i128;
+            let d = (word() as i128 & i128::MAX) | 1;
+            let order = continued_fraction_compare(
+                a.unsigned_abs(),
+                b as u128,
+                c.unsigned_abs(),
+                d as u128,
+            );
+            let want = match (a < 0, c < 0) {
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                (true, true) => order.reverse(),
+                (false, false) => order,
+            };
+            assert_eq!(compare(Value::Exact(a, b), Value::Exact(c, d)), want);
+        }
     }
 }

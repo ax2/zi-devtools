@@ -6269,6 +6269,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-numeric-statistics-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-matrix-core",
+]
+
+[[package]]
 name = "zi-pdf-text-core"
 version = "0.1.0"
 dependencies = [
