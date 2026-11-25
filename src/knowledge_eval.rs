@@ -1,9 +1,8 @@
 //! Repeatable, explicitly triggered evaluation of local retrieval and cited answers.
 use anyhow::{Context, Result, ensure};
 use eframe::egui;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{
-    collections::HashSet,
     fs::OpenOptions,
     io::Write,
     path::{Path, PathBuf},
@@ -20,73 +19,13 @@ use crate::{
     knowledge_sources::Source,
 };
 
-const MAX_SUITE_BYTES: usize = 32 * 1024;
-const MAX_CASES: usize = 10;
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Case {
-    pub id: String,
-    pub question: String,
-    pub terms: String,
-    pub expected_source: String,
-    pub expected_relative: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_answer_contains: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Suite {
-    pub version: u32,
-    pub cases: Vec<Case>,
-}
-
-fn valid_text(value: &str, max_chars: usize, max_bytes: usize) -> bool {
-    !value.trim().is_empty()
-        && value.chars().count() <= max_chars
-        && value.len() <= max_bytes
-        && !value.chars().any(char::is_control)
-}
+pub use zi_rag_eval_core::{Case, CaseResult, ComparisonCase, EvidenceRecord, Suite};
+use zi_rag_eval_core::{
+    MAX_CASES, MAX_REPORT_BYTES, comparison_stats, first_expected_rank, parse_suite_with,
+};
 
 pub fn parse_suite(input: &str, sources: &[Source]) -> Result<Suite> {
-    ensure!(input.len() <= MAX_SUITE_BYTES, "评测集超过 32 KiB");
-    let suite: Suite = serde_json::from_str(input).context("评测集 JSON 格式无效")?;
-    ensure!(suite.version == 1, "只支持评测集版本 1");
-    ensure!(
-        (1..=MAX_CASES).contains(&suite.cases.len()),
-        "评测集需包含 1–10 个样例"
-    );
-    let mut ids = HashSet::new();
-    for case in &suite.cases {
-        ensure!(
-            valid_text(&case.id, 64, 128),
-            "样例 ID 为空、过长或含控制字符"
-        );
-        ensure!(ids.insert(&case.id), "样例 ID 重复：{}", case.id);
-        ensure!(
-            valid_text(&case.question, 1000, 4000),
-            "{}：问题为空、过长或含控制字符",
-            case.id
-        );
-        ensure!(
-            valid_text(&case.terms, 120, 512),
-            "{}：检索词为空、过长或含控制字符",
-            case.id
-        );
-        ensure!(
-            valid_text(&case.expected_source, 80, 320)
-                && valid_text(&case.expected_relative, 512, 2048),
-            "{}：预期来源名称或相对路径无效",
-            case.id
-        );
-        if let Some(expected) = &case.expected_answer_contains {
-            ensure!(
-                valid_text(expected, 200, 800),
-                "{}：预期答案片段为空、过长或含控制字符",
-                case.id
-            );
-        }
+    parse_suite_with(input, |case| {
         let matches: Vec<_> = sources
             .iter()
             .filter(|source| source.name == case.expected_source)
@@ -106,36 +45,8 @@ pub fn parse_suite(input: &str, sources: &[Source]) -> Result<Suite> {
             case.id,
             case.expected_relative
         );
-    }
-    Ok(suite)
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct EvidenceRecord {
-    pub id: usize,
-    pub source: String,
-    pub relative: String,
-    pub location: String,
-    pub file_sha256: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct CaseResult {
-    pub id: String,
-    pub question: String,
-    pub terms: String,
-    pub expected_source: String,
-    pub expected_relative: String,
-    pub expected_answer_contains: Option<String>,
-    pub evidence_count: usize,
-    pub evidence: Vec<EvidenceRecord>,
-    pub expected_rank: Option<usize>,
-    pub cited_ids: Vec<usize>,
-    pub expected_cited: Option<bool>,
-    pub answer_contains_expected: Option<bool>,
-    pub answer: Option<String>,
-    pub error: Option<String>,
-    pub elapsed_ms: u128,
+        Ok(())
+    })
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -298,11 +209,17 @@ pub fn run_with(
                         file_sha256: evidence.hit.file_sha256.clone(),
                     })
                     .collect();
-                row.expected_rank = prepared.evidence.iter().find_map(|evidence| {
-                    (evidence.source_name == case.expected_source
-                        && evidence.hit.relative == case.expected_relative)
-                        .then_some(evidence.id)
-                });
+                row.expected_rank = first_expected_rank(
+                    prepared.evidence.iter().map(|item| {
+                        (
+                            item.id,
+                            item.source_name.as_str(),
+                            item.hit.relative.as_str(),
+                        )
+                    }),
+                    &case.expected_source,
+                    &case.expected_relative,
+                );
                 if row.expected_rank.is_some() {
                     report.retrieval_hits += 1;
                 }
@@ -358,19 +275,6 @@ pub fn run_with(
         }
     }
     Ok(report)
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct ComparisonCase {
-    pub id: String,
-    pub expected_source: String,
-    pub expected_relative: String,
-    pub keyword_rank: Option<usize>,
-    pub hybrid_rank: Option<usize>,
-    pub keyword_ms: u128,
-    pub hybrid_ms: u128,
-    pub keyword_error: Option<String>,
-    pub hybrid_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -444,8 +348,6 @@ pub fn compare(
         cancelled: false,
         results: Vec::new(),
     };
-    let mut keyword_rr = 0.0;
-    let mut hybrid_rr = 0.0;
     for case in &suite.cases {
         if cancel.load(Ordering::Relaxed) {
             report.cancelled = true;
@@ -489,27 +391,20 @@ pub fn compare(
             break;
         }
         let rank = |prepared: &knowledge_answer::Prepared| {
-            prepared.evidence.iter().find_map(|evidence| {
-                (evidence.source_name == case.expected_source
-                    && evidence.hit.relative == case.expected_relative)
-                    .then_some(evidence.id)
-            })
+            first_expected_rank(
+                prepared.evidence.iter().map(|item| {
+                    (
+                        item.id,
+                        item.source_name.as_str(),
+                        item.hit.relative.as_str(),
+                    )
+                }),
+                &case.expected_source,
+                &case.expected_relative,
+            )
         };
         let keyword_rank = keyword.as_ref().ok().and_then(rank);
         let hybrid_rank = mixed.as_ref().ok().and_then(rank);
-        if keyword.is_ok() && mixed.is_ok() {
-            report.paired += 1;
-            match (keyword_rank.is_some(), hybrid_rank.is_some()) {
-                (true, true) => report.both += 1,
-                (true, false) => report.keyword_only += 1,
-                (false, true) => report.hybrid_only += 1,
-                (false, false) => report.neither += 1,
-            }
-            report.keyword_hits += usize::from(keyword_rank.is_some());
-            report.hybrid_hits += usize::from(hybrid_rank.is_some());
-            keyword_rr += keyword_rank.map_or(0.0, |position| 1.0 / position as f64);
-            hybrid_rr += hybrid_rank.map_or(0.0, |position| 1.0 / position as f64);
-        }
         report.results.push(ComparisonCase {
             id: case.id.clone(),
             expected_source: case.expected_source.clone(),
@@ -523,10 +418,16 @@ pub fn compare(
         });
         report.completed += 1;
     }
-    if report.paired > 0 {
-        report.keyword_mrr = keyword_rr / report.paired as f64;
-        report.hybrid_mrr = hybrid_rr / report.paired as f64;
-    }
+    let stats = comparison_stats(&report.results);
+    report.paired = stats.paired;
+    report.keyword_hits = stats.keyword_hits;
+    report.hybrid_hits = stats.hybrid_hits;
+    report.hybrid_only = stats.hybrid_only;
+    report.keyword_only = stats.keyword_only;
+    report.both = stats.both;
+    report.neither = stats.neither;
+    report.keyword_mrr = stats.keyword_mrr;
+    report.hybrid_mrr = stats.hybrid_mrr;
     Ok(report)
 }
 
@@ -544,7 +445,7 @@ fn write_report<T: Serialize>(path: &Path, report: &T) -> Result<()> {
         "报告需保存为 .json 文件"
     );
     let bytes = serde_json::to_vec_pretty(report)?;
-    ensure!(bytes.len() <= 64 * 1024, "报告超过 64 KiB，不予保存");
+    ensure!(bytes.len() <= MAX_REPORT_BYTES, "报告超过 64 KiB，不予保存");
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -1276,6 +1177,15 @@ mod tests {
         let path = root.join("report.json");
         save_report(&path, &report).unwrap();
         assert!(save_report(&path, &report).is_err());
+        let exported = fs::read(&path).unwrap();
+        let review = zi_rag_eval_core::review::read(&exported).unwrap();
+        let review = serde_json::to_value(review).unwrap();
+        assert_eq!(review["matchesReport"], true);
+        assert_eq!(review["single"]["hits"], 1);
+        assert_eq!(
+            review["single"]["rows"][0]["firstRank"],
+            report.results[0].expected_rank.unwrap()
+        );
         let cancelled = AtomicBool::new(true);
         let cancelled_report = run(
             &index,

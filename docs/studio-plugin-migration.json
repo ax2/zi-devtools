@@ -3674,8 +3674,10 @@
       "sourceVersion": "1.0.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.rag.report.review"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3685,9 +3687,33 @@
           "sourceVersion": "1.0.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.rag.report.review",
+          "scopeKind": "bounded_confirmed_retrieval_report_review",
+          "scope": "单路用有序证据重算首名与命中，并推导 MRR。双路用记录名次复算配对统计和 MRR。分母和失败处理按原生报告定义，逐题结果只输出序号和统计状态。",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 65536,
+            "cases": 10,
+            "topK": [
+              3,
+              5,
+              8
+            ],
+            "serializedResultBytes": 8192
+          },
+          "runtimeVerification": "47_fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "固定文件报告离线复核。原生数据集编写、索引检索、本机模型和报告导出留待其他范围，需要目标 Studio 正常入口验收。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "复用原生资料校验与命中计算，复核已确认的仅检索 v2 和双路对比 v1 导出。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.retrieval-review",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/retrieval-review-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/retrieval-review-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "anythingllm",
