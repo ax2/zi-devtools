@@ -5944,6 +5944,7 @@ dependencies = [
  "zi-directory-compare-wasi",
  "zi-document-text-core",
  "zi-duplicate-files-wasi",
+ "zi-ics-preview-core",
  "zi-image-core",
  "zi-inspect-core",
  "zi-json-core",
@@ -6045,6 +6046,26 @@ dependencies = [
  "serde_json",
  "zi-json-core",
  "zi-regex-core",
+]
+
+[[package]]
+name = "zi-ics-preview-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "ical",
+ "serde",
+]
+
+[[package]]
+name = "zi-ics-preview-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-ics-preview-core",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]
