@@ -231,7 +231,7 @@ pub fn java_environment_cancellable(
         .zip(selected_home.as_ref())
         .and_then(|(a, b)| Some(a.canonicalize().ok()? != b.canonicalize().ok()?));
     report(
-        json!({"selected":selected,"comparison":compared,"javaHome":java_home,"javaHomeMismatch":mismatch,"pathJava":path_entry(&["java.exe","java"]),"mavenEntry":path_entry(&["mvn.cmd","mvn"]),"gradleEntry":path_entry(&["gradle.bat","gradle"]),"versionMismatch":if compared.is_null(){Value::Null}else{json!(selected["properties"]["java.version"]!=compared["properties"]["java.version"])},"notes":"执行固定 java -XshowSettings:properties -version；仅返回选定属性。构建入口只检查 PATH，未执行 Maven/Gradle 或读取 IDE 配置。未选择比较入口时不能判断 IDE 版本。javac 缺失可能是 JRE/裁剪运行时；具体构建兼容性需结合项目插件版本。"}),
+        json!({"selected":selected,"comparison":compared,"javaHome":java_home,"javaHomeMismatch":mismatch,"pathJava":path_entry(&["java.exe","java"]),"mavenEntry":path_entry(&["mvn.cmd","mvn"]),"gradleEntry":path_entry(&["gradle.bat","gradle"]),"versionMismatch":zi_jdk_report_core::version_mismatch(selected["properties"]["java.version"].as_str(),compared["properties"]["java.version"].as_str()),"notes":"执行固定 java -XshowSettings:properties -version；仅返回选定属性。构建入口只检查 PATH，未执行 Maven/Gradle 或读取 IDE 配置。未选择比较入口时不能判断 IDE 版本。javac 缺失可能是 JRE/裁剪运行时；具体构建兼容性需结合项目插件版本。"}),
     )
 }
 const PYTHON_PROBE: &str = r#"import sys,json,sysconfig,importlib.metadata as m,importlib.util as u

@@ -6029,6 +6029,7 @@ dependencies = [
  "zi-image-core",
  "zi-inspect-core",
  "zi-integration-entries-core",
+ "zi-jdk-report-core",
  "zi-json-core",
  "zi-json-object-wasi",
  "zi-json-schema-core",
@@ -6276,6 +6277,24 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-integration-entries-core",
+]
+
+[[package]]
+name = "zi-jdk-report-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-agent-record-core",
+]
+
+[[package]]
+name = "zi-jdk-report-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-jdk-report-core",
 ]
 
 [[package]]
