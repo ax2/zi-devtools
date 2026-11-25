@@ -3930,8 +3930,10 @@
       "sourceVersion": "0.3.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.collections.preview"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3941,9 +3943,32 @@
           "sourceVersion": "0.3.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.collections.preview",
+          "scopeKind": "bounded_confirmed_collection_import_plan",
+          "scope": "校验本机版本 1 工具集合 JSON，保留集合和工具 ID 顺序，按明确填写的名称计算冲突改名。可按集合、工具起始序号查看后续项目，未知 ID 作为原文保留。",
+          "sourceVersion": "0.3.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 131072,
+            "combinedCollections": 128,
+            "toolsPerCollection": 512,
+            "collectionPageSize": 16,
+            "memberPageSize": 16,
+            "memberPageEncodedBytes": 4096,
+            "serializedResultBytes": 24576
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "只读版本 1，实际写入、现有偏好读取和跨机器同步保留给原生功能。独立版 1 MiB，本候选验证 128 KiB。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "复用版本 1 的原生导入计划，只读查看集合名称、显式比较得到的改名与有序工具 ID。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.tool-collections",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/tool-collections-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/tool-collections-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "clipboard-actions",
