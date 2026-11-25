@@ -5948,6 +5948,7 @@ dependencies = [
  "zi-json-core",
  "zi-json-object-wasi",
  "zi-json-schema-core",
+ "zi-log-core",
  "zi-regex-core",
  "zi-shell-core",
  "zi-table-core",
@@ -6106,6 +6107,24 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-json-schema-core",
+]
+
+[[package]]
+name = "zi-log-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+]
+
+[[package]]
+name = "zi-log-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-log-core",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]

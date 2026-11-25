@@ -222,6 +222,23 @@ crop_row["operationScopes"].append(dict(
     blockingReason="单张裁剪子集，交互选区、标注、批量和原生界面仍待。",
 ))
 
+log_row = next(row for row in rows if row["sourceToolId"] == "log-viewer")
+log_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.log-viewer.filter"], scopeComplete=False,
+    packageId="com.zicode.devtools.log-viewer", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/log-viewer-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/log-viewer-0.1.0-candidate-02-verification.json",
+    reason="单份确认 UTF-8 日志的多行事件、级别和字面筛选已通过 Windows Worker。",
+)
+log_row["operationScopes"].append(dict(
+    operationId="devtools.log-viewer.filter", scopeKind="confirmed_local_log_event_preview",
+    scope="按原生事件规则识别多行事件，在本机按级别和区分大小写的字面正文筛选。报告总匹配数及前12条。",
+    sourceVersion=log_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=16384, queryBytes=256, previewBytes=512, displayedEvents=12),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="独立版的大日志流式索引、分页、时间定位与轮转尚未接入。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

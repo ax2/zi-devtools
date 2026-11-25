@@ -12,6 +12,7 @@ name = "ZiDevTools"
 path = "src/main.rs"
 
 [dependencies]
+zi-log-core = { path = "crates/zi-log-core" }
 zi-table-core = { path = "crates/zi-table-core" }
 zi-json-schema-core = { path = "crates/zi-json-schema-core" }
 zi-shell-core = { path = "crates/zi-shell-core" }
@@ -78,7 +79,7 @@ ui-preview = ["zi-shell-core/ui-preview"]
 
 [workspace]
 exclude = ["vendor/regex-automata"]
-members = ["crates/zi-table-core", "crates/zi-table-merge-wasi", "crates/zi-json-schema-core", "crates/zi-json-schema-wasi", "crates/zi-directory-compare-wasi", "crates/zi-duplicate-files-wasi", "crates/zi-disk-inspector-wasi", "crates/zi-resource-input-wasi", "crates/zi-json-format-wasi", "crates/zi-msi-actions", "crates/zi-shell-core", "crates/zi-compare-wasi", "crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-text-resource-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-image-core", "crates/zi-image-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi", "crates/zi-json-object-wasi"]
+members = ["crates/zi-log-core", "crates/zi-log-wasi", "crates/zi-table-core", "crates/zi-table-merge-wasi", "crates/zi-json-schema-core", "crates/zi-json-schema-wasi", "crates/zi-directory-compare-wasi", "crates/zi-duplicate-files-wasi", "crates/zi-disk-inspector-wasi", "crates/zi-resource-input-wasi", "crates/zi-json-format-wasi", "crates/zi-msi-actions", "crates/zi-shell-core", "crates/zi-compare-wasi", "crates/zi-diff-core", "crates/zi-regex-core", "crates/zi-fields-wasi", "crates/zi-json-core", "crates/zi-character-core", "crates/zi-text-core", "crates/zi-text-wasi", "crates/zi-text-resource-wasi", "crates/zi-diagnostics-core", "crates/zi-diagnostics-wasi", "crates/zi-inspect-core", "crates/zi-inspect-wasi", "crates/zi-image-core", "crates/zi-image-wasi", "crates/zi-trace-core", "crates/zi-trace-wasi", "crates/zi-json-object-wasi"]
 default-members = ["."]
 resolver = "3"
 

@@ -16,6 +16,8 @@ use anyhow::{Context, Result, bail, ensure};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{Receiver, unbounded};
 use eframe::egui;
+pub use zi_log_core::Level;
+use zi_log_core::{is_continuation, parse_timestamp};
 
 #[cfg(feature = "ui-preview")]
 use std::io::Write;
@@ -26,59 +28,6 @@ const LINE_PREFIX_LIMIT: usize = 4096;
 const EVENT_PREVIEW_LIMIT: usize = 16 * 1024;
 const SEARCH_QUERY_LIMIT: usize = 256;
 const SEARCH_CHUNK_SIZE: usize = 64 * 1024;
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Level {
-    Error,
-    Fatal,
-    Warning,
-    Info,
-    Debug,
-    Trace,
-    #[default]
-    Unknown,
-}
-
-impl Level {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Error => "错误",
-            Self::Fatal => "致命",
-            Self::Warning => "警告",
-            Self::Info => "信息",
-            Self::Debug => "调试",
-            Self::Trace => "跟踪",
-            Self::Unknown => "未识别",
-        }
-    }
-
-    fn from_first_line(bytes: &[u8]) -> Self {
-        let line = String::from_utf8_lossy(bytes).to_ascii_uppercase();
-        for (tokens, level) in [
-            (&["FATAL", "CRITICAL"][..], Self::Fatal),
-            (&["ERROR", "ERR"][..], Self::Error),
-            (&["WARN", "WARNING"][..], Self::Warning),
-            (&["INFO"][..], Self::Info),
-            (&["DEBUG"][..], Self::Debug),
-            (&["TRACE"][..], Self::Trace),
-        ] {
-            if tokens.iter().any(|token| contains_word(&line, token)) {
-                return level;
-            }
-        }
-        Self::Unknown
-    }
-}
-
-fn contains_word(text: &str, word: &str) -> bool {
-    text.match_indices(word).any(|(start, _)| {
-        let end = start + word.len();
-        let before = text[..start].chars().next_back();
-        let after = text[end..].chars().next();
-        before.is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_')
-            && after.is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_')
-    })
-}
 
 #[derive(Clone, Debug)]
 struct EventIndex {
@@ -986,28 +935,6 @@ fn read_bounded_line(
         bytes_read,
         truncated: content_bytes > LINE_PREFIX_LIMIT as u64,
     }))
-}
-
-fn parse_timestamp(bytes: &[u8]) -> Option<NaiveDateTime> {
-    let line = String::from_utf8_lossy(bytes);
-    let line = line.trim_start();
-    let line = line.strip_prefix('[').unwrap_or(line);
-    let raw = line.get(..19)?;
-    let normalized = raw.replacen('T', " ", 1);
-    NaiveDateTime::parse_from_str(&normalized, "%Y-%m-%d %H:%M:%S").ok()
-}
-
-fn is_continuation(bytes: &[u8]) -> bool {
-    let line = String::from_utf8_lossy(bytes);
-    let trimmed = line.trim_start();
-    trimmed.is_empty()
-        || line.starts_with(' ')
-        || line.starts_with('\t')
-        || trimmed.starts_with("at ")
-        || trimmed.starts_with("Caused by:")
-        || trimmed.starts_with("Suppressed:")
-        || trimmed.starts_with("...")
-        || trimmed.starts_with('^')
 }
 
 #[cfg(test)]
