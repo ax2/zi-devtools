@@ -318,6 +318,24 @@ flow_row["operationScopes"].append(dict(
     blockingReason="仅检查配方；运行、编辑、保存、命名实例、配方库及结果接力另行跟踪。",
 ))
 
+rename_row = next(row for row in rows if row["sourceToolId"] == "file-rename")
+rename_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.files.rename.preview"], scopeComplete=False,
+    packageId="com.zicode.devtools.rename-preview", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/rename-preview-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/rename-preview-0.1.0-candidate-01-verification.json",
+    reason="复用原生字面替换与文件名检查，接收显式确认的一层目录名称快照。",
+)
+rename_row["operationScopes"].append(dict(
+    operationId="devtools.files.rename.preview", scopeKind="bounded_confirmed_rename_preview",
+    scope="对确认的一层目录名称预览改名，检测未改变、仅大小写、相同提议、已有名称和非法名称。",
+    sourceVersion=rename_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(snapshotBytes=65536, entries=64, sourceNameBytes=12288, targetNameBytes=16384,
+                ruleFieldUtf8Bytes=128, serializedResultBytes=49152),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅目录名称快照的预览；原生多选、实际变更、竞态复核和撤销未接入。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
