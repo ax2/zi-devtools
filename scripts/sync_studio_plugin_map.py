@@ -284,6 +284,23 @@ ingest_row["operationScopes"].append(dict(
     blockingReason="仅 DOCX 正文分块预览，不接宏或媒体、其它格式、OCR、知识源索引和完整导出。",
 ))
 
+calendar_row = next(row for row in rows if row["sourceToolId"] == "calendar-planner")
+calendar_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.calendar.ics.preview"], scopeComplete=False,
+    packageId="com.zicode.devtools.ics-preview", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/ics-preview-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/ics-preview-0.1.0-candidate-01-verification.json",
+    reason="复用原生日历的属性及折行解析，提供经确认的 ICS 只读日程预览。",
+)
+calendar_row["operationScopes"].append(dict(
+    operationId="devtools.calendar.ics.preview", scopeKind="bounded_confirmed_ics_preview",
+    scope="确认一份本机 ICS，保留全天/浮动/UTC/命名时区、原始起止和 RRULE，展示有限日程。",
+    sourceVersion=calendar_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(confirmedFileBytes=16384, previewEvents=8, previewTextBytes=6144),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅 ICS 文件预览，尚不含日程导入/导出、同步、时区换算、重复展开或提醒。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

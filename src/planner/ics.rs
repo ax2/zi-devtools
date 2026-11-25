@@ -3,10 +3,11 @@ use super::*;
 use anyhow::{Context, bail};
 use chrono::{Timelike, Utc};
 use ical::property::Property;
+use zi_ics_preview_core::{prop, text_value, value};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
-    io::{Cursor, Read, Write},
+    io::{Read, Write},
     path::Path,
 };
 
@@ -57,22 +58,6 @@ pub(super) fn write(path: &Path, text: &str) -> Result<usize> {
     Ok(text.len())
 }
 
-fn text_value(value: &str) -> Result<String> {
-    let mut result = String::new();
-    let mut chars = value.chars();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            result.push(ch);
-            continue;
-        }
-        result.push(match chars.next() {
-            Some('n' | 'N') => '\n',
-            Some(ch @ ('\\' | ',' | ';')) => ch,
-            _ => bail!("ICS 含无效的文本转义"),
-        });
-    }
-    Ok(result)
-}
 fn escape(value: &str) -> String {
     value
         .replace('\\', "\\\\")
@@ -82,76 +67,14 @@ fn escape(value: &str) -> String {
         .replace(';', "\\;")
         .replace(',', "\\,")
 }
-fn prop<'a>(props: &'a [Property], name: &str) -> Result<Option<&'a Property>> {
-    let mut found = props.iter().filter(|p| p.name == name);
-    let value = found.next();
-    ensure!(
-        found.next().is_none(),
-        "ICS 属性 {name} 重复，无法确定使用哪一个"
-    );
-    Ok(value)
-}
-fn value<'a>(props: &'a [Property], name: &str) -> Result<Option<&'a str>> {
-    Ok(prop(props, name)?.and_then(|p| p.value.as_deref()))
-}
 fn required<'a>(props: &'a [Property], name: &str) -> Result<&'a str> {
     value(props, name)?
         .filter(|s| !s.is_empty())
         .with_context(|| format!("ICS 缺少 {name}"))
 }
 
-/// Preserve whitespace while unfolding, then let ical parse quoted parameters.
-/// ical's line reader trims trailing whitespace; a removable suffix prevents it.
-fn properties(text: &str) -> Result<Vec<Property>> {
-    ensure!(
-        text.len() <= LIMIT && !text.contains('\0'),
-        "ICS 超过 16 MiB 或包含空字节"
-    );
-    let mut lines: Vec<String> = Vec::new();
-    for (n, raw) in text.trim_start_matches('\u{feff}').split('\n').enumerate() {
-        ensure!(n < 100_000, "ICS 行数超过 100000，请拆分文件");
-        let line = raw.strip_suffix('\r').unwrap_or(raw);
-        ensure!(
-            !line.chars().any(|c| c.is_control() && c != '\t'),
-            "ICS 包含无效控制字符"
-        );
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with([' ', '\t']) {
-            let last = lines.last_mut().context("ICS 第一行不能是续行")?;
-            last.push_str(&line[1..]);
-            ensure!(last.len() <= MAX_BODY * 3 + 4096, "ICS 单个属性过大");
-        } else {
-            ensure!(line.len() <= MAX_BODY * 3 + 4096, "ICS 单个属性过大");
-            lines.push(line.to_owned());
-        }
-    }
-    let mut protected = String::new();
-    for line in lines {
-        protected.push_str(&line);
-        protected.push_str("\u{e000}\r\n");
-    }
-    ical::PropertyParser::from_reader(Cursor::new(protected))
-        .map(|p| {
-            let mut p = p.context("ICS 属性格式无效")?;
-            ensure!(
-                !p.name.is_empty()
-                    && p.name.len() <= 64
-                    && p.name
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b == b'-'),
-                "ICS 属性名无效"
-            );
-            let value = p.value.as_mut().context("ICS 属性缺少值")?;
-            ensure!(value.pop() == Some('\u{e000}'), "ICS 属性解析失败");
-            Ok(p)
-        })
-        .collect()
-}
-
 pub(super) fn parse(text: &str) -> Result<Import> {
-    let properties = properties(text)?;
+    let properties = zi_ics_preview_core::properties(text, LIMIT, 100_000, MAX_BODY * 3 + 4096)?;
     let mut stack: Vec<String> = Vec::new();
     let mut calendar = Vec::new();
     let mut event = Vec::new();

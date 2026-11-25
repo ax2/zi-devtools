@@ -1,0 +1,12 @@
+[package]
+name = "zi-ics-preview-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", default-features = false }
+ical = { version = "=0.11.0", default-features = false, features = ["property"] }
+serde = { version = "1.0", features = ["derive"] }
