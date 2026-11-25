@@ -6179,8 +6179,10 @@
       "sourceVersion": "0.7.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.shortcuts.profile.merge"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -6190,9 +6192,46 @@
           "sourceVersion": "0.7.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.shortcuts.profile.merge",
+          "title": "比较并合并快捷配置",
+          "scopeKind": "portable_shortcut_profile_merge_replace_and_save",
+          "sourceVersion": "0.7.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.shortcut-profile",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/shortcut-profile-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/shortcut-profile-0.1.0-candidate-01-verification.json",
+          "requiredProfiles": {
+            "resource.wasi.shortcuts.profile.v1": "=1.0.0-preview.1",
+            "resource.input.types.v1": "=1.0.0-preview.1",
+            "resource.output.types.v1": "=1.0.0-preview.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
+          "permissions": [
+            "resource.read"
+          ],
+          "inputProfile": "resource.wasi.input.draft2",
+          "outputProfile": "resource.wasi.output.draft1",
+          "limits": {
+            "inputFiles": 2,
+            "fileBytes": 16384,
+            "bindingsPerFile": 32,
+            "combinedBindings": 64,
+            "outputBytes": 49152
+          },
+          "scope": "原生便携 v1，选择导入位置、合并或替换，保留禁用和暂停命令，检查重复、前缀和固定 K，确认生成一个新 JSON。",
+          "blockingReason": "需要接收端快捷配置专用执行档案；实际系统文件选择、在用快捷键、当前默认与跨应用热键另行验收。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "选择并确认共享两份快捷配置，预览合并或替换和自定义冲突，确认保存新的可导入 JSON。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.shortcut-profile",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/shortcut-profile-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/shortcut-profile-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "super-clipboard",

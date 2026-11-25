@@ -6095,6 +6095,7 @@ dependencies = [
  "zi-rename-core",
  "zi-service-config-core",
  "zi-shell-core",
+ "zi-shortcut-profile-core",
  "zi-table-core",
  "zi-text-core",
  "zi-tool-collections-core",
@@ -6735,6 +6736,26 @@ dependencies = [
  "sha2",
  "uuid",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "zi-shortcut-profile-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-shortcut-profile-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "zi-resource-input-wasi",
+ "zi-shortcut-profile-core",
 ]
 
 [[package]]

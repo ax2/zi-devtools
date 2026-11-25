@@ -1,85 +1,14 @@
 //! Explicit portable bindings, excluding tool inputs, global permissions and credentials.
 use super::Bindings;
 use anyhow::{Context, Result, ensure};
-use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver},
 };
-const LIMIT: usize = 256 * 1024;
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Profile {
-    version: u32,
-    bindings: Vec<Binding>,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Binding {
-    command: String,
-    sequence: String,
-}
-fn validate_id(id: &str) -> Result<()> {
-    ensure!(
-        id.len() <= 512
-            && (matches!(
-                id,
-                "search" | "recorder:start" | "recorder:pause" | "recorder:stop"
-            ) || (id.starts_with("open:")
-                && id.len() > 5
-                && id
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || b":/._-".contains(&c)))),
-        "配置含无效指令标识"
-    );
-    Ok(())
-}
-pub fn parse(bytes: &[u8]) -> Result<Bindings> {
-    ensure!(bytes.len() <= LIMIT, "快捷配置最多 256 KiB");
-    let profile: Profile = serde_json::from_slice(bytes).context("无法解析快捷配置 JSON")?;
-    ensure!(profile.version == 1, "不支持的快捷配置版本");
-    ensure!(profile.bindings.len() <= 4096, "快捷配置最多 4096 项");
-    let mut result = Bindings::new();
-    for binding in profile.bindings {
-        validate_id(&binding.command)?;
-        let sequence = super::normalize_sequence(&binding.sequence).map_err(anyhow::Error::msg)?;
-        ensure!(
-            binding.command != "search" || sequence == "K",
-            "K 保留给搜索"
-        );
-        ensure!(
-            result.insert(binding.command, sequence).is_none(),
-            "配置含重复指令，拒绝覆盖"
-        );
-    }
-    Ok(result)
-}
-pub fn encode(bindings: &Bindings) -> Result<Vec<u8>> {
-    let profile = Profile {
-        version: 1,
-        bindings: bindings
-            .iter()
-            .map(|(id, s)| Binding {
-                command: id.clone(),
-                sequence: s.clone(),
-            })
-            .collect(),
-    };
-    let bytes = serde_json::to_vec_pretty(&profile)?;
-    parse(&bytes)?;
-    Ok(bytes)
-}
-pub fn candidate(current: &Bindings, imported: &Bindings, merge: bool) -> Bindings {
-    let mut result = if merge {
-        current.clone()
-    } else {
-        Bindings::new()
-    };
-    result.extend(imported.clone());
-    result
-}
+use zi_shortcut_profile_core::LIMIT;
+pub use zi_shortcut_profile_core::{candidate, encode, parse};
 pub fn load(path: &Path) -> Result<Bindings> {
     ensure!(path.is_absolute(), "请选择绝对路径");
     let file = File::open(path).context("无法打开快捷配置")?;

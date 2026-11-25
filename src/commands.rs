@@ -89,21 +89,8 @@ pub fn controls() -> Vec<Command> {
     })
     .collect()
 }
-/// Absence uses the default; an empty value explicitly removes the binding.
-pub type Bindings = std::collections::BTreeMap<String, String>;
-
-pub fn normalize_sequence(input: &str) -> Result<String, String> {
-    let keys: Vec<_> = input.split_whitespace().collect();
-    if input.len() > 64
-        || keys.len() > 4
-        || keys
-            .iter()
-            .any(|k| k.len() != 1 || !k.as_bytes()[0].is_ascii_alphabetic())
-    {
-        return Err("使用 1 至 4 个 A–Z 字母，以空格分隔；留空取消绑定".into());
-    }
-    Ok(keys.join(" ").to_ascii_uppercase())
-}
+use zi_shortcut_profile_core::sequences_overlap;
+pub use zi_shortcut_profile_core::{Bindings, normalize_sequence};
 
 /// Dormant bindings reserve keys without creating executable commands.
 /// Disable every participant in a conflict, rather than choosing an arbitrary winner.
@@ -161,16 +148,7 @@ pub fn configured(defaults: &[Command], bindings: &Bindings) -> (Vec<Command>, V
             if !valid_sequences[i] || !valid_sequences[j] {
                 continue;
             }
-            if !a.2.is_empty()
-                && !b.2.is_empty()
-                && (a.2 == b.2
-                    || a.2
-                        .strip_prefix(&b.2)
-                        .is_some_and(|suffix| suffix.starts_with(' '))
-                    || b.2
-                        .strip_prefix(&a.2)
-                        .is_some_and(|suffix| suffix.starts_with(' ')))
-            {
+            if sequences_overlap(&a.2, &b.2) {
                 invalid.insert(a.0.clone());
                 invalid.insert(b.0.clone());
                 if errors.len() < 128 {
