@@ -5047,7 +5047,14 @@
         "devtools.matrix.transpose",
         "devtools.matrix.determinant",
         "devtools.matrix.inverse",
-        "devtools.matrix.solve"
+        "devtools.matrix.solve",
+        "devtools.statistics.sum",
+        "devtools.statistics.mean",
+        "devtools.statistics.median",
+        "devtools.statistics.population_variance",
+        "devtools.statistics.sample_variance",
+        "devtools.statistics.population_standard_deviation",
+        "devtools.statistics.sample_standard_deviation"
       ],
       "pilotCapabilities": [],
       "operationScopes": [
@@ -5142,7 +5149,7 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         },
         {
           "operationId": "devtools.matrix.subtract",
@@ -5163,7 +5170,7 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         },
         {
           "operationId": "devtools.matrix.multiply",
@@ -5184,7 +5191,7 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         },
         {
           "operationId": "devtools.matrix.transpose",
@@ -5205,7 +5212,7 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         },
         {
           "operationId": "devtools.matrix.determinant",
@@ -5226,7 +5233,7 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         },
         {
           "operationId": "devtools.matrix.inverse",
@@ -5247,7 +5254,7 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
         },
         {
           "operationId": "devtools.matrix.solve",
@@ -5268,10 +5275,157 @@
             "serializedResultBytes": 12288
           },
           "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
-          "blockingReason": "仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+          "blockingReason": "仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.sum",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "实数数列求和。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 1,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.mean",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "实数数列算术平均值。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 1,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.median",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "实数数列中位数。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 1,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.population_variance",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "总体方差（分母 n）。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 1,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.sample_variance",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "样本方差（分母 n−1，至少两个值）。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 2,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.population_standard_deviation",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "总体方差的近似平方根。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 1,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
+        },
+        {
+          "operationId": "devtools.statistics.sample_standard_deviation",
+          "scopeKind": "bounded_offline_real_statistics",
+          "scope": "样本方差的近似平方根（至少两个值）。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "limits": {
+            "maxValues": 64,
+            "inputUtf8Bytes": 4096,
+            "valueUtf8Bytes": 96,
+            "minValues": 2,
+            "requestBytes": 16384,
+            "serializedResultBytes": 1024
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。"
         }
       ],
-      "reason": "日期候选保留原四项离线操作，矩阵候选另提供七项实数计算。独立版计算器范围尚未完整迁移。",
+      "reason": "日期四项、矩阵七项和一维数值统计七项使用独立离线候选。独立版计算器范围尚未完整迁移。",
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.date-calculator",
       "packageVersion": "0.1.0",
@@ -5303,6 +5457,21 @@
             "devtools.matrix.determinant",
             "devtools.matrix.inverse",
             "devtools.matrix.solve"
+          ]
+        },
+        {
+          "packageId": "com.zicode.devtools.numeric-statistics",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+          "capabilities": [
+            "devtools.statistics.sum",
+            "devtools.statistics.mean",
+            "devtools.statistics.median",
+            "devtools.statistics.population_variance",
+            "devtools.statistics.sample_variance",
+            "devtools.statistics.population_standard_deviation",
+            "devtools.statistics.sample_standard_deviation"
           ]
         }
       ]

@@ -339,6 +339,24 @@ pub fn complex_sqrt(real: f64, imaginary: f64) -> (f64, f64) {
     }
 }
 
+/// Parses one real literal for a bounded tool input without interpreting a formula.
+pub fn parse_real_literal(text: &str, approximate: bool) -> Result<Value, String> {
+    if approximate {
+        let number = text.parse().map_err(|_| "需要有限小数或科学计数法")?;
+        return Value::approximate(number);
+    }
+    if let Some((numerator, denominator)) = text.split_once('/') {
+        let n = numerator.trim().parse().map_err(|_| "分子需为 i128 整数")?;
+        let d = denominator
+            .trim()
+            .parse()
+            .map_err(|_| "分母需为 i128 整数")?;
+        Value::exact(n, d)
+    } else {
+        exact_number(text)
+    }
+}
+
 pub fn exact_number(text: &str) -> Result<Value, String> {
     if let Some((digits, radix)) = text
         .strip_prefix("0x")

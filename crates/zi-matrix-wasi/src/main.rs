@@ -3,8 +3,8 @@ use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Value as Json, json, value::RawValue};
 use std::io::{Read, Write};
 use zi_matrix_core::{
-    Value, exact_number,
     matrix::{Matrix, Operation, tsv_cells},
+    parse_real_literal,
 };
 
 const PLUGIN: &str = "com.zicode.devtools.matrix-calculator";
@@ -57,27 +57,6 @@ fn decode<T: DeserializeOwned>(input: &RawValue) -> Result<T, Failure> {
         .map_err(|_| Failure("INVALID_INPUT", "请检查矩阵与精度参数。".into()))
 }
 
-fn value(text: &str, precision: Precision) -> Result<Value, String> {
-    match precision {
-        Precision::Exact => {
-            if let Some((numerator, denominator)) = text.split_once('/') {
-                let n = numerator.trim().parse().map_err(|_| "分子需为 i128 整数")?;
-                let d = denominator
-                    .trim()
-                    .parse()
-                    .map_err(|_| "分母需为 i128 整数")?;
-                Value::exact(n, d)
-            } else {
-                exact_number(text)
-            }
-        }
-        Precision::Approximate => {
-            let number = text.parse().map_err(|_| "需要有限小数或科学计数法")?;
-            Value::approximate(number)
-        }
-    }
-}
-
 fn matrix(text: &str, precision: Precision, name: &str) -> Result<Matrix, Failure> {
     if text.len() > MATRIX_LIMIT {
         return Err(Failure(
@@ -90,12 +69,16 @@ fn matrix(text: &str, precision: Precision, name: &str) -> Result<Matrix, Failur
     let mut cells = Vec::with_capacity(grid.len() * grid[0].len());
     for (row, line) in grid.iter().enumerate() {
         for (column, cell) in line.iter().enumerate() {
-            cells.push(value(cell, precision).map_err(|message| {
-                Failure(
-                    "INVALID_CELL",
-                    format!("{name}({}, {}): {message}", row + 1, column + 1),
-                )
-            })?);
+            cells.push(
+                parse_real_literal(cell, matches!(precision, Precision::Approximate)).map_err(
+                    |message| {
+                        Failure(
+                            "INVALID_CELL",
+                            format!("{name}({}, {}): {message}", row + 1, column + 1),
+                        )
+                    },
+                )?,
+            );
         }
     }
     Matrix::new(grid.len(), grid[0].len(), cells)

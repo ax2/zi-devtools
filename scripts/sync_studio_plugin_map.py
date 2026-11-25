@@ -407,7 +407,37 @@ for action, scope in matrix_ops.items():
         limits=dict(matrixRows=8, matrixColumns=8, matrixBytes=4096, cellBytes=96,
                     requestBytes=16384, serializedResultBytes=12288),
         runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
-        blockingReason="仅七项实数 TSV 运算。原生网格、统计、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。",
+        blockingReason="仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。",
+    ))
+
+statistics_ops = {
+    "sum": "实数数列求和。",
+    "mean": "实数数列算术平均值。",
+    "median": "实数数列中位数。",
+    "population_variance": "总体方差（分母 n）。",
+    "sample_variance": "样本方差（分母 n−1，至少两个值）。",
+    "population_standard_deviation": "总体方差的近似平方根。",
+    "sample_standard_deviation": "样本方差的近似平方根（至少两个值）。",
+}
+statistics_package = dict(
+    packageId="com.zicode.devtools.numeric-statistics", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/numeric-statistics-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/numeric-statistics-0.1.0-candidate-01-verification.json",
+)
+statistics_capabilities = ["devtools.statistics." + name for name in statistics_ops]
+date_row["candidatePackages"].append(dict(**statistics_package, capabilities=statistics_capabilities))
+date_row["candidateCapabilities"] += statistics_capabilities
+date_row["reason"] = "日期四项、矩阵七项和一维数值统计七项使用独立离线候选。独立版计算器范围尚未完整迁移。"
+for action, scope in statistics_ops.items():
+    date_row["operationScopes"].append(dict(
+        operationId="devtools.statistics." + action, scopeKind="bounded_offline_real_statistics",
+        scope=scope, sourceVersion=date_row["sourceVersion"], pluginStatus="candidate",
+        **statistics_package,
+        limits=dict(maxValues=64, inputUtf8Bytes=4096, valueUtf8Bytes=96,
+                    minValues=2 if action.startswith("sample_") else 1,
+                    requestBytes=16384, serializedResultBytes=1024),
+        runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+        blockingReason="仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。",
     ))
 
 for operation, source_id, title in trace_actions:
