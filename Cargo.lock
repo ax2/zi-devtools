@@ -6516,6 +6516,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-screenshot-pixel-wasi"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "serde",
+ "serde_json",
+ "zi-image-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-service-config-core"
 version = "0.1.0"
 dependencies = [

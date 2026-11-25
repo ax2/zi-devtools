@@ -5963,8 +5963,10 @@
       "sourceVersion": "0.15.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.screenshot.png.pixel"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -5974,9 +5976,29 @@
           "sourceVersion": "0.15.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.screenshot.png.pixel",
+          "scopeKind": "confirmed_local_png_original_pixel",
+          "scope": "读取一份确认的静态 PNG 在原始坐标的 RGB、独立 Alpha 和可复制 HEX。",
+          "sourceVersion": "0.15.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 262144,
+            "maxEdge": 512,
+            "maxPixels": 16384,
+            "maxPoints": 1
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_exact_pixel_parity",
+          "blockingReason": "原生屏幕/窗口采集、缩放预览、编辑和剪贴板不在本范围。接收方单独核对正常工具中心及撤权和重启。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "将原生截图放大镜的原像素 RGB 判断接到明确确认的本机 PNG 文件。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.screenshot-pixel",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/screenshot-pixel-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/screenshot-pixel-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "unified-shortcuts",

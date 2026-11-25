@@ -785,6 +785,25 @@ integration_entries_row["operationScopes"].append(dict(
                    "接收方单独验证目录确认、撤权和保存。",
 ))
 
+screenshot_pixel_row = next(row for row in rows if row["sourceToolId"] == "screenshot-workbench")
+screenshot_pixel_capability = "devtools.screenshot.png.pixel"
+screenshot_pixel_row.update(
+    pluginStatus="candidate", candidateCapabilities=[screenshot_pixel_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.screenshot-pixel", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/screenshot-pixel-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/screenshot-pixel-0.1.0-candidate-01-verification.json",
+    reason="将原生截图放大镜的原像素 RGB 判断接到明确确认的本机 PNG 文件。",
+)
+screenshot_pixel_row["operationScopes"].append(dict(
+    operationId=screenshot_pixel_capability, scopeKind="confirmed_local_png_original_pixel",
+    scope="读取一份确认的静态 PNG 在原始坐标的 RGB、独立 Alpha 和可复制 HEX。",
+    sourceVersion=screenshot_pixel_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=262144, maxEdge=512, maxPixels=16384, maxPoints=1),
+    runtimeVerification="fixed_native_and_production_windows_worker_exact_pixel_parity",
+    blockingReason="原生屏幕/窗口采集、缩放预览、编辑和剪贴板不在本范围。"
+                   "接收方单独核对正常工具中心及撤权和重启。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

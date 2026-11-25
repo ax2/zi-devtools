@@ -297,7 +297,7 @@ impl Overlay {
         p.text(
             body.center_bottom() - egui::vec2(0., 9.),
             egui::Align2::CENTER_BOTTOM,
-            format!("{px}, {py}\n#{:02X}{:02X}{:02X}", c[0], c[1], c[2]),
+            format!("{px}, {py}\n{}", zi_image_core::HexRgb([c[0], c[1], c[2]])),
             egui::FontId::monospace(13.),
             Color32::WHITE,
         );
