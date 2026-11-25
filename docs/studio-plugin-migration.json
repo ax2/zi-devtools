@@ -2416,8 +2416,10 @@
       "sourceVersion": "1.4.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.image.batch.resize"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2427,9 +2429,30 @@
           "sourceVersion": "1.4.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.image.batch.resize",
+          "scopeKind": "confirmed_small_png_batch_resize",
+          "scope": "保持原图尺寸或用原生 Lanczos3 规则按比例限宽，每张结果单独确认保存。",
+          "sourceVersion": "1.4.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "sourceFiles": 2,
+            "outputFiles": 2,
+            "inputFileBytes": 32768,
+            "inputMaxEdge": 64,
+            "optionalMaxWidth": 48
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_order_pixels_and_exact_output_bytes",
+          "blockingReason": "静态 PNG 小图子范围。原生 100 张、JPEG/WebP、目标目录批量保存及运行中部分提交留待扩展。接收方单独验证文件确认、多结果正常入口及另存。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "在原有 Worker 预算内从逐次确认的一至两张小型静态 PNG 生成有序独立结果。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.image-batch",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/image-batch-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/image-batch-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "image-crop-annotate",
