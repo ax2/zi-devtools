@@ -249,6 +249,23 @@ log_row["operationScopes"].append(dict(
     blockingReason="整份快照仍由 Host 接收；无全文件分析、实时轮转、流式索引、分页和新的文件权限。",
 ))
 
+pdf_row = next(row for row in rows if row["sourceToolId"] == "pdf-text")
+pdf_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.pdf-text.page"], scopeComplete=False,
+    packageId="com.zicode.devtools.pdf-text", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/pdf-text-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/pdf-text-0.1.0-candidate-01-verification.json",
+    reason="复用原生文档解析的 PDF 库，已确认单份标准 PDF 单页嵌入文字候选。",
+)
+pdf_row["operationScopes"].append(dict(
+    operationId="devtools.pdf-text.page", scopeKind="bounded_pdf_embedded_page_text",
+    scope="确认一份本机 PDF，显式选择一页并检查适用的嵌入文本。区分空白、图像和无可提取内容。",
+    sourceVersion=pdf_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(confirmedPdfBytes=131072, pages=32, previewBytes=6144),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="候选只包含单页嵌入文本，保留独立版 PDF 专用 UI、OCR、全文检索和结果另存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

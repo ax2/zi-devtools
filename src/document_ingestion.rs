@@ -114,7 +114,7 @@ fn parse_pdf_with_recognizer(
     bytes: &[u8],
     mut recognize: impl FnMut(&[u8], u32, &[(u32, u32)]) -> Result<Vec<(u32, String)>>,
 ) -> Result<Vec<(String, String)>> {
-    let doc = lopdf::Document::load_mem(bytes).context("PDF 格式无效")?;
+    let doc = zi_pdf_text_core::open(bytes).context("PDF 格式无效")?;
     ensure!(!doc.is_encrypted(), "PDF 已加密，无法解析");
     let pages = doc.get_pages();
     ensure!(pages.len() <= 200, "PDF 超过 200 页，请拆分后导入");
@@ -122,8 +122,7 @@ fn parse_pdf_with_recognizer(
     let mut extracted = Vec::with_capacity(pages.len());
     let mut scanned = Vec::new();
     for (index, page) in pages.keys().enumerate() {
-        let text = doc
-            .extract_text(&[*page])
+        let text = zi_pdf_text_core::page_text(&doc, *page)
             .with_context(|| format!("PDF 第 {page} 页解析失败"))?;
         if text.trim().is_empty() {
             scanned.push((*page, index as u32));

@@ -2675,8 +2675,10 @@
       "sourceVersion": "0.0.0",
       "sourceStatus": "planned",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.pdf-text.page"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2686,9 +2688,28 @@
           "sourceVersion": "0.0.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.pdf-text.page",
+          "scopeKind": "bounded_pdf_embedded_page_text",
+          "scope": "确认一份本机 PDF，显式选择一页并检查适用的嵌入文本。区分空白、图像和无可提取内容。",
+          "sourceVersion": "0.0.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "confirmedPdfBytes": 131072,
+            "pages": 32,
+            "previewBytes": 6144
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "候选只包含单页嵌入文本，保留独立版 PDF 专用 UI、OCR、全文检索和结果另存。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "复用原生文档解析的 PDF 库，已确认单份标准 PDF 单页嵌入文字候选。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.pdf-text",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/pdf-text-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/pdf-text-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "openapi",

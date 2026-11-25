@@ -5949,6 +5949,7 @@ dependencies = [
  "zi-json-object-wasi",
  "zi-json-schema-core",
  "zi-log-core",
+ "zi-pdf-text-core",
  "zi-regex-core",
  "zi-shell-core",
  "zi-table-core",
@@ -6135,6 +6136,24 @@ dependencies = [
  "uuid",
  "windows-sys 0.59.0",
  "zi-shell-core",
+]
+
+[[package]]
+name = "zi-pdf-text-core"
+version = "0.1.0"
+dependencies = [
+ "lopdf",
+ "serde",
+]
+
+[[package]]
+name = "zi-pdf-text-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-pdf-text-core",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]
