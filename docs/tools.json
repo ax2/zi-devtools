@@ -1709,8 +1709,8 @@
       "status": "in-progress",
       "category": "扩展工具",
       "priority": "P2",
-      "scope": "通用 SQL、PostgreSQL、MySQL、SQLite、SQL Server/T-SQL 选项；支持 2/4 空格或 Tab 缩进及关键字大小写选择；宽窗口并排显示输入和结果，窄窗口纵向排列；使用 Rust sqlformat 进行本地空白与布局格式化，支持常见 CTE、JOIN、CASE、窗口函数、注释和参数占位符保留；MySQL/SQLite 使用通用词法模式。不是完整 AST 或语义校验器，不连接数据库、不执行 SQL。 同仓共享纯Rust格式化核心；文本WASI候选仅提供通用方言及默认格式选项，不能替代桌面端完整方言/缩进/大小写选项，Studio Host仍待验收。",
-      "tool_version": "0.3.1",
+      "scope": "通用 SQL、PostgreSQL、MySQL、SQLite、SQL Server/T-SQL 选项；支持 2/4 空格或 Tab 缩进及关键字大小写选择；宽窗口并排显示输入和结果，窄窗口纵向排列；使用 Rust sqlformat 进行本地空白与布局格式化，支持常见 CTE、JOIN、CASE、窗口函数、注释和参数占位符保留；MySQL/SQLite 使用通用词法模式。不是完整 AST 或语义校验器，不连接数据库、不执行 SQL。 同仓共享纯Rust格式化核心；文本 WASI 候选提供五种方言和原缩进、大小写选项。九组 8 KiB 密集短句在原有预算通过，深层及其他高开销输入仍受既有上限约束。Studio 接收与系统选择器待验。",
+      "tool_version": "0.3.2",
       "version_history": [
         {
           "version": "0.0.0",
@@ -1736,6 +1736,11 @@
           "version": "0.3.1",
           "date": "2026-10-17",
           "changes": "宽窗口并排显示 SQL 输入与结果，窄窗口保留纵向布局。"
+        },
+        {
+          "version": "0.3.2",
+          "date": "2026-11-25",
+          "changes": "Text WASI 优化高频 SQL 分词，九组 8 KiB 密集短句在原预算通过。Windows 原生继续使用原版 sqlformat 0.5.0。"
         }
       ],
       "discovery": {
