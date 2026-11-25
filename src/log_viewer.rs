@@ -16,7 +16,8 @@ use anyhow::{Context, Result, bail, ensure};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{Receiver, unbounded};
 use eframe::egui;
-use zi_log_core::{Level, is_continuation, parse_timestamp};
+pub use zi_log_core::Level;
+use zi_log_core::{is_continuation, parse_timestamp};
 
 #[cfg(feature = "ui-preview")]
 use std::io::Write;

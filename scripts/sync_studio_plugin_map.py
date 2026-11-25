@@ -226,8 +226,8 @@ log_row = next(row for row in rows if row["sourceToolId"] == "log-viewer")
 log_row.update(
     pluginStatus="candidate", candidateCapabilities=["devtools.log-viewer.filter"], scopeComplete=False,
     packageId="com.zicode.devtools.log-viewer", packageVersion="0.1.0",
-    candidateDirectory="release/plugin-candidates/log-viewer-0.1.0-candidate-01",
-    verificationReceipt="release/plugin-candidates/log-viewer-0.1.0-candidate-01-verification.json",
+    candidateDirectory="release/plugin-candidates/log-viewer-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/log-viewer-0.1.0-candidate-02-verification.json",
     reason="单份确认 UTF-8 日志的多行事件、级别和字面筛选已通过 Windows Worker。",
 )
 log_row["operationScopes"].append(dict(

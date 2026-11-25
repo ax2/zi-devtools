@@ -8,8 +8,8 @@ pub mod report;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Level {
-    Fatal,
     Error,
+    Fatal,
     Warning,
     Info,
     Debug,
