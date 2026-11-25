@@ -5230,7 +5230,7 @@
             "columns": 16,
             "outputBytes": 131072
           },
-          "runtimeVerification": "27_fixed_native_production_windows_worker_and_readonly_integrity_parity",
+          "runtimeVerification": "29_fixed_native_production_windows_worker_and_readonly_integrity_parity",
           "blockingReason": "覆盖一份小表完整另存。大表、工作台选区和持久工作实例不在本候选中。接收方单独验证正常工具页与另存。"
         }
       ],
@@ -5238,8 +5238,8 @@
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.table-sqlite",
       "packageVersion": "0.1.0",
-      "candidateDirectory": "release/plugin-candidates/table-sqlite-0.1.0-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/table-sqlite-0.1.0-candidate-01-verification.json"
+      "candidateDirectory": "release/plugin-candidates/table-sqlite-0.1.0-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/table-sqlite-0.1.0-candidate-02-verification.json"
     },
     {
       "sourceToolId": "recorder-tutorial",

@@ -25,7 +25,7 @@ def manifest():
                byteLength=integer(128 * 1024), text=string(256))
     inputs = obj(format={"type": "string", "enum": ["csv", "tsv", "json"], "title": "表格格式"},
                  tableName=dict(string(512), title="表名（可选）", default="data",
-                                description="省略时为 data，最多 512 个 UTF-8 字节。"))
+                                description="留空时为 data，最多 512 个 UTF-8 字节。"))
     inputs["required"] = ["format"]
     match_ok = obj(contractVersion=contract, ok=dict(boolean, const=True), data=data, error=nil)
     match_failure = obj(contractVersion=contract, ok=dict(boolean, const=False), data=nil,

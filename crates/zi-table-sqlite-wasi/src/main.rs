@@ -115,7 +115,12 @@ fn run() -> Result<Value, Failure> {
         Format::Tsv => (DataFormat::Csv, b'\t'),
         Format::Json => (DataFormat::Json, b','),
     };
-    let table = request.input.table_name.as_deref().unwrap_or("data");
+    let table = request
+        .input
+        .table_name
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("data");
     let data = Dataset::parse_with_limits(text, format, delimiter, MAX_ROWS, MAX_COLUMNS).map_err(
         |_| {
             (

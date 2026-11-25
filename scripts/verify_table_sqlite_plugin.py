@@ -47,6 +47,7 @@ def fixtures():
     yield "bom-csv-text-exact", b"\xef\xbb\xbf" + as_csv(headers, rows), FORMAT_CSV, dict(format="csv", tableName=table), headers, rows
     rows = [("0003", "\t内含制表", "007")]
     yield "tsv-text-exact", as_csv(headers, rows, "\t"), OCTET, dict(format="tsv"), headers, rows
+    yield "cleared-table-name-uses-default", as_csv(headers, rows, "\t"), OCTET, dict(format="tsv",tableName=""), headers, rows
     yield "header-only", as_csv(headers, []), FORMAT_CSV, dict(format="csv"), headers, []
     yield "empty-column-json-table", compact(dict(headers=headers, rows=[])), FORMAT_JSON, dict(format="json"), headers, []
     cells = {"ordered_bool": True, "null": None, "object": {"字": "𠀀", "x": 5},
@@ -94,6 +95,7 @@ def fixtures():
         ("invalid-utf8", b"one\n\xff", FORMAT_CSV, dict(format="csv"), "INVALID_UTF8"),
         ("unsupported-resource", b"one\n1\n", "image/png", dict(format="csv"), "UNSUPPORTED_MIME"),
         ("invalid-table-prefix", b"one\n1\n", FORMAT_CSV, dict(format="csv", tableName="SQLite_hidden"), "INVALID_IDENTIFIERS"),
+        ("whitespace-table-name", b"one\n1\n", FORMAT_CSV, dict(format="csv", tableName=" \t"), "INVALID_IDENTIFIERS"),
         ("identifier-nul", b"one\n1\n", FORMAT_CSV, dict(format="csv", tableName="name\0"), "INVALID_IDENTIFIERS"),
         ("513-byte-table-name", b"one\n1\n", FORMAT_CSV, dict(format="csv", tableName=large_name+"x"), "INVALID_IDENTIFIERS"),
         ("ascii-equivalent-columns", b"ID,id\n01,02\n", FORMAT_CSV, dict(format="csv"), "INVALID_IDENTIFIERS"),
@@ -134,7 +136,7 @@ def run_case(worker, native, module, directory, case):
         return dict(case=name,sourceSha256=digest(payload),mime=mime,options=options,code=headers)
     assert own["ok"] is True
     output, = actual["resources"]
-    table = options.get("tableName","data")
+    table = options.get("tableName") or "data"
     assert output["mimeType"] == MIME
     assert output["byteLength"] == len(blob) == own["data"]["byteLength"]
     assert own["data"]["tableName"] == table and own["data"]["rows"] == len(rows)
