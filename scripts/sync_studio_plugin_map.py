@@ -766,6 +766,25 @@ recording_chapters_row["operationScopes"].append(dict(
                    "接收方单独验证文件确认、完整预览和保存。",
 ))
 
+integration_entries_row = next(row for row in rows if row["sourceToolId"] == "integrations")
+integration_entries_capability = "devtools.integrations.directory.entries"
+integration_entries_row.update(
+    pluginStatus="candidate", candidateCapabilities=[integration_entries_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.integration-entries", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/integration-entries-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/integration-entries-0.1.0-candidate-01-verification.json",
+    reason="从用户确认的一份单层目录名称快照核对原生 Windows 工具入口白名单。",
+)
+integration_entries_row["operationScopes"].append(dict(
+    operationId=integration_entries_capability, scopeKind="confirmed_directory_windows_integration_entries",
+    scope="核对工作区内一个目录的 13 组已知工具正常文件名，输出完整只读 TXT 报告供确认保存。",
+    sourceVersion=integration_entries_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(metadataBytes=131072, entries=2048, knownTools=13, outputBytes=8192),
+    runtimeVerification="fixed_native_and_production_windows_worker_case_and_exact_text_parity",
+    blockingReason="仅一个工作区目录单层快照，PATH、环境、端口检查、任意目录及执行均保留独立版范围。"
+                   "接收方单独验证目录确认、撤权和保存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

@@ -5,6 +5,7 @@ use std::{
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
+use zi_integration_entries_core::WINDOWS_ENTRIES;
 
 pub fn discover() -> String {
     let mut lines =
@@ -12,21 +13,7 @@ pub fn discover() -> String {
     let paths: Vec<PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect())
         .unwrap_or_default();
-    for (name, candidates) in [
-        ("Ollama", &["ollama.exe"][..]),
-        ("Codex CLI", &["codex.exe", "codex.cmd", "codex.ps1"]),
-        ("Claude CLI", &["claude.exe", "claude.cmd"]),
-        ("Python", &["python.exe"]),
-        ("Java", &["java.exe"]),
-        ("Java 编译器", &["javac.exe"]),
-        ("Maven", &["mvn.cmd", "mvn.exe"]),
-        ("Gradle", &["gradle.bat", "gradle.exe"]),
-        ("Django CLI", &["django-admin.exe", "django-admin.cmd"]),
-        ("Node.js", &["node.exe"]),
-        ("uv", &["uv.exe"]),
-        ("Docker", &["docker.exe"]),
-        ("Git", &["git.exe"]),
-    ] {
+    for (name, candidates) in WINDOWS_ENTRIES {
         let found = paths
             .iter()
             .any(|p| candidates.iter().any(|c| p.join(c).is_file()));
