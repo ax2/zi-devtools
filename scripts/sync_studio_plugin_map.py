@@ -728,6 +728,25 @@ sqlite_browser_row["operationScopes"].append(dict(
                    "接收方单独验证正常入口、按次文件确认及 CSV 保存。",
 ))
 
+image_batch_row = next(row for row in rows if row["sourceToolId"] == "image-batch")
+image_batch_capability = "devtools.image.batch.resize"
+image_batch_row.update(
+    pluginStatus="candidate", candidateCapabilities=[image_batch_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.image-batch", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/image-batch-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/image-batch-0.1.0-candidate-01-verification.json",
+    reason="在原有 Worker 预算内从逐次确认的一至两张小型静态 PNG 生成有序独立结果。",
+)
+image_batch_row["operationScopes"].append(dict(
+    operationId=image_batch_capability, scopeKind="confirmed_small_png_batch_resize",
+    scope="保持原图尺寸或用原生 Lanczos3 规则按比例限宽，每张结果单独确认保存。",
+    sourceVersion=image_batch_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(sourceFiles=2, outputFiles=2, inputFileBytes=32768, inputMaxEdge=64, optionalMaxWidth=48),
+    runtimeVerification="fixed_native_and_production_windows_worker_order_pixels_and_exact_output_bytes",
+    blockingReason="静态 PNG 小图子范围。原生 100 张、JPEG/WebP、目标目录批量保存及运行中部分提交留待扩展。"
+                   "接收方单独验证文件确认、多结果正常入口及另存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

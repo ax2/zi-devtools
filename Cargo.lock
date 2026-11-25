@@ -6196,6 +6196,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-image-batch-wasi"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "serde",
+ "serde_json",
+ "zi-image-core",
+]
+
+[[package]]
 name = "zi-image-core"
 version = "0.1.0"
 dependencies = [
