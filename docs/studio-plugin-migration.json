@@ -3337,8 +3337,11 @@
       "sourceVersion": "1.0.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.mcp.config.codex-toml",
+        "devtools.mcp.config.generic-json"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3348,9 +3351,40 @@
           "sourceVersion": "1.0.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.mcp.config.codex-toml",
+          "scopeKind": "explicit_mcp_client_config_literal_rendering",
+          "scope": "复用独立版格式化；Codex TOML 保留写入审批及两个知识工具；通用 JSON 提供 stdio 连接字段。",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "executablePathBytes": 1024,
+            "serializedResultBytes": 8192
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_parsed_config_parity",
+          "blockingReason": "手动填写本机 Windows 路径并显式运行。自动发现、Codex CLI 命令及客户端连接保留独立版范围。接收方单独核对实际工具中心预览、确认保存到产物和重启读回。"
+        },
+        {
+          "operationId": "devtools.mcp.config.generic-json",
+          "scopeKind": "explicit_mcp_client_config_literal_rendering",
+          "scope": "复用独立版格式化；Codex TOML 保留写入审批及两个知识工具；通用 JSON 提供 stdio 连接字段。",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "executablePathBytes": 1024,
+            "serializedResultBytes": 8192
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_parsed_config_parity",
+          "blockingReason": "手动填写本机 Windows 路径并显式运行。自动发现、Codex CLI 命令及客户端连接保留独立版范围。接收方单独核对实际工具中心预览、确认保存到产物和重启读回。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "手填本机 ZiDevTools MCP 服务程序路径，预览 Codex TOML 或通用 JSON，可确认保存为 Studio 产物。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.mcp-client-export",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/mcp-client-export-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/mcp-client-export-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "mcp-server",

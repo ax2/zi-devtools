@@ -861,6 +861,26 @@ python_env_report_row["operationScopes"].append(dict(
                    "接收方单独核对 Windows 文件确认、预览、保存、重启。",
 ))
 
+mcp_export_row = next(row for row in rows if row["sourceToolId"] == "mcp-export")
+mcp_export_capabilities = ["devtools.mcp.config.codex-toml", "devtools.mcp.config.generic-json"]
+mcp_export_row.update(
+    pluginStatus="candidate", candidateCapabilities=mcp_export_capabilities, scopeComplete=False,
+    packageId="com.zicode.devtools.mcp-client-export", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/mcp-client-export-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/mcp-client-export-0.1.0-candidate-01-verification.json",
+    reason="手填本机 ZiDevTools MCP 服务程序路径，预览 Codex TOML 或通用 JSON，可确认保存为 Studio 产物。",
+)
+for mcp_export_capability in mcp_export_capabilities:
+    mcp_export_row["operationScopes"].append(dict(
+        operationId=mcp_export_capability, scopeKind="explicit_mcp_client_config_literal_rendering",
+        scope="复用独立版格式化；Codex TOML 保留写入审批及两个知识工具；通用 JSON 提供 stdio 连接字段。",
+        sourceVersion=mcp_export_row["sourceVersion"], pluginStatus="candidate",
+        limits=dict(executablePathBytes=1024, serializedResultBytes=8192),
+        runtimeVerification="fixed_native_and_production_windows_worker_parsed_config_parity",
+        blockingReason="手动填写本机 Windows 路径并显式运行。自动发现、Codex CLI 命令及客户端连接保留独立版范围。"
+                       "接收方单独核对实际工具中心预览、确认保存到产物和重启读回。",
+    ))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
