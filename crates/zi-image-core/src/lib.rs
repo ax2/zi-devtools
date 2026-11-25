@@ -7,6 +7,16 @@ pub const MAX_EDGE: u32 = 12_000;
 pub const MAX_PIXELS: u64 = 16_000_000;
 pub const MAX_DECODED_BYTES: usize = 192 * 1024 * 1024;
 
+/// The original screenshot magnifier's uppercase RGB notation.
+pub struct HexRgb(pub [u8; 3]);
+
+impl std::fmt::Display for HexRgb {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let [red, green, blue] = self.0;
+        write!(out, "#{red:02X}{green:02X}{blue:02X}")
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CropRegion {
     /// Horizontal origin in ten-thousandths of the input width.
