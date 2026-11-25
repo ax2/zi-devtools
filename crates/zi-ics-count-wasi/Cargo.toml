@@ -1,0 +1,12 @@
+[package]
+name = "zi-ics-count-wasi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+zi-ics-preview-core = { path = "../zi-ics-preview-core" }
+zi-resource-input-wasi = { path = "../zi-resource-input-wasi" }

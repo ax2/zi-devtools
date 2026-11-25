@@ -7,6 +7,6 @@ rust-version = "1.88"
 
 [dependencies]
 anyhow = "1.0"
-chrono = { version = "0.4", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 ical = { version = "=0.11.0", default-features = false, features = ["property"] }
 serde = { version = "1.0", features = ["derive"] }

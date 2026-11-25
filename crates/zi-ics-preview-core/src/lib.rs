@@ -4,7 +4,9 @@ use anyhow::{Context, Result, bail, ensure};
 use ical::property::Property;
 use std::io::Cursor;
 
+pub mod count;
 pub mod preview;
+pub mod recurrence;
 
 pub fn text_value(value: &str) -> Result<String> {
     let mut result = String::new();

@@ -518,6 +518,26 @@ local_html_row["operationScopes"].append(dict(
                    "本候选使用静态正文规则，单独验收 Windows 安装与资料生命周期。",
 ))
 
+ics_count_row = next(row for row in rows if row["sourceToolId"] == "planner-interop")
+ics_count_capability = "devtools.calendar.ics.count_cutoff"
+ics_count_row.update(
+    pluginStatus="candidate", candidateCapabilities=[ics_count_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.ics-count", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/ics-count-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/ics-count-0.1.0-candidate-01-verification.json",
+    reason="复用独立版 COUNT 截止计算，逐次确认一份本机 ICS，显示末次开始和可用的 UNTIL。",
+)
+ics_count_row["operationScopes"].append(dict(
+    operationId=ics_count_capability, scopeKind="bounded_confirmed_ics_count_cutoff",
+    scope="单日程 ICS，支持全天和浮动整分钟 DTSTART。显示日、周、月、年规则的包含末次；COUNT=1 显示单次。",
+    sourceVersion=ics_count_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=16384, maxPhysicalLines=512, maxEvents=1, maxRuleBytes=512,
+                firstYear=1901, lastYear=2099, serializedResultBytes=2048),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="UTC、TZID、重复例外、超出原生支持的规则、多事件和写入或同步不在本候选范围。"
+                   "单独验收 Windows 安装与资料生命周期。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

@@ -280,6 +280,41 @@ fn ics_count_repetitions_convert_to_equivalent_local_cutoffs() {
 }
 
 #[test]
+fn ics_count_matches_explicit_until_at_the_last_supported_day() {
+    let last = date("2099-12-31 00:00").date();
+    for (start, until) in [
+        ("DTSTART;VALUE=DATE:20991230", "20991231"),
+        ("DTSTART:20991230T090000", "20991231T090000"),
+    ] {
+        let schedule = |clause| {
+            ics::parse(&calendar(&format!("{start}\r\nRRULE:FREQ=DAILY;{clause}")))
+                .unwrap()
+                .records
+                .remove(0)
+                .schedule
+                .unwrap()
+        };
+        let counted = schedule("COUNT=2");
+        let rule = format!("UNTIL={until}");
+        let bounded = schedule(&rule);
+        assert_eq!(counted, bounded);
+        assert_eq!(counted.last_repeat_day(), last);
+        assert!(counted.on_day(last));
+        assert!(!counted.on_day(last.succ_opt().unwrap()));
+    }
+    let early = ics::parse(&calendar(
+        "DTSTART:20991230T090000\r\nRRULE:FREQ=DAILY;UNTIL=20991231T085900",
+    ))
+    .unwrap()
+    .records
+    .remove(0)
+    .schedule
+    .unwrap();
+    assert_eq!(early.last_repeat_day(), last.pred_opt().unwrap());
+    assert!(!early.on_day(last));
+}
+
+#[test]
 fn ics_count_rejects_invalid_conflicting_and_out_of_range_values() {
     for event in [
         "DTSTART:20261002T090000\r\nRRULE:FREQ=DAILY;COUNT=0",
