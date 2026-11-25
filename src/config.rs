@@ -6,33 +6,9 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub struct ServiceSpec {
-    #[serde(skip)]
-    pub id: String,
-    #[serde(default)]
-    pub name: String,
-    pub repo: PathBuf,
-    pub command: String,
-    #[serde(default)]
-    pub stop_command: Option<String>,
-    #[serde(default = "default_stop_timeout_ms")]
-    pub stop_timeout_ms: u64,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub health_url: Option<String>,
-    #[serde(default)]
-    pub port: Option<u16>,
-    #[serde(default)]
-    pub config_files: Vec<String>,
-    #[serde(default)]
-    pub env: BTreeMap<String, Option<String>>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
+pub use zi_service_config_core::ServiceSpec;
+use zi_service_config_core::{ImportProblem, RawConfig, import_problem, parse, stop_problem};
 
 #[derive(Clone, Debug)]
 pub struct DashboardConfig {
@@ -40,17 +16,6 @@ pub struct DashboardConfig {
     pub state_dir: PathBuf,
     pub services: BTreeMap<String, ServiceSpec>,
     pub modified: Option<SystemTime>,
-}
-
-fn default_stop_timeout_ms() -> u64 {
-    5_000
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct RawConfig {
-    #[serde(default)]
-    state_dir: Option<PathBuf>,
-    services: BTreeMap<String, ServiceSpec>,
 }
 
 pub fn import_config(source: &Path, destination: &Path, force: bool) -> Result<PathBuf> {
@@ -65,16 +30,12 @@ pub fn import_config(source: &Path, destination: &Path, force: bool) -> Result<P
 
     let text = fs::read_to_string(&source)
         .with_context(|| format!("无法读取待导入配置 {}", source.display()))?;
-    let mut raw: RawConfig = serde_yaml_ng::from_str(&text)
-        .with_context(|| format!("待导入 YAML 无效 {}", source.display()))?;
+    let mut raw = parse(&text).with_context(|| format!("待导入 YAML 无效 {}", source.display()))?;
     if raw.services.is_empty() {
         bail!("待导入配置必须包含非空 services 映射");
     }
     for (id, service) in &raw.services {
-        if service.command.trim().is_empty() || service.repo.as_os_str().is_empty() {
-            bail!("服务 {id} 缺少 repo 或 command");
-        }
-        validate_stop_options(id, service)?;
+        validate_problem(id, import_problem(service))?;
     }
     raw.state_dir = Some(default_state_dir());
 
@@ -109,8 +70,7 @@ pub fn load_config(path: &Path) -> Result<DashboardConfig> {
     let path = expand_path(path);
     let text = fs::read_to_string(&path)
         .with_context(|| format!("无法读取配置文件 {}", path.display()))?;
-    let mut raw: RawConfig = serde_yaml_ng::from_str(&text)
-        .with_context(|| format!("YAML 配置无效 {}", path.display()))?;
+    let mut raw = parse(&text).with_context(|| format!("YAML 配置无效 {}", path.display()))?;
     for (id, service) in &mut raw.services {
         service.id.clone_from(id);
         if service.name.trim().is_empty() {
@@ -141,17 +101,18 @@ pub fn load_config(path: &Path) -> Result<DashboardConfig> {
 }
 
 fn validate_stop_options(id: &str, service: &ServiceSpec) -> Result<()> {
-    if service
-        .stop_command
-        .as_ref()
-        .is_some_and(|command| command.trim().is_empty())
-    {
-        bail!("服务 {id} 的 stop_command 不能为空");
+    validate_problem(id, stop_problem(service))
+}
+
+fn validate_problem(id: &str, problem: Option<ImportProblem>) -> Result<()> {
+    match problem {
+        Some(ImportProblem::MissingRepoOrCommand) => bail!("服务 {id} 缺少 repo 或 command"),
+        Some(ImportProblem::EmptyStopCommand) => bail!("服务 {id} 的 stop_command 不能为空"),
+        Some(ImportProblem::InvalidStopTimeout) => {
+            bail!("服务 {id} 的 stop_timeout_ms 必须为 100 到 60000 毫秒")
+        }
+        None => Ok(()),
     }
-    if !(100..=60_000).contains(&service.stop_timeout_ms) {
-        bail!("服务 {id} 的 stop_timeout_ms 必须为 100 到 60000 毫秒");
-    }
-    Ok(())
 }
 
 /// Change only the service mapping, retaining unrelated YAML settings. The
@@ -173,7 +134,7 @@ pub fn save_services(
         }
     }
     let mut document: serde_yaml_ng::Value = if let Some(bytes) = &original {
-        serde_yaml_ng::from_slice(bytes)?
+        serde_yaml_ng::from_slice(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes))?
     } else {
         serde_yaml_ng::to_value(RawConfig {
             state_dir: Some(config.state_dir.clone()),
@@ -318,6 +279,31 @@ mod tests {
     }
 
     #[test]
+    fn saves_bom_prefixed_configuration_without_losing_other_fields() {
+        let root = std::env::temp_dir().join(format!("zi-config-bom-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("services.yml");
+        fs::write(
+            &path,
+            "\u{feff}unrelated: keep\nservices: { demo: { repo: '.', command: echo draft } }\n",
+        )
+        .unwrap();
+        let config = load_config(&path).unwrap();
+        assert_eq!(config.services["demo"].command, "echo draft");
+
+        let mut services = config.services.clone();
+        services.get_mut("demo").unwrap().command = "echo new".into();
+        let saved = save_services(&config, services).unwrap();
+        assert_eq!(saved.services["demo"].command, "echo new");
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("unrelated: keep")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn imports_services_into_independent_state_directory() {
         let root = std::env::temp_dir().join(format!("zi-import-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(root.join("repo")).unwrap();
@@ -326,7 +312,7 @@ mod tests {
         fs::write(
             &source,
             format!(
-                "state_dir: C:/legacy/state\nservices:\n  demo:\n    repo: {}\n    command: python -m http.server 8800\n",
+                "\u{feff}state_dir: C:/legacy/state\nservices:\n  demo:\n    repo: {}\n    command: python -m http.server 8800\n",
                 root.join("repo").display()
             ),
         )
