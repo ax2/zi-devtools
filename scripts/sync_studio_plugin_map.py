@@ -804,6 +804,25 @@ screenshot_pixel_row["operationScopes"].append(dict(
                    "接收方单独核对正常工具中心及撤权和重启。",
 ))
 
+clipboard_compose_row = next(row for row in rows if row["sourceToolId"] == "super-clipboard")
+clipboard_compose_capability = "devtools.clipboard.text.compose"
+clipboard_compose_row.update(
+    pluginStatus="candidate", candidateCapabilities=[clipboard_compose_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.clipboard-compose", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/clipboard-compose-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/clipboard-compose-0.1.0-candidate-01-verification.json",
+    reason="复用原生文本组合和 CSV 公式前缀，仅从当前确认的本机 JSON 正文集合读取。",
+)
+clipboard_compose_row["operationScopes"].append(dict(
+    operationId=clipboard_compose_capability, scopeKind="confirmed_portable_clipboard_text_composition",
+    scope="保持 JSON 原顺序组合正文为段落、编号、CSV 或 Markdown，并确认保存完整结果。",
+    sourceVersion=clipboard_compose_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=32768, rows=64, outputBytes=49152),
+    runtimeVerification="fixed_native_and_production_windows_worker_exact_four_file_outputs",
+    blockingReason="仅显式 JSON 文件版，系统剪贴板读取、历史、富文本与模板保持原范围。"
+                   "接收方单独核对正常工具中心及四种输出确认保存。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

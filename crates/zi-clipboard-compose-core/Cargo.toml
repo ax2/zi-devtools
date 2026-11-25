@@ -1,0 +1,9 @@
+[package]
+name = "zi-clipboard-compose-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+csv = "1.3"

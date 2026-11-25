@@ -5923,6 +5923,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-clipboard-compose-core"
+version = "0.1.0"
+dependencies = [
+ "csv",
+]
+
+[[package]]
+name = "zi-clipboard-compose-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-clipboard-compose-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-compare-wasi"
 version = "0.1.0"
 dependencies = [
@@ -6000,6 +6017,7 @@ dependencies = [
  "zi-agent-record-core",
  "zi-character-core",
  "zi-civil-date-core",
+ "zi-clipboard-compose-core",
  "zi-diagnostics-core",
  "zi-diff-core",
  "zi-directory-compare-wasi",

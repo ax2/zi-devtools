@@ -461,42 +461,7 @@ impl History {
             .map(|entry| entry.text.as_str())
             .collect::<Vec<_>>();
         let value = match format {
-            1 => parts
-                .iter()
-                .enumerate()
-                .map(|(i, t)| format!("{}. {}", i + 1, t))
-                .collect::<Vec<_>>()
-                .join("\n"),
             2 => serde_json::to_string_pretty(&parts).map_err(|_| "JSON组合失败")?,
-            3 => {
-                let mut writer = csv::Writer::from_writer(Vec::new());
-                writer.write_record(["text"]).map_err(|_| "CSV组合失败")?;
-                for text in parts {
-                    let safe = if text.trim_start().starts_with(['=', '+', '-', '@'])
-                        || text.starts_with(['\t', '\r'])
-                    {
-                        format!("'{text}")
-                    } else {
-                        text.to_string()
-                    };
-                    writer.write_record([safe]).map_err(|_| "CSV组合失败")?;
-                }
-                String::from_utf8(writer.into_inner().map_err(|_| "CSV组合失败")?)
-                    .map_err(|_| "CSV编码失败")?
-            }
-            4 => parts
-                .iter()
-                .map(|text| {
-                    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-                    let mut lines = normalized.split('\n');
-                    let first = lines.next().unwrap_or_default();
-                    std::iter::once(format!("- {first}"))
-                        .chain(lines.map(|line| format!("  {line}")))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
             6 => {
                 #[derive(serde::Serialize)]
                 struct Record<'a> {
@@ -541,7 +506,16 @@ impl History {
                     .map_err(|_| "JSON记录组合结果超过1 MiB，请减少选择")?;
                 String::from_utf8(writer.0).map_err(|_| "JSON记录组合编码失败")?
             }
-            _ => parts.join("\n\n"),
+            other => {
+                use zi_clipboard_compose_core::{TextFormat, combine_text};
+                let format = match other {
+                    1 => TextFormat::Numbered,
+                    3 => TextFormat::Csv,
+                    4 => TextFormat::Markdown,
+                    _ => TextFormat::Paragraphs,
+                };
+                combine_text(&parts, format, TEXT_LIMIT).map_err(|error| error.native_message())?
+            }
         };
         if value.len() > TEXT_LIMIT {
             return Err("组合结果超过1 MiB，请减少选择".into());
