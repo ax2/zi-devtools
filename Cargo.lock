@@ -5951,6 +5951,7 @@ dependencies = [
  "zi-json-core",
  "zi-json-object-wasi",
  "zi-json-schema-core",
+ "zi-knowledge-source-core",
  "zi-log-core",
  "zi-pdf-text-core",
  "zi-regex-core",
@@ -6173,6 +6174,23 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-json-schema-core",
+]
+
+[[package]]
+name = "zi-knowledge-preflight-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-knowledge-source-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-knowledge-source-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

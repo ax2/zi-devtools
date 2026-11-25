@@ -336,6 +336,24 @@ rename_row["operationScopes"].append(dict(
     blockingReason="仅目录名称快照的预览；原生多选、实际变更、竞态复核和撤销未接入。",
 ))
 
+sources_row = next(row for row in rows if row["sourceToolId"] == "rag-sources")
+sources_row.update(
+    pluginStatus="candidate", candidateCapabilities=["devtools.knowledge.source.preflight"], scopeComplete=False,
+    packageId="com.zicode.devtools.knowledge-preflight", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/knowledge-preflight-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/knowledge-preflight-0.1.0-candidate-01-verification.json",
+    reason="复用原生文档格式和排除规则，预检已确认的一层目录名称快照。",
+)
+sources_row["operationScopes"].append(dict(
+    operationId="devtools.knowledge.source.preflight", scopeKind="bounded_confirmed_knowledge_source_preflight",
+    scope="按文件名、类型与排除规则统计可能纳入知识源的文档，标明未扫描的子目录。",
+    sourceVersion=sources_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(snapshotBytes=65536, entries=64, nameBytes=12288, exclusionRules=8,
+                exclusionUtf8Bytes=960, previewCandidates=24, serializedResultBytes=24576),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅目录名称预检；内容、文件大小、递归、指纹、变更历史、保存知识源和重建索引未接入。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
