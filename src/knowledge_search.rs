@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
     sync::mpsc::{self, Receiver},
 };
+use zi_knowledge_keyword_core::excerpt;
 
 use crate::{
     knowledge_index::{self, SearchHit, SearchMode, SearchResults},
@@ -26,31 +27,6 @@ pub fn verified_result_path(hit: &SearchHit, sources: &[Source]) -> anyhow::Resu
         })
         .ok_or_else(|| anyhow::anyhow!("文件不在当前扫描快照中，或版本已变化"))?;
     crate::document_ingestion::verified_source_path(source, file)
-}
-
-fn excerpt(text: &str, query: &str) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let lower = text.to_lowercase();
-    let lowered_query = query.to_lowercase();
-    let pos = lower
-        .find(&lowered_query)
-        .or_else(|| {
-            query
-                .split_whitespace()
-                .filter(|term| !term.is_empty())
-                .filter_map(|term| lower.find(&term.to_lowercase()))
-                .min()
-        })
-        .map(|byte| lower[..byte].chars().count())
-        .unwrap_or(0);
-    let start = pos.saturating_sub(60).min(chars.len());
-    let end = (start + 260).min(chars.len());
-    format!(
-        "{}{}{}",
-        if start > 0 { "…" } else { "" },
-        chars[start..end].iter().collect::<String>(),
-        if end < chars.len() { "…" } else { "" }
-    )
 }
 
 fn citation(hit: &SearchHit, source_name: &str) -> String {

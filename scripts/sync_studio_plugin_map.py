@@ -881,6 +881,25 @@ for mcp_export_capability in mcp_export_capabilities:
                        "接收方单独核对实际工具中心预览、确认保存到产物和重启读回。",
     ))
 
+keyword_index_row = next(row for row in rows if row["sourceToolId"] == "rag-keyword-search")
+keyword_index_capability = "devtools.knowledge.keyword.snapshot.search"
+keyword_index_row.update(
+    pluginStatus="candidate", candidateCapabilities=[keyword_index_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.keyword-index", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/keyword-index-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/keyword-index-0.1.0-candidate-01-verification.json",
+    reason="逐次确认读取独立版 v1 静态 SQLite 小型索引，复用原生 FTS5、BM25 和字面片段检索。",
+)
+keyword_index_row["operationScopes"].append(dict(
+    operationId=keyword_index_capability, scopeKind="confirmed_native_static_knowledge_index_keyword_search",
+    scope="固定原生查询与结构；查看并保存匹配片段与历史引用；自动、字面、全部词、任一词，按来源 ID 可选筛选。",
+    sourceVersion=keyword_index_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=131072, corpusTextBytes=4096, chunks=32, literalQueryWords=12, ftsQueryTerms=4, ftsTermByteProduct=12288, resultCount=10, outputUtf8Bytes=24576),
+    runtimeVerification="fixed_native_and_production_windows_worker_bm25_cjk_schema_integrity_and_exact_text",
+    blockingReason="只读明确确认的静态 SQLite 小索引，无任何源路径或实时数据库访问。原件打开、同步、索引构建和更大范围仍由独立版提供。"
+                   "接收方单独核对实际 Windows Tool Center、确认保存和重启。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
