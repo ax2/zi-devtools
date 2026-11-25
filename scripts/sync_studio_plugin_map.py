@@ -606,6 +606,27 @@ tool_collections_row["operationScopes"].append(dict(
                    "独立版 1 MiB，本候选验证 128 KiB。",
 ))
 
+rag_eval_row = next(row for row in rows if row["sourceToolId"] == "rag-eval")
+rag_eval_capability = "devtools.rag.report.review"
+rag_eval_row.update(
+    pluginStatus="candidate", candidateCapabilities=[rag_eval_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.retrieval-review", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/retrieval-review-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/retrieval-review-0.1.0-candidate-01-verification.json",
+    reason="复用原生资料校验与命中计算，复核已确认的仅检索 v2 和双路对比 v1 导出。",
+)
+rag_eval_row["operationScopes"].append(dict(
+    operationId=rag_eval_capability, scopeKind="bounded_confirmed_retrieval_report_review",
+    scope="单路用有序证据重算首名与命中，并推导 MRR。双路用记录名次复算配对统计和 MRR。"
+          "分母和失败处理按原生报告定义，逐题结果只输出序号和统计状态。",
+    sourceVersion=rag_eval_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=65536, cases=10, topK=[3, 5, 8], serializedResultBytes=8192),
+    runtimeVerification="47_fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="固定文件报告离线复核。原生数据集编写、索引检索、本机模型和报告导出留待其他范围，"
+                   "需要目标 Studio 正常入口验收。",
+))
+
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
