@@ -1,14 +1,7 @@
 //! Local, credential-free snippets for connecting trusted MCP clients.
 use anyhow::{Result, ensure};
-use serde_json::json;
 use std::path::{Path, PathBuf};
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Exports {
-    pub codex_command: String,
-    pub codex_toml: String,
-    pub generic_json: String,
-}
+pub use zi_mcp_export_core::Exports;
 
 pub fn sibling_server() -> Result<PathBuf> {
     let app = std::env::current_exe()?;
@@ -40,29 +33,13 @@ pub fn generate(executable: &Path) -> Result<Exports> {
         !raw.chars().any(char::is_control),
         "MCP 程序路径包含控制字符"
     );
-    let powershell_literal = raw.replace('\'', "''");
-    let codex_command = format!("codex mcp add zi-knowledge -- '{powershell_literal}'");
-    let toml_path = if raw.contains('\'') {
-        serde_json::to_string(raw.as_ref())?
-    } else {
-        format!("'{raw}'")
-    };
-    let codex_toml = format!(
-        "[mcp_servers.zi-knowledge]\ncommand = {toml_path}\nenabled_tools = [\"list_knowledge_sources\", \"search_knowledge\"]\ndefault_tools_approval_mode = \"writes\"\n"
-    );
-    let generic_json = serde_json::to_string_pretty(&json!({
-        "mcpServers": {"zi-knowledge": {"command": raw, "args": []}}
-    }))?;
-    Ok(Exports {
-        codex_command,
-        codex_toml,
-        generic_json,
-    })
+    Ok(zi_mcp_export_core::render(&raw)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn exports_preserve_windows_path_without_credentials() {
