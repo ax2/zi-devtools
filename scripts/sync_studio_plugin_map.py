@@ -919,6 +919,26 @@ keyword_builder_row["operationScopes"].append(dict(
                    "接收方单独核对 Windows 同一应用的独立确认、保存和重新分享。",
 ))
 
+table_pipeline_row = next(row for row in rows if row["sourceToolId"] == "pipeline")
+table_pipeline_capability = "devtools.table.pipeline.replay"
+table_pipeline_row.update(
+    pluginStatus="candidate", candidateCapabilities=[table_pipeline_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.table-pipeline", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/table-pipeline-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/table-pipeline-0.1.0-candidate-01-verification.json",
+    reason="使用本次明确确认的原生 JSON 配方和 UTF-8 表格，手动生成带公式保护的新 CSV。",
+)
+table_pipeline_row["operationScopes"].append(dict(
+    operationId=table_pipeline_capability, scopeKind="confirmed_two_file_native_table_pipeline_replay",
+    scope="兼容格式 1–3 的受限表格配方，显式区分配方和 CSV/TSV/JSON 数据；沿用原生步骤和 CSV 保护，原件保留。",
+    sourceVersion=table_pipeline_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(recipeBytes=16384, tableBytes=16384, rows=96, cols=16, steps=32, intermediateBytes=16384,
+                cumulativeWorkUnits=131072, outputBytes=32768),
+    runtimeVerification="fixed_native_and_production_windows_worker_recipe_and_protected_csv_byte_parity",
+    blockingReason="当前范围为小型表格配方执行和带保护的新 CSV。流程编辑、应用撤销、多实例、SQLite 与更大输入继续跟踪。"
+                   "接收方独立核对 Windows 工具中心的角色、文件确认、保存和重启。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

@@ -6749,6 +6749,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-table-pipeline-wasi"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zi-resource-input-wasi",
+ "zi-table-core",
+]
+
+[[package]]
 name = "zi-table-sqlite-wasi"
 version = "0.1.0"
 dependencies = [
