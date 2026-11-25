@@ -3718,8 +3718,10 @@
       "sourceVersion": "1.4.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.knowledge.index.snapshot.create"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3729,9 +3731,30 @@
           "sourceVersion": "1.4.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.knowledge.index.snapshot.create",
+          "scopeKind": "confirmed_single_text_static_knowledge_index_creation",
+          "scope": "创建原生 v1 FTS5 内容与片段、保留来源 SHA-256；新文件确认保存。现有独立检索插件重新确认后可查询。",
+          "sourceVersion": "1.4.1",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 4096,
+            "indexedTextBytes": 4096,
+            "chunks": 32,
+            "labelBytes": 128,
+            "outputBytes": 131072
+          },
+          "runtimeVerification": "fixed_native_and_production_windows_worker_same_index_readback_with_frozen_keyword_plugin",
+          "blockingReason": "单份 TXT 到新静态索引。实时目录扫描、OCR、增量更新、日用索引仍由独立版提供。接收方单独核对 Windows 同一应用的独立确认、保存和重新分享。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "从一次明确确认的一份 UTF-8 TXT 按原生分块和 FTS5 入库创建新的静态 SQLite。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.knowledge-index-build",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/knowledge-index-build-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/knowledge-index-build-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "rag-vectors",

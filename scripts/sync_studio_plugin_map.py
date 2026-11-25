@@ -900,6 +900,25 @@ keyword_index_row["operationScopes"].append(dict(
                    "接收方单独核对实际 Windows Tool Center、确认保存和重启。",
 ))
 
+keyword_builder_row = next(row for row in rows if row["sourceToolId"] == "rag-index")
+keyword_builder_capability = "devtools.knowledge.index.snapshot.create"
+keyword_builder_row.update(
+    pluginStatus="candidate", candidateCapabilities=[keyword_builder_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.knowledge-index-build", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/knowledge-index-build-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/knowledge-index-build-0.1.0-candidate-01-verification.json",
+    reason="从一次明确确认的一份 UTF-8 TXT 按原生分块和 FTS5 入库创建新的静态 SQLite。",
+)
+keyword_builder_row["operationScopes"].append(dict(
+    operationId=keyword_builder_capability, scopeKind="confirmed_single_text_static_knowledge_index_creation",
+    scope="创建原生 v1 FTS5 内容与片段、保留来源 SHA-256；新文件确认保存。现有独立检索插件重新确认后可查询。",
+    sourceVersion=keyword_builder_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=4096, indexedTextBytes=4096, chunks=32, labelBytes=128, outputBytes=131072),
+    runtimeVerification="fixed_native_and_production_windows_worker_same_index_readback_with_frozen_keyword_plugin",
+    blockingReason="单份 TXT 到新静态索引。实时目录扫描、OCR、增量更新、日用索引仍由独立版提供。"
+                   "接收方单独核对 Windows 同一应用的独立确认、保存和重新分享。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"

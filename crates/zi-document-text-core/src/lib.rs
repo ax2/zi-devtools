@@ -18,6 +18,35 @@ pub struct Chunk {
     pub sha256: String,
 }
 
+/// Split UTF-8 plain text at the same paragraph boundaries as native ingestion.
+pub fn plain_paragraphs(text: &str) -> impl Iterator<Item = (usize, &str)> {
+    text.split("\n\n").enumerate()
+}
+
+/// Collect a bounded paragraph preview without allocating sections after the limit.
+pub fn plain_text_sections(
+    text: &str,
+    max_sections: usize,
+    max_bytes: usize,
+) -> Result<Vec<(String, String)>> {
+    let mut sections = Vec::new();
+    let mut stored_bytes = 0_usize;
+    for (index, paragraph) in plain_paragraphs(text) {
+        let trimmed = paragraph.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        ensure!(sections.len() < max_sections, "段落超出数量上限");
+        ensure!(
+            stored_bytes.saturating_add(paragraph.len()) <= max_bytes,
+            "提取正文超出字节上限"
+        );
+        stored_bytes += trimmed.len();
+        sections.push((format!("段落 {}", index + 1), trimmed.to_owned()));
+    }
+    Ok(sections)
+}
+
 pub fn chunks_from(sections: Vec<(String, String)>) -> Result<Vec<Chunk>> {
     let mut chunks = Vec::new();
     for (location, text) in sections {
