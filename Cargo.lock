@@ -5866,6 +5866,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-ascii-art-image-wasi"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "serde",
+ "serde_json",
+ "zi-character-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-character-core"
 version = "0.1.0"
 dependencies = [

@@ -483,7 +483,7 @@ pub fn image_art_bytes(bytes: &[u8], width: u32) -> anyhow::Result<String> {
         w > 0 && h > 0 && u64::from(w) * u64::from(h) <= 20_000_000,
         "图片像素超过上限"
     );
-    rgba_art(&reader.decode()?.to_rgba8(), width)
+    rgba_art(&reader.decode()?.into_rgba8(), width)
 }
 
 #[cfg(test)]
