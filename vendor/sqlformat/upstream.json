@@ -1,0 +1,64 @@
+{
+  "package": "sqlformat",
+  "version": "0.5.0",
+  "repo": "https://github.com/shssoichiro/sqlformat-rs",
+  "upstreamCommit": "832fa6e8eed392d01422db4f77d12086b3448194",
+  "registryChecksum": "0705994df478b895f05b8e290e0d46e53187b26f8d889d37b2a0881234922d94",
+  "modifiedSource": [
+    "src/tokenizer.rs"
+  ],
+  "files": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "6a4002b32cff55807304bacefe6186165ccd9465b617eb768c25c50f644358dd"
+    },
+    {
+      "path": "Cargo.toml.orig",
+      "sha256": "84b01a68ec939eff32b74b16e5e013ba0d28c625bffaaa2439fd5ccc1c2ad345"
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+    },
+    {
+      "path": "LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+    },
+    {
+      "path": "README.md",
+      "sha256": "13bf52de7a0743b8ac1bd8df8e2ff4021aca16f748e23ecca0c64f3673bc2e7e"
+    },
+    {
+      "path": "benches/bench.rs",
+      "sha256": "68f5df21b635538dde726bf41be2b5b4e351e4151ad08b4c24142ec4156c2f5a"
+    },
+    {
+      "path": "src/debug.rs",
+      "sha256": "2d5831eca2bfe15d819d73b7d89356af2013143c041d1fa9605e3e176984ec7e"
+    },
+    {
+      "path": "src/formatter.rs",
+      "sha256": "a3c62e7338956f1e300a871f6735702b20ceb9bf4e6a56ec659b01bd6af8ad1d"
+    },
+    {
+      "path": "src/indentation.rs",
+      "sha256": "687202a2d02ad32c91ca87877c1e03f97508fb82b101bda67c0ed2b9c5da4d49"
+    },
+    {
+      "path": "src/inline_block.rs",
+      "sha256": "9434361635d5b837d4caef28e2e3f3357f2f70d8b63df983a8813803a71bd6b8"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "8d36202b60a4b20b1552e25d07cb6217e0c8fcdf2809d336143af83ec8034d9c"
+    },
+    {
+      "path": "src/params.rs",
+      "sha256": "3b682767507846ef72690a6f6ff874024f6be5ea5c7e3e5dac1a1dda8f502d3a"
+    },
+    {
+      "path": "src/tokenizer.rs",
+      "sha256": "4a63850ee8d68d743d8a6b364a7ddeb3039e122bcc70223884c55e075a785cda"
+    }
+  ]
+}

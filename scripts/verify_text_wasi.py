@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--wasm', type=Path, required=True)
 parser.add_argument('--native', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--dense-sql', action='store_true', help='Include the five-dialect 8 KiB SQL regression cases')
 parser.add_argument('--cases-dir', type=Path, help='Write raw requests and expected outputs for independent Wasmtime verification')
 args = parser.parse_args()
 wasm = args.wasm.read_bytes()
@@ -117,6 +118,23 @@ cases.append(('request-byte-limit',b' '*(48*1024+1),None,'INPUT_TOO_LARGE'))
 cases.append(('invalid-utf8',b'\xff',None,'INVALID_INPUT'))
 cases.append(('duplicate-envelope',b'{"pluginId":"com.zicode.devtools.text","pluginId":"other","sceneId":"coding","capabilityId":"devtools.text.sha256","commandId":null,"input":{"text":"abc"}}',None,'INVALID_INPUT'))
 
+if args.dense_sql:
+    def dense_sql(statement):
+        return (statement * (8192 // len(statement))).ljust(8192)
+
+    varying = ''.join(f'select a{index} from t where i={index};\n' for index in range(400))[:8192]
+    varying = (varying.rsplit(';', 1)[0] + ';').ljust(8192)
+    sql_case('dense-short', dense_sql('select x from t;\n'), dialect='generic')
+    sql_case('dense-where', dense_sql('select x, y, z where i=2;\n'),
+             dialect='generic', keywordCase='lowercase', indent='twoSpaces')
+    sql_case('dense-varied', varying, dialect='generic')
+    sql_case('dense-string', dense_sql("select 'literal';\n"), dialect='generic')
+    sql_case('dense-dollar', dense_sql('select $$x$$;\n'), dialect='postgresql', keywordCase='preserve')
+    sql_case('dense-placeholder', dense_sql('select $1;\n'), dialect='postgresql')
+    sql_case('dense-mysql', dense_sql('select `x` # c\n;'), dialect='mysql')
+    sql_case('dense-sqlite', dense_sql('select [x];\n'), dialect='sqlite')
+    sql_case('dense-sqlserver', dense_sql('select [x]]y];\n'), dialect='sqlserver', indent='tabs')
+
 results = []
 for name, value, expected, error in cases:
     data = value if isinstance(value,bytes) else json.dumps(value,ensure_ascii=False,separators=(',',':')).encode()
@@ -131,6 +149,9 @@ for name, value, expected, error in cases:
     if error:
         assert output['ok'] is False and output['data'] is None and output['error']['code']==error, (name,output)
         assert 1 <= len(output['error']['message']) <= 240 and 'secret-test' not in output['error']['message'],name
+    elif name.startswith('sql-options-dense-'):
+        # Native byte parity above uses the original registry sqlformat as an oracle.
+        assert output['ok'] is True and output['error'] is None and isinstance(output['data']['text'], str), name
     else:
         assert output['ok'] is True and output['error'] is None and output['data']=={'text':expected},name
     telemetry = json.loads(wasi.stderr)

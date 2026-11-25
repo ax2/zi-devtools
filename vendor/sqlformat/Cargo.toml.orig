@@ -1,0 +1,32 @@
+[package]
+name = "sqlformat"
+version = "0.5.0"
+authors = ["Josh Holmer <jholmer.in@gmail.com>"]
+edition = "2021"
+rust-version = "1.84"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/shssoichiro/sqlformat-rs"
+repository = "https://github.com/shssoichiro/sqlformat-rs"
+documentation = "https://docs.rs/sqlformat"
+description = "Formats whitespace in a SQL string to make it easier to read"
+keywords = ["sql"]
+categories = ["development-tools"]
+
+[features]
+debug = ["dep:anstream", "dep:anstyle", "dep:okhsl"]
+
+[dependencies]
+anstream = { version = "0.6.21", optional = true }
+anstyle = { version = "1.0.13", optional = true }
+okhsl = { version = "1.0.1", optional = true }
+unicode_categories = "0.1.1"
+winnow = { version = "0.7.0", features = ["simd"] }
+
+[dev-dependencies]
+criterion = "0.7"
+indoc = "2.0"
+pretty_assertions = "1.4.1"
+
+[[bench]]
+name = "bench"
+harness = false
