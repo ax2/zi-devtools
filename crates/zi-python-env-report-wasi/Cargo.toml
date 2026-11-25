@@ -1,0 +1,12 @@
+[package]
+name = "zi-python-env-report-wasi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.88"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+zi-python-env-report-core = { path = "../zi-python-env-report-core" }
+zi-resource-input-wasi = { path = "../zi-resource-input-wasi" }

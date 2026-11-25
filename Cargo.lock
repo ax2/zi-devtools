@@ -6039,6 +6039,7 @@ dependencies = [
  "zi-memo-text-core",
  "zi-pdf-text-core",
  "zi-prompt-template-core",
+ "zi-python-env-report-core",
  "zi-rag-eval-core",
  "zi-recording-chapters-core",
  "zi-regex-core",
@@ -6476,6 +6477,25 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-prompt-template-core",
+]
+
+[[package]]
+name = "zi-python-env-report-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-agent-record-core",
+]
+
+[[package]]
+name = "zi-python-env-report-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-python-env-report-core",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]

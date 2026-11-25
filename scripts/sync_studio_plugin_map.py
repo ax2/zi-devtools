@@ -842,6 +842,25 @@ jdk_report_row["operationScopes"].append(dict(
                    "接收方单独核对 Windows 文件确认、预览、保存、重启。",
 ))
 
+python_env_report_row = next(row for row in rows if row["sourceToolId"] == "django-environment")
+python_env_report_capability = "devtools.django.environment.report.review"
+python_env_report_row.update(
+    pluginStatus="candidate", candidateCapabilities=[python_env_report_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.python-env-report", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/python-env-report-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/python-env-report-0.1.0-candidate-01-verification.json",
+    reason="读取一次明确确认的原生 Python / Django JSON，查看单环境或双环境历史快照，预览脱敏结果。",
+)
+python_env_report_row["operationScopes"].append(dict(
+    operationId=python_env_report_capability, scopeKind="confirmed_native_python_django_environment_report_review",
+    scope="保留解释器版本、虚拟环境、Django 分发和模块来源的分别记录，以及采集时 django-admin 入口三态。",
+    sourceVersion=python_env_report_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=32768, outputBytes=4096, captureCount=2),
+    runtimeVerification="fixed_native_and_production_windows_worker_exact_redacted_text",
+    blockingReason="读取历史报告。执行解释器、读取当前系统 PATH、检查项目配置仍由独立版提供。"
+                   "接收方单独核对 Windows 文件确认、预览、保存、重启。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
