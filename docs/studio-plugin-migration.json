@@ -2347,8 +2347,10 @@
       "sourceVersion": "1.7.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.image.convert.original-size"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2358,9 +2360,29 @@
           "sourceVersion": "1.7.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.image.convert.original-size",
+          "scopeKind": "bounded_confirmed_original_size_image_conversion",
+          "scope": "用独立版编码器转换静态图片，保留原宽高，生成单个可确认另存的派生资源。",
+          "sourceVersion": "1.7.1",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 33554432,
+            "outputBytes": 33554432,
+            "maxEdge": 12000,
+            "maxPixels": 16000000
+          },
+          "runtimeVerification": "32_fixed_production_windows_worker_cases_native_codec_parity",
+          "blockingReason": "单文件转换。剪贴板、工作实例、批量、完整图像接力及接收端正常入口另验。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "来自单图图片工具的原尺寸编码，读取本次明确确认的静态 PNG、JPEG 或 WebP。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.image-convert",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/image-convert-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/image-convert-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "image-batch",

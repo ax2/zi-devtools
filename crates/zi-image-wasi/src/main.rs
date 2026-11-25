@@ -1,4 +1,4 @@
-//! Resource-mode image adapter with separate resize and crop builds.
+//! Resource-mode image adapter with separate resize, crop and format-conversion builds.
 use anyhow::{Context, Result, ensure};
 use image::ImageFormat;
 use serde::Deserialize;
@@ -7,14 +7,22 @@ use std::io::{Read, Seek, SeekFrom, Write};
 const MAX_REQUEST_BYTES: usize = 256 * 1024;
 const MAX_RESOURCE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
-const PROFILE_MAX_EDGE: u32 = 4096;
+const PROFILE_MAX_EDGE: u32 = if cfg!(all(feature = "convert", not(feature = "crop"))) {
+    zi_image_core::MAX_EDGE
+} else {
+    4096
+};
 const PROFILE_MAX_PIXELS: u64 = 16_000_000;
 const IO_CHUNK: usize = 64 * 1024;
-#[cfg(not(feature = "crop"))]
+#[cfg(all(feature = "convert", not(feature = "crop")))]
+const PLUGIN: &str = "com.zicode.devtools.image-convert";
+#[cfg(not(any(feature = "crop", feature = "convert")))]
 const PLUGIN: &str = "com.zicode.devtools.image";
 #[cfg(feature = "crop")]
 const PLUGIN: &str = "com.zicode.devtools.image-crop";
-#[cfg(not(feature = "crop"))]
+#[cfg(all(feature = "convert", not(feature = "crop")))]
+const CAPABILITY: &str = "devtools.image.convert.original-size";
+#[cfg(not(any(feature = "crop", feature = "convert")))]
 const CAPABILITY: &str = "devtools.image.resize";
 #[cfg(feature = "crop")]
 const CAPABILITY: &str = "devtools.image.crop";
@@ -64,8 +72,10 @@ struct ResourceDescriptor {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Operation {
+    #[cfg(not(feature = "convert"))]
     max_width: serde_json::Value,
     format: String,
+    #[cfg_attr(feature = "convert", serde(default = "default_quality"))]
     quality: serde_json::Value,
 }
 
@@ -124,15 +134,26 @@ fn integer_parameter(value: &serde_json::Value, max_digits: usize) -> Result<u32
     }
 }
 
+#[cfg(all(feature = "convert", not(feature = "crop")))]
+fn default_quality() -> serde_json::Value {
+    serde_json::Value::from(85)
+}
+
 #[cfg(not(feature = "crop"))]
 impl Operation {
-    fn validated(&self) -> Result<(u32, u8, ImageFormat, i32, &'static str)> {
-        let max_width = integer_parameter(&self.max_width, 4)?;
+    fn validated(&self) -> Result<(Option<u32>, u8, ImageFormat, i32, &'static str)> {
+        #[cfg(not(feature = "convert"))]
+        let max_width = {
+            let width = integer_parameter(&self.max_width, 4)?;
+            ensure!(
+                (1..=PROFILE_MAX_EDGE).contains(&width),
+                "invalid operation width"
+            );
+            Some(width)
+        };
+        #[cfg(feature = "convert")]
+        let max_width = None;
         let quality = integer_parameter(&self.quality, 2)?;
-        ensure!(
-            (1..=PROFILE_MAX_EDGE).contains(&max_width),
-            "invalid operation width"
-        );
         ensure!((35..=95).contains(&quality), "invalid operation quality");
         let (format, mime_index, mime_type) = encode_format(&self.format)?;
         Ok((max_width, quality as u8, format, mime_index, mime_type))
@@ -241,6 +262,9 @@ fn encode_format(name: &str) -> Result<(ImageFormat, i32, &'static str)> {
         "png" => Ok((ImageFormat::Png, 1, "image/png")),
         "jpeg" => Ok((ImageFormat::Jpeg, 2, "image/jpeg")),
         "webp" => Ok((ImageFormat::WebP, 3, "image/webp")),
+        #[cfg(feature = "convert")]
+        _ => anyhow::bail!("invalid operation output format"),
+        #[cfg(not(feature = "convert"))]
         _ => anyhow::bail!("unsupported output format"),
     }
 }
@@ -307,8 +331,8 @@ fn execute(envelope: Envelope) -> Result<serde_json::Value> {
         PROFILE_MAX_PIXELS,
     )
     .context("image dimensions exceed resource profile")?;
-    #[cfg(feature = "crop")]
-    let bounds = {
+    #[cfg(any(feature = "crop", feature = "convert"))]
+    {
         // Animated images are a separate workflow. Do not silently flatten them.
         let reader = std::io::Cursor::new(&input_bytes);
         let animated = match detected {
@@ -321,8 +345,10 @@ fn execute(envelope: Envelope) -> Result<serde_json::Value> {
             _ => false,
         };
         ensure!(!animated, "unsupported input image animation");
-        envelope.input.bounds(input_width, input_height)?
-    };
+    }
+    #[cfg(feature = "crop")]
+    let bounds = envelope.input.bounds(input_width, input_height)?;
+
     let image = zi_image_core::decode(&input_bytes).context("image decode failed")?;
     // The decoded image owns its pixels; free the compressed guest input before
     // processing so the resource frame bytes do not remain live unnecessarily.
@@ -330,10 +356,20 @@ fn execute(envelope: Envelope) -> Result<serde_json::Value> {
     let source_width = image.width();
     let source_height = image.height();
     #[cfg(not(feature = "crop"))]
-    let derived = zi_image_core::resize_to_width(&image, max_width)?;
+    let derived = match max_width {
+        Some(width) => {
+            let resized = zi_image_core::resize_to_width(&image, width)?;
+            drop(image);
+            resized
+        }
+        None => image,
+    };
     #[cfg(feature = "crop")]
-    let derived = zi_image_core::crop_pixels(&image, bounds)?;
-    drop(image);
+    let derived = {
+        let cropped = zi_image_core::crop_pixels(&image, bounds)?;
+        drop(image);
+        cropped
+    };
     let mut output = BoundedOutput::new();
     zi_image_core::encode(&derived, format, quality, &mut output)?;
     let output_bytes = output.into_bytes();
@@ -373,7 +409,14 @@ fn public_failure(error: &anyhow::Error) -> serde_json::Value {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(" ");
-    let (code, message) = if detail.contains("图片尺寸超出限制") {
+    let (code, message) = if cfg!(all(feature = "convert", not(feature = "crop")))
+        && detail.contains("unsupported input image animation")
+    {
+        (
+            "IMAGE_ANIMATED",
+            "此工具接受静态图片。请选择一张静态 PNG、JPEG 或 WebP。",
+        )
+    } else if detail.contains("图片尺寸超出限制") {
         ("IMAGE_DIMENSION_LIMIT", "图片尺寸超过当前能力上限")
     } else if detail.contains("图片解码内存超限") {
         ("IMAGE_MEMORY_LIMIT", "图片解码内存超过当前能力上限")
@@ -385,8 +428,10 @@ fn public_failure(error: &anyhow::Error) -> serde_json::Value {
     } else if detail.contains("output budget") {
         ("OUTPUT_LIMIT", "编码结果超过 32 MiB 输出限制")
     } else if detail.contains("invalid operation") {
-        #[cfg(not(feature = "crop"))]
+        #[cfg(not(any(feature = "crop", feature = "convert")))]
         let message = "缩放宽度、格式或质量参数无效";
+        #[cfg(all(feature = "convert", not(feature = "crop")))]
+        let message = "输出格式或 JPEG 质量参数无效";
         #[cfg(feature = "crop")]
         let message = "裁剪区域必须落在图片范围内";
         ("INVALID_PARAMETERS", message)
@@ -409,7 +454,7 @@ fn main() {
     }
 }
 
-#[cfg(all(test, not(feature = "crop")))]
+#[cfg(all(test, not(any(feature = "crop", feature = "convert"))))]
 mod tests {
     use super::*;
 
