@@ -260,8 +260,12 @@ fn result_too_large() -> ResultEnvelope {
     ResultEnvelope::failure("INPUT_TOO_LARGE", "结果超过 48 KiB")
 }
 
-fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
-    struct StrictSeed(usize);
+fn deserialize_strict_value<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+    depth: usize,
+    wide_integers: bool,
+) -> Result<Value, D::Error> {
+    struct StrictSeed(usize, bool);
     impl<'de> DeserializeSeed<'de> for StrictSeed {
         type Value = Value;
 
@@ -269,11 +273,11 @@ fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
             self,
             deserializer: D,
         ) -> Result<Self::Value, D::Error> {
-            deserializer.deserialize_any(StrictVisitor(self.0))
+            deserializer.deserialize_any(StrictVisitor(self.0, self.1))
         }
     }
 
-    struct StrictVisitor(usize);
+    struct StrictVisitor(usize, bool);
     impl<'de> Visitor<'de> for StrictVisitor {
         type Value = Value;
 
@@ -296,19 +300,20 @@ fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
             Ok(Value::String(value))
         }
         fn visit_i64<E: de::Error>(self, value: i64) -> Result<Value, E> {
-            if !(-9_007_199_254_740_991..=9_007_199_254_740_991).contains(&value) {
+            if !self.1 && !(-9_007_199_254_740_991..=9_007_199_254_740_991).contains(&value) {
                 return Err(E::custom("unsafe integer"));
             }
             Ok(Value::Number(Number::from(value)))
         }
         fn visit_u64<E: de::Error>(self, value: u64) -> Result<Value, E> {
-            if value > 9_007_199_254_740_991 {
+            if !self.1 && value > 9_007_199_254_740_991 {
                 return Err(E::custom("unsafe integer"));
             }
             Ok(Value::Number(Number::from(value)))
         }
         fn visit_f64<E: de::Error>(self, value: f64) -> Result<Value, E> {
-            if !value.is_finite() || (value.fract() == 0.0 && value.abs() > 9_007_199_254_740_991.0)
+            if !value.is_finite()
+                || (!self.1 && value.fract() == 0.0 && value.abs() > 9_007_199_254_740_991.0)
             {
                 return Err(E::custom("unsafe rounded integer"));
             }
@@ -317,17 +322,17 @@ fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
                 .ok_or_else(|| E::custom("invalid number"))
         }
         fn visit_seq<S: SeqAccess<'de>>(self, mut seq: S) -> Result<Value, S::Error> {
-            if self.0 >= 64 {
+            if self.0 >= if self.1 { 128 } else { 64 } {
                 return Err(de::Error::custom("depth"));
             }
             let mut result = Vec::new();
-            while let Some(value) = seq.next_element_seed(StrictSeed(self.0 + 1))? {
+            while let Some(value) = seq.next_element_seed(StrictSeed(self.0 + 1, self.1))? {
                 result.push(value);
             }
             Ok(Value::Array(result))
         }
         fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Value, M::Error> {
-            if self.0 >= 64 {
+            if self.0 >= if self.1 { 128 } else { 64 } {
                 return Err(de::Error::custom("depth"));
             }
             let mut result = serde_json::Map::new();
@@ -335,7 +340,7 @@ fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
                 if result.contains_key(&key) {
                     return Err(de::Error::custom("duplicate"));
                 }
-                let value = map.next_value_seed(StrictSeed(self.0 + 1))?;
+                let value = map.next_value_seed(StrictSeed(self.0 + 1, self.1))?;
                 result.insert(key, value);
             }
             result.sort_keys();
@@ -343,8 +348,12 @@ fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
         }
     }
 
+    StrictSeed(depth, wide_integers).deserialize(deserializer)
+}
+
+fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
     let mut deserializer = serde_json::Deserializer::from_str(input);
-    let value = StrictSeed(depth).deserialize(&mut deserializer)?;
+    let value = deserialize_strict_value(&mut deserializer, depth, false)?;
     deserializer.end()?;
     Ok(value)
 }
@@ -353,6 +362,14 @@ fn strict_json(input: &str, depth: usize) -> Result<Value, serde_json::Error> {
 /// and nesting beyond the frozen compute contract.
 pub fn parse_strict_json(input: &str) -> Result<Value, serde_json::Error> {
     strict_json(input, 0)
+}
+
+/// Deserialize a document with unique string keys and exact i64/u64 values.
+/// Callers converting decimal text must also check the source number spellings.
+pub fn deserialize_with_wide_integers<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Value, D::Error> {
+    deserialize_strict_value(deserializer, 0, true)
 }
 
 #[cfg(test)]

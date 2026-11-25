@@ -41,6 +41,36 @@ pub fn run(input: &str, action: Action) -> Result<String, &'static str> {
     String::from_utf8(writer.0).map_err(|_| "INVALID_UTF8")
 }
 
+/// Strict conversion without the JavaScript integer range restriction.
+pub fn strict_wide_value(
+    input: &str,
+    float_round_trips: fn(&str, f64) -> bool,
+) -> Result<serde_json::Value, &'static str> {
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let value = crate::deserialize_with_wide_integers(&mut deserializer).map_err(|error| {
+        if error.is_data() || error.to_string().starts_with("number out of range") {
+            "JSON_POLICY_REJECTED"
+        } else {
+            "INVALID_INPUT"
+        }
+    })?;
+    deserializer.end().map_err(|_| "INVALID_INPUT")?;
+    if !crate::json_file_numbers::lossless_wide_numbers(input, float_round_trips) {
+        return Err("JSON_POLICY_REJECTED");
+    }
+    Ok(value)
+}
+
+/// Whether two finite decimal spellings describe the same number.
+pub fn matching_decimals(source: &str, output: &str) -> bool {
+    crate::json_file_numbers::matching_decimals(source, output)
+}
+
+/// Check a source decimal against the JSON formatter's representation.
+pub fn lossless_decimal(source: &str, value: f64) -> bool {
+    crate::json_file_numbers::lossless_decimal(source, value)
+}
+
 struct Bounded(Vec<u8>);
 impl Write for Bounded {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {

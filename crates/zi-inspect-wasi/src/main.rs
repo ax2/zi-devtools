@@ -1,4 +1,6 @@
 //! One bounded request/result using the shared frozen protocol, no Host access.
+mod yaml_conversion;
+
 use std::io::{Read, Write};
 use zi_text_core::{
     CONTRACT_VERSION, REQUEST_LIMIT, ResultEnvelope, Text, execute_plugin_request, serialize_result,
@@ -21,6 +23,23 @@ fn execute(capability: &str, input: &str) -> ResultEnvelope {
     // fuel constructing output that the serializer must subsequently refuse.
     if id == "unicode.inspect" && input.chars().count() > REQUEST_LIMIT / 150 {
         return ResultEnvelope::failure("INPUT_TOO_LARGE", "结果超过 48 KiB");
+    }
+    if matches!(id, "yaml.to_json" | "yaml.from_json") {
+        return match yaml_conversion::convert(id, input) {
+            Ok(text) => ResultEnvelope {
+                contract_version: CONTRACT_VERSION,
+                ok: true,
+                data: Some(Text { text }),
+                error: None,
+            },
+            Err(yaml_conversion::Error::Policy) => ResultEnvelope::failure(
+                "INVALID_INPUT",
+                "Conversion requires unique keys and lossless numbers. 转换要求键唯一，且数值能精确往返。",
+            ),
+            Err(yaml_conversion::Error::Syntax) => {
+                ResultEnvelope::failure("INVALID_INPUT", "输入无法按该操作处理")
+            }
+        };
     }
     match zi_inspect_core::run(id, input) {
         Ok(text) => ResultEnvelope {
