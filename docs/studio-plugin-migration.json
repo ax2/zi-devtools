@@ -2197,8 +2197,10 @@
       "sourceVersion": "1.5.1",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.sqlite.snapshot.browse"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2208,9 +2210,33 @@
           "sourceVersion": "1.5.1",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.sqlite.snapshot.browse",
+          "scopeKind": "confirmed_single_sqlite_snapshot_browser",
+          "scope": "浏览一份自包含 UTF-8 SQLite 文件的表目录和普通表页，可生成一个完整页的 CSV 供确认另存。",
+          "sourceVersion": "1.5.1",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 131072,
+            "catalogObjects": 64,
+            "pageRows": 16,
+            "maxPages": 16,
+            "columns": 16,
+            "maxCellBytes": 512,
+            "maxPageBytes": 6144,
+            "outputCsvBytes": 24576
+          },
+          "runtimeVerification": "40_fixed_native_production_windows_worker_and_exact_csv_parity",
+          "blockingReason": "支持静态只读目录与普通表分页，视图或虚拟表数据、任意 SQL、可写打开、外部扩展和 WAL 保留。接收方单独验证正常入口、按次文件确认及 CSV 保存。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "复用原生只读表分页和 CSV 编码，从本次明确确认的单份静态库查看目录及普通表。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.sqlite-browser",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/sqlite-browser-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/sqlite-browser-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "http-collections",

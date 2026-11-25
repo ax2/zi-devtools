@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--sqlite-source", required=True, type=Path,
                         help="sqlite3.c from Cargo's locked libsqlite3-sys 0.30.1")
     parser.add_argument("--work", required=True, type=Path, help="Writable directory for build-only C artifacts")
+    parser.add_argument("--package", choices=("zi-table-sqlite-wasi", "zi-sqlite-browser-wasi"),
+                        default="zi-table-sqlite-wasi", help="SQLite guest to build")
     args = parser.parse_args()
     compiler, sqlite, work = (value.resolve() for value in (args.zig, args.sqlite_source, args.work))
     if hashlib.sha256(sqlite.read_bytes()).hexdigest() != SOURCE_SHA:
@@ -38,7 +40,7 @@ def main():
     context.update(LIBSQLITE3_SYS_USE_PKG_CONFIG="1", SQLITE3_LIB_DIR=str(work),
                    SQLITE3_INCLUDE_DIR=str(sqlite.parent), SQLITE3_STATIC="1")
     subprocess.run(["cargo", "build", "--offline", "--locked", "--target", "wasm32-wasip1",
-                    "--profile", "plugin", "-p", "zi-table-sqlite-wasi"],
+                    "--profile", "plugin", "-p", args.package],
                    cwd=ROOT, env=context, check=True)
 
 
