@@ -27,7 +27,8 @@ proof = json.loads(args.proof.read_text(encoding='utf-8'))
 digest = lambda data: hashlib.sha256(data).hexdigest()
 module = args.wasm.read_bytes()
 assert digest(module)==proof['wasmSha256'] and len(module)<=2*1024*1024
-assert len(proof['cases'])==67, 'Expected 43 baseline and 24 SQL option native/WASI cases'
+assert len(proof['cases']) == 76, 'Expected the 67 frozen cases and nine dense SQL additions'
+assert sum(case['id'].startswith('sql-options-dense-') for case in proof['cases']) == 9
 view_proof = json.loads(args.view_proof.read_text(encoding='utf-8'))
 budget_proof = json.loads(args.budget_proof.read_text(encoding='utf-8'))
 cold_proof = json.loads(args.cold_proof.read_text(encoding='utf-8'))
@@ -51,10 +52,11 @@ for case_id,case in fixture_cases.items():
         assert digest(contents)==case[sha_field]==budget_case[sha_field]
 git = lambda *a: subprocess.check_output(['git',*a],cwd=root).decode().strip()
 source = dict(revision=git('rev-parse','HEAD'),dirty=bool(git('status','--porcelain')))
+assert not source['dirty'], 'Commit the candidate source before freezing'
 contract = root/'contracts/studio-devtools/v1'
 catalog = json.loads((contract/'catalog.example.json').read_text(encoding='utf-8'))
 plugin = json.loads((contract/'plugin.example.json').read_text(encoding='utf-8'))
-plugin['version'] = '0.4.2'
+plugin['version'] = '0.4.3'
 catalog['packageVersion'] = plugin['version']
 catalog['source']=source
 versions = {item['id']:item['tool_version'] for item in json.loads((root/'docs/tools.json').read_text(encoding='utf-8'))['tools']}
@@ -103,6 +105,7 @@ source_files = [root/'Cargo.lock',root/'Cargo.toml',root/'docs/tools.json',
                 root/'plugins/text/README.md',root/'plugins/text/views/main.html',sql_input_file]
 source_files += sorted((root/'crates').rglob('*.rs')) + sorted((root/'crates').rglob('Cargo.toml'))
 source_files += sorted((root/'contracts/studio-tool-directory/1.0.0-preview.1').glob('*'))
+source_files += sorted(path for path in (root/'vendor/sqlformat').rglob('*') if path.is_file())
 provenance['sourceFiles'] = [dict(path=path.relative_to(root).as_posix(),sha256=digest(path.read_bytes())) for path in source_files]
 def write(path,data):
     target=output/path
@@ -112,7 +115,7 @@ def json_bytes(value): return (json.dumps(value,ensure_ascii=False,indent=2)+'\n
 write(Path('runtime/tools.wasm'),module)
 write(Path('plugin.json'),json_bytes(plugin))
 write(Path('verification/tool-directory-snapshot.json'),directory_snapshot_bytes)
-write(Path('MIGRATION.md'),('''# Migration to the Text 0.4.2 candidate\n\nThe seven capability IDs and the directory profile are unchanged. SQL accepts optional dialect, indent and keywordCase. A text-only request produces the former generic, four-space, uppercase result. The other capabilities retain their text-only schemas. The SQL response still contains text. The packaged Text View continues to use the generic defaults. The prior 0.4.1 directory remains available. This unsigned candidate requires separate Studio install and lifecycle acceptance.\n''').encode())
+write(Path('MIGRATION.md'),('''# Migration to the Text 0.4.3 candidate\n\nThe seven capability IDs and the directory profile are unchanged. SQL accepts optional dialect, indent and keywordCase. A text-only request produces the former generic, four-space, uppercase result. The other capabilities retain their text-only schemas. The SQL response still contains text. The packaged Text View continues to use the generic defaults. Common dense 8 KiB SQL templates now complete within the existing Worker budget. The 0.4.2 directory remains available. This unsigned candidate requires separate Studio install and lifecycle acceptance.\n''').encode())
 write(Path('verification/fuel-proof.json'),json_bytes(budget_proof))
 write(Path('verification/cold-proof.json'),json_bytes(cold_proof))
 write(Path('verification/engine-provenance.json'),json_bytes(engine_provenance))
@@ -120,7 +123,7 @@ write(Path('verification/verify_fuel.py'),(root/'scripts/verify_diagnostics_fuel
 write(Path('verification/verify_cold.py'),(root/'scripts/verify_diagnostics_cold.py').read_bytes())
 write(Path('verification/bootstrap_engine.py'),(root/'scripts/bootstrap_diagnostics_engine.py').read_bytes())
 write(Path('verification/requirements.txt'),b'wasmtime==36.0.0\n')
-write(Path('verification/README.md'),('''# Replaying the independent runtime proofs\n\nThe package is an unsigned provider directory, not a Studio Host acceptance result. Replaying requires Windows PowerShell, Python 3.13, network access for the hash-pinned Wasmtime 36.0.2 C-API archive, and the package files. From the repository root, create a new cache under `target` and record its local engine identity:\n\n```powershell\npy -3.13 verification/bootstrap_engine.py --cache-dir target/text-plugin-wasmtime-36.0.2 --provenance target/text-plugin-engine.json\n$env:PYTHONPATH = (Resolve-Path target/text-plugin-wasmtime-36.0.2).Path\npy -3.13 verification/verify_fuel.py --wasm release/text-plugin-0.4.2-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.2-candidate-01/fixtures/budget --output target/text-plugin-fuel --text-results --engine-provenance target/text-plugin-engine.json\npy -3.13 verification/verify_cold.py --wasm release/text-plugin-0.4.2-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.2-candidate-01/fixtures/budget --output target/text-plugin-cold.json --engine-provenance target/text-plugin-engine.json\n```\n\nThe packaged fuel/cold proofs bind the WASM digest, raw requests, exact expected response bytes, Wasmtime native DLL digest and all 67 case IDs. They do not test Studio's production Worker, UI bridge, Pi authorization, install lifecycle or Host pipe behavior.\n''').encode())
+write(Path('verification/README.md'),('''# Replaying the independent runtime proofs\n\nThe package is an unsigned provider directory, not a Studio Host acceptance result. Replaying requires Windows PowerShell, Python 3.13, network access for the hash-pinned Wasmtime 36.0.2 C-API archive, and the package files. From the repository root, create a new cache under `target` and record its local engine identity:\n\n```powershell\npy -3.13 verification/bootstrap_engine.py --cache-dir target/text-plugin-wasmtime-36.0.2 --provenance target/text-plugin-engine.json\n$env:PYTHONPATH = (Resolve-Path target/text-plugin-wasmtime-36.0.2).Path\npy -3.13 verification/verify_fuel.py --wasm release/text-plugin-0.4.3-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.3-candidate-01/fixtures/budget --output target/text-plugin-fuel --text-results --engine-provenance target/text-plugin-engine.json\npy -3.13 verification/verify_cold.py --wasm release/text-plugin-0.4.3-candidate-01/runtime/tools.wasm --fixtures release/text-plugin-0.4.3-candidate-01/fixtures/budget --output target/text-plugin-cold.json --engine-provenance target/text-plugin-engine.json\n```\n\nThe packaged fuel/cold proofs bind the WASM digest, raw requests, exact expected response bytes, Wasmtime native DLL digest and all 76 case IDs. They do not test Studio's production Worker, UI bridge, Pi authorization, install lifecycle or Host pipe behavior.\n''').encode())
 for case_file in sorted(args.cases_dir.iterdir()):
     if case_file.is_file():
         write(Path('fixtures/budget')/case_file.name,case_file.read_bytes())
@@ -141,19 +144,26 @@ write(Path('fixtures/sql-format.json'),json_bytes({
     'operations':[{'capabilityId':'devtools.text.sql.format',
                    'input':'select id,name from users where active=true',
                    'expected':'SELECT id, name\nFROM users\nWHERE active = TRUE'}],
-    'limitations':['dense SQL may exhaust the unchanged Worker fuel budget','no semantic validation or database connection']}))
+    'limitations':['deep or other unusually complex SQL can still reach the unchanged Worker budgets','no semantic validation or database connection']}))
 write(Path('views/main.html'),(root/'plugins/text/views/main.html').read_bytes())
 write(Path('LICENSE'),(root/'LICENSE').read_bytes())
-write(Path('NOTICE'),b'ZiDevTools Text 0.4.2. MIT. Rust core dependencies: serde/serde_json (MIT OR Apache-2.0), base64 (MIT OR Apache-2.0), sha2 and RustCrypto dependencies (MIT OR Apache-2.0), sqlformat (MIT OR Apache-2.0). Rust standard library (MIT OR Apache-2.0).\n')
+for license_name in ['LICENSE-MIT', 'LICENSE-APACHE']:
+    write(Path('licenses') / ('sqlformat-' + license_name), (root/'vendor/sqlformat'/license_name).read_bytes())
+write(Path('NOTICE'),b'ZiDevTools Text 0.4.3. MIT. Rust core dependencies: serde/serde_json (MIT OR Apache-2.0), base64 (MIT OR Apache-2.0), sha2 and RustCrypto dependencies (MIT OR Apache-2.0), sqlformat (MIT OR Apache-2.0). Rust standard library (MIT OR Apache-2.0).\n')
 write(Path('README.md'),(root/'plugins/text/README.md').read_bytes())
 files=[]
 for path in sorted(output.rglob('*')):
     if path.is_file():
         data=path.read_bytes()
         assert len(data)<=10*1024*1024
-        files.append(dict(path=path.relative_to(output).as_posix(),sha256=digest(data),size=len(data)))
+        files.append(dict(path=path.relative_to(output).as_posix(),size=len(data),sha256=digest(data)))
 assert len(files)<=2048 and sum(item['size'] for item in files)<=50*1024*1024
 index_bytes=json.dumps(files,ensure_ascii=False,separators=(',',':')).encode()
-verification=dict(**provenance,files=files,directoryIndexSha256=digest(index_bytes),packageSha256=None,signature='unsigned; no .zicode-plugin container or signing key',functionalProof=proof,viewProof=view_proof,fuelProof=budget_proof,coldProof=cold_proof,unverified=['Studio install, update/rollback, revoke, uninstall','Studio production Worker, pipe-drain and Host timing behavior','Actual Host SDK, scenes and Pi Broker authorization','macOS/Linux standalone and Host behavior'])
+verification=dict(**provenance,schemaVersion=1,pluginId=plugin['id'],packageVersion=plugin['version'],
+                  signatureVerified=False,files=files,fileCount=len(files),totalBytes=sum(row['size'] for row in files),
+                  directoryIndexSha256=digest(index_bytes),
+                  directoryIndexEncoding=dict(hash="SHA-256",encoding="UTF-8",content="files array in listed order",
+                      objectKeyOrder=["path","size","sha256"],ensureAscii=False,separators=[",",":"],trailingNewline=False),
+                  packageSha256=None,signature='unsigned; no .zicode-plugin container or signing key',functionalProof=proof,viewProof=view_proof,fuelProof=budget_proof,coldProof=cold_proof,unverified=['Studio install, update/rollback, revoke, uninstall','Studio production Worker, pipe-drain and Host timing behavior','Actual Host SDK, scenes and Pi Broker authorization','macOS/Linux standalone and Host behavior'])
 output.parent.joinpath(output.name+'-verification.json').write_bytes(json_bytes(verification))
 print(f'Unsigned candidate: {output}; {len(files)} files, {sum(item["size"] for item in files)} bytes; no signed package')

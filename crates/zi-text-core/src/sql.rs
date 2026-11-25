@@ -3,6 +3,8 @@ use std::{borrow::Cow, collections::BTreeMap, fmt::Write};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Deserializer};
 use sqlformat::{Dialect as FormatterDialect, FormatOptions, Indent, QueryParams};
+#[cfg(target_os = "wasi")]
+use sqlformat_wasi as sqlformat;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
