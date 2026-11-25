@@ -224,11 +224,11 @@ crop_row["operationScopes"].append(dict(
 
 log_row = next(row for row in rows if row["sourceToolId"] == "log-viewer")
 log_row.update(
-    pluginStatus="candidate", candidateCapabilities=["devtools.log-viewer.filter"], scopeComplete=False,
-    packageId="com.zicode.devtools.log-viewer", packageVersion="0.1.0",
-    candidateDirectory="release/plugin-candidates/log-viewer-0.1.0-candidate-02",
-    verificationReceipt="release/plugin-candidates/log-viewer-0.1.0-candidate-02-verification.json",
-    reason="单份确认 UTF-8 日志的多行事件、级别和字面筛选已通过 Windows Worker。",
+    pluginStatus="candidate", candidateCapabilities=["devtools.log-viewer.filter", "devtools.log-viewer.tail"], scopeComplete=False,
+    packageId="com.zicode.devtools.log-viewer", packageVersion="0.2.0",
+    candidateDirectory="release/plugin-candidates/log-viewer-0.2.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/log-viewer-0.2.0-candidate-01-verification.json",
+    reason="单份确认 UTF-8 日志的多行事件、级别、字面筛选和有界末尾窗口已通过 Windows Worker。",
 )
 log_row["operationScopes"].append(dict(
     operationId="devtools.log-viewer.filter", scopeKind="confirmed_local_log_event_preview",
@@ -237,6 +237,16 @@ log_row["operationScopes"].append(dict(
     limits=dict(inputBytes=16384, queryBytes=256, previewBytes=512, displayedEvents=12),
     runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
     blockingReason="独立版的大日志流式索引、分页、时间定位与轮转尚未接入。",
+))
+
+log_row["operationScopes"].append(dict(
+    operationId="devtools.log-viewer.tail", scopeKind="bounded_log_tail_snapshot",
+    scope="只分析已确认日志快照的末尾 16 KiB，并用前一字节核对整行。报告窗口、有效分析范围与边界裁切。",
+    sourceVersion=log_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(confirmedSnapshotBytes=32 * 1024 * 1024, windowBytes=16384, lookbehindBytes=1,
+                queryBytes=256, eventPreviewBytes=512, displayedEvents=12),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="整份快照仍由 Host 接收；无全文件分析、实时轮转、流式索引、分页和新的文件权限。",
 ))
 
 for operation, source_id, title in trace_actions:
