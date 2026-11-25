@@ -6058,6 +6058,7 @@ dependencies = [
  "zi-json-core",
  "zi-json-object-wasi",
  "zi-json-schema-core",
+ "zi-knowledge-keyword-core",
  "zi-knowledge-source-core",
  "zi-log-core",
  "zi-matrix-core",
@@ -6371,6 +6372,25 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-json-schema-core",
+]
+
+[[package]]
+name = "zi-knowledge-keyword-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+]
+
+[[package]]
+name = "zi-knowledge-keyword-wasi"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "zi-knowledge-keyword-core",
+ "zi-resource-input-wasi",
 ]
 
 [[package]]

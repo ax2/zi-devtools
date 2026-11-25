@@ -1,0 +1,10 @@
+[package]
+name = "zi-knowledge-keyword-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+rusqlite = { version = "0.32.1", features = ["bundled"] }
