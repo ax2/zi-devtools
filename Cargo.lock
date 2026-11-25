@@ -6024,6 +6024,7 @@ dependencies = [
  "zi-shell-core",
  "zi-table-core",
  "zi-text-core",
+ "zi-tool-collections-core",
  "zi-trace-core",
  "zip",
 ]
@@ -6499,6 +6500,25 @@ name = "zi-text-wasi"
 version = "0.1.0"
 dependencies = [
  "zi-text-core",
+]
+
+[[package]]
+name = "zi-tool-collections-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-tool-collections-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-resource-input-wasi",
+ "zi-tool-collections-core",
 ]
 
 [[package]]

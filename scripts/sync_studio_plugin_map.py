@@ -584,6 +584,28 @@ for operation, kind, scope in prompt_operations:
                        "本候选的超长展开仅提供有界预览。",
     ))
 
+tool_collections_row = next(row for row in rows if row["sourceToolId"] == "command-collections")
+tool_collections_capability = "devtools.collections.preview"
+tool_collections_row.update(
+    pluginStatus="candidate", candidateCapabilities=[tool_collections_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.tool-collections", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/tool-collections-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/tool-collections-0.1.0-candidate-01-verification.json",
+    reason="复用版本 1 的原生导入计划，只读查看集合名称、显式比较得到的改名与有序工具 ID。",
+)
+tool_collections_row["operationScopes"].append(dict(
+    operationId=tool_collections_capability, scopeKind="bounded_confirmed_collection_import_plan",
+    scope="校验本机版本 1 工具集合 JSON，保留集合和工具 ID 顺序，按明确填写的名称计算冲突改名。"
+          "可按集合、工具起始序号查看后续项目，未知 ID 作为原文保留。",
+    sourceVersion=tool_collections_row["sourceVersion"], pluginStatus="candidate",
+    limits=dict(inputBytes=131072, combinedCollections=128, toolsPerCollection=512,
+                collectionPageSize=16, memberPageSize=16, memberPageEncodedBytes=4096,
+                serializedResultBytes=24576),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="只读版本 1，实际写入、现有偏好读取和跨机器同步保留给原生功能。"
+                   "独立版 1 MiB，本候选验证 128 KiB。",
+))
+
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)
     assert row["pluginStatus"] == "candidate"
