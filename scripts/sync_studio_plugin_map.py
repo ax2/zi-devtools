@@ -407,7 +407,7 @@ for action, scope in matrix_ops.items():
         limits=dict(matrixRows=8, matrixColumns=8, matrixBytes=4096, cellBytes=96,
                     requestBytes=16384, serializedResultBytes=12288),
         runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
-        blockingReason="仅七项实数 TSV 运算。原生网格、表达式、变量、复数、工作表和求根未迁移；Studio Host 安装及工具中心尚待验收。",
+        blockingReason="仅七项实数 TSV 运算。原生网格、独立表达式、变量、复数和工作表未迁移；Studio Host 安装及工具中心尚待验收。",
     ))
 
 statistics_ops = {
@@ -437,8 +437,28 @@ for action, scope in statistics_ops.items():
                     minValues=2 if action.startswith("sample_") else 1,
                     requestBytes=16384, serializedResultBytes=1024),
         runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
-        blockingReason="仅实数一维数列统计，排列组合、表达式、变量、工作表、图表和求根未迁移；Studio 安装及工具中心待验收。",
+        blockingReason="仅实数一维数列统计，排列组合、独立表达式、变量、工作表和图表未迁移；Studio 安装及工具中心待验收。",
     ))
+
+root_capability = "devtools.roots.bisect"
+root_package = dict(
+    packageId="com.zicode.devtools.root-solver", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/root-solver-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/root-solver-0.1.0-candidate-01-verification.json",
+)
+date_row["candidatePackages"].append(dict(**root_package, capabilities=[root_capability]))
+date_row["candidateCapabilities"].append(root_capability)
+date_row["reason"] = "日期四项、矩阵与数值统计各七项、区间二分求根作为独立离线候选。独立版计算器范围尚未完整迁移。"
+date_row["operationScopes"].append(dict(
+    operationId=root_capability, scopeKind="bounded_real_bisection",
+    scope="在给定区间用原生二分法估算一个实函数的候选点，报告残差、迭代和收敛状态。",
+    sourceVersion=date_row["sourceVersion"], pluginStatus="candidate", **root_package,
+    limits=dict(formulaUtf8Bytes=2048, formulaTokens=512, expressionDepth=64, maxAbsEndpoint=1_000_000_000_000,
+                minTolerance=1e-12, maxTolerance=1e-2, minIterations=1, maxIterations=200, explicitConstants=64,
+                guestWorkUnits=22000, requestBytes=16384, serializedResultBytes=1024),
+    runtimeVerification="fixed_synthetic_native_windows_production_worker_parity",
+    blockingReason="仅用户提供区间的一个候选点。复杂度预算、连续性未证明、极点及偶重根限制均明示。独立表达式、变量会话、绘图、工作表和数值接力未迁移。",
+))
 
 for operation, source_id, title in trace_actions:
     row = next(row for row in rows if row["sourceToolId"] == source_id)

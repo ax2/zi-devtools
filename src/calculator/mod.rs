@@ -2,7 +2,6 @@
 mod dates;
 pub mod exchange;
 mod matrix_ui;
-mod parser;
 mod plot;
 #[cfg(feature = "ui-preview")]
 mod plot_preview;
@@ -16,14 +15,8 @@ mod worksheet_ui;
 pub use ui::State;
 
 use std::collections::BTreeMap;
-pub use zi_matrix_core::Value;
-use zi_matrix_core::{complex_sqrt, matrix};
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Angle {
-    Radians,
-    Degrees,
-}
+pub use zi_matrix_core::{Angle, Value, valid_variable};
+use zi_matrix_core::{expression as parser, matrix};
 
 pub fn evaluate(
     expression: &str,
@@ -31,13 +24,6 @@ pub fn evaluate(
     angle: Angle,
 ) -> Result<Value, String> {
     parser::evaluate(expression, variables, angle)
-}
-
-pub fn valid_variable(name: &str) -> bool {
-    !matches!(name, "pi" | "e" | "i" | "ans")
-        && (1..=32).contains(&name.len())
-        && name.as_bytes()[0].is_ascii_alphabetic()
-        && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
 }
 
 #[cfg(test)]
@@ -137,7 +123,7 @@ mod tests {
         let (real, imaginary) = large.parts();
         assert!((real - 1.0).abs() < 1e-12);
         assert!(imaginary.abs() < 1e-12);
-        let (root_real, root_imaginary) = super::complex_sqrt(1e308, 1e308);
+        let (root_real, root_imaginary) = zi_matrix_core::complex_sqrt(1e308, 1e308);
         assert!(root_real.is_finite() && root_imaginary.is_finite());
         assert!(evaluate("floor(1+i)", &BTreeMap::new(), Angle::Radians).is_err());
         assert!(

@@ -1,8 +1,8 @@
-use super::{Angle, Value};
+use super::{Angle, Value, exact_number as number};
 use std::collections::BTreeMap;
-use zi_matrix_core::exact_number as number;
 
-#[derive(Clone)]
+mod bisection;
+
 enum Token {
     Number(Value),
     Name(String),
@@ -12,15 +12,65 @@ enum Token {
     Comma,
     End,
 }
-struct Parser<'a> {
-    tokens: &'a [(Token, usize)],
-    at: usize,
-    depth: usize,
+trait Evaluation {
+    type Output: Copy;
+
+    fn number(value: Value) -> Self::Output;
+    fn variable(&self, name: &str) -> Option<Result<Self::Output, String>>;
+    fn prefix(&mut self, op: &str, value: Self::Output) -> Result<Self::Output, String>;
+    fn binary(
+        &mut self,
+        op: &'static str,
+        left: Self::Output,
+        right: Self::Output,
+        column: usize,
+    ) -> Result<Self::Output, String>;
+    fn function(&mut self, name: &str, args: Vec<Self::Output>) -> Result<Self::Output, String>;
+}
+
+struct Direct<'a> {
     variables: &'a BTreeMap<String, Value>,
     angle: Angle,
 }
 
-pub(super) fn evaluate(
+impl Evaluation for Direct<'_> {
+    type Output = Value;
+
+    fn number(value: Value) -> Value {
+        value
+    }
+
+    fn variable(&self, name: &str) -> Option<Result<Value, String>> {
+        variable(self.variables, name)
+    }
+
+    fn prefix(&mut self, op: &str, value: Value) -> Result<Value, String> {
+        prefix(op, value)
+    }
+
+    fn binary(
+        &mut self,
+        op: &'static str,
+        left: Value,
+        right: Value,
+        column: usize,
+    ) -> Result<Value, String> {
+        binary(op, left, right, column)
+    }
+
+    fn function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, String> {
+        function(name, &args, self.angle)
+    }
+}
+
+struct Parser<'a, E> {
+    tokens: &'a [(Token, usize)],
+    at: usize,
+    depth: usize,
+    evaluation: E,
+}
+
+pub fn evaluate(
     input: &str,
     variables: &BTreeMap<String, Value>,
     angle: Angle,
@@ -46,22 +96,11 @@ pub(super) fn evaluate(
             .binary("/", target.1);
     }
     let tokens = lex(input)?;
-    let mut p = Parser {
-        tokens: &tokens,
-        at: 0,
-        depth: 0,
-        variables,
-        angle,
-    };
-    let result = p.expression(0)?;
-    if !matches!(p.tokens[p.at].0, Token::End) {
-        return Err(p.error("存在多余内容"));
-    }
-    Ok(result)
+    Parser::new(&tokens, Direct { variables, angle }).parse()
 }
 
 /// Reuse bounded lexing when evaluating the same formula at many coordinates.
-pub(super) struct Prepared {
+pub struct Prepared {
     tokens: Vec<(Token, usize)>,
 }
 impl Prepared {
@@ -78,18 +117,7 @@ impl Prepared {
         variables: &BTreeMap<String, Value>,
         angle: Angle,
     ) -> Result<Value, String> {
-        let mut p = Parser {
-            tokens: &self.tokens,
-            at: 0,
-            depth: 0,
-            variables,
-            angle,
-        };
-        let result = p.expression(0)?;
-        if !matches!(p.tokens[p.at].0, Token::End) {
-            return Err(p.error("存在多余内容"));
-        }
-        Ok(result)
+        Parser::new(&self.tokens, Direct { variables, angle }).parse()
     }
 }
 
@@ -196,28 +224,46 @@ fn lex(input: &str) -> Result<Vec<(Token, usize)>, String> {
     Ok(tokens)
 }
 
-impl Parser<'_> {
-    fn error(&self, message: &str) -> String {
-        format!("第 {} 列：{message}", self.tokens[self.at].1 + 1)
+impl<'a, E: Evaluation> Parser<'a, E> {
+    fn new(tokens: &'a [(Token, usize)], evaluation: E) -> Self {
+        Self {
+            tokens,
+            at: 0,
+            depth: 0,
+            evaluation,
+        }
     }
-    fn expression(&mut self, min: u8) -> Result<Value, String> {
+
+    fn parse(&mut self) -> Result<E::Output, String> {
+        let result = self.expression(0)?;
+        if !matches!(self.tokens[self.at].0, Token::End) {
+            return Err(self.error("存在多余内容"));
+        }
+        Ok(result)
+    }
+
+    fn column(&self) -> usize {
+        self.tokens[self.at].1 + 1
+    }
+
+    fn error(&self, message: &str) -> String {
+        format!("第 {} 列：{message}", self.column())
+    }
+    fn expression(&mut self, min: u8) -> Result<E::Output, String> {
         if self.depth >= 64 {
             return Err(self.error("表达式嵌套最多 64 层"));
         }
         self.depth += 1;
-        let mut left = match self.tokens[self.at].0.clone() {
+        let tokens = self.tokens;
+        let mut left = match &tokens[self.at].0 {
             Token::Number(v) => {
                 self.at += 1;
-                v
+                E::number(*v)
             }
             Token::Op(op @ ("+" | "-" | "~")) => {
                 self.at += 1;
                 let v = self.expression(60)?;
-                match op {
-                    "-" => v.checked_neg()?,
-                    "~" => Value::Exact(!v.integer()?, 1),
-                    _ => v,
-                }
+                self.evaluation.prefix(op, v)?
             }
             Token::Open => {
                 self.at += 1;
@@ -249,30 +295,16 @@ impl Parser<'_> {
                         return Err(self.error("函数缺少右括号"));
                     }
                     self.at += 1;
-                    function(&name, &args, self.angle)?
+                    self.evaluation.function(name, args)?
                 } else {
-                    match name.as_str() {
-                        "pi" => Value::Approx(std::f64::consts::PI),
-                        "e" => Value::Approx(std::f64::consts::E),
-                        "i" => Value::Complex(0.0, 1.0),
-                        _ => match *self
-                            .variables
-                            .get(&name)
-                            .ok_or_else(|| self.error(&format!("未知变量 {name}")))?
-                        {
-                            Value::Exact(n, d) => Value::exact(n, d)?,
-                            Value::Approx(x) => Value::approximate(x)?,
-                            Value::Complex(real, imaginary) => Value::complex(real, imaginary)?,
-                        },
-                    }
+                    self.evaluation
+                        .variable(name)
+                        .ok_or_else(|| self.error(&format!("未知变量 {name}")))??
                 }
             }
             _ => return Err(self.error("需要数字、变量或左括号")),
         };
-        loop {
-            let Token::Op(op) = self.tokens[self.at].0 else {
-                break;
-            };
+        while let Token::Op(op) = self.tokens[self.at].0 {
             let (l, r) = match op {
                 "|" => (10, 11),
                 "&" => (20, 21),
@@ -287,11 +319,37 @@ impl Parser<'_> {
             }
             self.at += 1;
             let right = self.expression(r)?;
-            left = left.binary(op, right).map_err(|e| self.error(&e))?;
+            left = self.evaluation.binary(op, left, right, self.column())?;
         }
         self.depth -= 1;
         Ok(left)
     }
+}
+
+fn variable(variables: &BTreeMap<String, Value>, name: &str) -> Option<Result<Value, String>> {
+    Some(match name {
+        "pi" => Ok(Value::Approx(std::f64::consts::PI)),
+        "e" => Ok(Value::Approx(std::f64::consts::E)),
+        "i" => Ok(Value::Complex(0.0, 1.0)),
+        _ => match *variables.get(name)? {
+            Value::Exact(n, d) => Value::exact(n, d),
+            Value::Approx(x) => Value::approximate(x),
+            Value::Complex(real, imaginary) => Value::complex(real, imaginary),
+        },
+    })
+}
+
+fn prefix(op: &str, value: Value) -> Result<Value, String> {
+    match op {
+        "-" => value.checked_neg(),
+        "~" => Ok(Value::Exact(!value.integer()?, 1)),
+        _ => Ok(value),
+    }
+}
+
+fn binary(op: &str, left: Value, right: Value, column: usize) -> Result<Value, String> {
+    left.binary(op, right)
+        .map_err(|reason| format!("第 {column} 列：{reason}"))
 }
 
 fn function(name: &str, args: &[Value], angle: Angle) -> Result<Value, String> {
