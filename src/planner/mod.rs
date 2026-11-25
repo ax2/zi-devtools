@@ -53,37 +53,10 @@ use std::{
     time::Instant,
 };
 
-const MIN_YEAR: i32 = 1901;
-const MAX_YEAR: i32 = 2099;
+use zi_ics_preview_core::recurrence::{MAX_YEAR, MIN_YEAR, Repeat};
+
 const MAX_ITEMS: usize = 2000;
 const MAX_BODY: usize = 128 * 1024;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum Repeat {
-    Once,
-    Daily,
-    Weekly,
-    Monthly,
-    Yearly,
-}
-impl Repeat {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Once => "不重复",
-            Self::Daily => "每天",
-            Self::Weekly => "每周",
-            Self::Monthly => "每月",
-            Self::Yearly => "每年",
-        }
-    }
-    fn days(self) -> Option<i64> {
-        match self {
-            Self::Once | Self::Monthly | Self::Yearly => None,
-            Self::Daily => Some(1),
-            Self::Weekly => Some(7),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

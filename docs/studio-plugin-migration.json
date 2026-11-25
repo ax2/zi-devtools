@@ -4957,8 +4957,10 @@
       "sourceVersion": "0.1.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.calendar.ics.count_cutoff"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -4968,9 +4970,32 @@
           "sourceVersion": "0.1.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.calendar.ics.count_cutoff",
+          "scopeKind": "bounded_confirmed_ics_count_cutoff",
+          "scope": "单日程 ICS，支持全天和浮动整分钟 DTSTART。显示日、周、月、年规则的包含末次；COUNT=1 显示单次。",
+          "sourceVersion": "0.1.0",
+          "pluginStatus": "candidate",
+          "limits": {
+            "inputBytes": 16384,
+            "maxPhysicalLines": 512,
+            "maxEvents": 1,
+            "maxRuleBytes": 512,
+            "firstYear": 1901,
+            "lastYear": 2099,
+            "serializedResultBytes": 2048
+          },
+          "runtimeVerification": "fixed_synthetic_native_windows_production_worker_parity",
+          "blockingReason": "UTC、TZID、重复例外、超出原生支持的规则、多事件和写入或同步不在本候选范围。单独验收 Windows 安装与资料生命周期。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "复用独立版 COUNT 截止计算，逐次确认一份本机 ICS，显示末次开始和可用的 UNTIL。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.ics-count",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/ics-count-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/ics-count-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "memo-library",

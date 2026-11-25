@@ -3,23 +3,19 @@ use super::*;
 use anyhow::{Context, bail};
 use chrono::{Timelike, Utc};
 use ical::property::Property;
-use zi_ics_preview_core::{prop, text_value, value};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
     path::Path,
 };
+use zi_ics_preview_core::{prop, recurrence::parse_rule, text_value, value};
 
 const LIMIT: usize = 16 * 1024 * 1024;
 const UID_DOMAIN: &str = "@zi-devtools.zicode.com";
 pub(super) struct Import {
     pub records: Vec<Item>,
     pub notices: Vec<String>,
-}
-enum CountConversion {
-    Single,
-    Until,
 }
 
 fn extension(path: &Path) -> Result<()> {
@@ -325,11 +321,15 @@ fn parse_event(props: &[Property], notices: &mut HashSet<String>) -> Result<Item
             !utc,
             "UTC 重复日程暂不导入：转换为本机钟表重复会改变夏令时后的安排"
         );
-        match parse_rule(s, rule)? {
-            Some(CountConversion::Single) => {
+        let rule = parse_rule(s.start, s.all_day, rule)?;
+        s.repeat = rule.repeat;
+        s.repeat_until = rule.repeat_until;
+        s.clamp_missing_day = rule.clamp_missing_day;
+        match rule.count {
+            Some(result) if result.count == 1 => {
                 notices.insert("RRULE COUNT=1 已转换为单次日程；再次导出时不含重复规则。".into());
             }
-            Some(CountConversion::Until) => {
+            Some(_) => {
                 notices.insert(
                     "重复次数 COUNT 已换算为本机重复规则的截止日期；再次导出时会使用 UNTIL。"
                         .into(),
@@ -374,131 +374,6 @@ fn parse_event(props: &[Property], notices: &mut HashSet<String>) -> Result<Item
     }
     item.validate()?;
     Ok(item)
-}
-
-fn parse_rule(s: &mut Schedule, rule: &str) -> Result<Option<CountConversion>> {
-    let mut parts = HashMap::new();
-    for part in rule.split(';') {
-        let (key, value) = part.split_once('=').context("RRULE 格式无效")?;
-        ensure!(
-            parts
-                .insert(key.to_ascii_uppercase(), value.to_ascii_uppercase())
-                .is_none(),
-            "RRULE 属性重复"
-        );
-    }
-    ensure!(
-        parts.remove("INTERVAL").is_none_or(|v| v == "1"),
-        "暂不支持间隔大于 1 的重复规则"
-    );
-    let until = parts.remove("UNTIL");
-    let count = parts.remove("COUNT");
-    ensure!(
-        until.is_none() || count.is_none(),
-        "RRULE 不能同时设置 UNTIL 和 COUNT"
-    );
-    if let Some(until) = until {
-        let day = if s.all_day {
-            ensure!(
-                until.len() == 8 && until.bytes().all(|b| b.is_ascii_digit()),
-                "全天重复的 UNTIL 必须是 YYYYMMDD 日期"
-            );
-            NaiveDate::parse_from_str(&until, "%Y%m%d")?
-        } else {
-            ensure!(
-                until.len() == 15 && until.as_bytes()[8] == b'T',
-                "浮动时间的 UNTIL 必须是本地 YYYYMMDDTHHMMSS，不附 Z 或时区"
-            );
-            let at = NaiveDateTime::parse_from_str(&until, "%Y%m%dT%H%M%S")?;
-            ensure!(
-                at.nanosecond() == 0 && at >= s.start,
-                "重复截止不能早于开始，且不能含闰秒"
-            );
-            // Each supported rule keeps DTSTART's clock time. A cutoff before
-            // that clock excludes its date; retain the same occurrence set.
-            if at.time() < s.start.time() {
-                at.date().pred_opt().context("截止日期无效")?
-            } else {
-                at.date()
-            }
-        };
-        ensure!(
-            day >= s.start.date() && (MIN_YEAR..=MAX_YEAR).contains(&day.year()),
-            "重复截止日期超出范围或早于开始"
-        );
-        s.repeat_until = (day != NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap()).then_some(day);
-    }
-    s.repeat = match parts.remove("FREQ").as_deref() {
-        Some("DAILY") => Repeat::Daily,
-        Some("WEEKLY") => Repeat::Weekly,
-        Some("MONTHLY") => Repeat::Monthly,
-        Some("YEARLY") => Repeat::Yearly,
-        _ => bail!("暂不支持此重复频率"),
-    };
-    if s.repeat == Repeat::Weekly {
-        if let Some(day) = parts.remove("BYDAY") {
-            ensure!(
-                day == ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
-                    [s.start.weekday().num_days_from_monday() as usize],
-                "暂不支持每周多个星期日或与开始日期不同的星期日"
-            );
-        }
-        if let Some(week) = parts.remove("WKST") {
-            ensure!(
-                ["MO", "TU", "WE", "TH", "FR", "SA", "SU"].contains(&week.as_str()),
-                "WKST 无效"
-            );
-        }
-    }
-    if s.repeat == Repeat::Yearly {
-        if let Some(month) = parts.remove("BYMONTH") {
-            ensure!(month == s.start.month().to_string(), "暂不支持多个重复月份");
-        } else {
-            ensure!(
-                !parts.contains_key("BYMONTHDAY"),
-                "每年按日号重复必须明确限定起始月份，否则会增加额外日期"
-            );
-        }
-    }
-    if matches!(s.repeat, Repeat::Monthly | Repeat::Yearly)
-        && let Some(days) = parts.remove("BYMONTHDAY")
-    {
-        let clamped = (28..=s.start.day())
-            .map(|d| d.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        if s.start.day() > 28
-            && days == clamped
-            && parts.get("BYSETPOS").map(String::as_str) == Some("-1")
-        {
-            parts.remove("BYSETPOS");
-            s.clamp_missing_day = true;
-        } else {
-            ensure!(days == s.start.day().to_string(), "暂不支持多个重复日号");
-        }
-    }
-    ensure!(
-        parts.is_empty(),
-        "RRULE 含当前无法保留的条件（如多值 BYDAY / BYSETPOS），未导入任何记录"
-    );
-    if let Some(count) = count {
-        let count = count.parse::<u32>().context("RRULE COUNT 必须是正整数")?;
-        ensure!(count > 0, "RRULE COUNT 必须大于零");
-        let Some(last) = s.occurrence_date(count) else {
-            bail!("RRULE COUNT 超出日程支持的 1901–2099 年日期范围");
-        };
-        if count == 1 {
-            s.repeat = Repeat::Once;
-            s.clamp_missing_day = false;
-            Ok(Some(CountConversion::Single))
-        } else {
-            s.repeat_until =
-                (last != NaiveDate::from_ymd_opt(MAX_YEAR, 12, 31).unwrap()).then_some(last);
-            Ok(Some(CountConversion::Until))
-        }
-    } else {
-        Ok(None)
-    }
 }
 
 fn line(out: &mut String, text: &str) {

@@ -6153,6 +6153,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-ics-count-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-ics-preview-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
 name = "zi-ics-preview-core"
 version = "0.1.0"
 dependencies = [
