@@ -1388,8 +1388,8 @@ declarative_manifest_capability = "devtools.plugin-manifest.preview"
 declarative_manifest_row.update(
     pluginStatus="candidate", candidateCapabilities=[declarative_manifest_capability], scopeComplete=False,
     packageId="com.zicode.devtools.plugin-manifest-preview", packageVersion="0.1.0",
-    candidateDirectory="release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01",
-    verificationReceipt="release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01-verification.json",
+    candidateDirectory="release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-02-verification.json",
     reason="确认共享本机声明式插件清单后，可预览清单结构、工具声明及原字节的 SHA-256。",
 )
 declarative_manifest_row["operationScopes"].append(dict(

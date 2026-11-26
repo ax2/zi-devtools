@@ -30,7 +30,9 @@ def manifest():
 
     adapter = {'type':'object','oneOf':[
         obj(type={'type':'string','const':'builtin'},tool=string(64),action=integer(64)),
-        obj(type={'type':'string','const':'http'},method={'type':'string','enum':['GET','POST']}),
+        # Scalar constants keep the exact two methods inside the Host schema depth limit.
+        *(obj(type={'type':'string','const':'http'},method={'type':'string','const':method})
+          for method in ('GET','POST')),
     ]}
     row = obj(ordinal=ordinal(),id=string(64),name=string(128),category=string(32),
               version=nullable(string(32)),aliasCount=integer(16),historyCount=integer(64),adapter=adapter)

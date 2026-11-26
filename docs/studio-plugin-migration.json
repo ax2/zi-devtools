@@ -2971,8 +2971,8 @@
           "pluginStatus": "candidate",
           "packageId": "com.zicode.devtools.plugin-manifest-preview",
           "packageVersion": "0.1.0",
-          "candidateDirectory": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01-verification.json",
+          "candidateDirectory": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-02-verification.json",
           "inputProfile": "resource.wasi.input.draft2",
           "requiredPermissions": [
             "resource.read"
@@ -3001,8 +3001,8 @@
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.plugin-manifest-preview",
       "packageVersion": "0.1.0",
-      "candidateDirectory": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01-verification.json"
+      "candidateDirectory": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-02-verification.json"
     },
     {
       "sourceToolId": "integrations",
