@@ -6109,6 +6109,7 @@ dependencies = [
  "zi-mcp-export-core",
  "zi-memo-text-core",
  "zi-pdf-text-core",
+ "zi-plugin-manifest-core",
  "zi-prompt-template-core",
  "zi-python-env-report-core",
  "zi-rag-eval-core",
@@ -6606,6 +6607,28 @@ dependencies = [
  "serde",
  "serde_json",
  "zi-pdf-text-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-plugin-manifest-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "memchr",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "zi-plugin-manifest-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-plugin-manifest-core",
  "zi-resource-input-wasi",
 ]
 
