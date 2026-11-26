@@ -165,8 +165,9 @@
   function l10n(context) {
     language = /^zh(?:-|$)/i.test(context.locale) ? labels.zh : labels.en;
     document.documentElement.lang = isChinese() ? 'zh-CN' : 'en';
-    if (['dark', 'light'].includes(context.theme)) document.documentElement.dataset.theme = context.theme;
-    else delete document.documentElement.dataset.theme;
+    document.title = isChinese() ? '时区工作台' : 'Time zone workbench';
+    if (['dark', 'night', 'dawn', 'midnight'].includes(context.theme)) document.documentElement.dataset.theme = 'dark';
+    if (['light', 'clean', 'terracotta', 'sage'].includes(context.theme)) document.documentElement.dataset.theme = 'light';
     for (const node of document.querySelectorAll('[data-text]')) node.textContent = language[node.dataset.text];
     for (const node of document.querySelectorAll('[data-placeholder]')) node.placeholder = language[node.dataset.placeholder];
     $('results').ariaLabel = language.results;
