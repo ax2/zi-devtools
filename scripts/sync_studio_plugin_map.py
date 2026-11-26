@@ -1321,6 +1321,26 @@ shortcut_row["operationScopes"].append(dict(
     blockingReason="需要接收端快捷配置专用执行档案；实际系统文件选择、在用快捷键、当前默认与跨应用热键另行验收。",
 ))
 
+zone_row = next(row for row in rows if row["sourceToolId"] == "time-zone")
+zone_capability = "devtools.time-zone.convert"
+zone_row.update(
+    migration="compute_candidate", pluginStatus="candidate", candidateCapabilities=[zone_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.time-zone", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/time-zone-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/time-zone-0.1.0-candidate-01-verification.json",
+    reason="复用离线 IANA 2025b，将单个本地时刻转换到 1 至 8 个目的地，保留重复时间和空缺提示。",
+)
+zone_row["operationScopes"].append(dict(
+    operationId=zone_capability, title="时区工作台", scopeKind="iana_local_time_to_multiple_zones",
+    sourceVersion=zone_row["sourceVersion"], pluginStatus="candidate",
+    packageId=zone_row["packageId"], packageVersion=zone_row["packageVersion"],
+    candidateDirectory=zone_row["candidateDirectory"], verificationReceipt=zone_row["verificationReceipt"],
+    requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
+    requiredPermissions=[], limits=dict(targets=8, zoneUtf8Bytes=64, requestBytes=8192, resultBytes=4096), tzdbVersion="2025b",
+    scope="本地时间输入、IANA 名称、明确早晚选项、空缺最近有效分钟及按原顺序输出目的时间、偏移和缩写。",
+    blockingReason="提供方离线计算候选。独立版的逐个添加与移除、即时预览和独立逐行复制界面继续维护。",
+))
+
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

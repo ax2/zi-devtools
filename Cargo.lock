@@ -6098,6 +6098,7 @@ dependencies = [
  "zi-shortcut-profile-core",
  "zi-table-core",
  "zi-text-core",
+ "zi-time-zone-core",
  "zi-tool-collections-core",
  "zi-trace-core",
  "zip",
@@ -6843,6 +6844,23 @@ name = "zi-text-wasi"
 version = "0.1.0"
 dependencies = [
  "zi-text-core",
+]
+
+[[package]]
+name = "zi-time-zone-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz 0.10.4",
+]
+
+[[package]]
+name = "zi-time-zone-wasi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "zi-time-zone-core",
 ]
 
 [[package]]
