@@ -83,8 +83,8 @@ mod wasm {
 
     #[target_feature(enable = "simd128")]
     pub(super) unsafe fn padding(bytes: &[u8]) -> bool {
-        let mut chunks = bytes.chunks_exact(16);
-        chunks.all(|chunk| {
+        let (chunks, tail) = bytes.as_chunks::<16>();
+        chunks.iter().all(|chunk| {
             // Each SIMD read stays inside an entire chunk.
             let word = unsafe { v128_load(chunk.as_ptr().cast()) };
             let horizontal = v128_or(
@@ -96,15 +96,15 @@ mod wasm {
                 u8x16_eq(word, u8x16_splat(b'\n')),
             );
             u8x16_all_true(v128_or(horizontal, vertical))
-        }) && chunks.remainder().iter().copied().all(json_whitespace)
+        }) && tail.iter().copied().all(json_whitespace)
     }
 
     #[target_feature(enable = "simd128")]
     pub(super) unsafe fn work(bytes: &[u8]) -> (usize, usize) {
-        let mut chunks = bytes.chunks_exact(16);
+        let (chunks, tail) = bytes.as_chunks::<16>();
         let mut marks = 0;
         let mut separators = 0;
-        for chunk in chunks.by_ref() {
+        for chunk in chunks {
             let word = unsafe { v128_load(chunk.as_ptr().cast()) };
             let exp = v128_or(
                 u8x16_eq(word, u8x16_splat(b'e')),
@@ -114,7 +114,7 @@ mod wasm {
             marks += u8x16_bitmask(decimal).count_ones() as usize;
             separators += u8x16_bitmask(u8x16_eq(word, u8x16_splat(b','))).count_ones() as usize;
         }
-        let (tail_marks, tail_separators) = scalar_work(chunks.remainder());
+        let (tail_marks, tail_separators) = scalar_work(tail);
         (marks + tail_marks, separators + tail_separators)
     }
 }

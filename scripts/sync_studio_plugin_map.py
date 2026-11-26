@@ -1410,8 +1410,8 @@ embedding_files_capability = "devtools.embedding.compare-files"
 embedding_files_row.update(
     pluginStatus="candidate", candidateCapabilities=[embedding_files_capability], scopeComplete=False,
     packageId="com.zicode.devtools.embedding", packageVersion="0.1.0",
-    candidateDirectory="release/plugin-candidates/embedding-files-0.1.0-candidate-01",
-    verificationReceipt="release/plugin-candidates/embedding-files-0.1.0-candidate-01-verification.json",
+    candidateDirectory="release/plugin-candidates/embedding-files-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/embedding-files-0.1.0-candidate-02-verification.json",
     reason="确认两份已有向量或一份嵌入响应后，复用原生度量完成离线比较。",
 )
 embedding_files_row["operationScopes"].append(dict(

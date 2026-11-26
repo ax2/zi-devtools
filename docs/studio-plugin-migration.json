@@ -3262,8 +3262,8 @@
           "pluginStatus": "candidate",
           "packageId": "com.zicode.devtools.embedding",
           "packageVersion": "0.1.0",
-          "candidateDirectory": "release/plugin-candidates/embedding-files-0.1.0-candidate-01",
-          "verificationReceipt": "release/plugin-candidates/embedding-files-0.1.0-candidate-01-verification.json",
+          "candidateDirectory": "release/plugin-candidates/embedding-files-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/embedding-files-0.1.0-candidate-02-verification.json",
           "inputProfile": "resource.wasi.input.draft2",
           "requiredPermissions": [
             "resource.read"
@@ -3291,8 +3291,8 @@
       "scopeComplete": false,
       "packageId": "com.zicode.devtools.embedding",
       "packageVersion": "0.1.0",
-      "candidateDirectory": "release/plugin-candidates/embedding-files-0.1.0-candidate-01",
-      "verificationReceipt": "release/plugin-candidates/embedding-files-0.1.0-candidate-01-verification.json"
+      "candidateDirectory": "release/plugin-candidates/embedding-files-0.1.0-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/embedding-files-0.1.0-candidate-02-verification.json"
     },
     {
       "sourceToolId": "model-benchmark",
