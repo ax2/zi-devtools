@@ -1341,6 +1341,27 @@ zone_row["operationScopes"].append(dict(
     blockingReason="提供方离线计算候选。独立版的逐个添加与移除、即时预览和独立逐行复制界面继续维护。",
 ))
 
+clock_row = next(row for row in rows if row["sourceToolId"] == "clock-workbench")
+clock_capability = "devtools.clock.backup.inspect"
+clock_row.update(
+    pluginStatus="candidate", candidateCapabilities=[clock_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.clock-backup", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/clock-backup-0.1.0-candidate-02",
+    verificationReceipt="release/plugin-candidates/clock-backup-0.1.0-candidate-02-verification.json",
+    reason="确认共享一份原生时钟备份 JSON 后，检查 v1–v3 并显示脱敏恢复摘要。",
+)
+clock_row["operationScopes"].append(dict(
+    operationId=clock_capability, title="时钟备份检查", scopeKind="native_clock_backup_v1_v2_v3_read_only",
+    sourceVersion=clock_row["sourceVersion"], pluginStatus="candidate", packageId=clock_row["packageId"],
+    packageVersion=clock_row["packageVersion"], candidateDirectory=clock_row["candidateDirectory"],
+    verificationReceipt=clock_row["verificationReceipt"],
+    requiredProfiles={"resource.input.types.v1":"=1.0.0-preview.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
+    requiredPermissions=["resource.read"], inputProfile="resource.wasi.input.draft2",
+    limits=dict(fileBytes=524288,jsonWorkBytes=229376,escapeCost=6,outerPaddingDivisor=4,resultBytes=2048),
+    scope="核验一份用户确认的时钟文件，报告保存时间、数量、声效配置及保存的恢复策略，省略私人名称。",
+    blockingReason="只读备份校验。超复杂备份、定时、恢复、声音和小窗仍由独立版处理。",
+))
+
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

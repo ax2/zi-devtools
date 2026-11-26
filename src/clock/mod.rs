@@ -104,12 +104,7 @@ impl Timer {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Source {
-    Timer(u64),
-    Alarm(u64),
-    Focus,
-}
+pub use zi_clock_snapshot_core::Source;
 pub struct Notice {
     pub source: Source,
     pub title: String,

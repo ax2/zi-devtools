@@ -6148,8 +6148,10 @@
       "sourceVersion": "0.7.0",
       "sourceStatus": "in-progress",
       "migration": "standalone_incomplete",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.clock.backup.inspect"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -6159,9 +6161,43 @@
           "sourceVersion": "0.7.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+        },
+        {
+          "operationId": "devtools.clock.backup.inspect",
+          "title": "时钟备份检查",
+          "scopeKind": "native_clock_backup_v1_v2_v3_read_only",
+          "sourceVersion": "0.7.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.clock-backup",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/clock-backup-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/clock-backup-0.1.0-candidate-02-verification.json",
+          "requiredProfiles": {
+            "resource.input.types.v1": "=1.0.0-preview.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
+          "requiredPermissions": [
+            "resource.read"
+          ],
+          "inputProfile": "resource.wasi.input.draft2",
+          "limits": {
+            "fileBytes": 524288,
+            "jsonWorkBytes": 229376,
+            "escapeCost": 6,
+            "outerPaddingDivisor": 4,
+            "resultBytes": 2048
+          },
+          "scope": "核验一份用户确认的时钟文件，报告保存时间、数量、声效配置及保存的恢复策略，省略私人名称。",
+          "blockingReason": "只读备份校验。超复杂备份、定时、恢复、声音和小窗仍由独立版处理。"
         }
       ],
-      "reason": "独立版整体尚未完成；已有开发子集不等于该功能的插件交付。"
+      "reason": "确认共享一份原生时钟备份 JSON 后，检查 v1–v3 并显示脱敏恢复摘要。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.clock-backup",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/clock-backup-0.1.0-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/clock-backup-0.1.0-candidate-02-verification.json"
     },
     {
       "sourceToolId": "screenshot-workbench",
