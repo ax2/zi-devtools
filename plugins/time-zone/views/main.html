@@ -17,7 +17,7 @@
   [hidden] { display:none !important; }
   body { margin:0; background:var(--surface); color:var(--text); font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif; }
   main { padding:16px; max-width:960px; margin:auto; }
-  form { display:grid; gap:12px; }
+  .converter { display:grid; gap:12px; }
   .fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
   label { display:block; font-weight:600; }
   input, button, textarea { font:inherit; color:inherit; }
@@ -64,33 +64,33 @@
 </head>
 <body>
 <main>
-  <form id="converter" autocomplete="off">
+  <div class="converter">
     <div class="fields">
       <div>
         <label for="local-time" data-text="localTime">Local date and time</label>
-        <input id="local-time" type="text" maxlength="32" required placeholder="2026-11-01 01:30" aria-describedby="format">
+        <input id="local-time" type="text" maxlength="32" required autocomplete="off" placeholder="2026-11-01 01:30" aria-describedby="format">
         <small id="format">YYYY-MM-DD HH:MM[:SS]</small>
       </div>
       <div class="picker">
         <label for="source-zone" data-text="source">Source time zone</label>
-        <input id="source-zone" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="source-options" maxlength="96" spellcheck="false" value="Asia/Shanghai">
+        <input id="source-zone" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="source-options" maxlength="96" autocomplete="off" spellcheck="false" value="Asia/Shanghai">
         <ul id="source-options" class="options" role="listbox" hidden></ul>
       </div>
     </div>
     <div>
       <label for="target-zone"><span data-text="targets">Destination time zones</span> <span id="target-count" class="count"></span></label>
       <div class="picker">
-        <input id="target-zone" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="target-options" maxlength="96" spellcheck="false" aria-describedby="target-help" data-placeholder="search">
+        <input id="target-zone" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="target-options" maxlength="96" autocomplete="off" spellcheck="false" aria-describedby="target-help" data-placeholder="search">
         <ul id="target-options" class="options" role="listbox" hidden></ul>
       </div>
       <small id="target-help" data-text="targetHelp">Choose destinations in the order you want to see them.</small>
       <ol id="targets" class="targets" aria-labelledby="target-help"></ol>
     </div>
     <div class="actions">
-      <button id="convert" class="primary" type="submit" data-text="convert" aria-disabled="true">Convert</button>
+      <button id="convert" class="primary" type="button" data-text="convert" aria-disabled="true">Convert</button>
       <button id="cancel" type="button" data-text="cancel" hidden>Cancel</button>
     </div>
-  </form>
+  </div>
   <div id="status" class="status" role="status"></div>
   <span id="lookup-status" class="sr-only" role="status"></span>
   <fieldset id="choices" hidden></fieldset>
@@ -389,9 +389,9 @@
     $('results').hidden = false;
   }
 
-  async function run(event) {
-    event.preventDefault();
+  async function run() {
     if (!ready || pending) return;
+    if (!localInput.value.trim()) { status(language.invalidDate, true); localInput.focus(); return; }
     if (!targets.length) { status(language.count, true); targetInput.focus(); return; }
     if (targetInput.value.trim()) { status(language.pickTarget, true); targetInput.focus(); return; }
     if (sourceInput.value !== source) { status(language.pickSource, true); sourceInput.focus(); return; }
@@ -433,7 +433,14 @@
   picker(sourceInput, $('source-options'), true);
   picker(targetInput, $('target-options'), false);
   localInput.addEventListener('input', () => changed(true));
-  $('converter').addEventListener('submit', event => { void run(event); });
+  // Studio's View sandbox disallows native form submissions.
+  convert.addEventListener('click', () => { void run(); });
+  localInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
+      event.preventDefault();
+      void run();
+    }
+  });
   cancel.addEventListener('click', () => {
     pending?.abort();
     status(language.cancelled);
