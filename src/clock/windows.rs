@@ -1,58 +1,11 @@
 use super::*;
 use chrono::Datelike;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) enum Target {
-    World(Tz),
-    Stopwatch,
-    Timer(u64),
-    Focus,
-}
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct SavedSize {
-    target: String,
-    width: u16,
-    height: u16,
-}
-impl SavedSize {
-    fn from_target_size(target: Target, size: egui::Vec2) -> Self {
-        let target = match target {
-            Target::World(zone) => format!("world:{}", zone.name()),
-            Target::Stopwatch => "stopwatch".into(),
-            Target::Timer(id) => format!("timer:{id}"),
-            Target::Focus => "focus".into(),
-        };
-        Self {
-            target,
-            width: size.x.round() as u16,
-            height: size.y.round() as u16,
-        }
-    }
-    pub(super) fn validate(&self) -> Result<Target, String> {
-        let target = match self.target.as_str() {
-            "stopwatch" => Target::Stopwatch,
-            "focus" => Target::Focus,
-            value if value.starts_with("world:") => value[6..]
-                .parse::<Tz>()
-                .map(Target::World)
-                .map_err(|_| "无效的小窗时区".to_owned())?,
-            value if value.starts_with("timer:") => {
-                let id = value[6..]
-                    .parse::<u64>()
-                    .map_err(|_| "无效的小窗计时器".to_owned())?;
-                if id == 0 || id == u64::MAX {
-                    return Err("无效的小窗计时器".into());
-                }
-                Target::Timer(id)
-            }
-            _ => return Err("无效的小窗目标".into()),
-        };
-        if !(320..=1600).contains(&self.width) || !(260..=1200).contains(&self.height) {
-            return Err("小窗尺寸越界".into());
-        }
-        Ok(target)
-    }
+pub(super) use zi_clock_snapshot_core::WindowTarget as Target;
+use zi_clock_snapshot_core::SavedSize;
+
+fn saved_size(target: Target, size: egui::Vec2) -> SavedSize {
+    SavedSize::new(target, size.x.round() as u16, size.y.round() as u16)
 }
 #[derive(Debug, Clone)]
 struct Pane {
@@ -158,8 +111,8 @@ impl Windows {
             .iter()
             .position(|(recent_target, _)| *recent_target == target)
         {
-            if SavedSize::from_target_size(target, self.recent_sizes[index].1)
-                == SavedSize::from_target_size(target, size)
+            if saved_size(target, self.recent_sizes[index].1)
+                == saved_size(target, size)
             {
                 return false;
             }
@@ -173,7 +126,7 @@ impl Windows {
     pub(super) fn saved_sizes(&self) -> Vec<SavedSize> {
         self.recent_sizes
             .iter()
-            .map(|(target, size)| SavedSize::from_target_size(*target, *size))
+            .map(|(target, size)| saved_size(*target, *size))
             .collect()
     }
     pub(super) fn restore_sizes(&mut self, sizes: &[SavedSize]) {

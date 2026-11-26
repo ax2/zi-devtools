@@ -276,7 +276,8 @@ fn invalid_snapshots_do_not_modify_current_state() {
     x.zones = vec!["Unknown/Zone".into()];
     invalid.push(x);
     let mut x = good.clone();
-    x.timers.push(x.timers[0].clone());
+    let repeated_timer = x.timers[0].clone();
+    x.timers.push(repeated_timer);
     invalid.push(x);
     let mut x = good.clone();
     x.timers[0].remaining = u64::MAX;

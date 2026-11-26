@@ -9,132 +9,67 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const LIMIT: u64 = 524_288;
-const MAX_MS: u64 = 3_153_600_000_000; // 100 years; rejects pathological files.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub(super) enum Policy {
-    #[default]
-    Pause,
-    Continue,
-}
+use std::ops::{Deref, DerefMut};
+pub(super) use zi_clock_snapshot_core::Policy;
+use zi_clock_snapshot_core::{AlarmData, NoticeData, Snapshot as SnapshotData, TimerData};
 
+const LIMIT: u64 = zi_clock_snapshot_core::FILE_LIMIT as u64;
 #[cfg(test)]
 #[path = "persistence_tests.rs"]
 mod tests;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TimerData {
-    id: u64,
-    name: String,
-    total: u64,
-    cycle: u64,
-    remaining: u64,
-    running: bool,
-    finished: bool,
-}
-impl TimerData {
-    fn capture(t: &Timer, now: Instant) -> Self {
-        Self {
-            id: t.id,
-            name: t.name.clone(),
-            total: millis(t.total),
-            cycle: millis(t.cycle),
-            remaining: millis(t.remaining(now)),
-            running: t.running(),
-            finished: t.finished,
-        }
-    }
-    fn validate(&self) -> Result<()> {
-        name(&self.name)?;
-        ensure!(
-            (1_000..=604_800_000).contains(&self.total)
-                && (1_000..=604_800_000).contains(&self.cycle),
-            "计时时长越界"
-        );
-        ensure!(self.remaining <= self.cycle, "剩余时长超过当前周期");
-        ensure!(
-            !self.finished || (!self.running && self.remaining == 0),
-            "结束状态不一致"
-        );
-        Ok(())
-    }
-    fn restore(&self, now: Instant, elapsed: u64, policy: Policy) -> Timer {
-        let remaining = if self.running && policy == Policy::Continue {
-            self.remaining.saturating_sub(elapsed)
-        } else {
-            self.remaining
-        };
-        Timer {
-            id: self.id,
-            name: self.name.clone(),
-            total: Duration::from_millis(self.total),
-            cycle: Duration::from_millis(self.cycle),
-            remaining: Duration::from_millis(remaining),
-            started: (self.running && policy == Policy::Continue && remaining > 0).then_some(now),
-            finished: self.finished || (self.running && remaining == 0),
-        }
+#[serde(transparent)]
+pub(super) struct Snapshot(SnapshotData);
+
+impl Deref for Snapshot {
+    type Target = SnapshotData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct AlarmData {
-    id: u64,
-    name: String,
-    zone: String,
-    at: DateTime<Utc>,
-    daily: bool,
-    late: bool,
-    time: NaiveTime,
-    enabled: bool,
-    snooze: Option<DateTime<Utc>>,
+
+impl DerefMut for Snapshot {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct NoticeData {
-    source: Source,
-    title: String,
-}
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct Snapshot {
-    schema: u32,
-    tool_version: String,
-    saved_at: DateTime<Utc>,
-    policy: Policy,
-    tab: u8,
-    zones: Vec<String>,
-    analog: bool,
-    meeting: i32,
-    stopwatch: u64,
-    laps: Vec<u64>,
-    timers: Vec<TimerData>,
-    alarms: Vec<AlarmData>,
-    focus: TimerData,
-    work: u64,
-    short: u64,
-    long: u64,
-    completed: u32,
-    phase: u8,
-    notices: Vec<NoticeData>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    window_sizes: Vec<windows::SavedSize>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    audio: Option<audio::Settings>,
-}
+
 fn millis(duration: Duration) -> u64 {
     duration.as_millis().min(u64::MAX as u128) as u64
 }
-fn name(value: &str) -> Result<()> {
-    ensure!(
-        !value.trim().is_empty() && value.chars().count() <= 80,
-        "名称需要1–80个字符"
-    );
-    Ok(())
+fn capture_timer(t: &Timer, now: Instant) -> TimerData {
+    TimerData {
+        id: t.id,
+        name: t.name.clone(),
+        total: millis(t.total),
+        cycle: millis(t.cycle),
+        remaining: millis(t.remaining(now)),
+        running: t.running(),
+        finished: t.finished,
+    }
 }
+fn restore_timer(saved: &TimerData, now: Instant, elapsed: u64, policy: Policy) -> Timer {
+    let remaining = if saved.running && policy == Policy::Continue {
+        saved.remaining.saturating_sub(elapsed)
+    } else {
+        saved.remaining
+    };
+    Timer {
+        id: saved.id,
+        name: saved.name.clone(),
+        total: Duration::from_millis(saved.total),
+        cycle: Duration::from_millis(saved.cycle),
+        remaining: Duration::from_millis(remaining),
+        started: (saved.running && policy == Policy::Continue && remaining > 0).then_some(now),
+        finished: saved.finished || (saved.running && remaining == 0),
+    }
+}
+
 impl Snapshot {
     pub(super) fn capture(s: &State, now: Instant, utc: DateTime<Utc>, policy: Policy) -> Self {
-        Self {
+        Self(SnapshotData {
             schema: 3,
             tool_version: "0.7.0".into(),
             audio: Some(s.audio.settings.clone()),
@@ -155,7 +90,7 @@ impl Snapshot {
             timers: s
                 .timers
                 .iter()
-                .map(|t| TimerData::capture(t, now))
+                .map(|t| capture_timer(t, now))
                 .collect(),
             alarms: s
                 .alarms
@@ -172,7 +107,7 @@ impl Snapshot {
                     snooze: a.snooze,
                 })
                 .collect(),
-            focus: TimerData::capture(&s.focus.timer, now),
+            focus: capture_timer(&s.focus.timer, now),
             work: s.focus.work,
             short: s.focus.short,
             long: s.focus.long,
@@ -187,99 +122,7 @@ impl Snapshot {
                 })
                 .collect(),
             window_sizes: s.windows.saved_sizes(),
-        }
-    }
-    fn validate(&self) -> Result<()> {
-        ensure!(
-            [1, 2, 3].contains(&self.schema),
-            "不支持此时钟文件版本，保留原文件"
-        );
-        ensure!(
-            match self.schema {
-                1 => self.audio.is_none(),
-                2 | 3 => self.audio.as_ref().is_some_and(audio::Settings::valid),
-                _ => false,
-            },
-            "声音设置与保存格式不一致或越界"
-        );
-        ensure!(
-            self.window_sizes.len() <= 48 && (self.schema == 3 || self.window_sizes.is_empty()),
-            "小窗尺寸数量越界或与保存格式不一致"
-        );
-        let mut window_targets = std::collections::HashSet::new();
-        for size in &self.window_sizes {
-            ensure!(
-                window_targets.insert(size.validate().map_err(anyhow::Error::msg)?),
-                "小窗目标重复"
-            );
-        }
-        ensure!(
-            !self.tool_version.is_empty()
-                && self.tool_version.len() <= 64
-                && self.tab <= 4
-                && (-720..=1440).contains(&self.meeting),
-            "时钟设置越界"
-        );
-        ensure!(
-            self.zones.len() <= 12
-                && self.laps.len() <= 1024
-                && self.timers.len() <= 32
-                && self.alarms.len() <= 64
-                && self.notices.len() <= 97,
-            "时钟记录数量越界"
-        );
-        let mut zones = std::collections::HashSet::new();
-        for z in &self.zones {
-            ensure!(z.parse::<Tz>().is_ok() && zones.insert(z), "无效或重复时区");
-        }
-        ensure!(
-            self.stopwatch <= MAX_MS
-                && self.laps.windows(2).all(|p| p[0] <= p[1])
-                && self.laps.last().is_none_or(|last| *last <= self.stopwatch),
-            "秒表分段不一致"
-        );
-        ensure!(
-            (1..=180).contains(&self.work)
-                && (1..=60).contains(&self.short)
-                && (1..=120).contains(&self.long)
-                && self.phase <= 2
-                && self.focus.id == 0,
-            "专注设置越界"
-        );
-        self.focus.validate()?;
-        let mut ids = std::collections::HashSet::new();
-        for t in &self.timers {
-            t.validate()?;
-            ensure!(
-                t.id > 0 && t.id < u64::MAX && ids.insert(t.id),
-                "计时器ID无效或重复"
-            );
-        }
-        for a in &self.alarms {
-            name(&a.name)?;
-            ensure!(
-                a.id > 0 && a.id < u64::MAX && ids.insert(a.id) && a.zone.parse::<Tz>().is_ok(),
-                "闹钟ID或时区无效"
-            );
-        }
-        let mut sources = std::collections::HashSet::new();
-        for n in &self.notices {
-            ensure!(
-                !n.title.is_empty()
-                    && n.title.chars().count() <= 512
-                    && sources.insert(format!("{:?}", n.source)),
-                "提醒无效或重复"
-            );
-            ensure!(
-                match n.source {
-                    Source::Timer(id) => self.timers.iter().any(|t| t.id == id),
-                    Source::Alarm(id) => self.alarms.iter().any(|a| a.id == id),
-                    Source::Focus => true,
-                },
-                "提醒来源不存在"
-            );
-        }
-        Ok(())
+        })
     }
     pub(super) fn restore(
         &self,
@@ -323,7 +166,7 @@ impl Snapshot {
         s.timers = self
             .timers
             .iter()
-            .map(|t| t.restore(now, elapsed, policy))
+            .map(|t| restore_timer(t, now, elapsed, policy))
             .collect();
         s.alarms = self
             .alarms
@@ -341,7 +184,7 @@ impl Snapshot {
             })
             .collect();
         s.focus = Focus {
-            timer: self.focus.restore(now, elapsed, policy),
+            timer: restore_timer(&self.focus, now, elapsed, policy),
             work: self.work,
             short: self.short,
             long: self.long,

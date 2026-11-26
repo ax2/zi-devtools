@@ -1,6 +1,5 @@
 use chrono::{DateTime, Local, Timelike, Utc};
 use eframe::egui;
-use serde::{Deserialize, Serialize};
 use std::{
     sync::{
         Arc,
@@ -10,67 +9,8 @@ use std::{
 };
 
 const RATE: usize = 48_000;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub(super) enum Tone {
-    #[default]
-    Chime,
-    Double,
-    Soft,
-}
-impl Tone {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Chime => "清脆提示",
-            Self::Double => "双音提醒",
-            Self::Soft => "柔和提示",
-        }
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct Settings {
-    pub enabled: bool,
-    pub muted: bool,
-    pub volume: u8,
-    pub tone: Tone,
-    pub quiet: bool,
-    pub quiet_start: u16,
-    pub quiet_end: u16,
-}
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            muted: false,
-            volume: 50,
-            tone: Tone::Chime,
-            quiet: false,
-            quiet_start: 1320,
-            quiet_end: 420,
-        }
-    }
-}
-impl Settings {
-    pub fn valid(&self) -> bool {
-        self.volume <= 100 && self.quiet_start < 1440 && self.quiet_end < 1440
-    }
-    fn permitted(&self, minute: u16, preview: bool) -> bool {
-        if !self.valid() || self.muted || self.volume == 0 || (!preview && !self.enabled) {
-            return false;
-        }
-        if preview || !self.quiet {
-            return true;
-        }
-        let quiet = if self.quiet_start == self.quiet_end {
-            true
-        } else if self.quiet_start < self.quiet_end {
-            (self.quiet_start..self.quiet_end).contains(&minute)
-        } else {
-            minute >= self.quiet_start || minute < self.quiet_end
-        };
-        !quiet
-    }
-}
+pub(super) use zi_clock_snapshot_core::Settings;
+use zi_clock_snapshot_core::Tone;
 // Bounded stereo f32 frames. Each note fades in/out to avoid abrupt clicks.
 fn samples(settings: &Settings) -> Vec<u8> {
     let notes: &[(f64, usize, usize)] = match settings.tone {

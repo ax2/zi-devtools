@@ -5965,6 +5965,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "zi-clock-backup-wasi"
+version = "0.1.0"
+dependencies = [
+ "memchr",
+ "serde",
+ "serde_json",
+ "zi-clock-snapshot-core",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-clock-snapshot-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz 0.10.4",
+ "serde",
+]
+
+[[package]]
 name = "zi-compare-wasi"
 version = "0.1.0"
 dependencies = [
@@ -6063,6 +6084,7 @@ dependencies = [
  "zi-character-core",
  "zi-civil-date-core",
  "zi-clipboard-compose-core",
+ "zi-clock-snapshot-core",
  "zi-conversation-core",
  "zi-diagnostics-core",
  "zi-diff-core",
