@@ -6091,6 +6091,7 @@ dependencies = [
  "zi-directory-compare-wasi",
  "zi-document-text-core",
  "zi-duplicate-files-wasi",
+ "zi-embedding-core",
  "zi-flow-recipe-core",
  "zi-html-clip-core",
  "zi-ics-preview-core",
@@ -6202,6 +6203,25 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "zi-resource-input-wasi",
+]
+
+[[package]]
+name = "zi-embedding-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+]
+
+[[package]]
+name = "zi-embedding-wasi"
+version = "0.1.0"
+dependencies = [
+ "memchr",
+ "serde",
+ "serde_json",
+ "zi-embedding-core",
  "zi-resource-input-wasi",
 ]
 

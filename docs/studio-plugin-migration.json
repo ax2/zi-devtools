@@ -3240,8 +3240,10 @@
       "sourceVersion": "1.0.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.embedding.compare-files"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -3251,9 +3253,46 @@
           "sourceVersion": "1.0.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.embedding.compare-files",
+          "title": "离线向量比较",
+          "scopeKind": "native_embedding_offline_comparison",
+          "sourceVersion": "1.0.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.embedding",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/embedding-files-0.1.0-candidate-02",
+          "verificationReceipt": "release/plugin-candidates/embedding-files-0.1.0-candidate-02-verification.json",
+          "inputProfile": "resource.wasi.input.draft2",
+          "requiredPermissions": [
+            "resource.read"
+          ],
+          "requiredProfiles": {
+            "resource.input.types.v1": "=1.0.0-preview.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
+          "limits": {
+            "inputFiles": 2,
+            "fileBytes": 262144,
+            "dimensions": 8192,
+            "componentMax": 1000000,
+            "jsonWorkBytes": 360448,
+            "decimalMarkWork": 24,
+            "decimalMarks": 10000,
+            "separators": 16416
+          },
+          "scope": "两份 JSON 数值数组或一份含两个 embeddings 的响应。只返回维度、范数、余弦相似度和欧氏距离。",
+          "blockingReason": "已有向量的本机比较。模型生成、服务连接、模型列表和原生剪贴板历史仍保留单独范围。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "确认两份已有向量或一份嵌入响应后，复用原生度量完成离线比较。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.embedding",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/embedding-files-0.1.0-candidate-02",
+      "verificationReceipt": "release/plugin-candidates/embedding-files-0.1.0-candidate-02-verification.json"
     },
     {
       "sourceToolId": "model-benchmark",
