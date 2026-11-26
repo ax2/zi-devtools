@@ -1383,6 +1383,28 @@ clock_row["operationScopes"].append(dict(
     blockingReason="只读备份校验。超复杂备份、定时、恢复、声音和小窗仍由独立版处理。",
 ))
 
+declarative_manifest_row = next(row for row in rows if row["sourceToolId"] == "plugins")
+declarative_manifest_capability = "devtools.plugin-manifest.preview"
+declarative_manifest_row.update(
+    pluginStatus="candidate", candidateCapabilities=[declarative_manifest_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.plugin-manifest-preview", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01-verification.json",
+    reason="确认共享本机声明式插件清单后，可预览清单结构、工具声明及原字节的 SHA-256。",
+)
+declarative_manifest_row["operationScopes"].append(dict(
+    operationId=declarative_manifest_capability, title="ZiDevTools 插件清单预览",
+    scopeKind="native_declarative_manifest_read_only", sourceVersion=declarative_manifest_row["sourceVersion"],
+    pluginStatus="candidate", packageId=declarative_manifest_row["packageId"], packageVersion=declarative_manifest_row["packageVersion"],
+    candidateDirectory=declarative_manifest_row["candidateDirectory"], verificationReceipt=declarative_manifest_row["verificationReceipt"],
+    inputProfile="resource.wasi.input.draft2", requiredPermissions=["resource.read"],
+    requiredProfiles={"resource.input.types.v1":"=1.0.0-preview.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
+    limits=dict(fileBytes=262144, tools=64, toolsPerPage=8, outputBytes=8192, declaredUrlBytes=2048,
+                jsonWorkBytes=294912, jsonPropertyCost=128, jsonWorkUnits=4096, outsideStringBytes=32768),
+    scope="原生 v1 声明式 JSON 结构与规则、原字节 SHA-256、按序查看声明。隐藏地址、请求正文、样例和模型。",
+    blockingReason="独立包不安装源清单、不调用工具或服务，不校验签名、比较已装版本或管理发布者。",
+))
+
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",

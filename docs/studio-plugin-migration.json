@@ -2949,8 +2949,10 @@
       "sourceVersion": "1.15.0",
       "sourceStatus": "implemented",
       "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.plugin-manifest.preview"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2960,9 +2962,47 @@
           "sourceVersion": "1.15.0",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.plugin-manifest.preview",
+          "title": "ZiDevTools 插件清单预览",
+          "scopeKind": "native_declarative_manifest_read_only",
+          "sourceVersion": "1.15.0",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.plugin-manifest-preview",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01-verification.json",
+          "inputProfile": "resource.wasi.input.draft2",
+          "requiredPermissions": [
+            "resource.read"
+          ],
+          "requiredProfiles": {
+            "resource.input.types.v1": "=1.0.0-preview.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
+          "limits": {
+            "fileBytes": 262144,
+            "tools": 64,
+            "toolsPerPage": 8,
+            "outputBytes": 8192,
+            "declaredUrlBytes": 2048,
+            "jsonWorkBytes": 294912,
+            "jsonPropertyCost": 128,
+            "jsonWorkUnits": 4096,
+            "outsideStringBytes": 32768
+          },
+          "scope": "原生 v1 声明式 JSON 结构与规则、原字节 SHA-256、按序查看声明。隐藏地址、请求正文、样例和模型。",
+          "blockingReason": "独立包不安装源清单、不调用工具或服务，不校验签名、比较已装版本或管理发布者。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "确认共享本机声明式插件清单后，可预览清单结构、工具声明及原字节的 SHA-256。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.plugin-manifest-preview",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/plugin-manifest-preview-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "integrations",

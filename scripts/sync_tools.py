@@ -23,7 +23,7 @@ for tool in items:
         assert re.fullmatch(r'\d{4}-\d{2}-\d{2}', event['date']) and event['changes'].strip()
         versions.append(tuple(map(int, event['version'].split('.'))))
     assert all(a < b for a, b in zip(versions, versions[1:])), f"Tool versions must increase: {tool['id']}"
-source = (root/'src/tools.rs').read_text(encoding='utf-8')
+source = (root/'crates/zi-plugin-manifest-core/src/tool_kind.rs').read_text(encoding='utf-8')
 ids = set(re.findall(r'Self::\w+ => "([a-z0-9-]+)"', source[source.index('fn id'):source.index('pub fn description')]))
 registry = (root/'src/app/registry.rs').read_text(encoding='utf-8')
 ids |= set(re.findall(r'"([a-z0-9-]+)" => Page::', registry))
