@@ -1,0 +1,120 @@
+"""Package the exact offline time-zone candidate and its verification receipt."""
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import shutil
+import subprocess
+
+from package_disk_inspector_plugin import dump, obj, string
+from package_duplicate_files_plugin import candidate_arguments
+from verify_time_zone_plugin import (
+    CAPABILITY, CONTRACT, IANA, MAX_RESULT, PLUGIN, check, compact, digest, fixtures, request,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = "time-zone"
+SLUG = "time-zone"
+VERSION = "0.1.0"
+TITLE = "时区工作台"
+SCOPE = "用相同 IANA 时区规则离线将一个本地时间换算到最多 8 个时区，明确列出重复或缺失时间。"
+
+
+def manifest():
+    nil = {"type":"null"}
+    choice = {"type":"string","enum":["earlier","later"]}
+    contract = {"type":"string","const":CONTRACT}
+
+    def nullable(schema):
+        return {"oneOf":[schema,nil]}
+
+    wall = string(32)
+    offset = string(6)
+    instant = obj(utc=string(40), offset=offset)
+    row = obj(zone=string(64), local=wall, offset=offset, abbreviation=string(32))
+    report = obj(
+        status={"type":"string","enum":["unique","ambiguous","nonexistent"]},
+        sourceZone=string(64), sourceLocal=wall, sourceOffset=nullable(offset),
+        sourceAbbreviation=nullable(string(32)), utc=nullable(string(40)),
+        earlier=nullable(instant), later=nullable(instant), selectedChoice=nullable(choice),
+        previousValid=nullable(wall), nextValid=nullable(wall),
+        rows={"type":"array","maxItems":8,"items":row},
+        tzdbVersion={"type":"string","const":IANA}, text=string(2048),
+    )
+    success = obj(contractVersion=contract,ok={"type":"boolean","const":True},data=report,error=nil)
+    failure = obj(contractVersion=contract,ok={"type":"boolean","const":False},data=nil,
+                  error=obj(code=string(32),message=string(256)))
+    inputs = dict(obj(
+        localTime=dict(string(32),minLength=1,title="本地时间",
+                       description="格式 YYYY-MM-DD HH:MM[:SS]，例如 2026-11-01 01:30。"),
+        sourceZone=dict(string(64),minLength=1,title="来源时区",
+                        description="填 IANA 名称，例如 America/New_York。"),
+        targetZones={"type":"array","minItems":1,"maxItems":8,"items":dict(string(64),minLength=1),
+                     "title":"目的时区",
+                     "description":'按需要的顺序填写 JSON 数组，例如 ["Asia/Shanghai","Europe/London"]。输入 1 至 8 个不同名称。'},
+        ambiguousChoice=dict(choice,title="重复时间选择（可选）",
+                             description="遇到重复时间先查看两个候选，再选 earlier（较早）或 later（较晚）。"),
+    ),required=["localTime","sourceZone","targetZones"])
+    capability=dict(id=CAPABILITY,title=TITLE,description=SCOPE,inputSchema=inputs,
+                    outputSchema={"type":"object","oneOf":[success,failure]},maxResultBytes=MAX_RESULT,
+                    directory=dict(categoryId="data",aliases=["时区转换","IANA 时区","夏令时","会议时间换算","Time Zone","Timezone Converter"],description=SCOPE))
+    return dict(schemaVersion=2,id=PLUGIN,name="ZiDevTools Time Zone",displayName=TITLE,
+                description=SCOPE,version=VERSION,publisher="zicode",license="MIT",
+                engines={"zicode":">=0.7.2 <1.0.0","pluginApi":"^1.0.0"},
+                requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1",
+                                  "tool.directory.v1":"=1.0.0-preview.1"},
+                activationEvents=["onCapability:"+CAPABILITY],runtime={"wasi":"runtime/tools.wasm"},
+                contributes=dict(activities=[],views=[],commands=[],piTools=[],capabilities=[capability]),
+                permissions=dict(required=[],optional=[]))
+
+
+def main():
+    parser,args=candidate_arguments(__doc__)
+    if len(args.candidate)!=2 or not args.candidate.isascii() or not args.candidate.isdecimal():
+        parser.error("use a two-digit candidate number")
+    package=ROOT/"release/plugin-candidates"/f"{SLUG}-{VERSION}-candidate-{args.candidate}"
+    receipt=package.with_name(package.name+"-verification.json")
+    if package.exists() or receipt.exists():
+        parser.error("package and receipt must be new")
+    module=args.module.read_bytes()
+    proof=json.loads(args.evidence.read_text(encoding="utf-8"))
+    fixed=list(fixtures())
+    if (not 0<len(module)<=2*1024*1024 or proof["wasmSha256"]!=digest(module) or proof["moduleBytes"]!=len(module)
+            or proof["ianaVersion"]!=IANA or proof["workerProfile"]!="compute.wasi.v1" or proof["failures"]
+            or proof["passed"]!=len(fixed)):
+        parser.error("module or Windows Worker proof does not match the candidate")
+    for row,expected in zip(proof["cases"],fixed,strict=True):
+        data=compact(row["result"])
+        check(row["result"],expected["expected"])
+        if (row["case"]!=expected["name"] or row["requestSha256"]!=digest(compact(request(expected)))
+                or row["resultBytes"]!=len(data) or row["resultSha256"]!=digest(data) or len(data)>MAX_RESULT):
+            parser.error("fixture proof differs from its result or identity")
+
+    def git(*args):
+        return subprocess.check_output(["git",*args],cwd=ROOT,text=True).strip()
+    if git("status","--porcelain","--untracked-files=no"):
+        parser.error("commit source before freezing")
+    (package/"runtime").mkdir(parents=True)
+    (package/"runtime/tools.wasm").write_bytes(module)
+    shutil.copyfile(ROOT/"LICENSE",package/"LICENSE")
+    shutil.copyfile(ROOT/"plugins/time-zone/README.md",package/"README.md")
+    (package/"NOTICE").write_text("ZiDevTools is MIT. Dependencies, including chrono-tz, retain their own licenses. IANA rule data 2025b.\n",encoding="utf8")
+    dump(package/"plugin.json",manifest())
+    dump(package/"catalog.json",dict(contract="zicode.devtools-plugin/1.0.0-rc.1",packageId=PLUGIN,packageVersion=VERSION,
+        deliveryStatus="unsigned_provider_candidate_not_host_accepted",
+        tools=[dict(sourceToolId=SOURCE,capabilityId=CAPABILITY,title=TITLE,status="candidate",scope=SCOPE,tzdbVersion=IANA)]))
+    dump(package/"fixtures.json",dict(generator="scripts/verify_time_zone_plugin.py",cases=proof["cases"]))
+    dump(package/"provenance.json",dict(sourceRevision=git("rev-parse","HEAD"),dirty=False,signature="unsigned",
+        builtAt=datetime.now(timezone.utc).isoformat(),wasmTarget="wasm32-wasip1",wasmProfile="plugin",
+        moduleSha256=digest(module),ianaVersion=IANA,workerVerification=proof))
+    files=[dict(path=item.relative_to(package).as_posix(),size=item.stat().st_size,sha256=digest(item.read_bytes()))
+           for item in sorted(package.rglob("*")) if item.is_file()]
+    index=digest(compact(files))
+    dump(receipt,dict(schemaVersion=1,pluginId=PLUGIN,packageVersion=VERSION,signatureVerified=False,
+        directoryIndexSha256=index,files=files,fileCount=len(files),totalBytes=sum(item["size"] for item in files),
+        directoryIndexEncoding=dict(hash="SHA-256",encoding="UTF-8",content="files array in listed order",
+            objectKeyOrder=["path","size","sha256"],ensureAscii=False,separators=[",",":"],trailingNewline=False)))
+    print(json.dumps(dict(candidate=str(package),directoryIndexSha256=index,files=len(files))))
+
+
+if __name__=="__main__":
+    main()

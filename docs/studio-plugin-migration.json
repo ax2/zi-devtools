@@ -2666,9 +2666,11 @@
       "title": "时区工作台",
       "sourceVersion": "0.1.2",
       "sourceStatus": "implemented",
-      "migration": "await_host",
-      "pluginStatus": "not_delivered",
-      "candidateCapabilities": [],
+      "migration": "compute_candidate",
+      "pluginStatus": "candidate",
+      "candidateCapabilities": [
+        "devtools.time-zone.convert"
+      ],
       "pilotCapabilities": [],
       "operationScopes": [
         {
@@ -2678,9 +2680,40 @@
           "sourceVersion": "0.1.2",
           "pluginStatus": "not_delivered",
           "blockingReason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+        },
+        {
+          "operationId": "devtools.time-zone.convert",
+          "title": "时区工作台",
+          "scopeKind": "iana_local_time_to_multiple_zones",
+          "sourceVersion": "0.1.2",
+          "pluginStatus": "candidate",
+          "packageId": "com.zicode.devtools.time-zone",
+          "packageVersion": "0.1.0",
+          "candidateDirectory": "release/plugin-candidates/time-zone-0.1.0-candidate-01",
+          "verificationReceipt": "release/plugin-candidates/time-zone-0.1.0-candidate-01-verification.json",
+          "requiredProfiles": {
+            "compute.wasi.v1": "=1.0.0-rc.1",
+            "output.schema.v1": "=1.0.0-rc.1",
+            "tool.directory.v1": "=1.0.0-preview.1"
+          },
+          "requiredPermissions": [],
+          "limits": {
+            "targets": 8,
+            "zoneUtf8Bytes": 64,
+            "requestBytes": 8192,
+            "resultBytes": 4096
+          },
+          "tzdbVersion": "2025b",
+          "scope": "本地时间输入、IANA 名称、明确早晚选项、空缺最近有效分钟及按原顺序输出目的时间、偏移和缩写。",
+          "blockingReason": "提供方离线计算候选。独立版的逐个添加与移除、即时预览和独立逐行复制界面继续维护。"
         }
       ],
-      "reason": "需资源、服务、桌面或通用扩展Host接口；不得用路径直读、独立EXE或本地HTTP绕过。"
+      "reason": "复用离线 IANA 2025b，将单个本地时刻转换到 1 至 8 个目的地，保留重复时间和空缺提示。",
+      "scopeComplete": false,
+      "packageId": "com.zicode.devtools.time-zone",
+      "packageVersion": "0.1.0",
+      "candidateDirectory": "release/plugin-candidates/time-zone-0.1.0-candidate-01",
+      "verificationReceipt": "release/plugin-candidates/time-zone-0.1.0-candidate-01-verification.json"
     },
     {
       "sourceToolId": "regex-replace",
