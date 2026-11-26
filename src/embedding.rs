@@ -1,7 +1,7 @@
 //! Explicit local Ollama embedding comparison; text and vectors remain in memory.
 use anyhow::{Context, Result, ensure};
 use eframe::egui;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::{
     future::Future,
     sync::{
@@ -12,8 +12,8 @@ use std::{
     time::Duration,
 };
 
-const MAX_RESPONSE: usize = 4 * 1024 * 1024;
-const MAX_DIMENSIONS: usize = 8192;
+use zi_embedding_core::MAX_RESPONSE;
+pub use zi_embedding_core::{Comparison, parse_response, parse_vectors};
 
 pub fn endpoint_url(endpoint: &str) -> Result<reqwest::Url> {
     let url = crate::plugins::endpoint(endpoint)?;
@@ -53,93 +53,6 @@ pub fn validate(endpoint: &str, model: &str, a: &str, b: &str) -> Result<reqwest
     validate_text(a)?;
     validate_text(b)?;
     Ok(url)
-}
-
-#[derive(Clone, Debug)]
-pub struct Comparison {
-    pub model: String,
-    pub dimensions: usize,
-    pub cosine: f64,
-    pub euclidean: f64,
-    pub norm_a: f64,
-    pub norm_b: f64,
-    pub vector_a: Vec<f64>,
-    pub vector_b: Vec<f64>,
-}
-
-pub fn parse_response(bytes: &[u8], model: &str) -> Result<Comparison> {
-    let mut vectors = parse_vectors(bytes, 2)?;
-    let vector_b = vectors.pop().unwrap();
-    let vector_a = vectors.pop().unwrap();
-    let dot: f64 = vector_a.iter().zip(&vector_b).map(|(a, b)| a * b).sum();
-    let norm_a = vector_a.iter().map(|v| v * v).sum::<f64>().sqrt();
-    let norm_b = vector_b.iter().map(|v| v * v).sum::<f64>().sqrt();
-    let euclidean = vector_a
-        .iter()
-        .zip(&vector_b)
-        .map(|(a, b)| (a - b).powi(2))
-        .sum::<f64>()
-        .sqrt();
-    ensure!(
-        norm_a.is_finite() && norm_b.is_finite() && norm_a > 0.0 && norm_b > 0.0,
-        "嵌入向量范数无效或为零"
-    );
-    ensure!(euclidean.is_finite(), "向量距离无效");
-    let cosine = (dot / (norm_a * norm_b)).clamp(-1.0, 1.0);
-    ensure!(cosine.is_finite(), "余弦相似度无效");
-    Ok(Comparison {
-        model: model.into(),
-        dimensions: vector_a.len(),
-        cosine,
-        euclidean,
-        norm_a,
-        norm_b,
-        vector_a,
-        vector_b,
-    })
-}
-
-pub fn parse_vectors(bytes: &[u8], expected: usize) -> Result<Vec<Vec<f64>>> {
-    ensure!(bytes.len() <= MAX_RESPONSE, "嵌入响应超过 4 MiB");
-    ensure!((1..=16).contains(&expected), "每批最多 16 条文本");
-    let response: Value = serde_json::from_slice(bytes).context("嵌入响应不是 JSON")?;
-    let embeddings = response
-        .get("embeddings")
-        .and_then(Value::as_array)
-        .context("嵌入响应缺少 embeddings 数组")?;
-    ensure!(embeddings.len() == expected, "嵌入响应向量数量不符合请求");
-    let mut vectors = Vec::with_capacity(expected);
-    for item in embeddings {
-        let values = item.as_array().context("嵌入向量不是数值数组")?;
-        ensure!(
-            !values.is_empty() && values.len() <= MAX_DIMENSIONS,
-            "嵌入维度必须在 1–8192 之间"
-        );
-        let vector = values
-            .iter()
-            .map(|value| value.as_f64().context("嵌入向量包含非数值"))
-            .collect::<Result<Vec<_>>>()?;
-        ensure!(
-            vector
-                .iter()
-                .all(|value| value.is_finite() && value.abs() <= 1e6),
-            "嵌入向量包含非有限或异常数值"
-        );
-        vectors.push(vector);
-    }
-    let dimensions = vectors[0].len();
-    ensure!(
-        vectors.iter().all(|vector| vector.len() == dimensions),
-        "嵌入向量维度不同"
-    );
-    ensure!(
-        vectors.iter().all(|vector| {
-            let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt();
-            norm.is_finite() && norm > 0.0
-        }),
-        "嵌入向量范数无效或为零"
-    );
-    Ok(vectors)
 }
 
 async fn cancellable<T>(future: impl Future<Output = T>, cancel: &AtomicBool) -> Result<T> {

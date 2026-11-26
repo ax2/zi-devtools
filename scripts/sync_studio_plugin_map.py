@@ -1405,6 +1405,28 @@ declarative_manifest_row["operationScopes"].append(dict(
     blockingReason="独立包不安装源清单、不调用工具或服务，不校验签名、比较已装版本或管理发布者。",
 ))
 
+embedding_files_row = next(row for row in rows if row["sourceToolId"] == "embedding-playground")
+embedding_files_capability = "devtools.embedding.compare-files"
+embedding_files_row.update(
+    pluginStatus="candidate", candidateCapabilities=[embedding_files_capability], scopeComplete=False,
+    packageId="com.zicode.devtools.embedding", packageVersion="0.1.0",
+    candidateDirectory="release/plugin-candidates/embedding-files-0.1.0-candidate-01",
+    verificationReceipt="release/plugin-candidates/embedding-files-0.1.0-candidate-01-verification.json",
+    reason="确认两份已有向量或一份嵌入响应后，复用原生度量完成离线比较。",
+)
+embedding_files_row["operationScopes"].append(dict(
+    operationId=embedding_files_capability, title="离线向量比较",
+    scopeKind="native_embedding_offline_comparison", sourceVersion=embedding_files_row["sourceVersion"],
+    pluginStatus="candidate", packageId=embedding_files_row["packageId"], packageVersion=embedding_files_row["packageVersion"],
+    candidateDirectory=embedding_files_row["candidateDirectory"], verificationReceipt=embedding_files_row["verificationReceipt"],
+    inputProfile="resource.wasi.input.draft2", requiredPermissions=["resource.read"],
+    requiredProfiles={"resource.input.types.v1":"=1.0.0-preview.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
+    limits=dict(inputFiles=2, fileBytes=262144, dimensions=8192, componentMax=1000000,
+                jsonWorkBytes=360448, decimalMarkWork=24, decimalMarks=10000, separators=16416),
+    scope="两份 JSON 数值数组或一份含两个 embeddings 的响应。只返回维度、范数、余弦相似度和欧氏距离。",
+    blockingReason="已有向量的本机比较。模型生成、服务连接、模型列表和原生剪贴板历史仍保留单独范围。",
+))
+
 result = dict(contract="zicode.devtools-plugin/1.0.0-rc.1", sourceCatalogVersion=catalog["version"],
               acceptedCapabilities=0,
               categories=dict(compute_candidate="可迁移候选", overlap_integration="重叠能力整合（未确认，不推定已有Host能力）",
