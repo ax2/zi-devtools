@@ -1338,7 +1338,28 @@ zone_row["operationScopes"].append(dict(
     requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1","tool.directory.v1":"=1.0.0-preview.1"},
     requiredPermissions=[], limits=dict(targets=8, zoneUtf8Bytes=64, requestBytes=8192, resultBytes=4096), tzdbVersion="2025b",
     scope="本地时间输入、IANA 名称、明确早晚选项、空缺最近有效分钟及按原顺序输出目的时间、偏移和缩写。",
-    blockingReason="提供方离线计算候选。独立版的逐个添加与移除、即时预览和独立逐行复制界面继续维护。",
+    blockingReason="保留 v0.1.0 通用表单候选的独立验收与字节历史。",
+))
+
+zone_operation = "devtools.time-zone.workbench"
+zone_row.update(
+    candidateViewOperations=[zone_operation], packageVersion="0.2.0",
+    candidateDirectory="release/plugin-candidates/time-zone-0.2.0-candidate-03",
+    verificationReceipt="release/plugin-candidates/time-zone-0.2.0-candidate-03-verification.json",
+    reason="复用离线 IANA 2025b 换算，新增可搜索选择、有序目的地及逐行复制的 Studio 专用 View。",
+)
+zone_row["operationScopes"].append(dict(
+    operationId=zone_operation, title="时区工作台", scopeKind="iana_interactive_view",
+    sourceVersion=zone_row["sourceVersion"], pluginStatus="candidate",
+    packageId=zone_row["packageId"], packageVersion=zone_row["packageVersion"],
+    candidateDirectory=zone_row["candidateDirectory"], verificationReceipt=zone_row["verificationReceipt"],
+    requiredProfiles={"compute.wasi.v1":"=1.0.0-rc.1","output.schema.v1":"=1.0.0-rc.1",
+                      "tool.directory.v1":"=1.0.0-preview.1","tool.open.v1":"=1.0.0-preview.1",
+                      "view.operation.directory.v1":"=1.0.0-preview.1"},
+    executionSurface="view", viewId="devtools.time-zone.main", requiredPermissions=[],
+    limits=dict(targets=8, ianaNames=597, zoneUtf8Bytes=64, requestBytes=8192, resultBytes=4096), tzdbVersion="2025b",
+    scope="公开 SDK 专用时区界面，用同一 IANA 2025b Worker 按选择顺序换算，支持搜索、移除、重复/空缺提示、取消和按行复制。",
+    blockingReason="提供方冻结候选已通过隔离 Windows Studio；独立版即时检查和其他平台仍在原范围。",
 ))
 
 clock_row = next(row for row in rows if row["sourceToolId"] == "clock-workbench")
