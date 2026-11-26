@@ -1,4 +1,6 @@
 //! File conversion validates that the original data survives the output format.
+mod flat_numbers;
+
 use std::collections::HashSet;
 use yaml_rust2::{
     parser::{Event, Parser, Tag},
@@ -28,10 +30,13 @@ pub(super) fn convert(id: &str, input: &str) -> Result<String, Error> {
         return serde_yaml_ng::to_string(&value).map_err(|_| Error::Policy);
     }
 
-    check_yaml_numbers(input)?;
-    let value =
+    let value = if let Some(value) = flat_numbers::parse(input) {
+        value
+    } else {
+        check_yaml_numbers(input)?;
         zi_text_core::deserialize_with_wide_integers(serde_yaml_ng::Deserializer::from_str(input))
-            .map_err(|_| Error::Policy)?;
+            .map_err(|_| Error::Policy)?
+    };
     serde_json::to_string_pretty(&value).map_err(|_| Error::Policy)
 }
 
